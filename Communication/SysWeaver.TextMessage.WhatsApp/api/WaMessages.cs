@@ -88,6 +88,9 @@ namespace SysWeaver.TextMessage.WhatsAppApi
         public WaTemplateComponent[] components;
     }
 
+    /// <summary>
+    /// The language of a template
+    /// </summary>
     public sealed class WaLanguage
     {
         /// <summary>
@@ -96,6 +99,9 @@ namespace SysWeaver.TextMessage.WhatsAppApi
         public String code;
     }
 
+    /// <summary>
+    /// A component (body, header, button etc) of a template message
+    /// </summary>
     public sealed class WaTemplateComponent
     {
         /// <summary>
@@ -109,6 +115,9 @@ namespace SysWeaver.TextMessage.WhatsAppApi
         public WaTemplateParameter[] parameters;
     }
 
+    /// <summary>
+    /// A parameter value of a template component
+    /// </summary>
     public sealed class WaTemplateParameter
     {
         /// <summary>
@@ -123,6 +132,9 @@ namespace SysWeaver.TextMessage.WhatsAppApi
         public String text;
     }
 
+    /// <summary>
+    /// The context of a message, used to send a message as a reply to another
+    /// </summary>
     public sealed class WaContext
     {
         /// <summary>
@@ -136,13 +148,25 @@ namespace SysWeaver.TextMessage.WhatsAppApi
     /// </summary>
     public sealed class WaSendResponse
     {
+        /// <summary>
+        /// The messaging product, always "whatsapp"
+        /// </summary>
         public String messaging_product;
 
+        /// <summary>
+        /// The recipients of the message
+        /// </summary>
         public WaContact[] contacts;
 
+        /// <summary>
+        /// The ids of the sent messages
+        /// </summary>
         public WaMessageId[] messages;
     }
 
+    /// <summary>
+    /// A WhatsApp user (a recipient in a send response, or the sender in a webhook)
+    /// </summary>
     public sealed class WaContact
     {
         /// <summary>
@@ -161,6 +185,9 @@ namespace SysWeaver.TextMessage.WhatsAppApi
         public WaProfile profile;
     }
 
+    /// <summary>
+    /// The profile of a WhatsApp user
+    /// </summary>
     public sealed class WaProfile
     {
         /// <summary>
@@ -169,6 +196,9 @@ namespace SysWeaver.TextMessage.WhatsAppApi
         public String name;
     }
 
+    /// <summary>
+    /// The id of a sent message
+    /// </summary>
     public sealed class WaMessageId
     {
         /// <summary>
@@ -187,8 +217,14 @@ namespace SysWeaver.TextMessage.WhatsAppApi
     /// </summary>
     public sealed class WaReadRequest
     {
+        /// <summary>
+        /// The messaging product, always "whatsapp"
+        /// </summary>
         public String messaging_product = "whatsapp";
 
+        /// <summary>
+        /// The new status of the message, always "read"
+        /// </summary>
         public String status = "read";
 
         /// <summary>
@@ -197,8 +233,14 @@ namespace SysWeaver.TextMessage.WhatsAppApi
         public String message_id;
     }
 
+    /// <summary>
+    /// Response from a request that only reports success
+    /// </summary>
     public sealed class WaSuccessResponse
     {
+        /// <summary>
+        /// True if the request succeeded
+        /// </summary>
         public bool success;
     }
 
@@ -207,6 +249,9 @@ namespace SysWeaver.TextMessage.WhatsAppApi
     /// </summary>
     public sealed class WaErrorResponse
     {
+        /// <summary>
+        /// The error
+        /// </summary>
         public WaError error;
     }
 
@@ -216,6 +261,7 @@ namespace SysWeaver.TextMessage.WhatsAppApi
     /// </summary>
     public sealed class WaError
     {
+        /// <inheritdoc />
         public override string ToString() => String.Concat('(', code, ") ", title ?? message, String.IsNullOrEmpty(error_data?.details) ? "" : ": " + error_data.details);
 
         /// <summary>
@@ -238,15 +284,30 @@ namespace SysWeaver.TextMessage.WhatsAppApi
         /// </summary>
         public String type;
 
+        /// <summary>
+        /// The error sub code (failed requests)
+        /// </summary>
         public int error_subcode;
 
+        /// <summary>
+        /// A trace id that can be given to Meta support
+        /// </summary>
         public String fbtrace_id;
 
+        /// <summary>
+        /// Extra error data (webhooks)
+        /// </summary>
         public WaErrorData error_data;
     }
 
+    /// <summary>
+    /// Extra data about an error
+    /// </summary>
     public sealed class WaErrorData
     {
+        /// <summary>
+        /// The messaging product, always "whatsapp"
+        /// </summary>
         public String messaging_product;
 
         /// <summary>

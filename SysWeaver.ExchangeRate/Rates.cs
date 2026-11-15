@@ -2,6 +2,9 @@
 
 namespace SysWeaver.ExchangeRate
 {
+    /// <summary>
+    /// A set of exchange rates from a source, all relative to a reference currency
+    /// </summary>
     public sealed class Rates
     {
 #if DEBUG
@@ -25,7 +28,7 @@ namespace SysWeaver.ExchangeRate
         public DateTime LastUpdated;
 
         /// <summary>
-        /// The rates to use for converting from a currency to the reference currency
+        /// The rates of the currencies, each is the amount of that currency that one unit of the reference currency is worth
         /// </summary>
         public Rate[] From;
     }

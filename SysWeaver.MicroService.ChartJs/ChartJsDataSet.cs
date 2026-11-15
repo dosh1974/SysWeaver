@@ -3,6 +3,9 @@ using SysWeaver.AI;
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// A data set (a series) of a chart
+    /// </summary>
     public sealed class ChartJsDataSet : ChartJsBaseOptions
     {
         /// <summary>
@@ -26,7 +29,7 @@ namespace SysWeaver.MicroService
         public String xAxisID = "x";
 
         /// <summary>
-        /// If true the border isn't drawn at the bottom (start)
+        /// Chart.js "parsing" option: false if the data is already in the internal format and doesn't need to be parsed
         /// </summary>
         [AiIgnore]
         public bool? parsing;

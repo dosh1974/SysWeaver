@@ -3,6 +3,9 @@
 namespace SysWeaver.MicroService
 {
 
+    /// <summary>
+    /// Describes how a value (a member, or an element of a collection) is edited
+    /// </summary>
     public class TypeInstanceDesc
     {
         /// <summary>
@@ -77,8 +80,12 @@ namespace SysWeaver.MicroService
         public TypeInstanceDesc ElementInst;
     }
 
+    /// <summary>
+    /// Describes a type (with its name and, for collections, the names of the element and key types)
+    /// </summary>
     public class TypeDescBase : TypeInstanceDesc
     {
+        /// <inheritdoc />
         public override string ToString() =>
             DisplayName != null
             ?
@@ -93,12 +100,12 @@ namespace SysWeaver.MicroService
         public String TypeName;
 
         /// <summary>
-        /// Element member (for collections)
+        /// Name of the element type (for collections)
         /// </summary>
         public String ElementTypeName;
 
         /// <summary>
-        /// Key
+        /// Name of the key type (for dictionaries)
         /// </summary>
         public String KeyTypeName;
 
@@ -114,6 +121,7 @@ namespace SysWeaver.MicroService
     /// </summary>
     public sealed class TypeMemberDesc : TypeDescBase
     {
+        /// <inheritdoc />
         public override string ToString() =>
             DisplayName != null
             ?

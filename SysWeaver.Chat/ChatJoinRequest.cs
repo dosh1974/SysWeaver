@@ -157,10 +157,20 @@ namespace SysWeaver.Chat
         /// </summary>
         public bool AllowPublicStore;
 
+        /// <summary>
+        /// Create an empty response (for deserialization)
+        /// </summary>
         public ChatJoinResponse()
         {
         }
 
+        /// <summary>
+        /// Create a response for a user
+        /// </summary>
+        /// <param name="r">The chat session settings</param>
+        /// <param name="session">The session of the user (what the user is allowed to do is evaluated using its auth)</param>
+        /// <param name="messages">The initial messages</param>
+        /// <param name="storage">Optional user storage service</param>
         public ChatJoinResponse(ChatSessionParams r, HttpSession session, ChatMessage[] messages, IUserStorageService storage = null)
         {
             var a = session?.Auth;

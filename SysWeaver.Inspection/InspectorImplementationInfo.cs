@@ -12,6 +12,7 @@ namespace SysWeaver.Inspection.Implementation
         public static readonly TypeInfo InspectorTypeInfo = typeof(I).GetTypeInfo();
 
         public static readonly MethodInfo ArrayLenghts = InspectorTypeInfo.GetDeclaredMethod("Array_Begin");
+        public static readonly MethodInfo ArrayLength = InspectorTypeInfo.GetDeclaredMethod("Array_Length");
         public static readonly MethodInfo ArrayLevelUp = InspectorTypeInfo.GetDeclaredMethod("Array_LevelUp");
         public static readonly MethodInfo ArrayLevelDown = InspectorTypeInfo.GetDeclaredMethod("Array_LevelDown");
         public static readonly MethodInfo ArrayByteArray = InspectorTypeInfo.GetDeclaredMethod("Array_ByteArray");

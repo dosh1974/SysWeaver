@@ -24,6 +24,12 @@ namespace SysWeaver.TextMessage
         const String LogPrefix = "[WhatsApp] ";
         const TextMessageChannels Channel = TextMessageChannels.WhatsApp;
 
+        /// <summary>
+        /// Create the service
+        /// </summary>
+        /// <param name="p">The parameters, at least one number and the <see cref="WhatsAppTextMessageParams.WebhookUrl"/> are required</param>
+        /// <param name="msg">Optional message host used for logging</param>
+        /// <exception cref="Exception">A parameter is missing or invalid</exception>
         public WhatsAppTextMessageService(WhatsAppTextMessageParams p = null, IMessageHost msg = null)
         {
             p = p ?? new WhatsAppTextMessageParams();
@@ -77,8 +83,10 @@ namespace SysWeaver.TextMessage
             Msg?.AddMessage(MessageLevels.Debug, $"{LogPrefix}Using {Numbers.Length} number(s), webhook at {url.ToQuoted()}");
         }
 
+        /// <inheritdoc />
         public override string ToString() => Tos;
 
+        /// <inheritdoc />
         public void Dispose()
         {
             foreach (var x in Numbers)
@@ -517,7 +525,9 @@ namespace SysWeaver.TextMessage
         readonly TextMessageQueue<IncomingTextMessage> Incoming;
         readonly TextMessageQueue<TextMessageStatusUpdate> Statuses;
 
+        /// <inheritdoc />
         public event Action<IncomingTextMessage> OnIncoming;
+        /// <inheritdoc />
         public event Action<TextMessageStatusUpdate> OnStatus;
 
         readonly LinkedList<WhatsAppTextMessage> Messages = new();
@@ -633,6 +643,7 @@ namespace SysWeaver.TextMessage
         readonly ExceptionTracker WebhookFails = new ExceptionTracker();
         readonly ExceptionTracker MarkReadFails = new ExceptionTracker();
 
+        /// <inheritdoc />
         public IEnumerable<Stats> GetStats()
         {
             const String n = nameof(WhatsAppTextMessageService);
@@ -646,6 +657,7 @@ namespace SysWeaver.TextMessage
                 yield return x;
         }
 
+        /// <inheritdoc />
         public PerfMonitor PerfMon { get; init; } = new PerfMonitor(nameof(WhatsAppTextMessageService));
 
         #endregion//Stats

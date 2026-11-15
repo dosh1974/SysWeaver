@@ -80,6 +80,10 @@ namespace SysWeaver.Data
     public class BaseTableData : CommonTableData
     {
 #if DEBUG
+        /// <summary>
+        /// Debug builds only: the size of the table as "columns x rows".
+        /// </summary>
+        /// <returns>A short text for debugging.</returns>
         public override string ToString() => String.Concat( Cols?.Length ?? Rows?.FirstOrDefault()?.Values?.Length ?? 0, 'x', Rows?.Length ?? 0);
 #endif//DEBUG
 

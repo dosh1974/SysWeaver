@@ -12,6 +12,10 @@ namespace SysWeaver
     public sealed class ImageData32
     {
 #if DEBUG
+        /// <summary>
+        /// Debug builds only: the image size as "width x height".
+        /// </summary>
+        /// <returns>A short text for debugging.</returns>
         public override string ToString() => String.Concat(Width, 'x', Height);
 #endif//DEBUG
 

@@ -130,7 +130,7 @@
                     const old = obj[mn];
                     if (old === v || (old === null && v === ""))
                         return;
-                    await editor.SetMemberValue(member, v, old, _T("Set value: \"{0}\"", isPassword ? "***" : v, "Command text stored in a log when a property value was changed.{0} is replaced with the new value."), token);
+                    await editor.SetMemberValue(member, v, old, E.Handler.SetText(isPassword ? "***" : v), token);
                 },
                 v => v, v => (v === null || v === undefined) ? "" : ("" + v),
                 member.Summary, null, null, max > 0 ? max : null, def, readOnly, multi ? 3 : 0);
@@ -140,7 +140,7 @@
             }
             if (obj[mn] === null && (member.Flags & F.AcceptNull) !== 0)
                 text.placeholder = "null";
-            text.setAttribute("aria-label", member.DisplayName || mn);
+            text.setAttribute("aria-label", E.Handler.Label(member));
             editContext.Element.append(text);
             return E.Handler.Item(obj, editor, member, {
                 Focus: text, Title: tip, DefValue: def, DefValueText: defText,

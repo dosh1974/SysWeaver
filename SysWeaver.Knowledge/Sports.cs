@@ -5,14 +5,32 @@ using System.Collections.Generic;
 namespace SysWeaver.Knowledge
 {
 
+    /// <summary>
+    /// Knowledge about sports (names and alternative names)
+    /// </summary>
     public static class Sports
     {
+        /// <summary>
+        /// The group (category) name of all sport info
+        /// </summary>
         public const String Group = "Sports";
 
+        /// <summary>
+        /// Try to get info about a sport
+        /// </summary>
+        /// <param name="name">The name (or alternative name) of the sport, any case</param>
+        /// <param name="info">The info if found</param>
+        /// <returns>True if info was found</returns>
         public static bool TryGet(String name, out Info info) => Tags.TryGetValueLower(name, out info);
 
+        /// <summary>
+        /// All keyword/info pairs (the keys are lower case)
+        /// </summary>
         public static IEnumerable<KeyValuePair<String, Info>> All => Tags;
 
+        /// <summary>
+        /// The number of keywords
+        /// </summary>
         public static int Count => Tags.Count;
 
         #region Setup

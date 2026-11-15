@@ -270,6 +270,10 @@ namespace SysWeaver
         bool IsLeaf;
 
 #if DEBUG
+        /// <summary>
+        /// Debug builds only: "Leaf" for a leaf node, else the number of child nodes.
+        /// </summary>
+        /// <returns>A short text for debugging.</returns>
         public override string ToString() => IsLeaf ? "Leaf" : ("Children: " + Nodes?.Count);
 #endif//DEBUG
 
@@ -676,6 +680,9 @@ namespace SysWeaver
         /// </summary>
         static long CountAllocNodes;
 
+        /// <summary>
+        /// Finalizer, updates the allocated node counter (see <see cref="AllocatedNodes"/>).
+        /// </summary>
         ~CompactStringTree()
         {
             Interlocked.Decrement(ref CountAllocNodes);

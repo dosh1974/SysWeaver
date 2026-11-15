@@ -106,17 +106,64 @@ namespace SysWeaver.Email
     /// </summary>
     public sealed class FakeEmailSummary
     {
+        /// <summary>
+        /// The email id
+        /// </summary>
         public String Id;
+
+        /// <summary>
+        /// True if this email was received (faked), false if it was sent by the system
+        /// </summary>
         public bool Incoming;
+
+        /// <summary>
+        /// The email address that the email was sent from
+        /// </summary>
         public String From;
+
+        /// <summary>
+        /// The display name of the sender (if known)
+        /// </summary>
         public String SenderName;
+
+        /// <summary>
+        /// The email address that the email was sent to
+        /// </summary>
         public String To;
+
+        /// <summary>
+        /// The subject of the email
+        /// </summary>
         public String Subject;
+
+        /// <summary>
+        /// A short plain text preview of the body
+        /// </summary>
         public String Preview;
+
+        /// <summary>
+        /// True if the body is html, false if it's plain text
+        /// </summary>
         public bool IsHtml;
+
+        /// <summary>
+        /// The UTC time stamp of when the email was sent or received
+        /// </summary>
         public DateTime Time;
+
+        /// <summary>
+        /// The system that the email belongs to
+        /// </summary>
         public String System;
+
+        /// <summary>
+        /// The error (if sending failed)
+        /// </summary>
         public String Error;
+
+        /// <summary>
+        /// The id of the email that this is a reply to (if known)
+        /// </summary>
         public String InReplyTo;
 
         internal FakeEmailSummary(AnyEmail e)

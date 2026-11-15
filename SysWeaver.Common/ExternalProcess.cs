@@ -12,6 +12,10 @@ namespace SysWeaver
     /// </summary>
     public sealed class ExternalProcessResult
     {
+        /// <summary>
+        /// A short description of the outcome: the failure message, "Timed out" or the exit code.
+        /// </summary>
+        /// <returns>A short text.</returns>
         public override string ToString() => Exception != null ? ("Failed: " + Exception.Message) : (TimedOut ? "Timed out" : ("Exit code " + ExitCode));
 
         /// <summary>

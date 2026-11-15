@@ -70,6 +70,7 @@ namespace SysWeaver.AI
         }
 
 
+        /// <inheritdoc />
         public void Dispose()
         {
             var sm = Manager;
@@ -110,6 +111,9 @@ namespace SysWeaver.AI
             return prefix;
         }
 
+        /// <summary>
+        /// The performance monitor used to track the requests of this service
+        /// </summary>
         public PerfMonitor PerfMon { get; } = new PerfMonitor("AiHost");
 
         #region AI services
@@ -343,6 +347,7 @@ namespace SysWeaver.AI
         const String ChatCompletionsPath = "chat/completions";
         const String ResponsesPath = "responses";
 
+        /// <inheritdoc />
         public String[] OnlyForPrefixes { get; }
 
         readonly IHttpRequestHandler ModelsHandler;
@@ -353,6 +358,7 @@ namespace SysWeaver.AI
 
         const String IndexSuffix = "/index.html";
 
+        /// <inheritdoc />
         public IHttpRequestHandler Handler(HttpServerRequest context)
         {
             var url = context.LocalUrl.AsSpan();

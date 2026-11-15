@@ -2154,6 +2154,15 @@
         }
     }
 
+    /**
+     * Drop the inline vertical placement of a dialog box (a kept bottom edge, a drag position): the css or the geometry places it again.
+     * @param {HTMLElement} box The dialog.
+     */
+    function clearBoxEdges(box) {
+        for (const p of ["top", "bottom", "margin-bottom"])
+            box.style.removeProperty(p);
+    }
+
     /** Elements of a dialog head that are not a drag handle. */
     const NoDrag = "button, a, input, select, textarea, [role=button], [contenteditable], .sw-dialog-tools";
 
@@ -2205,7 +2214,7 @@
         const apply = () => {
             //  a moved / maximized dialog is placed by its geometry (a kept bottom edge of the centered one no longer applies)
             if ((g.Placed || g.Max) && !box.style.height)
-                ["top", "bottom", "margin-bottom"].forEach(p => box.style.removeProperty(p));
+                clearBoxEdges(box);
             box.classList.toggle("sw-max", g.Max);
             box.classList.toggle("sw-placed", g.Placed && !g.Max);
             box.classList.toggle("sw-sized", g.Sized && !g.Max);
@@ -2338,7 +2347,7 @@
                     dragging = true;
                     //  grab what is on screen (an inline top / bottom of a centered or held box gives way to the drag's position)
                     const rr = box.getBoundingClientRect();
-                    ["top", "bottom", "margin-bottom"].forEach(p => box.style.removeProperty(p));
+                    clearBoxEdges(box);
                     g.Placed = true;
                     grab = { X: sx - rr.left, Y: sy - rr.top };
                     box.classList.add("sw-dragging");
@@ -2707,19 +2716,13 @@
     }
 
     /**
-     * aria-disabled with a reason (Sw.Disabled from ui/base.js when present, else the attribute).
+     * aria-disabled with a reason (Sw.Disabled.Set of ui/base.js).
      * @param {HTMLElement} e The element.
      * @param {boolean} on Disabled.
      * @param {string} [reason] The reason.
      */
     function setDisabled(e, on, reason) {
-        if (Sw.Disabled && typeof Sw.Disabled.Set === "function") {
-            Sw.Disabled.Set(e, on, reason);
-            return;
-        }
-        e.toggleAttribute("aria-disabled", on);
-        if (on)
-            e.setAttribute("aria-disabled", "true");
+        Sw.Disabled.Set(e, on, reason);
     }
 
     /**
@@ -2727,9 +2730,7 @@
      * @returns {boolean} True when it is disabled (aria-disabled or disabled).
      */
     function isDisabled(e) {
-        if (Sw.Disabled && typeof Sw.Disabled.Is === "function")
-            return !!Sw.Disabled.Is(e);
-        return e.disabled === true || e.getAttribute("aria-disabled") === "true";
+        return !!Sw.Disabled.Is(e);
     }
 
     /** @type {string} The pointer type of the last press ("touch", "mouse", "pen"). */
@@ -3426,7 +3427,7 @@
                 box.style.removeProperty("height");
                 //  a box that grew at its top keeps its bottom edge (the footer stays where it was all along; the top comes back down)
                 if (!st.BottomKept)
-                    ["top", "bottom", "margin-bottom"].forEach(p => box.style.removeProperty(p));
+                    clearBoxEdges(box);
                 else if (box.classList.contains("sw-placed"))
                     box.style.removeProperty("top");
             };
@@ -3434,7 +3435,7 @@
             const onHoldResize = () => {
                 if (!st.Held && st.BottomKept) {
                     st.BottomKept = false;
-                    ["top", "bottom", "margin-bottom"].forEach(p => box.style.removeProperty(p));
+                    clearBoxEdges(box);
                 }
                 if (st.Held) {
                     st.BottomKept = false;
@@ -5906,7 +5907,7 @@
                 lastBox = null;
                 if (!st.Held && st.BottomKept) {
                     st.BottomKept = false;
-                    ["top", "bottom", "margin-bottom"].forEach(p => box.style.removeProperty(p));
+                    clearBoxEdges(box);
                 }
                 requestAnimationFrame(() => {
                     footWrap();

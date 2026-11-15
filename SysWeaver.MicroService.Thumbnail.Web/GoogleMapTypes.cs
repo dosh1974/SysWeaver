@@ -1,13 +1,16 @@
 ﻿namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// The visuals of a Google Maps image
+    /// </summary>
     public enum GoogleMapTypes
     {
         /// <summary>
-        /// Satelite image
+        /// Satellite image
         /// </summary>
         Satellite = 0,
         /// <summary>
-        /// Raod map image
+        /// Road map image
         /// </summary>
         Roadmap,
         /// <summary>

@@ -259,7 +259,9 @@
         const p = Sw.Net.MessageParts("Save", new Error("x"));
         return String(p) === p.Text && ("" + p) === p.Text;
     }, eq(true));
-    t("Sw.Net.Compose(what, why, todo) → text", () => Sw.Net.Compose("Withdraw: not done.", "it was used", "try again"), eq("Withdraw: not done. It was used. Try again."));
+    t("Sw.Net.Sentence(text, o) → ends with a full stop", () => [Sw.Net.Sentence(" it ended "), Sw.Net.Sentence("it ended", { Capital: true }), Sw.Net.Sentence("409 - Conflict\nit ended!", { StatusLine: true, Capital: true }), Sw.Net.Sentence("")].join("|"), eq("it ended.|It ended.|It ended!|"));
+    t("Sw.ErrorMessage(e) → the message, else the text", () => [Sw.ErrorMessage(new Error("boom")), Sw.ErrorMessage("plain"), Sw.ErrorMessage(null)].join("|"), eq("boom|plain|null"));
+    t("Sw.Net.Compose(what, why, todo) → text",() => Sw.Net.Compose("Withdraw: not done.", "it was used", "try again"), eq("Withdraw: not done. It was used. Try again."));
     t("Sw.Net.Compose never repeats advice that what already says", () => Sw.Net.Compose("OpsVictim is no longer listed. Nothing was sent.", "", "Nothing was sent."), eq("OpsVictim is no longer listed. Nothing was sent."));
     t("Sw.Net.ReasonOf(body) → the reason", () => Sw.Net.ReasonOf("The session has already ended."), eq("The session has already ended."));
     t("Sw.Net.ReasonOf(html) → empty", () => Sw.Net.ReasonOf("<html><body>x</body></html>"), eq(""));

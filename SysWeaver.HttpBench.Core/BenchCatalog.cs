@@ -49,6 +49,9 @@ namespace SysWeaver.HttpBench
         /// </summary>
         public String Desc;
 
+        /// <summary>
+        /// The http method and path, ex: "GET serverTime".
+        /// </summary>
         public override string ToString() => String.Concat(Method, ' ', Path);
     }
 

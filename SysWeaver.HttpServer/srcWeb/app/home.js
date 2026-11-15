@@ -290,12 +290,12 @@ function homeUptime(list, start) {
     const k = homeKpi({
         Icon: "clock",
         Label: _TF("Service uptime", "Label of the tile with the time the service has been running, on the home page"),
-        Title: _T("The service started {0}", start.toLocaleString(Sw.Format.Locale(), { dateStyle: "medium", timeStyle: "short" }), "Tool tip of the service uptime on the home page.{0} is replaced with the date and time the service started"),
+        Title: _T("The service started {0}", Sw.Format.DateTime(start, { dateStyle: "medium", timeStyle: "short" }), "Tool tip of the service uptime on the home page.{0} is replaced with the date and time the service started"),
     });
     const sameDay = start.toDateString() === new Date().toDateString();
     k.Sub.textContent = sameDay
-        ? _T("Since {0} today", start.toLocaleTimeString(Sw.Format.Locale(), { hour: "2-digit", minute: "2-digit" }), "Sub line of the server uptime tile on the home page.{0} is replaced with the time the server started (hours and minutes)")
-        : _T("Since {0}", start.toLocaleString(Sw.Format.Locale(), { dateStyle: "medium", timeStyle: "short" }), "Sub line of the server uptime tile on the home page.{0} is replaced with the date and time the server started");
+        ? _T("Since {0} today", Sw.Format.Time(start, false), "Sub line of the server uptime tile on the home page.{0} is replaced with the time the server started (hours and minutes)")
+        : _T("Since {0}", Sw.Format.DateTime(start, { dateStyle: "medium", timeStyle: "short" }), "Sub line of the server uptime tile on the home page.{0} is replaced with the date and time the server started");
     const update = () => {
         const min = Math.floor(Math.max(0, homeNow().getTime() - start.getTime()) / 60000);
         const d = Math.floor(min / 1440);
@@ -331,8 +331,8 @@ function homeVersion(main, list) {
     k.Value.textContent = short;
     const d = homeParseUtc(ds.appbuild);
     if (d) {
-        tip += "\n" + _T("Built {0}", d.toLocaleString(Sw.Format.Locale(), { dateStyle: "medium", timeStyle: "short" }), "Tool tip line of the application version on the home page.{0} is replaced with the date and time the application was built");
-        k.Sub.textContent = _T("Build {0}", d.toLocaleDateString(Sw.Format.Locale(), { dateStyle: "medium" }), "Sub line of the application version tile on the home page.{0} is replaced with the date the application was built");
+        tip += "\n" + _T("Built {0}", Sw.Format.DateTime(d, { dateStyle: "medium", timeStyle: "short" }), "Tool tip line of the application version on the home page.{0} is replaced with the date and time the application was built");
+        k.Sub.textContent = _T("Build {0}", Sw.Format.DateText(d), "Sub line of the application version tile on the home page.{0} is replaced with the date the application was built");
     }
     k.E.title = tip;
     list.append(k.E);
@@ -370,7 +370,7 @@ function homeStatus(main) {
         }
         catch {
         }
-        const time = homeNow().toLocaleTimeString(Sw.Format.Locale(), { hour: "2-digit", minute: "2-digit" });
+        const time = Sw.Format.Time(homeNow(), false);
         badge.className = "sw-badge sw-noicon HomeStatus " + (!online ? "sw-error" : (problems > 0 ? "sw-warning" : "sw-ok"));
         badge.lastChild.textContent = !online
             ? _TF("Not connected to the service", "Status line on the home page of the application when the service cannot be reached")

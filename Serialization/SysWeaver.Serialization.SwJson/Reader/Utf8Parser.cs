@@ -654,8 +654,8 @@ namespace SysWeaver.Serialization.SwJson.Reader
             var i = rem.IndexOfAny(QuoteEscapeOrNonAscii);
             if ((i >= 0) && (rem[i] == '"'))
             {
-                // ASCII without escapes (the common case)
-                var s = i == 0 ? String.Empty : UTF8.GetString(d, i);
+                // ASCII without escapes (the common case), short strings are shared (they often repeat)
+                var s = i == 0 ? String.Empty : ((i <= SpanStringCache.MaxLength) && SpanStringCache.Enabled ? SpanStringCache.GetAscii(d, i) : UTF8.GetString(d, i));
                 d += i + 1;
                 return s;
             }

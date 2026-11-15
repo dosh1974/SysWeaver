@@ -3,6 +3,9 @@ using System;
 
 namespace SysWeaver.WebBrowser
 {
+    /// <summary>
+    /// Parameters for the <see cref="CefWebBrowser"/>
+    /// </summary>
     public sealed class CefWebBrowserParams
     {
         /// <summary>

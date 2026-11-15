@@ -12,10 +12,19 @@ namespace SysWeaver.MicroService
 
 
 
+    /// <summary>
+    /// Parameters for the <see cref="MediaThumbnailService"/>
+    /// </summary>
     public sealed class MediaThumbnailParams
     {
+        /// <summary>
+        /// The maximum number of thumbnails rendered at the same time, default is 16 (minimum 1)
+        /// </summary>
         public int MaxConcurrency = 16;
 
+        /// <summary>
+        /// The base url used by the web renderer to reach the media, if null the local uri of the file server is used
+        /// </summary>
         public String MediaUrlRoot;
     }
 
@@ -28,6 +37,7 @@ namespace SysWeaver.MicroService
     [RequiredDep(typeof(HttpServerBase))]
     public sealed class MediaThumbnailService : IDisposable
     {
+        /// <inheritdoc />
         public override string ToString()
         {
             var rs = MediaInfo.ExternalMediaTypes.ToList();
@@ -37,6 +47,11 @@ namespace SysWeaver.MicroService
 
 
 
+        /// <summary>
+        /// Create the service, registers media info handlers for "glsl" and "svg" files
+        /// </summary>
+        /// <param name="manager">The service manager</param>
+        /// <param name="p">Parameters, null uses defaults</param>
         public MediaThumbnailService(ServiceManager manager, MediaThumbnailParams p = null)
         {
             p = p ?? new MediaThumbnailParams();
@@ -174,6 +189,9 @@ namespace SysWeaver.MicroService
 
         readonly Stack<IDisposable> MediaHandlers = new Stack<IDisposable>();
 
+        /// <summary>
+        /// Unregisters the media info handlers
+        /// </summary>
         public void Dispose()
         {
             var m = MediaHandlers;

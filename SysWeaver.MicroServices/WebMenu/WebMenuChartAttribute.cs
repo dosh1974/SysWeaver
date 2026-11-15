@@ -10,7 +10,7 @@ namespace SysWeaver.MicroService
     public class WebMenuChartAttribute : WebMenuAttribute
     {
         /// <summary>
-        /// Put this attribute on a table data API to add it to a menu
+        /// Put this attribute on a chart API to add it to a menu
         /// </summary>
         /// <param name="menu">Menu name to add it to (null for default)</param>
         /// <param name="id">Id of this item, this can be path separated by /, ex: "Debug/Data/CompressionTable"</param>

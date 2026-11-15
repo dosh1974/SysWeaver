@@ -29,15 +29,6 @@
     const DefaultCols = [0, 1, 2, 5, 3, 6, 7, 4, 8, 9];
 
     /**
-     * Thousands separated by spaces ("1 234 567").
-     * @param {number|string} v The value.
-     * @returns {string} The text.
-     */
-    function intText(v) {
-        return String(v).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
-    }
-
-    /**
      * Lower case extension of a name ("" without one, and for folders / uploads when a type is given).
      * @param {string} n The name.
      * @param {number} [t] The item type.
@@ -97,17 +88,17 @@
             c.title = _TF("Size is not known, this is probably a dynamically generated resource", "A tool tip description of a text field containing the size of a web resources with an unknown size");
             return;
         }
-        c.textContent = intText(size);
+        c.textContent = Sw.Format.Number(size, 0);
         let t = Sw.Clipboard.CopyOnClick(c, size, { Keyboard: true });
         const kb = (size + 512) >> 10;
         if (kb > 0) {
-            t += "\n\n" + _T("{0} KB", intText(kb), "Tool tip of the size column of a web resource listing: the size in kilobytes. {0} is the formatted whole number, ex: 12");
+            t += "\n\n" + _T("{0} KB", Sw.Format.Number(kb, 0), "Tool tip of the size column of a web resource listing: the size in kilobytes. {0} is the formatted whole number, ex: 12");
             const mb = Math.round(size / 1048576);
             if (mb > 0)
-                t += "\n" + _T("{0} MB", intText(mb), "Tool tip of the size column of a web resource listing: the size in megabytes. {0} is the formatted whole number, ex: 12");
+                t += "\n" + _T("{0} MB", Sw.Format.Number(mb, 0), "Tool tip of the size column of a web resource listing: the size in megabytes. {0} is the formatted whole number, ex: 12");
             const gb = Math.round(size / 1073741824);
             if (gb > 0)
-                t += "\n" + _T("{0} GB", intText(gb), "Tool tip of the size column of a web resource listing: the size in gigabytes. {0} is the formatted whole number, ex: 12");
+                t += "\n" + _T("{0} GB", Sw.Format.Number(gb, 0), "Tool tip of the size column of a web resource listing: the size in gigabytes. {0} is the formatted whole number, ex: 12");
         }
         c.title = t;
     }
@@ -651,7 +642,7 @@
         }
         catch (e) {
             console.error(e);
-            Sw.Fail(e && e.message ? e.message : String(e), true);
+            Sw.Fail(Sw.ErrorMessage(e), true);
         }
         finally {
             done();

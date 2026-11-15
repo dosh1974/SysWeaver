@@ -17,6 +17,7 @@ namespace SysWeaver.AI
     /// </summary>
     public sealed class OpenAiCompletionsChatSession : AiChatSessionBase, IOpenAiChatSession
     {
+        /// <inheritdoc />
         public OpenAiChatApi ChatApi => OpenAiChatApi.Completions;
 
         internal OpenAiCompletionsChatSession(bool isPrivate, ChatClient c, OpenAiSessionParams p, IAiToolCache toolCache, String joinAuth, String clearAuth, PerfMonitor monitor, AsyncLock chatLock, IAiMemory memory)
@@ -47,6 +48,7 @@ namespace SysWeaver.AI
         readonly ChatReasoningEffortLevel? ReasonigLevel;
         readonly ChatServiceTier? Tier;
 
+        /// <inheritdoc />
         protected override void OnToolsChanged()
         {
             Options = null;
@@ -66,6 +68,7 @@ namespace SysWeaver.AI
 
         #endregion//Options
 
+        /// <inheritdoc />
         public override String SystemPrompt
         {
             get =>
@@ -83,8 +86,14 @@ namespace SysWeaver.AI
                                 new UserChatMessage(value));
         }
 
+        /// <summary>
+        /// The system prompt as an API message (a system message, or a user message if the model has no system role), null if no system prompt is set
+        /// </summary>
         public ChatMessage MsgSystemPrompt { get; private set; }
 
+        /// <summary>
+        /// The conversation history (excluding the system prompt), sent on every request.
+        /// </summary>
         public readonly List<ChatMessage> ApiMessages = new List<ChatMessage>();
 
         IEnumerable<ChatMessage> EnumMessages(String p)
@@ -113,6 +122,7 @@ namespace SysWeaver.AI
                 messages.Add(new ToolChatMessage(tcs[i].Id, res[i]));
         }
 
+        /// <inheritdoc />
         public override async Task<String> Query(String text, AiDebugMessage debug = null, Func<String, long, long, Task> onUsage = null, IReadOnlyList<ValueTuple<AiContentPart, String>> extraData = null)
         {
             using var _a = Monitor?.Track(nameof(Query));
@@ -128,6 +138,7 @@ namespace SysWeaver.AI
             return await InternalComplete(messages, messages, null, debug, onUsage, false).ConfigureAwait(false);
         }
 
+        /// <inheritdoc />
         public override async Task<String> Complete(String text, HttpServerRequest request, AiDebugMessage debug = null, String from = null, Func<String, long, long, Task> onUsage = null)
         {
             using var _a = Monitor?.Track(nameof(Complete));
@@ -233,6 +244,7 @@ namespace SysWeaver.AI
         }
 
 
+        /// <inheritdoc />
         public override async Task<String> CompleteUpdate(String text,
             IReadOnlyList<ValueTuple<AiContentPart, String>> extraData,
             HttpServerRequest request,
@@ -403,8 +415,10 @@ namespace SysWeaver.AI
             return "No text response!";
         }
 
+        /// <inheritdoc />
         public override void ClearApiMessages() => ApiMessages.Clear();
 
+        /// <inheritdoc />
         protected override void WriteConversation(Utf8JsonWriter writer)
         {
             var opt = ModelReaderWriterOptions.Json;

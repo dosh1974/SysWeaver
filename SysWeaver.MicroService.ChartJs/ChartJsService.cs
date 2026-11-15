@@ -18,9 +18,17 @@ using SysWeaver.Serialization.NewtonsoftJson;
 namespace SysWeaver.MicroService
 {
 
+    /// <summary>
+    /// Creates charts (Chart.js configurations) from tables and data, and exports them using the registered chart exporters
+    /// </summary>
     [AiToolPrefix("")]
     public sealed class ChartJsService : IHaveAiTools, IDisposable, IChatStoreLinkHandler
     {
+        /// <summary>
+        /// Create the service, chart exporters of the other services are added (and saving as links if there is a user storage service)
+        /// </summary>
+        /// <param name="manager">The service manager</param>
+        /// <param name="p">Parameters, null to use the defaults</param>
         public ChartJsService(ServiceManager manager, ChartJsParams p = null)
         {
             p = p ?? new ChartJsParams();
@@ -53,6 +61,7 @@ namespace SysWeaver.MicroService
         readonly UserStorageChartExporter[] StorageExporters;
 
 
+        /// <inheritdoc />
         public async Task<string> HandleLink(IUserStorageService us, string url, UserStorageScopes scope, HttpServerRequest context)
         {
             var ss = StorageExporters;
@@ -76,6 +85,7 @@ namespace SysWeaver.MicroService
 
         readonly ApiHttpServerModule ApiModule;
 
+        /// <inheritdoc />
         public void Dispose()
         {
             var manager = Manager;
@@ -401,7 +411,7 @@ namespace SysWeaver.MicroService
         /// Returns chart data for peformance mesaurement.
         /// Returns in progress and max concurrency data.
         /// </summary>
-        /// <returns></returns>
+        /// <returns>Graph data as json (for each method: the number of calls in progress and the peak)</returns>
         [WebApiAuth(Roles.Debug)]
         [WebApi]
         [WebApiRaw(HttpServerTools.JsonMime)]
@@ -520,6 +530,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Returns true if the TableChart api is available.
         /// </summary>
+        /// <returns>True if the web api module is available, so <see cref="TableChart"/> can be used</returns>
         [WebApi]
         [WebApiClientCacheStatic]
         [WebApiRequestCacheStatic]
@@ -672,9 +683,13 @@ namespace SysWeaver.MicroService
         }
 
         /// <summary>
-        /// Returns chart data for a table
+        /// Returns chart data for a table: calls a web api that returns table data and charts the result
         /// </summary>
-        /// <returns></returns>
+        /// <param name="p">The table api to call (and its table request options) and how to chart the table</param>
+        /// <param name="request">Automatically populated by the request handler, don't use</param>
+        /// <returns>Graph data as json</returns>
+        /// <exception cref="UserNotAllowedException">The caller isn't allowed to use the table api</exception>
+        /// <exception cref="Exception">The api doesn't exist or doesn't return table data</exception>
         [WebApi]
         [WebApiRaw(HttpServerTools.JsonMime)]
         public async Task<ReadOnlyMemory<Byte>> TableChart(TableChartParams p, HttpServerRequest request)
@@ -874,7 +889,8 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Get the menu items for all registered chart exporters
         /// </summary>
-        /// <returns></returns>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
+        /// <returns>The exporters the caller can use (the ones that require a user are only included for a signed in user)</returns>
         [WebApi]
         public WebMenuItem[] GetChartExporters(HttpServerRequest context) => context.Session?.Auth == null ? ChartExporterMenu : ChartExporterUserMenu;
 
@@ -884,8 +900,8 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Export some chart using a specified exporter
         /// </summary>
-        /// <param name="export">Required paramterers</param>
-        /// <param name="context"></param>
+        /// <param name="export">The exporter to use (ExportAs), the chart data and the export options</param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
         /// <returns>A "file" with the exported data</returns>
         [WebApi]
         public Task<MemoryFile> ExportChart(ExportChartRequest export, HttpServerRequest context)
@@ -943,6 +959,11 @@ namespace SysWeaver.MicroService
             RemoveExporter(instance as IHaveChartExporters);
         }
 
+        /// <summary>
+        /// Add a chart exporter
+        /// </summary>
+        /// <param name="exp">The exporter</param>
+        /// <returns>True if it was added, false if an exporter with the same name already exists</returns>
         public bool AddExporter(IChartExporter exp)
         {
             if (!ChartExporters.TryAdd(exp.Name, exp))
@@ -951,6 +972,11 @@ namespace SysWeaver.MicroService
             return true;
         }
 
+        /// <summary>
+        /// Remove a chart exporter
+        /// </summary>
+        /// <param name="exp">The exporter (removed by its name)</param>
+        /// <returns>True if it was removed</returns>
         public bool RemoveExporter(IChartExporter exp)
         {
             if (!ChartExporters.TryRemove(exp.Name, out var _))
@@ -960,6 +986,11 @@ namespace SysWeaver.MicroService
         }
 
 
+        /// <summary>
+        /// Add all chart exporters of an object
+        /// </summary>
+        /// <param name="exp">The object, can be null</param>
+        /// <returns>The number of exporters that were added</returns>
         public int AddExporter(IHaveChartExporters exp)
         {
             if (exp == null)
@@ -975,6 +1006,11 @@ namespace SysWeaver.MicroService
             return c;
         }
 
+        /// <summary>
+        /// Remove all chart exporters of an object
+        /// </summary>
+        /// <param name="exp">The object, can be null</param>
+        /// <returns>The number of exporters that were removed</returns>
         public int RemoveExporter(IHaveChartExporters exp)
         {
             if (exp == null)

@@ -16,6 +16,9 @@ namespace SysWeaver.MicroService
 
 
 
+    /// <summary>
+    /// Service that provides sign in and passkey management using FIDO2 passkeys (WebAuthn), users are handled by the <see cref="UserManagerService"/>.
+    /// </summary>
     [IsMicroService]
     [RequiredDep<UserManagerService>]
     [OptionalDep<IQrCodeService>]
@@ -77,6 +80,11 @@ namespace SysWeaver.MicroService
         #endregion//Dynamic menu
 
 
+        /// <summary>
+        /// Create the service
+        /// </summary>
+        /// <param name="manager">The service manager (the <see cref="UserManagerService"/> is required, an <see cref="IQrCodeService"/> is optional)</param>
+        /// <param name="p">Parameters, null to use the defaults</param>
         public PassKeyService(ServiceManager manager, PassKeyParams p)
         {
             p = p ?? new PassKeyParams();
@@ -253,11 +261,11 @@ namespace SysWeaver.MicroService
 
 
         /// <summary>
-        /// Show a QR code with a link that add's a passkey on some other device
+        /// Show a QR code with a link that adds a passkey on some other device
         /// </summary>
-        /// <param name="context"></param>
-        /// <returns></returns>
-        /// <exception cref="NoUserLoggedInException"></exception>
+        /// <param name="context">The request context</param>
+        /// <returns>The QR code as svg</returns>
+        /// <exception cref="NoUserLoggedInException">If no user is signed in</exception>
         [WebApi("GetQR.svg")]
         [WebApiRaw("svg")]
         [WebApiClientCache(10)]
@@ -671,11 +679,12 @@ namespace SysWeaver.MicroService
         /// </summary>
         /// <param name="request">The passkey and the new name</param>
         /// <param name="context"></param>
-        /// <returns>True if the passkey was renamed</returns>
+        /// <returns>True when the passkey was renamed (never false: a passkey that is not found is a 409 with the reason)</returns>
+        /// <exception cref="HttpResponseException">409 with the reason: the passkey was not found (it may already be removed)</exception>
         [WebApi]
         [WebApiAuth]
-        public Task<bool> RenamePassKey(PassKeyRenameRequest request, HttpServerRequest context)
-            => Um.RenamePassKey(request.Id, request.Name, context);
+        public async Task<bool> RenamePassKey(PassKeyRenameRequest request, HttpServerRequest context)
+            => await Um.RenamePassKey(request.Id, request.Name, context).ConfigureAwait(false) ? true : throw HttpResponseException.Gone("Can't rename the passkey: it was not found (it may already be removed), refresh the list");
 
         /// <summary>
         /// Remove a passkey from the signed in user, the last sign in method (passkey or password) of a user can't be removed

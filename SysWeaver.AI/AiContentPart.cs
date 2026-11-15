@@ -2,6 +2,9 @@ using System;
 
 namespace SysWeaver.AI
 {
+    /// <summary>
+    /// The kind of content of an <see cref="AiContentPart"/>
+    /// </summary>
     public enum AiContentPartKinds
     {
         /// <summary>
@@ -23,6 +26,7 @@ namespace SysWeaver.AI
     /// </summary>
     public sealed class AiContentPart
     {
+        /// <inheritdoc />
         public override string ToString() => String.Concat(Kind, ": ", Text ?? Filename ?? Uri?.ToString() ?? MimeType);
 
         /// <summary>
@@ -60,18 +64,49 @@ namespace SysWeaver.AI
         /// </summary>
         public bool HighDetail { get; init; } = true;
 
+        /// <summary>
+        /// Create a text part
+        /// </summary>
+        /// <param name="text">The text</param>
+        /// <returns>The part</returns>
         public static AiContentPart CreateTextPart(String text)
             => new AiContentPart { Kind = AiContentPartKinds.Text, Text = text };
 
+        /// <summary>
+        /// Create an image part from bytes
+        /// </summary>
+        /// <param name="data">The image data</param>
+        /// <param name="mimeType">The mime type of the image</param>
+        /// <param name="highDetail">True to request high detail processing (if supported by the API)</param>
+        /// <returns>The part</returns>
         public static AiContentPart CreateImagePart(BinaryData data, String mimeType, bool highDetail = true)
             => new AiContentPart { Kind = AiContentPartKinds.Image, Data = data, MimeType = mimeType, HighDetail = highDetail };
 
+        /// <summary>
+        /// Create an image part from an uri
+        /// </summary>
+        /// <param name="uri">The uri of the image</param>
+        /// <param name="highDetail">True to request high detail processing (if supported by the API)</param>
+        /// <returns>The part</returns>
         public static AiContentPart CreateImagePart(Uri uri, bool highDetail = true)
             => new AiContentPart { Kind = AiContentPartKinds.Image, Uri = uri, HighDetail = highDetail };
 
+        /// <summary>
+        /// Create a file part from bytes
+        /// </summary>
+        /// <param name="data">The file data</param>
+        /// <param name="mimeType">The mime type of the file</param>
+        /// <param name="filename">The name of the file</param>
+        /// <returns>The part</returns>
         public static AiContentPart CreateFilePart(BinaryData data, String mimeType, String filename)
             => new AiContentPart { Kind = AiContentPartKinds.File, Data = data, MimeType = mimeType, Filename = filename };
 
+        /// <summary>
+        /// Create a file part from an uri
+        /// </summary>
+        /// <param name="uri">The uri of the file</param>
+        /// <param name="mimeType">The mime type of the file, if known</param>
+        /// <returns>The part</returns>
         public static AiContentPart CreateFilePart(Uri uri, String mimeType = null)
             => new AiContentPart { Kind = AiContentPartKinds.File, Uri = uri, MimeType = mimeType };
     }

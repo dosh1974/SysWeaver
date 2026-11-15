@@ -28,6 +28,10 @@ namespace SysWeaver
         /// </summary>
         public readonly Message.TextStyles Style;
 
+        /// <summary>
+        /// The handler type, mode and text style.
+        /// </summary>
+        /// <returns>A short text for debugging.</returns>
         public override string ToString()
         {
             return String.Concat("Text ", Mode, " ", Style);
@@ -35,6 +39,11 @@ namespace SysWeaver
 
         String Prev;
 
+        /// <summary>
+        /// Renders the message as text (prepending a date line if needed) and passes it to <see cref="WriteText(string)"/>.
+        /// </summary>
+        /// <param name="message">The message to handle.</param>
+        /// <returns>The task returned by <see cref="WriteText(string)"/>.</returns>
         protected sealed override Task Add(Message message)
         {
             var style = Style;
@@ -58,6 +67,9 @@ namespace SysWeaver
         /// <returns>A task that completes when the text is written (must be completed on return in <see cref="MessageHandler.Modes.NativeSync"/> mode).</returns>
         protected abstract Task WriteText(String text);
 
+        /// <summary>
+        /// Nothing to flush by default, override if the output is buffered.
+        /// </summary>
         protected override void OnFlush()
         {
         }

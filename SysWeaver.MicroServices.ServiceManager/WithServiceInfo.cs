@@ -3,8 +3,16 @@ using SysWeaver.MicroService;
 
 namespace SysWeaver
 {
+    /// <summary>
+    /// Base class for services that want to know their instance name and service info
+    /// </summary>
     public abstract class WithServiceInfo
     {
+        /// <summary>
+        /// Create a service base object
+        /// </summary>
+        /// <param name="manager">The service manager that the service is registered to</param>
+        /// <param name="defaultInstanceName">The instance name to use if the manager has no name for the instance, null or empty means "default"</param>
         protected WithServiceInfo(ServiceManager manager, String defaultInstanceName = "default")
         {
             Manager = manager;
@@ -13,10 +21,13 @@ namespace SysWeaver
         }
         readonly String DefInstanceName;
 
+        /// <summary>
+        /// The service manager
+        /// </summary>
         protected readonly ServiceManager Manager;
 
         /// <summary>
-        /// Get the name of the instance (if created by the manager).
+        /// Get the name of the instance (if created by the manager), the default instance name if it has no name.
         /// Can't be called in the constructor.
         /// </summary>
         public String InstanceName

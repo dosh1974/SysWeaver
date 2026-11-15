@@ -5,12 +5,18 @@ using System.Text.Json.Nodes;
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// Describes a service to create (type, optional instance name and optional parameters)
+    /// </summary>
     public sealed class ServiceManifest
     {
 #if DEBUG
         public override string ToString() => String.Concat(Type.ToQuoted(), " {", Params, "}");
 #endif//DEBUG
 
+        /// <summary>
+        /// Create an empty manifest
+        /// </summary>
         public ServiceManifest()
         {
         }
@@ -31,6 +37,12 @@ namespace SysWeaver.MicroService
         public Object Params { get; set; }
 
 
+        /// <summary>
+        /// Try to get the parameters as a specific type (deserializing it if it is a json element or node)
+        /// </summary>
+        /// <param name="a">The parameters as the requested type, null on failure</param>
+        /// <param name="pt">The requested type</param>
+        /// <returns>True if the parameters could be converted to the requested type</returns>
         public bool TryGetParamAs(out Object a, Type pt)
         {
             var op = Params;

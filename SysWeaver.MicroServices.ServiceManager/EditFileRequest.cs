@@ -2,6 +2,9 @@ using System;
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// Describes the urls an editor uses to read, save and delete a file
+    /// </summary>
     public class EditFileRequest
     {
         /// <summary>

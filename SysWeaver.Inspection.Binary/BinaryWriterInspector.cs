@@ -109,61 +109,73 @@ namespace SysWeaver.Inspection
 
         #region IInspector
 
+        /// <inheritdoc />
         public void LazyRef<T>(T value, SetProp<T> setValue) where T : class
         {
         }
 
+        /// <inheritdoc />
         public void Field(ref Boolean value)
         {
             Writer.Write(value);
         }
 
+        /// <inheritdoc />
         public void Field(ref Byte value)
         {
             Writer.Write(value);
         }
 
+        /// <inheritdoc />
         public void Field(ref Char value)
         {
             //  As an UInt16: any char (BinaryWriter.Write(Char) throws for a lone surrogate), independent of the encoding
             Writer.Write((UInt16)value);
         }
 
+        /// <inheritdoc />
         public void Field(ref Decimal value)
         {
             Writer.Write(value);
         }
 
+        /// <inheritdoc />
         public void Field(ref Double value)
         {
             Writer.Write(value);
         }
 
+        /// <inheritdoc />
         public void Field(ref Int16 value)
         {
             Writer.Write(value);
         }
 
+        /// <inheritdoc />
         public void Field(ref Int32 value)
         {
             Writer.Write(value);
         }
 
+        /// <inheritdoc />
         public void Field(ref Int64 value)
         {
             Writer.Write(value);
         }
 
+        /// <inheritdoc />
         public void Field(ref SByte value)
         {
             Writer.Write(value);
         }
 
+        /// <inheritdoc />
         public void Field(ref Single value)
         {
             Writer.Write(value);
         }
 
+        /// <inheritdoc />
         public void Field(ref String value)
         {
             var w = Writer;
@@ -182,42 +194,50 @@ namespace SysWeaver.Inspection
             WriteNonNullString(value);
         }
 
+        /// <inheritdoc />
         public void Field(ref UInt16 value)
         {
             Writer.Write(value);
         }
 
+        /// <inheritdoc />
         public void Field(ref UInt32 value)
         {
             Writer.Write(value);
         }
 
+        /// <inheritdoc />
         public void Field(ref UInt64 value)
         {
             Writer.Write(value);
         }
 
+        /// <inheritdoc />
         public void Field(ref TimeSpan value)
         {
             Writer.Write(value.Ticks);
         }
 
+        /// <inheritdoc />
         public void Field(ref DateTime value)
         {
             Writer.Write(value.Ticks);
             Writer.Write((Byte)value.Kind);
         }
 
+        /// <inheritdoc />
         public void Field(ref TimeOnly value)
         {
             Writer.Write(value.Ticks);
         }
 
+        /// <inheritdoc />
         public void Field(ref DateOnly value)
         {
             Writer.Write(value.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc).Ticks);
         }
 
+        /// <inheritdoc />
         public void Field(ref DateTimeOffset value)
         {
             Writer.Write(value.Ticks);
@@ -229,6 +249,7 @@ namespace SysWeaver.Inspection
             Writer.Write((Int32)o);
         }
 
+        /// <inheritdoc />
         public void Field(ref Guid value)
         {
             //  The same bytes as ToByteArray
@@ -237,62 +258,74 @@ namespace SysWeaver.Inspection
             Writer.Write(b);
         }
 
+        /// <inheritdoc />
         public void Field<T>(ref T value)
         {
             var handler = TypeHandlerCache<T>.GetHandler(ref value);
             handler.Field(this, ref value);
         }
 
+        /// <inheritdoc />
         public void Prop(Boolean value, SetProp<Boolean> onSet)
         {
             Writer.Write(value);
         }
 
+        /// <inheritdoc />
         public void Prop(Byte value, SetProp<Byte> onSet)
         {
             Writer.Write(value);
         }
 
+        /// <inheritdoc />
         public void Prop(Char value, SetProp<Char> onSet)
         {
             Writer.Write((UInt16)value);
         }
 
+        /// <inheritdoc />
         public void Prop(Decimal value, SetProp<Decimal> onSet)
         {
             Writer.Write(value);
         }
 
+        /// <inheritdoc />
         public void Prop(Double value, SetProp<Double> onSet)
         {
             Writer.Write(value);
         }
 
+        /// <inheritdoc />
         public void Prop(Int16 value, SetProp<Int16> onSet)
         {
             Writer.Write(value);
         }
 
+        /// <inheritdoc />
         public void Prop(Int32 value, SetProp<Int32> onSet)
         {
             Writer.Write(value);
         }
 
+        /// <inheritdoc />
         public void Prop(Int64 value, SetProp<Int64> onSet)
         {
             Writer.Write(value);
         }
 
+        /// <inheritdoc />
         public void Prop(SByte value, SetProp<SByte> onSet)
         {
             Writer.Write(value);
         }
 
+        /// <inheritdoc />
         public void Prop(Single value, SetProp<Single> onSet)
         {
             Writer.Write(value);
         }
 
+        /// <inheritdoc />
         public void Prop(String value, SetProp<String> onSet)
         {
             var w = Writer;
@@ -311,49 +344,58 @@ namespace SysWeaver.Inspection
             WriteNonNullString(value);
         }
 
+        /// <inheritdoc />
         public void Prop(UInt16 value, SetProp<UInt16> onSet)
         {
             Writer.Write(value);
         }
 
+        /// <inheritdoc />
         public void Prop(UInt32 value, SetProp<UInt32> onSet)
         {
             Writer.Write(value);
         }
 
+        /// <inheritdoc />
         public void Prop(UInt64 value, SetProp<UInt64> onSet)
         {
             Writer.Write(value);
         }
 
 
+        /// <inheritdoc />
         public void Prop(TimeSpan value, SetProp<TimeSpan> onSet)
         {
             Writer.Write(value.Ticks);
         }
 
+        /// <inheritdoc />
         public void Prop(DateTime value, SetProp<DateTime> onSet)
         {
             Writer.Write(value.Ticks);
             Writer.Write((Byte)value.Kind);
         }
 
+        /// <inheritdoc />
         public void Prop(TimeOnly value, SetProp<TimeOnly> onSet)
         {
             Writer.Write(value.Ticks);
         }
 
+        /// <inheritdoc />
         public void Prop(DateOnly value, SetProp<DateOnly> onSet)
         {
             Writer.Write(value.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc).Ticks);
         }
 
+        /// <inheritdoc />
         public void Prop(DateTimeOffset value, SetProp<DateTimeOffset> onSet)
         {
             //  Same as the field (ticks and offset)
             Field(ref value);
         }
 
+        /// <inheritdoc />
         public void Prop(Guid value, SetProp<Guid> onSet)
         {
             //  The same bytes as ToByteArray
@@ -362,6 +404,7 @@ namespace SysWeaver.Inspection
             Writer.Write(b);
         }
 
+        /// <inheritdoc />
         public void Prop<T>(T value, SetProp<T> setValue)
         {
             var handler = TypeHandlerCache<T>.GetHandler(value);
@@ -377,14 +420,17 @@ namespace SysWeaver.Inspection
             throw new NotSupportedException("Internal error, a writer never creates objects!");
         }
 
+        /// <inheritdoc />
         public void ParentField<T>(ref T value) where T : class
         {
         }
 
+        /// <inheritdoc />
         public void ParentProp<T>(T value, SetProp<T> setValue) where T : class
         {
         }
 
+        /// <inheritdoc />
         public void UnmanagedMemory(ref IntPtr data, ref int length, ref Action disposeAction)
         {
             StaticTypeHandler.HandleUnmanagedMemory(this, ref data, ref length, ref disposeAction);
@@ -460,6 +506,9 @@ namespace SysWeaver.Inspection
         Dictionary<Type, int> Types => State.Types;
         Dictionary<String, int> StringPool => State.StringPool;
 
+        /// <summary>
+        /// Called by the generated type handlers to write a field (see <see cref="IInspectorImplementation"/>)
+        /// </summary>
         public void Field_Object<T>(TypeHandler<T> context, ref T value)
         {
             var v = value;
@@ -482,6 +531,9 @@ namespace SysWeaver.Inspection
 
         }
 
+        /// <summary>
+        /// Called by the generated type handlers to write a property (see <see cref="IInspectorImplementation"/>)
+        /// </summary>
         public void Prop_Object<T>(TypeHandler<T> context, ref T value, SetProp<T> onSet)
         {
             var v = value;
@@ -535,6 +587,9 @@ namespace SysWeaver.Inspection
             Writer.Write(0);
             WriteNonNullString(StaticTypeHandler.GetTypename(t, TypenameQualification));
         }
+        /// <summary>
+        /// Called by the generated type handlers to write a field (see <see cref="IInspectorImplementation"/>)
+        /// </summary>
         public void Field_TypedObject<T, F>(TypeHandler<T> context, ref T value)
         {
             var v = value;
@@ -560,6 +615,9 @@ namespace SysWeaver.Inspection
             InternalStack.Pop();
         }
 
+        /// <summary>
+        /// Called by the generated type handlers to write a property (see <see cref="IInspectorImplementation"/>)
+        /// </summary>
         public void Prop_TypedObject<T, F>(TypeHandler<T> context, ref T value, SetProp<T> onSet)
         {
             var v = value;
@@ -587,18 +645,27 @@ namespace SysWeaver.Inspection
 
 
 
+        /// <summary>
+        /// Called by the generated type handlers to write a field (see <see cref="IInspectorImplementation"/>)
+        /// </summary>
         public void Field_Value<T>(TypeHandler<T> context, ref T value)
         {
             Writer.Write(context.LatestVersion);
             context.Describe(this, ref value, context.LatestVersion);
         }
 
+        /// <summary>
+        /// Called by the generated type handlers to write a property (see <see cref="IInspectorImplementation"/>)
+        /// </summary>
         public void Prop_Value<T>(TypeHandler<T> context, ref T value, SetProp<T> onSet)
         {
             Writer.Write(context.LatestVersion);
             context.Describe(this, ref value, context.LatestVersion);
         }
 
+        /// <summary>
+        /// Called by the generated type handlers to write a field (see <see cref="IInspectorImplementation"/>)
+        /// </summary>
         public void Field_NullableValue<T>(TypeHandler<T> context, ref T value)
         {
             if (value == null)
@@ -610,6 +677,9 @@ namespace SysWeaver.Inspection
             context.Describe(this, ref value, context.LatestVersion);
         }
 
+        /// <summary>
+        /// Called by the generated type handlers to write a property (see <see cref="IInspectorImplementation"/>)
+        /// </summary>
         public void Prop_NullableValue<T>(TypeHandler<T> context, ref T value, SetProp<T> onSet)
         {
             if (value == null)
@@ -621,6 +691,10 @@ namespace SysWeaver.Inspection
             context.Describe(this, ref value, context.LatestVersion);
         }
 
+        /// <summary>
+        /// The objects being written, the innermost on top (used by <see cref="ParentField{T}(ref T)"/> / <see cref="ParentProp{T}(T, SetProp{T})"/>).
+        /// An object is pushed before its members are written and popped when it's complete.
+        /// </summary>
         public Stack<Object> Stack
         {
             get
@@ -633,21 +707,41 @@ namespace SysWeaver.Inspection
 
         #region Array
 
+        /// <summary>
+        /// Called by the generated type handlers to write an array (see <see cref="IInspectorImplementation"/>)
+        /// </summary>
         public void Array_Begin(int[] dimensions)
         {
             foreach (var x in dimensions)
                 Writer.Write(x);
         }
 
+        /// <summary>
+        /// Called by the generated type handlers to write the length of a one dimensional array (see <see cref="IInspectorImplementation.Array_Length(ref int)"/>)
+        /// </summary>
+        public void Array_Length(ref int length)
+        {
+            Writer.Write(length);
+        }
+
+        /// <summary>
+        /// Called by the generated type handlers to write an array (see <see cref="IInspectorImplementation"/>)
+        /// </summary>
         public void Array_ByteArray(int length, ref Byte[] value)
         {
             Writer.Write(value);
         }
 
+        /// <summary>
+        /// Called by the generated type handlers to write an array (see <see cref="IInspectorImplementation"/>)
+        /// </summary>
         public void Array_LevelUp(int rank)
         {
         }
 
+        /// <summary>
+        /// Called by the generated type handlers to write an array (see <see cref="IInspectorImplementation"/>)
+        /// </summary>
         public void Array_LevelDown(int rank)
         {
         }

@@ -15,6 +15,9 @@ using SysWeaver.Serialization;
 namespace SysWeaver.Db
 {
 
+    /// <summary>
+    /// Base class for database providers built on SimpleStack.Orm
+    /// </summary>
     public abstract class DbSimpleStack : IBlob
     {
 
@@ -46,10 +49,10 @@ namespace SysWeaver.Db
         }
 
         /// <summary>
-        /// 
+        /// Create a db provider, resolves the server address and applies any forced system wide config
         /// </summary>
-        /// <param name="p"></param>
-        /// <param name="dp"></param>
+        /// <param name="p">The parameters, if null a default instance of paramType is created</param>
+        /// <param name="dp">The SimpleStack dialect provider</param>
         /// <param name="paramType">The type of p</param>
         /// <param name="msg">Optional message host</param>
         protected DbSimpleStack(DbParams p, IDialectProvider dp, Type paramType, IMessageHost msg)
@@ -89,8 +92,14 @@ namespace SysWeaver.Db
         }
 
 
+        /// <summary>
+        /// Prefix to use for log messages, identifies the provider and server
+        /// </summary>
         public readonly String LogPrefix;
 
+        /// <summary>
+        /// Optional message host used for log messages
+        /// </summary>
         public readonly IMessageHost Msg;
 
         #region Blob
@@ -101,11 +110,11 @@ namespace SysWeaver.Db
         /// <summary>
         /// Convert an object to a database blob
         /// </summary>
-        /// <typeparam name="T"></typeparam>
+        /// <typeparam name="T">The type of the object</typeparam>
         /// <param name="data">The object to blobbify</param>
         /// <param name="compLevel">The compression level to use.
         /// Null means use the default level based on the size of the data:
-        /// 4KB or less: Best.
+        /// levelSize bytes or less: Best.
         /// Otherwise: Balanced.
         /// </param>
         /// <param name="levelSize">The size threshold for determining the compression level (only applies if compLevel is null)</param>
@@ -124,9 +133,9 @@ namespace SysWeaver.Db
         /// <summary>
         /// Convert a database blob to an object
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="data"></param>
-        /// <returns></returns>
+        /// <typeparam name="T">The type of the object</typeparam>
+        /// <param name="data">The blob data</param>
+        /// <returns>The object</returns>
         public T FromBlob<T>(ReadOnlySpan<Byte> data)
         {
             using var tMem = BlobComp.GetUnmanagedDecompressed(data);
@@ -144,9 +153,9 @@ namespace SysWeaver.Db
         /// <summary>
         /// Convert a blob to an object, or a default instance if the blob is null
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="data"></param>
-        /// <returns></returns>
+        /// <typeparam name="T">The type of the object</typeparam>
+        /// <param name="data">The blob data, may be null</param>
+        /// <returns>The object, or a new instance if data is null</returns>
         public T NewOrBlob<T>(Byte[] data) where T : new()
         {
             if (data == null)
@@ -159,10 +168,21 @@ namespace SysWeaver.Db
 
         #endregion//Blob
 
+        /// <summary>
+        /// The connection parameters
+        /// </summary>
         public readonly DbParams P;
 
+        /// <summary>
+        /// The SimpleStack dialect provider
+        /// </summary>
         public readonly IDialectProvider DP;
 
+        /// <summary>
+        /// Create a schema, errors (such as the schema already existing) are ignored
+        /// </summary>
+        /// <param name="schema">The name of the schema</param>
+        /// <returns>A task that completes when done</returns>
         public virtual async Task CreateSchemaIfNotExist(String schema)
         {
             var p = P;
@@ -219,8 +239,8 @@ namespace SysWeaver.Db
         /// <summary>
         /// Call init once to init the db (creates the schema if it doesn't exist and creates the connection facotry etc)
         /// </summary>
-        /// <returns></returns>
-        /// <exception cref="Exception"></exception>
+        /// <returns>A task that completes when a connection could be made</returns>
+        /// <exception cref="Exception">If no connection could be made within InitRetrySeconds</exception>
         public virtual async Task Init()
         {
             var f = F;
@@ -265,14 +285,17 @@ namespace SysWeaver.Db
             m?.AddMessage(MessageLevels.Debug, $"{LogPrefix}Connected!");
         }
 
+        /// <summary>
+        /// The partition folders in use (set by derived classes that support partitioning)
+        /// </summary>
         public String[] Partitions { get; protected set; }
 
         /// <summary>
-        /// 
+        /// Creates a table if it doesn't exist and validates it
         /// </summary>
-        /// <typeparam name="T"></typeparam>
+        /// <typeparam name="T">The type of the table</typeparam>
         /// <param name="con">An open connection to use for queries</param>
-        /// <returns></returns>
+        /// <returns>A task that completes when done</returns>
         public virtual async Task InitTable<T>(OrmConnection con)
         {
             await con.CreateTableIfNotExistsAsync<T>().ConfigureAwait(false);
@@ -281,7 +304,16 @@ namespace SysWeaver.Db
 
         OrmConnectionFactory F;
 
+        /// <summary>
+        /// Open a connection (Init must have been called)
+        /// </summary>
+        /// <returns>An open connection, the caller must dispose it</returns>
         public OrmConnection Get() => F.OpenConnection();
+
+        /// <summary>
+        /// Open a connection (Init must have been called)
+        /// </summary>
+        /// <returns>An open connection, the caller must dispose it</returns>
         public Task<OrmConnection> GetAsync() => F.OpenConnectionAsync();
 
 
@@ -289,9 +321,9 @@ namespace SysWeaver.Db
         /// <summary>
         /// Get all rows in a table
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="tableName"></param>
-        /// <returns></returns>
+        /// <typeparam name="T">The row type</typeparam>
+        /// <param name="tableName">Optionally override table name</param>
+        /// <returns>All rows in the table</returns>
         public async Task<List<T>> GetAll<T>(String tableName = null)
         {
             using var c = await F.OpenConnectionAsync().ConfigureAwait(false);
@@ -302,18 +334,42 @@ namespace SysWeaver.Db
         /// <summary>
         /// Get the column index for the given member
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="fieldName"></param>
-        /// <returns></returns>
+        /// <typeparam name="T">The model type</typeparam>
+        /// <param name="fieldName">The name of the field</param>
+        /// <returns>The column index, 0 if the field was not found</returns>
         public static int GetColumnIndex<T>(String fieldName) => DbSimpleStackCache<T>.Ordinal.TryGetValue(fieldName, out var o) ? o : 0;
 
 
+        /// <summary>
+        /// Partition a table (does nothing if the partition count is less than 2)
+        /// </summary>
+        /// <typeparam name="T">The type of the table</typeparam>
+        /// <param name="con">An open connection to use for queries</param>
+        /// <param name="partitionCount">Number of partitions (no explicit folders)</param>
+        /// <param name="tableName">Optionally override table name</param>
+        /// <returns>True if the table was partitioned</returns>
         public Task<bool> Partition<T>(OrmConnection con, int partitionCount, String tableName = null)
             => partitionCount < 2 ? TaskExt.FalseTask : Partition<T>(con, new String[partitionCount], tableName);
 
+        /// <summary>
+        /// Partition a table
+        /// </summary>
+        /// <typeparam name="T">The type of the table</typeparam>
+        /// <param name="con">An open connection to use for queries</param>
+        /// <param name="partitionFolders">The folder of each partition</param>
+        /// <param name="tableName">Optionally override table name</param>
+        /// <returns>True if the table was partitioned</returns>
         public Task<bool> Partition<T>(OrmConnection con, String[] partitionFolders, String tableName = null)
             => Partition(con, typeof(T), partitionFolders, tableName);
 
+        /// <summary>
+        /// Partition a table (the base implementation does nothing)
+        /// </summary>
+        /// <param name="con">An open connection to use for queries</param>
+        /// <param name="t">The type of the table</param>
+        /// <param name="partitionFolders">The folder of each partition</param>
+        /// <param name="tableName">Optionally override table name</param>
+        /// <returns>True if the table was partitioned</returns>
         public virtual Task<bool> Partition(OrmConnection con, Type t, String[] partitionFolders, String tableName = null)
             => TaskExt.FalseTask;
 

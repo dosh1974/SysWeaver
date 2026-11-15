@@ -59,6 +59,9 @@ namespace SysWeaver.MicroService
     /// </summary>
     public enum TextMessageStatuses
     {
+        /// <summary>
+        /// The status is not known
+        /// </summary>
         Unknown = 0,
         /// <summary>
         /// Accepted (queued) by the provider
@@ -100,7 +103,7 @@ namespace SysWeaver.MicroService
         /// </summary>
         InvalidNumber,
         /// <summary>
-        /// The recipient have blocked the sender or opted out
+        /// The recipient has blocked the sender or opted out
         /// </summary>
         Blocked,
         /// <summary>
@@ -134,7 +137,8 @@ namespace SysWeaver.MicroService
     /// </summary>
     public sealed class TextMessageTemplate
     {
-        public override string ToString() => String.Concat(Name, String.IsNullOrEmpty(Language) ? "" : " [" + Language + ']');
+        /// <inheritdoc />
+        public override string ToString() => String.Concat(Name,String.IsNullOrEmpty(Language) ? "" : " [" + Language + ']');
 
         /// <summary>
         /// The provider specific template name / id.
@@ -159,6 +163,7 @@ namespace SysWeaver.MicroService
     /// </summary>
     public sealed class TextMessageSendResult
     {
+        /// <inheritdoc />
         public override string ToString() => String.Concat('#', Id, ' ', Channel, ' ', Status, Failure == TextMessageFailures.None ? "" : " " + Failure + ": " + Error);
 
         /// <summary>
@@ -212,6 +217,7 @@ namespace SysWeaver.MicroService
     /// </summary>
     public sealed class TextMessageStatusUpdate
     {
+        /// <inheritdoc />
         public override string ToString() => String.Concat('#', MessageId, ' ', PhoneNumber, ' ', Channel, ' ', Status, Failure == TextMessageFailures.None ? "" : " " + Failure + ": " + Error);
 
         /// <summary>
@@ -274,6 +280,10 @@ namespace SysWeaver.MicroService
         /// </summary>
         public DateTime Time;
 
+        /// <summary>
+        /// Create a shallow copy of this update
+        /// </summary>
+        /// <returns>The copy</returns>
         public TextMessageStatusUpdate Clone() => (TextMessageStatusUpdate)MemberwiseClone();
     }
 

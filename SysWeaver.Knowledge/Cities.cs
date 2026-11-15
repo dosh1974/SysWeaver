@@ -7,6 +7,9 @@ using System.Threading.Tasks;
 namespace SysWeaver.Knowledge
 {
 
+    /// <summary>
+    /// Info about a city
+    /// </summary>
     public sealed class City : Info
     {
         internal City(string name, string desc, string category, String country, bool isCapital, long pop, Info[] parent) : base(name, desc, category, parent, true)
@@ -32,14 +35,32 @@ namespace SysWeaver.Knowledge
 
     }
 
+    /// <summary>
+    /// Knowledge about cities
+    /// </summary>
     public static class Cities
     {
+        /// <summary>
+        /// The group (category) name of all city info
+        /// </summary>
         public const String Group = "Cities";
 
+        /// <summary>
+        /// Try to get info about a city
+        /// </summary>
+        /// <param name="name">The name of the city, any case</param>
+        /// <param name="info">The info if found</param>
+        /// <returns>True if info was found</returns>
         public static bool TryGet(String name, out City info) => Tags.TryGetValueLower(name, out info);
 
+        /// <summary>
+        /// All keyword/info pairs (the keys are lower case)
+        /// </summary>
         public static IEnumerable<KeyValuePair<String, City>> All => Tags;
 
+        /// <summary>
+        /// The number of keywords
+        /// </summary>
         public static int Count => Tags.Count;
 
         #region Setup

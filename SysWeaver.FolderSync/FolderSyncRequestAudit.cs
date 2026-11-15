@@ -2,6 +2,9 @@
 
 namespace SysWeaver.FolderSync
 {
+    /// <summary>
+    /// The audit information of a request to sync a managed folder
+    /// </summary>
     public sealed class FolderSyncRequestAudit
     {
         /// <summary>

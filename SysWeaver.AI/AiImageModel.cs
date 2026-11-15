@@ -8,6 +8,7 @@ namespace SysWeaver.AI
     [SysWeaver.Data.TableDataCard("+image@ai/cards/models")]
     public sealed class AiImageModel
     {
+        /// <inheritdoc />
         public override string ToString() => String.IsNullOrEmpty(Name) ? Id : String.Concat(Id, " (", Name, ')');
 
         /// <summary>

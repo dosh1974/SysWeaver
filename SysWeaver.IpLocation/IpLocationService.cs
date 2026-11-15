@@ -9,11 +9,19 @@ using SysWeaver.MicroService;
 namespace SysWeaver.IpLocation
 {
 
+    /// <summary>
+    /// Finds the estimated location of ip addresses using the available location sources (<see cref="IIpLocationSource"/>) and an optional cache
+    /// </summary>
     [RequiredDep<IIpLocationSource>]
     [OptionalDep<IIpLocationCache>]
     [WebApiUrl("IpLocation")]
     public sealed class IpLocationService : IHaveStats, IPerfMonitored
     {
+        /// <summary>
+        /// Create the service, all location sources of the manager are used (oldest first)
+        /// </summary>
+        /// <param name="manager">The service manager</param>
+        /// <param name="p">Parameters, null to use the defaults</param>
         public IpLocationService(ServiceManager manager, IpLocationParams p = null)
         {
             p = p ?? new IpLocationParams();
@@ -36,10 +44,10 @@ namespace SysWeaver.IpLocation
         readonly IIpLocationSource[] Sources;
 
         /// <summary>
-        /// Get the locatrion from an ip address
+        /// Get the location from an ip address
         /// </summary>
         /// <param name="ip">Ip address</param>
-        /// <returns>Location or null</returns>
+        /// <returns>A copy of the location, null if no source could find it</returns>
         [WebApi]
         [WebApiAuth(Roles.Service)]
         public async Task<IpLocation> GetLocation(string ip)
@@ -53,6 +61,7 @@ namespace SysWeaver.IpLocation
         readonly Func<String, Task<IpLocation>> InternalGetLocationFunc;
         readonly ExceptionTracker SourceFails = new ExceptionTracker();
 
+        /// <inheritdoc />
         public PerfMonitor PerfMon { get; } = new PerfMonitor("IpLocation");
 
         /// <summary>
@@ -117,6 +126,7 @@ namespace SysWeaver.IpLocation
             return false;
         }
 
+        /// <inheritdoc />
         public IEnumerable<Stats> GetStats()
         {
             foreach (var x in SourceFails.GetStats("IpLocation", "Source."))

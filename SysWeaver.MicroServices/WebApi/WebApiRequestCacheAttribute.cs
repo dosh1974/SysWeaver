@@ -4,6 +4,9 @@ using System;
 namespace SysWeaver.MicroService
 {
 
+    /// <summary>
+    /// How a server side request cache is keyed
+    /// </summary>
     public enum WebApiCaches
     {
         /// <summary>
@@ -21,11 +24,14 @@ namespace SysWeaver.MicroService
     }
 
 
+    /// <summary>
+    /// Web api constants
+    /// </summary>
     public static class WebApiTools
     {
         /// <summary>
         /// Client side cache duration for static results.
-        /// 30 seconds should be ok, is a service restart (update) takes more than this there's no room for error.
+        /// 30 seconds should be ok, if a service restart (update) takes more than this there's no room for error.
         /// </summary>
         public const int CacheClientStatic = 30;
 
@@ -59,6 +65,7 @@ namespace SysWeaver.MicroService
 
         /// <summary>
         /// The duration in seconds that the same request should be cached on the server, i.e the WriteStream / GetData for the same request from multiple clients within this period will only result in a single call to these methods (reduces server load).
+        /// A negative value means that the cache is per session.
         /// </summary>
         public readonly int Duration;
 
@@ -70,14 +77,14 @@ namespace SysWeaver.MicroService
 
 
     /// <summary>
-    /// Put this attribute on a type or method to specify that the request should be cached as a static resource (not changing during the service lifetime)
+    /// Put this attribute on a type or method to specify that the response should be cached by the client as a static resource (not changing during the service lifetime)
     /// </summary>
     [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Method, AllowMultiple = false)]
     public class WebApiClientCacheStaticAttribute : WebApiClientCacheAttribute
     {
 
         /// <summary>
-        /// Put this attribute on a type or method to specify that the request should be cached forever
+        /// Put this attribute on a type or method to specify that the client should cache the response for <see cref="WebApiTools.CacheClientStatic"/> seconds
         /// </summary>
         public WebApiClientCacheStaticAttribute() : base(WebApiTools.CacheClientStatic)
         {
@@ -86,14 +93,14 @@ namespace SysWeaver.MicroService
 
 
     /// <summary>
-    /// Put this attribute on a type or method to specify that the request should be cached as a static resource (not changing during the service lifetime)
+    /// Put this attribute on a type or method to specify that the request should be cached on the server as a static resource (not changing during the service lifetime)
     /// </summary>
     [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Method, AllowMultiple = false)]
     public class WebApiRequestCacheStaticAttribute : WebApiRequestCacheAttribute
     {
 
         /// <summary>
-        /// Put this attribute on a type or method to specify that the request should be cached forever
+        /// Put this attribute on a type or method to specify that the request should be cached on the server for <see cref="WebApiTools.CacheServerStatic"/> seconds (effectively forever)
         /// </summary>
         /// <param name="cache">Specifies cache behaviour</param>
         public WebApiRequestCacheStaticAttribute(WebApiCaches cache = WebApiCaches.AutoDetect) : base(WebApiTools.CacheServerStatic, cache)

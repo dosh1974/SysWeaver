@@ -35,18 +35,8 @@
         },
         EmptyState: { Icon: "any", Title: Str, Text: Str, Actions: "any", Error: "boolean", Class: Str },
     };
-    if (Sw.Work && typeof Sw.Work.RegisterOptions === "function")
-        for (const k of Object.keys(LayoutSchema))
-            Sw.Work.RegisterOptions("Sw." + k, LayoutSchema[k]);
-
-    /**
-     * Check the options of a layout part (DevMode; nothing in production).
-     * @param {string} name The part ("Tabs"). @param {object} o The options.
-     */
-    function checkOpts(name, o) {
-        if (o && typeof o === "object" && Sw.Work && typeof Sw.Work.CheckOptions === "function")
-            Sw.Work.CheckOptions("Sw." + name, o, LayoutSchema[name]);
-    }
+    /** Check the options of a layout part (DevMode; nothing in production): checkOpts("Tabs", o). */
+    const checkOpts = Sw.Work.OptionSet(LayoutSchema);
 
     // ------------------------------------------------------------------ tabs
 

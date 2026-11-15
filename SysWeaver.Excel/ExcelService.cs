@@ -10,11 +10,19 @@ using SysWeaver.Data;
 namespace SysWeaver.Excel
 {
 
+    /// <summary>
+    /// Service that sets up the Excel (GemBox.Spreadsheet) license and provides table data exporters for Excel (xlsx) and PDF
+    /// </summary>
     public sealed class ExcelService : IHaveTableDataExporters
     {
 
+        /// <inheritdoc />
         public override string ToString() => (ExcelTools.HaveLicense ? "Licensed, table margins (inches): " : "Free limited version, table margins (inches): ") + TableMarginInch.ToString("0.####", CultureInfo.InvariantCulture);
 
+        /// <summary>
+        /// Create the service, sets the license (see <see cref="ExcelTools.SetLicense(ApiKeyParams, bool)"/>) and the static <see cref="TableMarginInch"/>
+        /// </summary>
+        /// <param name="p">Parameters, null to use the defaults (free limited license)</param>
         public ExcelService(ExcelParams p)
         {
             p = p ?? new ExcelParams();
@@ -22,6 +30,7 @@ namespace SysWeaver.Excel
             TableMarginInch = Math.Max(0.0, p.TableMarginInch);
         }
 
+        /// <inheritdoc />
         public IReadOnlyList<ITableDataExporter> TableDataExporters =>
             [
                 ExcelTableDataExporter.Xlsx,
@@ -35,10 +44,24 @@ namespace SysWeaver.Excel
         public static double TableMarginInch { get; private set; } = 0.2;
 
 
+        /// <summary>
+        /// Multiply inches by this value to get millimeters
+        /// </summary>
         public const double Convert_inch_to_mm = 25.4;
+
+        /// <summary>
+        /// Multiply millimeters by this value to get inches
+        /// </summary>
         public const double Convert_mm_to_inch = 1.0 / Convert_inch_to_mm;
 
 
+        /// <summary>
+        /// Set up a worksheet for printing on A4 paper: no gridlines, headings or cell notes, fit to one page wide, horizontally centered
+        /// </summary>
+        /// <param name="s">The worksheet</param>
+        /// <param name="marginInch">The margin (top, right, bottom and left) in inches, header and footer margins are zero</param>
+        /// <param name="portrait">True for portrait, false for landscape</param>
+        /// <param name="singlePage">True to also fit the worksheet height to one page and center it vertically</param>
         public static void PageSetUp(ExcelWorksheet s, double marginInch = 0.2, bool portrait = false, bool singlePage = false)
         {
             var popt = s.PrintOptions;
@@ -64,6 +87,9 @@ namespace SysWeaver.Excel
     }
 
 
+    /// <summary>
+    /// Excel (GemBox.Spreadsheet) helpers, license handling and color conversion
+    /// </summary>
     public static class ExcelTools
     {
         static readonly Object InitLock = new object();
@@ -94,7 +120,7 @@ namespace SysWeaver.Excel
 
 
         /// <summary>
-        /// Set the livense to the free limited license
+        /// Set the license to the free limited license
         /// </summary>
         public static void SetFreeLicense()
             => SetLicense((ApiKeyParams)null, false);
@@ -122,6 +148,12 @@ namespace SysWeaver.Excel
         }
 
 
+        /// <summary>
+        /// Convert a web color (name or hex value, see <see cref="HtmlColors"/>) to a GemBox color, a color with alpha less than 255 is converted to a transparent color
+        /// </summary>
+        /// <param name="webColor">The web color, may be null</param>
+        /// <param name="col">The color, red if the conversion failed</param>
+        /// <returns>True if the color was converted, false if <paramref name="webColor"/> is null or isn't a valid color</returns>
         public static bool TryGetWebColor(String webColor, out DrawingColor col)
         {
             if (webColor == null)

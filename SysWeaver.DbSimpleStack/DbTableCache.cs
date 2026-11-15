@@ -12,7 +12,7 @@ namespace SysWeaver.Db
 {
 
     /// <summary>
-    /// Utiltiy function to create a database cache (in a key/value dictionary). 
+    /// Utility functions to create a database cache (in a key/value dictionary). 
     /// </summary>
     public static class DbTableCache
     {
@@ -33,7 +33,7 @@ namespace SysWeaver.Db
     }
 
     /// <summary>
-    /// Utiltiy function to create a database cache (in a key/value dictionary). 
+    /// Utility functions to create a database cache (in a key/value dictionary). 
     /// </summary>
     /// <typeparam name="T">Database row type</typeparam>
     public static class DbTableCache<T> where T : class, new()
@@ -62,6 +62,7 @@ namespace SysWeaver.Db
     /// <typeparam name="T">Database row type</typeparam>
     public class DbTableCache<K, T> : IDbTableCache where T : class, new()
     {
+        /// <inheritdoc />
         public PerfMonitor PerfMon { get; init; }
 
 
@@ -92,9 +93,9 @@ namespace SysWeaver.Db
         }
 
         /// <summary>
-        /// Get the current values (if no sync have been performed, this will block until a sync have been done).
+        /// Get the current values (if no sync have been performed, this will wait until a sync have been done).
         /// </summary>
-        /// <returns></returns>
+        /// <returns>The cached rows by key</returns>
         public ValueTask<IReadOnlyDictionary<K, T>> GetValues()
         {
             var c = InternalValues;
@@ -105,9 +106,9 @@ namespace SysWeaver.Db
 
 
         /// <summary>
-        /// Get the current state (if no sync have been performed, this will block until a sync have been done).
+        /// Get the current state (if no sync have been performed, this will wait until a sync have been done).
         /// </summary>
-        /// <returns></returns>
+        /// <returns>The cached rows and the time stamps of the sync</returns>
         public ValueTask<DbCachedValues<K, T>> GetCurrent()
         {
             var c = InternalValues;
@@ -147,10 +148,7 @@ namespace SysWeaver.Db
             }
         }
 
-        /// <summary>
-        /// Explicitly sync, call once after creation to populate the cache
-        /// </summary>
-        /// <returns></returns>
+        /// <inheritdoc />
         public async Task SyncNow()
         {
             using var _ = await SyncLock.Lock().ConfigureAwait(false);
@@ -158,11 +156,7 @@ namespace SysWeaver.Db
         }
 
 
-        /// <summary>
-        /// Explicitly sync using an explicit db connection, call once after creation to populate the cache
-        /// </summary>
-        /// <param name="c">The db connection to use</param>
-        /// <returns></returns>
+        /// <inheritdoc />
         public async Task SyncNow(OrmConnection c)
         {
             using var _ = await SyncLock.Lock().ConfigureAwait(false);
@@ -192,27 +186,22 @@ namespace SysWeaver.Db
             if ((os != null) || (osa != null))
             {
                 using var ___ = PerfMon.Track(PerfSyncEventsName);
-                try
-                {
-                    os?.Invoke(newVal);
-                }
-                catch
-                {
-                }
-                try
-                {
-                    await osa.RaiseEvents(newVal).ConfigureAwait(false);
-                }
-                catch
-                {
-                }
+                os.RaiseEvents(newVal);
+                await osa.RaiseEvents(newVal).ConfigureAwait(false);
             }
-
         }
 
+        /// <summary>
+        /// Raised after each completed sync
+        /// </summary>
         public event Action<DbCachedValues<K, T>> OnSynced;
+
+        /// <summary>
+        /// Raised after each completed sync (async handlers)
+        /// </summary>
         public event Func<DbCachedValues<K, T>, Task> OnSyncedAsync;
 
+        /// <inheritdoc />
         public void Dispose()
         {
             Interlocked.Exchange(ref UpdateTask, null)?.Dispose();

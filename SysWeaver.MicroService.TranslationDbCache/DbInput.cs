@@ -5,14 +5,29 @@ using SysWeaver.Data;
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// A database row with the input (and translated text) of a cached translation
+    /// </summary>
     [Alias("Inputs")]
     [PartitionByKey(nameof(Hash))]
     public sealed class DbInput
     {
+        /// <summary>
+        /// The maximum number of chars stored of the text to translate
+        /// </summary>
         public const int MaxTextLen = 768;
+        /// <summary>
+        /// The maximum number of chars stored of the translation context
+        /// </summary>
         public const int MaxContextLen = 768;
+        /// <summary>
+        /// The maximum number of chars stored of the translated text
+        /// </summary>
         public const int MaxTranslatedLen = 768;
         
+        /// <summary>
+        /// The expiration used for manual translations (an expiration at or after this is considered manual)
+        /// </summary>
         public static readonly long Max = new DateTime(9999, 01, 01).Ticks;
 
 
@@ -94,7 +109,7 @@ namespace SysWeaver.MicroService
 
 
         /// <summary>
-        /// Time stamp when translation was performed
+        /// Time stamp (UTC ticks) when the translation expires, <see cref="Max"/> for a manual translation (never expires)
         /// </summary>
         [Required]
         [Index]
@@ -103,7 +118,7 @@ namespace SysWeaver.MicroService
 
 
         /// <summary>
-        /// The content type specified
+        /// The content type specified (a <c>TranslationContentTypes</c> value)
         /// </summary>
         [Required]
         [Index]
@@ -111,14 +126,14 @@ namespace SysWeaver.MicroService
         public Byte ContentType { get; set; }
 
         /// <summary>
-        /// The name of the service / user that performed the translation
+        /// The name of the service that requested the translation
         /// </summary>
         [StringLength(Auth.AuhorizationLimits.MaxUserNameLength)]
         [Index]
         public String Service { get; set; }
 
         /// <summary>
-        /// The name of the user that performed the translation
+        /// The name of the user that requested the translation (or manually changed it)
         /// </summary>
         [StringLength(Auth.AuhorizationLimits.MaxUserNameLength)]
         [Index]

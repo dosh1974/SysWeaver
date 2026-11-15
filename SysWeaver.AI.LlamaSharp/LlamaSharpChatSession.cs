@@ -21,6 +21,7 @@ namespace SysWeaver.AI
 
         readonly LlamaSharpModel LlmModel;
 
+        /// <inheritdoc />
         public override String SystemPrompt { get; set; }
 
         /// <summary>
@@ -43,6 +44,7 @@ namespace SysWeaver.AI
                 return SystemPrompt;
             };
 
+        /// <inheritdoc />
         public override async Task<String> Query(String text, AiDebugMessage debug = null, Func<String, long, long, Task> onUsage = null, IReadOnlyList<ValueTuple<AiContentPart, String>> extraData = null)
         {
             using var _a = Monitor?.Track(nameof(Query));
@@ -55,6 +57,7 @@ namespace SysWeaver.AI
             return err ?? sb.ToString();
         }
 
+        /// <inheritdoc />
         public override async Task<String> Complete(String text, HttpServerRequest request, AiDebugMessage debug = null, String from = null, Func<String, long, long, Task> onUsage = null)
         {
             using var _a = Monitor?.Track(nameof(Complete));
@@ -67,6 +70,7 @@ namespace SysWeaver.AI
             return err ?? sb.ToString();
         }
 
+        /// <inheritdoc />
         public override async Task<String> CompleteUpdate(String text,
             IReadOnlyList<ValueTuple<AiContentPart, String>> extraData,
             HttpServerRequest request,
@@ -127,8 +131,10 @@ namespace SysWeaver.AI
             return "No text response!";
         }
 
+        /// <inheritdoc />
         public override void ClearApiMessages() => ApiMessages.Clear();
 
+        /// <inheritdoc />
         protected override void WriteConversation(Utf8JsonWriter writer)
         {
             var tools = GetTools();

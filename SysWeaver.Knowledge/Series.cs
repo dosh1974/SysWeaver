@@ -5,6 +5,9 @@ using System.Collections.Generic;
 namespace SysWeaver.Knowledge
 {
 
+    /// <summary>
+    /// Info about a (TV) series
+    /// </summary>
     public sealed class Serie : Info
     {
         internal Serie(string name, string desc, int yearStart, int yearEnd, String rating, String plot, String length, Info[] parent) : base(name, desc, Series.Group, parent, true)
@@ -13,15 +16,16 @@ namespace SysWeaver.Knowledge
             YearEnd = yearEnd;
             Rating = rating;
             Plot = plot;
+            Length = length;
         }
 
         /// <summary>
-        /// What year the serie was released
+        /// What year the serie started
         /// </summary>
         public readonly int YearStart;
 
         /// <summary>
-        /// What year the serie was released
+        /// What year the serie ended
         /// </summary>
         public readonly int YearEnd;
 
@@ -42,14 +46,32 @@ namespace SysWeaver.Knowledge
     }
 
 
+    /// <summary>
+    /// Knowledge about (TV) series
+    /// </summary>
     public static class Series
     {
+        /// <summary>
+        /// The group (category) name of all series info
+        /// </summary>
         public const String Group = "Series";
 
+        /// <summary>
+        /// Try to get info about a series
+        /// </summary>
+        /// <param name="name">The title of the series, any case</param>
+        /// <param name="info">The info if found</param>
+        /// <returns>True if info was found</returns>
         public static bool TryGet(String name, out Serie info) => Tags.TryGetValueLower(name, out info);
 
+        /// <summary>
+        /// All keyword/info pairs (the keys are lower case)
+        /// </summary>
         public static IEnumerable<KeyValuePair<String, Serie>> All => Tags;
 
+        /// <summary>
+        /// The number of keywords
+        /// </summary>
         public static int Count => Tags.Count;
 
         #region Setup

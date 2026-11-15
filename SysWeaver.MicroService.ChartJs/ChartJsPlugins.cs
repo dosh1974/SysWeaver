@@ -3,6 +3,9 @@ using SysWeaver.AI;
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// The plugin options of a chart
+    /// </summary>
     public sealed class ChartJsPlugins
     {
         /// <summary>
@@ -36,6 +39,9 @@ namespace SysWeaver.MicroService
 
     }
 
+    /// <summary>
+    /// Options for the tooltip plugin
+    /// </summary>
     public sealed class ChartJsTooltip
     {
         /// <summary>
@@ -44,6 +50,9 @@ namespace SysWeaver.MicroService
         public bool? enabled;
     }
 
+    /// <summary>
+    /// Options for the shadow plugin
+    /// </summary>
     public sealed class ChartJsShadow
     {
         /// <summary>
@@ -74,10 +83,13 @@ namespace SysWeaver.MicroService
     }
 
 
+    /// <summary>
+    /// Options for the data labels plugin
+    /// </summary>
     public sealed class ChartJsDataLabels
     {
         /// <summary>
-        /// Display the legend
+        /// Display the data labels
         /// </summary>
         [AiOptional]
         public bool? display;

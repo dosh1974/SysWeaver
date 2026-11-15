@@ -2,6 +2,9 @@
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// The parameters of a login (see <see cref="LoginService.Login"/>)
+    /// </summary>
     public sealed class LoginRequest
     {
         /// <summary>

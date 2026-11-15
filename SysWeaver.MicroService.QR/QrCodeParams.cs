@@ -4,10 +4,13 @@
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// Parameters for the <see cref="QrCodeService"/>
+    /// </summary>
     public sealed class QrCodeParams
     {
         /// <summary>
-        /// Optional end points that will server qr codes.
+        /// Optional end points that will serve qr codes (default is "qr/Code.svg" and "qr/Code.png").
         /// </summary>
         public QrCodeEndPoint[] EndPoints = [
             new QrCodeEndPoint(),
@@ -18,12 +21,12 @@ namespace SysWeaver.MicroService
             ];
 
         /// <summary>
-        /// Used when some other service is requesting a response
+        /// The compression methods in the preferred order, used by responses created for other services (<see cref="QrCodeService.CreateResponse"/>)
         /// </summary>
         public String ResponseCompression = "deflate: Best, br: Best, gzip: Best";
 
         /// <summary>
-        /// Used when some other service is requesting a response
+        /// Auth required for responses created for other services (<see cref="QrCodeService.CreateResponse"/>), null for none
         /// </summary>
         public String ResponseAuth;
 

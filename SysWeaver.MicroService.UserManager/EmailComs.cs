@@ -5,12 +5,22 @@ using System.Threading.Tasks;
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// Communicates with users using e-mail (through an <see cref="IEmailSender"/>)
+    /// </summary>
     public sealed class EmailComs : IUserManagerComs, IDisposable
     {
+        /// <inheritdoc />
         public String Name => "Email";
-        
+
+        /// <inheritdoc />
         public bool AllowSignUp { get; init; }
 
+        /// <summary>
+        /// Create the e-mail communication method
+        /// </summary>
+        /// <param name="manager">The service manager, used to get the <see cref="IEmailSender"/> (and the <see cref="AuthManagerService"/> used to validate addresses)</param>
+        /// <param name="p">Parameters, null to use the defaults</param>
         public EmailComs(ServiceManager manager, EmailComsParams p)
         {
             p = p ?? new EmailComsParams();
@@ -54,6 +64,7 @@ namespace SysWeaver.MicroService
             Header = p.Header ?? new();
         }
 
+        /// <inheritdoc />
         public void Dispose()
         {
             Manager.OnServiceAdded -= Manager_OnServiceAdded;
@@ -71,6 +82,7 @@ namespace SysWeaver.MicroService
         readonly ServiceManager Manager;
         readonly String[] WhiteListPrefixes;
 
+        /// <inheritdoc />
         public bool CleanAndValidate(ref String target)
         {
             var am = AuthMan;
@@ -86,6 +98,7 @@ namespace SysWeaver.MicroService
         static bool IsMissing(ManagedMailMessage m)
             => (m == null) || String.IsNullOrEmpty(m.Body) || String.IsNullOrEmpty(m.Subject);
 
+        /// <inheritdoc />
         public Task Send(UserManagerComOps ops, ManagedLanguageMessages messages, String target, Dictionary<String, String> vars, String system)
         {
             bool haveLang = messages != null;
@@ -130,6 +143,7 @@ namespace SysWeaver.MicroService
 
 
 
+        /// <inheritdoc />
         public Task Send(String message, ManagedLanguageMessages messages, String target, Dictionary<String, String> vars, String system, params ManagedLanguageMessages[] fallbacks)
         {
             ManagedMailMessage get(String mm)

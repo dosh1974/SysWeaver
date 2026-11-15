@@ -2,6 +2,9 @@
 
 namespace SysWeaver.FolderSync
 {
+    /// <summary>
+    /// Identifies a version of a shared folder
+    /// </summary>
     public sealed class SharedFolderSyncRequest
     {
         /// <summary>

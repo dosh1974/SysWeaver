@@ -22,7 +22,7 @@ namespace SysWeaver.MicroService
     [WebMenuEmbedded(null, "Debug/Media/MediaEditor", "Media editor", "mediaView/MediaEdit.html?link=../logo.png&props=%7B%22Transparent%22%3Atrue%2C%22Effect%22%3A%22imageEffects%2FRain.glsl%22%7D", "The media editor (showing the logo, transparent, with the rain effect): open any media, change its settings and share a link to it", "../icons/edit.svg", 5, Roles.Dev)]
     [WebMenuEmbedded(null, "Debug/Media/GoogleMapDemo", "Google map demo", "mediaView/MapDemo.html", "A demo showcase of the Google map support", "../icons/table_country.svg", 8, Roles.Dev)]
     public sealed class MediaService : IDisposable
-    { 
+    {
         public MediaService(ServiceManager manager, MediaParams p = null)
         {
             p = p ?? new MediaParams();

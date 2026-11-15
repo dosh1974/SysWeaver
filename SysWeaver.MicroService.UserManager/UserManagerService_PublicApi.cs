@@ -21,6 +21,9 @@ namespace SysWeaver.MicroService
 {
     public sealed partial class UserManagerService
     {
+        /// <summary>
+        /// The audit group that the user manager actions are logged in
+        /// </summary>
         public const String AuditGroup = "UserManager";
 
         #region Public API
@@ -29,7 +32,7 @@ namespace SysWeaver.MicroService
         /// Get information about a potential new user from a token, (will decrease the short code use counter if the token is a short code)
         /// </summary>
         /// <param name="token">The token as sent in the mail</param>
-        /// <param name="context"></param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
         /// <returns>New user data or null if it's an invalid token</returns>
         [WebApi]
         public async Task<NewUserData> GetNewUserData(String token, HttpServerRequest context)
@@ -39,7 +42,7 @@ namespace SysWeaver.MicroService
         /// Check if a short code is valid (will decrease the short code use counter)
         /// </summary>
         /// <param name="code">The short code to test</param>
-        /// <param name="context"></param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
         /// <returns>1 if ok, 0 if wrong, -1 if non-existent</returns>
         [WebApi]
         public int ValidateShortCode(String code, HttpServerRequest context)
@@ -58,7 +61,7 @@ namespace SysWeaver.MicroService
         /// The answer tells nothing about who has an account: an unknown user id answers like an account with a wrong code (0, and -2 after as many tries).
         /// </summary>
         /// <param name="request">The user id (null or empty: the one this session asked a reset for) and the code</param>
-        /// <param name="context"></param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
         /// <returns>1 if ok, 0 if wrong (or expired), -2 if too many wrong codes were tried for the user id (wait and try again)</returns>
         /// <exception cref="HttpResponseException">400: no user id</exception>
         [WebApi]
@@ -89,7 +92,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// The methods that can be used for sign up (sign up is still only available if the SignUp service is loaded)
         /// </summary>
-        /// <returns></returns>
+        /// <returns>The names of the sign up methods (as configured for this service)</returns>
         [WebApi]
         [WebApiClientCacheStatic]
         [WebApiRequestCacheStatic]
@@ -99,7 +102,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Get information about the user manager configuration
         /// </summary>
-        /// <returns></returns>
+        /// <returns>The public properties of the user manager (what a client page needs to know, like which sign in and sign up options are available)</returns>
         [WebApi]
         [WebApiClientCacheStatic]
         [WebApiRequestCacheStatic]
@@ -111,7 +114,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Check if the currently logged in user is managed by the user manager
         /// </summary>
-        /// <param name="context"></param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
         /// <returns>True if the currently logged in user is managed by the user manager</returns>
         [WebApi]
         [WebApiAuth]
@@ -239,7 +242,8 @@ namespace SysWeaver.MicroService
         /// </summary>
         /// <param name="request">Parameters</param>
         /// <param name="context">Context, handled internally</param>
-        /// <returns>True if password was changed</returns>
+        /// <returns>True when the password was changed (never false: failures throw)</returns>
+        /// <exception cref="AuthenticationFailedException">400: the request is not from the signed in user, the one time pad is invalid or has expired, or the current password is wrong</exception>
         [WebApi]
         [WebApiAuth]
         [WebApiAudit(AuditGroup)]
@@ -247,13 +251,13 @@ namespace SysWeaver.MicroService
         {
             var user = ValidatePasswordRequestData(request, context);
             if (user == null)
-                return false;
+                throw new AuthenticationFailedException();
             using var c = await Db.GetAsync().ConfigureAwait(false);
             using var tr = await c.BeginTransactionAsync().ConfigureAwait(false);
             var id = user.Id;
             var authData = await c.FirstOrDefaultAsync<DbAuthPassword>(x => x.UserId == id).ConfigureAwait(false);
             if (!ValidatePasswordRequestPassword(request, authData))
-                return false;
+                throw new AuthenticationFailedException();
             authData.Pwd = request.NewHash;
             authData.MustResetPassword = false;
             await c.UpdateAsync(authData, x => new { x.Pwd, x.MustResetPassword }).ConfigureAwait(false);
@@ -276,7 +280,7 @@ namespace SysWeaver.MicroService
         /// Why nothing was sent is only logged.
         /// </summary>
         /// <param name="identifier">User identification (user name, e-mail address or phone number)</param>
-        /// <param name="context"></param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
         /// <returns>The identifier (trimmed), never the e-mail addresses and phone numbers of the account: show it as "if an account uses ..."</returns>
         /// <exception cref="HttpResponseException">400: no identifier</exception>
         [WebApi]
@@ -674,7 +678,7 @@ namespace SysWeaver.MicroService
         /// Get information about a potential new user from a token
         /// </summary>
         /// <param name="token">The token as sent in the email</param>
-        /// <param name="context"></param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
         /// <returns>New user data</returns>
         /// <exception cref="TokenExpiredException">The token can't be used (used, replaced, expired or unknown): 410 (a short code: 400) with the reason</exception>
         [WebApi]
@@ -886,6 +890,17 @@ namespace SysWeaver.MicroService
             => InternalAddChangeEmailRequest(newEmail, true, context);
 
 
+        /// <summary>
+        /// Send a message (with a link, no code) to a new e-mail address that adds it to the account, or changes the e-mail address of the account to it
+        /// </summary>
+        /// <param name="userId">The id of the user</param>
+        /// <param name="user">The core data of the user (used for the name and language of the message)</param>
+        /// <param name="newEmail">The e-mail address to add or change to</param>
+        /// <param name="language">The language to use if the user has no preferred language</param>
+        /// <param name="origin">The origin of the request (shown in the message), can be null</param>
+        /// <returns>An array of communication targets that instructions was sent to</returns>
+        /// <exception cref="EmailAlreadyAssignedException">If the account already has the address</exception>
+        /// <exception cref="EmailInUseException">If the address belongs to some other account</exception>
         public async Task<String[]> SendAddChangeEmailRequest(long userId, IUserCoreData user, String newEmail, String language, String origin)
         {
             var am = AuthMan;
@@ -1414,6 +1429,9 @@ namespace SysWeaver.MicroService
 
         #region NickName
 
+        /// <summary>
+        /// True if users may change their nick name (<see cref="UserManagerParams.CanSetNickName"/>)
+        /// </summary>
         public readonly bool CanSetNickName;
 
         /// <summary>
@@ -1421,9 +1439,10 @@ namespace SysWeaver.MicroService
         /// If successful a page reload request is sent to all sessions for that user (maybe don't have time to get the result or act on it)
         /// </summary>
         /// <param name="newName">The new nick name</param>
-        /// <param name="context"></param>
-        /// <returns>True if the user now has this nick name (also when it already was the name: setting it again is no failure), false if the user no longer exists</returns>
-        /// <exception cref="Exception"></exception>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
+        /// <returns>True when the user has this nick name (also when it already was the name: setting it again is no failure), never false</returns>
+        /// <exception cref="HttpResponseException">409 with the reason: the user no longer exists</exception>
+        /// <exception cref="Exception">Only users managed by the UserManager may change nick name</exception>
         [WebApi]
         [WebApiAuth]
         [WebApiOptional(nameof(CanSetNickName))]
@@ -1434,7 +1453,9 @@ namespace SysWeaver.MicroService
                 throw new Exception("Only user managed by the UserManager may change nick name!");
             var t = await SetNickName(user.Id, newName).ConfigureAwait(false);
             //  Item3 is null only when the user no longer exists (else the new name, or the current one when it already was the name)
-            return t.Item3 != null;
+            if (t.Item3 == null)
+                throw HttpResponseException.Gone("Can't change the nick name to " + (newName ?? "").ToQuoted() + ": your user account no longer exists");
+            return true;
         }
 
 

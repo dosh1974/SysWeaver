@@ -46,6 +46,11 @@ This server supports the following sizes:
 ";
         const String ImageRoot = "auth/UserImages/";
 
+        /// <summary>
+        /// Create the service, registers an <see cref="AuthManager"/> using all <see cref="AuthorizerBase"/> services found
+        /// </summary>
+        /// <param name="manager">The service manager</param>
+        /// <param name="p">Optional parameters, null uses defaults</param>
         public AuthManagerService(ServiceManager manager, AuthManagerServiceParams p = null)
         {
             Manager = manager;
@@ -178,8 +183,19 @@ This server supports the following sizes:
         IDefaultUserImageHandler DefaultUserImageHandler;
         IReadOnlyDictionary<String, int> UserImageSizes;
 
+        /// <summary>
+        /// If true, IP addresses are accepted as the domain part of e-mail addresses
+        /// </summary>
         public readonly bool AllowEmailIps;
+
+        /// <summary>
+        /// If true, generated default user images are opaque
+        /// </summary>
         public readonly bool OpaqueUserImage;
+
+        /// <summary>
+        /// The authentication manager used by this service
+        /// </summary>
         public readonly AuthManager Auth;
 
 
@@ -239,7 +255,7 @@ This server supports the following sizes:
         /// Validate an international phone number
         /// </summary>
         /// <param name="phoneNumber">The international phone number to validate (all non-digits are ignored)</param>
-        /// <returns>True if the email address seems to be valid</returns>
+        /// <returns>True if the phone number seems to be valid</returns>
         [WebApi]
         public bool ValidatePhoneNumber(String phoneNumber)
             => ValidatePhoneNumber(ref phoneNumber, true);
@@ -249,7 +265,7 @@ This server supports the following sizes:
         /// Validate an international phone number
         /// </summary>
         /// <param name="phoneNumber">The international phone number to validate (all non-digits are ignored)</param>
-        /// <returns>True if the email address seems to be valid</returns>
+        /// <returns>True if the phone number seems to be valid</returns>
         public bool ValidatePhoneNumber(ref String phoneNumber)
             => ValidatePhoneNumber(ref phoneNumber, true);
 
@@ -258,7 +274,7 @@ This server supports the following sizes:
         /// </summary>
         /// <param name="phoneNumber">The international phone number to validate (all non-digits are ignored)</param>
         /// <param name="exceptions">If true, exceptions are thrown</param>
-        /// <returns>True if the email address seems to be valid</returns>
+        /// <returns>True if the phone number seems to be valid</returns>
         public bool ValidatePhoneNumber(ref String phoneNumber, bool exceptions)
         {
             try
@@ -362,6 +378,7 @@ This server supports the following sizes:
         }
 
 
+        /// <inheritdoc />
         public void Dispose()
         {
             var m = Manager;
@@ -377,6 +394,7 @@ This server supports the following sizes:
         //readonly String ImageRoot;
         readonly int ImageRootLen;
         
+        /// <inheritdoc />
         public String[] OnlyForPrefixes { get; init; }
 
 
@@ -386,10 +404,10 @@ This server supports the following sizes:
         public Func<HttpServerRequest, ValueTask<IHttpRequestHandler>> AsyncHandler { get; init; }
 
         /// <summary>
-        /// Remove a user image from the cache
+        /// Remove a user image from the cache, and make the sessions of the user reload the user image resources
         /// </summary>
-        /// <param name="userGuid"></param>
-        /// <param name="context"></param>
+        /// <param name="userGuid">The guid of the user, null only invalidates the "Current" images and dependencies</param>
+        /// <param name="context">The current request</param>
         public void InvalidateUserImageCache(String userGuid, HttpServerRequest context)
         {
             var cr = ImageRoot + "Current/";
@@ -435,16 +453,16 @@ This server supports the following sizes:
         /// <summary>
         /// Remove a resource from the user image dependencies
         /// </summary>
-        /// <param name="url"></param>
-        /// <returns></returns>
+        /// <param name="url">The url of the resource, as given to <see cref="AddUserImageDependency"/></param>
+        /// <returns>True if the resource was removed</returns>
         public bool RemoveUserImageDependency(String url)
             => UserImageDependencies.TryRemove(url, out var x);
 
 
         /// <summary>
-        /// Remove a user image from the cache
+        /// Remove the user image of the logged in user of the request from the cache
         /// </summary>
-        /// <param name="context"></param>
+        /// <param name="context">The current request</param>
         public void InvalidateUserImageCache(HttpServerRequest context)
             => InvalidateUserImageCache(context.Session.Auth?.Guid, context);
 
@@ -519,6 +537,7 @@ This server supports the following sizes:
 
         readonly FastMemCache<String, IHttpRequestHandler> UserImageCache = new (TimeSpan.FromSeconds(30), StringComparer.Ordinal);
 
+        /// <inheritdoc />
         public IEnumerable<IHttpServerEndPoint> EnumEndPoints(String root = null)
         {
             if (root == null)
@@ -553,6 +572,12 @@ This server supports the following sizes:
 
         static readonly ICompType Comp = CompManager.GetFromHttp("br");
 
+        /// <summary>
+        /// Generate a default (SVG) user icon
+        /// </summary>
+        /// <param name="name">The name to show</param>
+        /// <param name="guid">The guid of the user (used together with the name to select the look)</param>
+        /// <returns>A handler serving the compressed SVG</returns>
         public StaticMemoryHttpRequestHandler GenSvgImage(String name, String guid)
         {
             var svgS = new SvgScene(256, 256);

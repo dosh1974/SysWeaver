@@ -22,4 +22,4 @@ The `EmbedLocal` target in [`SysWeaver.Auth.Core.csproj`](../SysWeaver.Auth.Core
 ## Relationships
 
 - **Part of:** [SysWeaver.Auth.Core](../README.md)
-- **Uses:** [Compress](../../_tools/compress/README.md) at build time
+- **Uses:** [Compress](https://github.com/dosh1974/SysWeaver.Tools/blob/main/Compress/README.md) at build time

@@ -13,19 +13,25 @@ namespace SysWeaver.Chat
 
 
 
+    /// <summary>
+    /// A chat room of the <see cref="SimpleChatService"/>, the <see cref="ChatSessionParams.Name"/> is the room name.
+    /// </summary>
     public sealed class SimpleChatRoom : ChatSessionParams
     {
     }
 
+    /// <summary>
+    /// Parameters for the <see cref="SimpleChatService"/>
+    /// </summary>
     public sealed class SimpleChatParams
     {
+        /// <summary>
+        /// Not used by <see cref="SimpleChatService"/> (it doesn't support user created chats).
+        /// </summary>
         public bool AllowUserCreatedChat;
         /// <summary>
-        /// Array of chat "rooms" (or sessions).
-        /// Each room is defined like: Name | Tokens | Clear | RemoveMessage
-        /// [Name] the name of the char room.
-        /// [Tokens] the security token required to join, "-" means no login required, "*" means any logged in user.
-        /// [ClearUse | and the required security tokens to join, no '|' at all mean that anyone can write even without logging in (anonymously).
+        /// The chat rooms (or sessions), rooms with an empty name are ignored.
+        /// Access to each room is defined by the <see cref="ChatSessionParams"/> members (ex: <see cref="ChatSessionParams.Auth"/>).
         /// </summary>
         public SimpleChatRoom[] Rooms = [
             
@@ -42,10 +48,19 @@ namespace SysWeaver.Chat
     }
 
 
+    /// <summary>
+    /// A simple in memory chat provider with a fixed set of chat rooms (messages are lost on restart).
+    /// </summary>
     public sealed class SimpleChatService : IChatProvider
     {
+        /// <inheritdoc/>
         public override string ToString() => "Rooms: " + Rooms.Count;
 
+        /// <summary>
+        /// Create a simple chat service
+        /// </summary>
+        /// <param name="msg">Optional message host, used to log the rooms that are added</param>
+        /// <param name="p">Parameters, null uses the defaults</param>
         public SimpleChatService(IMessageHost msg = null, SimpleChatParams p = null)
         {
             p = p ?? new SimpleChatParams();
@@ -69,13 +84,15 @@ namespace SysWeaver.Chat
         
         IChatController Controller;
         
-        public void OnInit(IChatController controller) 
+        /// <inheritdoc/>
+        public void OnInit(IChatController controller)
         {
             Controller = controller;
         }
 
         readonly ConcurrentDictionary<String, Room> Rooms = new ConcurrentDictionary<string, Room>(StringComparer.Ordinal);
 
+        /// <inheritdoc/>
         public string Name => "Simple";
 
         sealed class Room 
@@ -127,11 +144,16 @@ namespace SysWeaver.Chat
             return room;
         }
 
+        /// <summary>
+        /// Not supported, always throws.
+        /// </summary>
+        /// <exception cref="NotImplementedException">Always</exception>
         public Task<string> CreateNewChat(string type, HttpServerRequest request)
         {
             throw new NotImplementedException();
         }
 
+        /// <inheritdoc/>
         public Task<bool> Clear(string providerChatId, HttpServerRequest request)
         {
             var room = GetAuthenticatedRoom(out var c, providerChatId, request);
@@ -150,6 +172,7 @@ namespace SysWeaver.Chat
             return TaskExt.TrueTask;
         }
         
+        /// <inheritdoc/>
         public Task<bool> RemoveMessage(string providerChatId, long messageId, HttpServerRequest request)
         {
             var room = GetAuthenticatedRoom(out var c, providerChatId, request);
@@ -172,6 +195,7 @@ namespace SysWeaver.Chat
             return TaskExt.TrueTask;
         }
 
+        /// <inheritdoc/>
         public Task<long> GetCurrentId(string providerChatId, HttpServerRequest request)
         {
             var room = GetAuthenticatedRoom(out var c, providerChatId, request);
@@ -252,12 +276,14 @@ namespace SysWeaver.Chat
             return ret.ToArray();
         }
 
+        /// <inheritdoc/>
         public Task<Chat.ChatMessage[]> GetMessages(string providerChatId, HttpServerRequest request, long pivotId, int maxCount)
         {
             var room = GetAuthenticatedRoom(out var c, providerChatId, request);
             return Task.FromResult(InternalGetMessages(room, request.Session.Auth?.Guid, pivotId, maxCount));
         }
 
+        /// <inheritdoc/>
         public Task<ChatJoinResponse> Join(string providerChatId, HttpServerRequest request, long pivotId = 0, int maxCount = 50)
         {
             var room = GetAuthenticatedRoom(out var c, providerChatId, request);
@@ -267,6 +293,7 @@ namespace SysWeaver.Chat
             return Task.FromResult(new ChatJoinResponse(room.R, session, msgs));
         }
 
+        /// <inheritdoc/>
         public Task<ChatMessage> GetChatMessage(String providerChatId, long messageId, HttpServerRequest request)
         {
             var room = GetAuthenticatedRoom(out var c, providerChatId, request);
@@ -278,6 +305,7 @@ namespace SysWeaver.Chat
         }
 
 
+        /// <inheritdoc/>
         public Task<bool> UserMessage(string providerChatId, HttpServerRequest request, ChatMessageBody message)
         {
             var room = GetAuthenticatedRoom(out var c, providerChatId, request);
@@ -307,6 +335,10 @@ namespace SysWeaver.Chat
             return TaskExt.TrueTask;
         }
 
+        /// <summary>
+        /// Not supported, always throws (no variables exist).
+        /// </summary>
+        /// <exception cref="Exception">Always (or if the room is unknown / not accessible)</exception>
         public Task<bool> SetValue(String providerChatId, HttpServerRequest request, long messageId, String key, String value)
         {
             var room = GetAuthenticatedRoom(out var c, providerChatId, request);

@@ -198,6 +198,11 @@ namespace SysWeaver
         /// <returns>Always null.</returns>
         public Exception MakeExecutable(String file) => null;
 
+        /// <summary>
+        /// Allow everyone to read and write a directory and everything inside it, by adding an inheritable full control rule for "Everyone" (if missing).
+        /// </summary>
+        /// <param name="directoryName">The directory</param>
+        /// <returns>Null if successful, else the exception</returns>
         public Exception MakeDirectoryAccessableToEveryOne(String directoryName)
         {
             try

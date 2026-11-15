@@ -43,7 +43,7 @@ Functionality of a specific service is configured in a single json file that dec
 
 > SysWeaver is a .NET framework for building server applications out of small, annotated micro services that are composed by configuration and exposed through a built-in web platform. This documentation describes the architecture and the role of each project; the source code remains the reference for member-level details.
 
-SysWeaver targets .NET 10 and is MIT licensed. Two companion repositories build on it: [SysWeaver.Services](https://github.com/dosh1974/SysWeaver.Services) (ready-to-run service applications) and [SysWeaver.Tools](https://github.com/dosh1974/SysWeaver.Tools) (command line tools, some used by the SysWeaver build) — see [Companion repositories](#companion-repositories).
+SysWeaver targets .NET 11 (with runtime async) and is MIT licensed. Two companion repositories build on it: [SysWeaver.Services](https://github.com/dosh1974/SysWeaver.Services) (ready-to-run service applications) and [SysWeaver.Tools](https://github.com/dosh1974/SysWeaver.Tools) (command line tools, some used by the SysWeaver build) — see [Companion repositories](#companion-repositories).
 
 ## Contents
 
@@ -253,7 +253,7 @@ See also [Companion repositories](#companion-repositories).
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net11.0</TargetFramework>
     <GenerateDocumentationFile>True</GenerateDocumentationFile>
   </PropertyGroup>
   <ItemGroup>
@@ -542,7 +542,7 @@ flowchart LR
 
 ## Platform and build notes
 
-- **Target framework:** all projects target .NET 10 (`net10.0`, `net10.0-windows` for the Windows-only browser hosts); the vendored libraries in `_external` keep their own targets.
+- **Target framework:** all projects target .NET 11 (`net11.0`, `net11.0-windows` for the Windows-only browser hosts), built with the C# `runtime-async` feature (`<Features>runtime-async=on</Features>`) so async methods use the .NET 11 runtime async; the vendored libraries in `_external` keep their own targets.
 - **Runtime:** applications run on Windows and Linux. OS-specific behaviour (platform tools, service hosting, native media libraries) lives in separate assemblies resolved at runtime; deploy the ones for your target.
 - **Build:** many projects pre-compress or optimise their embedded web assets with pre-built Windows tools from `_tools` and use Windows shell commands in their build steps, so the repository builds as-is on Windows.
 - **Windows-only components:** the WebView2 browser, the CEF runtime packages as configured, certificate binding for the HttpListener server, and the Windows service host.

@@ -18,12 +18,13 @@ namespace SysWeaver.MicroService
     /// When added to a service, all files (server by the FileHttpServerModule) can be returned as a thumbnail, by adding "?Key" to the url.
     /// The Key consists of the prefix and the supported resolution (resolutions can be specified in the params), ex: "?Thumb32x32".
     /// The resolutions are only there for guidance and are not guaranteed.
-    /// File-types that aren't recognized return their file extension icon instead (tyipcally .svg).
+    /// File-types that aren't recognized return their file extension icon instead (typically .svg).
     /// </summary>
     [IsMicroService]
     [RequiredDep<IconHttpServerModule, FileHttpServerModule>]
     public sealed class ThumbnailService : IDisposable, IFileTransformer, IPerfMonitored, IHttpServerModule, IHaveStats
     {
+        /// <inheritdoc />
         public override string ToString()
         {
             var rs = MapRes;
@@ -31,6 +32,11 @@ namespace SysWeaver.MicroService
             return String.Concat(r, r == 1 ? " resolution: " : " resolutions: ", String.Join(", ", rs.Select(x => String.Concat(x.Key.ToQuoted(), " @ ", x.Value.Item1, 'x', x.Value.Item2))));
         }
 
+        /// <summary>
+        /// Create the service and register a file transformer for each configured resolution
+        /// </summary>
+        /// <param name="manager">The service manager</param>
+        /// <param name="p">Parameters, null uses defaults</param>
         public ThumbnailService(ServiceManager manager, ThumbnailParams p = null)
         {
             p = p ?? new ThumbnailParams();
@@ -67,6 +73,9 @@ namespace SysWeaver.MicroService
         }
         readonly RequestOptions Options;
 
+        /// <summary>
+        /// The prefix used before the width and height of a thumbnail key, ex: "Thumb"
+        /// </summary>
         public readonly String Prefix;
         readonly TimeSpan CacheDuration;
         readonly IconHttpServerModule IconModule;
@@ -75,6 +84,9 @@ namespace SysWeaver.MicroService
         readonly FileHttpServerModule Fs;
         readonly ICompType Comp;
 
+        /// <summary>
+        /// Remove all file transformers
+        /// </summary>
         public void Dispose()
         {
             var fs = Fs;
@@ -82,12 +94,27 @@ namespace SysWeaver.MicroService
                 fs.RemoveFileTransformer(x.Key);
         }
 
+        /// <summary>
+        /// Get (cached) media information for a file, using the default key (<see cref="Prefix"/>, no fixed size)
+        /// </summary>
+        /// <param name="filename">The file to get information about</param>
+        /// <param name="fill">If true the thumbnail fills the requested size</param>
+        /// <param name="waitForResult">If true wait for the information to be built, else a result might not be available yet</param>
+        /// <returns>The media information, null if the key isn't registered</returns>
         public async Task<MediaInfo> GetMediaInfo(String filename, bool fill = false, bool waitForResult = true)
         {
             using var perf = PerfMon.Track(nameof(GetMediaInfo));
             return await GetMediaInfo(Prefix, filename, fill, waitForResult).ConfigureAwait(false);
         }
 
+        /// <summary>
+        /// Get (cached) media information for a file and a thumbnail size
+        /// </summary>
+        /// <param name="key">The key of the thumbnail size, ex: "Thumb32x32"</param>
+        /// <param name="filename">The file to get information about</param>
+        /// <param name="fill">If true the thumbnail fills the requested size</param>
+        /// <param name="waitForResult">If true wait for the information to be built, else a result might not be available yet</param>
+        /// <returns>The media information, null if the key isn't registered</returns>
         public async Task<MediaInfo> GetMediaInfo(String key, String filename, bool fill = false, bool waitForResult = true)
         {
             using var perf = PerfMon.Track(nameof(GetMediaInfo));
@@ -143,6 +170,13 @@ namespace SysWeaver.MicroService
             }
         }
 
+        /// <summary>
+        /// Get a request handler for the thumbnail of a file
+        /// </summary>
+        /// <param name="key">The key of the thumbnail size, ex: "Thumb32x32"</param>
+        /// <param name="filename">The file to get a thumbnail of</param>
+        /// <param name="fill">If true the thumbnail fills the requested size</param>
+        /// <returns>A handler for the thumbnail, the icon of the file type if there is no thumbnail, or null if the file has no extension</returns>
         public async Task<IHttpRequestHandler> GetThumb(String key, String filename, bool fill = false)
         {
             using var perf = PerfMon.Track(nameof(GetThumb));
@@ -175,13 +209,20 @@ namespace SysWeaver.MicroService
 
 
 
+        /// <summary>
+        /// Not supported (requests are handled by <see cref="AsyncHandler"/>)
+        /// </summary>
+        /// <param name="context">The incoming request</param>
+        /// <returns>Never returns</returns>
+        /// <exception cref="NotImplementedException">Always</exception>
         public IHttpRequestHandler Handler(HttpServerRequest context)
             => throw new NotImplementedException();
 
+        /// <inheritdoc />
         public String[] OnlyForPrefixes { get; } = ["thumbnail/"];
 
         /// <summary>
-        /// An optional async handler
+        /// Async handler for "thumbnail/[resolution name].png?[source url]" requests
         /// </summary>
         public Func<HttpServerRequest, ValueTask<IHttpRequestHandler>> AsyncHandler => CachedAsyncHandler;
 
@@ -242,6 +283,7 @@ namespace SysWeaver.MicroService
             return new FileHttpRequestHandler(PngMime, new FileInfo(m.IconFile), Options, false, null);
         }
 
+        /// <inheritdoc />
         public IEnumerable<IHttpServerEndPoint> EnumEndPoints(string root = null) => HttpServerTools.NoEndPoints;
 
         /// <summary>
@@ -249,8 +291,9 @@ namespace SysWeaver.MicroService
         /// </summary>
         /// <param name="width">The max width in pixels</param>
         /// <param name="height">The max height in pixels</param>
-        /// <param name="key">An optional key</param>
-        /// <returns>The key to use to get this thumbnail "?Key", ex: "?Thumb64x64"</returns>
+        /// <param name="key">An optional key, defaults to the prefix followed by the size, ex: "Thumb64x64"</param>
+        /// <returns>The key to use to get this thumbnail "?Key", ex: "?Thumb64x64", or null if the file transformer could not be registered.
+        /// Adding an existing key with the same size increases its use count (see <see cref="RemoveThumbSize"/>)</returns>
         /// <exception cref="ArgumentException">The key is already registered with another size</exception>
         public String AddThumbSize(int width, int height, String key = null)
         {
@@ -279,7 +322,7 @@ namespace SysWeaver.MicroService
         }
 
         /// <summary>
-        /// Remove a previously added thumbnail size
+        /// Remove a previously added thumbnail size (the size is removed when it has been removed as many times as it was added)
         /// </summary>
         /// <param name="key">The key returned by the AddThumbSize call</param>
         public void RemoveThumbSize(String key)
@@ -307,6 +350,7 @@ namespace SysWeaver.MicroService
 
         readonly ConcurrentDictionary<String, Tuple<int, int, long, FastMemCache<String, MediaInfo>>> MapRes = new ConcurrentDictionary<string, Tuple<int, int, long, FastMemCache<String, MediaInfo>>>(StringComparer.Ordinal);
 
+        /// <inheritdoc />
         public async ValueTask<IHttpRequestHandler> Modify(string key, Tuple<string, bool> mime, FileInfo fi, RequestOptions options, bool isAccepted, ICompDecoder decoder, bool updateAccessTime, bool isDynamic)
         {
             using (AllTrackers.Track(key))
@@ -331,6 +375,7 @@ namespace SysWeaver.MicroService
             return mime.AsSpan(0, i).TrimEnd().ToString();
         }
 
+        /// <inheritdoc />
         public IEnumerable<Stats> GetStats()
         {
             long h = 0;
@@ -359,6 +404,7 @@ namespace SysWeaver.MicroService
 
         readonly ConcurrentDictionary<String, IHttpRequestHandler> MimeCache = new ConcurrentDictionary<string, IHttpRequestHandler>(StringComparer.OrdinalIgnoreCase);
 
+        /// <inheritdoc />
         public PerfMonitor PerfMon { get; private set; } = new PerfMonitor(nameof(ThumbnailService));
     }
 }

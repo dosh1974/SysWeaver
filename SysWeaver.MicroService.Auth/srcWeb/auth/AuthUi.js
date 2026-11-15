@@ -210,7 +210,7 @@
             }
             catch (e) {
                 console.error(e);
-                Sw.Fail(e && e.message ? e.message : String(e));
+                Sw.Fail(Sw.ErrorMessage(e));
                 return undefined;
             }
             finally {
@@ -354,7 +354,7 @@
         }
         catch (e) {
             console.error(e);
-            Sw.Fail(e && e.message ? e.message : String(e));
+            Sw.Fail(Sw.ErrorMessage(e));
         }
         finally {
             if (o.Dialog !== false)
@@ -445,7 +445,8 @@
     }
 
     /**
-     * The reason of a button that is disabled while the form's request runs, or after it was done (the page moves on).
+     * The reason of a button that is disabled while the form's request runs, or after it was done (the page moves on)
+     * (also Sw.AuthUi.WaitReason, used by UserManagerUi.js).
      * @returns {string} The text.
      */
     const waitReason = () => _TF("Wait until the current step is done", "Reason of a disabled button of an account or sign in page while its request runs");
@@ -1318,7 +1319,7 @@
     }
 
     /**
-     * The passkey plug-in (Passkey.js) when loaded and supported, else null.
+     * The passkey plug-in (Passkey.js) when loaded and supported, else null (also Sw.AuthUi.PassKeys, used by UserManagerUi.js).
      * @returns {*} The PassKey class or null.
      */
     function passKeys() {
@@ -1349,7 +1350,7 @@
                     have = await Sw.Net.Send(Sw.Url.Root + "Api/HaveService", "SysWeaver.MicroService.PassKeyService", { NoNavigate: true });
                 }
                 catch (e) {
-                    console.warn("AuthUi: HaveService failed: " + ((e && e.message) || e));
+                    console.warn("AuthUi: HaveService failed: " + Sw.ErrorMessage(e));
                 }
                 if (!have)
                     return false;
@@ -1446,6 +1447,42 @@
     }
 
     /**
+     * Start the end state of a page (LinkGone, Done): the page content is cleared and the title is the page's (the document and the
+     * page header). The state view has its own icon, so the page icon is hidden (an image icon, ex: a QR code, is stale too).
+     * @param {AuthPage} page The page.
+     * @param {string} [title] The title (none: unchanged).
+     */
+    function beginState(page, title) {
+        page.Clear();
+        page.IconWrap.hidden = true;
+        if (title) {
+            document.title = title;
+            if (page.Header)
+                page.Header.SetTitle(title);
+        }
+    }
+
+    /**
+     * Show the state view of an end state on the page (after beginState): its title is the page's heading (screen reader heading
+     * navigation).
+     * @param {AuthPage} page The page.
+     * @param {string} cls The class of the view.
+     * @param {object} o The Sw.StateView options.
+     * @returns {{E: HTMLElement}} The state view.
+     */
+    function showState(page, cls, o) {
+        const view = Sw.StateView(o);
+        view.E.classList.add(cls);
+        const t = view.E.querySelector(".sw-state-title");
+        if (t) {
+            t.setAttribute("role", "heading");
+            t.setAttribute("aria-level", "1");
+        }
+        page.Box.append(view.E);
+        return view;
+    }
+
+    /**
      * Show "This link no longer works" on a page (a Design v2 state view: icon, title, the cause, what to do, the actions; the page
      * content is replaced, no toast): the server's reason (the real cause: used, a newer link was sent, the password / e-mail / phone
      * changed, expired ...), what to do for this kind of link, a help line that names the application, and
@@ -1491,12 +1528,7 @@
                         : kind === "UndoEmail"
                             ? _TF("Reset your password: on the forgot password page, enter the phone number of the account. No phone number on the account? Contact the support of this site.", "What to do, on the page of the link that undoes an e-mail address change when it no longer works")
                             : _TF("Sign in and start again from the page that sent the link: you get a new one.", "What to do, on the page of an account link (change e-mail, delete account ...) that no longer works");
-        page.Clear();
-        //  The state view has its own icon (the page icon is hidden; an image icon, ex: a QR code, is stale too)
-        page.IconWrap.hidden = true;
-        document.title = title;
-        if (page.Header)
-            page.Header.SetTitle(title);
+        beginState(page, title);
         const actions = Sw.ButtonRow();
         const request = (kind === "ResetPassword" || kind === "UndoEmail") && !disabled;
         if (request)
@@ -1512,15 +1544,7 @@
             OnClick: request ? () => Sw.Page.Navigate("Login.html", "_self") : undefined,
         }, page);
         page.OnSubmit = () => Sw.Page.Navigate(request ? "ForgotPassword.html" : "Login.html", "_self");
-        const view = Sw.StateView({ Kind: "error", Icon: "warning", Title: title, Text: todo ? why + " " + todo : why, Actions: [actions] });
-        view.E.classList.add("auth-link-gone");
-        //  The title is the page's heading (screen reader heading navigation)
-        const t = view.E.querySelector(".sw-state-title");
-        if (t) {
-            t.setAttribute("role", "heading");
-            t.setAttribute("aria-level", "1");
-        }
-        page.Box.append(view.E);
+        showState(page, "auth-link-gone", { Kind: "error", Icon: "warning", Title: title, Text: todo ? why + " " + todo : why, Actions: [actions] });
         const help = Text(page, "", { Class: "auth-muted auth-link-help", NoCopy: true });
         AppName().then(n => help.textContent = n
             ? _T("If you need help, contact the administrator of {0}.", n, "Help line of the page shown for a link that no longer works.{0} is replaced with the application name")
@@ -1549,13 +1573,7 @@
      */
     function Done(page, o) {
         o = o || {};
-        page.Clear();
-        page.IconWrap.hidden = true;
-        if (o.Title) {
-            document.title = o.Title;
-            if (page.Header)
-                page.Header.SetTitle(o.Title);
-        }
+        beginState(page, o.Title);
         const next = Array.isArray(o.Next) && o.Next.length ? o.Next : [{
             Text: _TF("Go to the start page", "Button at the end of an account page (ex: after the account was deleted) that opens the start page of the site"),
             Title: _TF("Open the start page of this site", "Tool tip of the go to the start page button at the end of an account page"),
@@ -1582,14 +1600,7 @@
             ? { Text: n.Text, Title: n.Title, Icon: n.Icon, Submit: true }
             : { Text: n.Text, Title: n.Title, Icon: n.Icon, Kind: "ghost", OnClick: () => go(n) }, page));
         page.OnSubmit = () => go(next[0]);
-        const view = Sw.StateView({ Kind: "empty", Icon: o.Icon || "check", Title: o.Title || "", Text: o.Text || "", Actions: [actions] });
-        view.E.classList.add("auth-done");
-        const t = view.E.querySelector(".sw-state-title");
-        if (t) {
-            t.setAttribute("role", "heading");
-            t.setAttribute("aria-level", "1");
-        }
-        page.Box.append(view.E);
+        const view = showState(page, "auth-done", { Kind: "empty", Icon: o.Icon || "check", Title: o.Title || "", Text: o.Text || "", Actions: [actions] });
         page.Focus(page.MainButton ? page.MainButton.E : null);
         return view;
     }
@@ -1741,8 +1752,8 @@
         /** The policy the reserved cells are sized for: every policy seen on this page merged (the most rules, the widest numbers). */
         let reserved = null;
         /**
-         * Size the two reserved cells for the policies this page can really show (Designer N4: no empty band sized for every rule of
-         * any policy): the checklist and the longest hint of the policies seen so far. The first one (the common policy, asked before the
+         * Size the two reserved cells: the checklist for the policies seen so far (at least three lines, Auth.css), the hint for every
+         * rule kind (its "needs" sentence of a stricter policy wraps to another line; see below). The first one (the common policy, asked before the
          * form shows) sizes them before the first paint; another user's policy only ever grows them, and only when it has more rules (one
          * authorizer: the same policy for every user id, nothing moves while typing, LAY-9).
          * @param {object|null} policy The policy just received (null: the default length rules).
@@ -1760,14 +1771,18 @@
             reserved = m;
             //  (a too long password adds "At most 64 characters": a real state of the list, so it is in the size)
             Sw.Reserve.SetSizer(rulesSlot, el("ul.auth-rules", null, RuleItems(A.PolicyRules("x".repeat(m.MaxLength + 1), m), true)));
+            //  The hint cell is sized for every rule kind from the first paint: the policy of the typed user id (another authorizer) is
+            //  only known once the user id is typed / autofilled values are exposed, and its longer "needs" sentence (more rules) wraps
+            //  to another line, which pushed the buttons down when the user id field was focused (LAY-9). As the rules cell (three lines).
+            const w = { ...m, MixedCase: true, MixedNumerical: true, MixedSpecial: true };
             //  (the status sentences of the original shown while typing, S6-D4: each rule's sentence, A.CheckPolicy of a probe password)
-            const len = Math.max(1, Math.min(m.MaxLength, Math.max(m.MinLength, 3)));
+            const len = Math.max(1, Math.min(w.MaxLength, Math.max(w.MinLength, 3)));
             const probe = s => s.repeat(Math.ceil(len / s.length)).slice(0, len);
-            const ruleTexts = ["x", "x".repeat(m.MaxLength + 1), probe("1"), probe("a"), probe("aA"), probe("aA1")].map(x => A.CheckPolicy(x, m)).filter(x => x);
+            const ruleTexts = ["x", "x".repeat(w.MaxLength + 1), probe("1"), probe("a"), probe("aA"), probe("aA1")].map(x => A.CheckPolicy(x, w)).filter(x => x);
             Sw.Reserve.SetSizer(msgSlot, [
                 ...ruleTexts,
                 _TF("Enter your user id", "Information text explaining that the user should enter their user id (user name, email or phone number)"),
-                NeedsText(A.PolicyRules("", m).map(r => r.Text), ""),
+                NeedsText(A.PolicyRules("", w).map(r => r.Text), ""),
                 _TF("Wrong user ID or password. Please try again.", "Error message displayed under the sign in form when the user id or password is wrong"),
             ], "auth-status auth-login-status auth-warning");
         }
@@ -2122,7 +2137,7 @@
                     }
                 }
                 catch (e) {
-                    res = { Error: P.Errors.VerificationFailed, Message: String(e.message || e) };
+                    res = { Error: P.Errors.VerificationFailed, Message: Sw.ErrorMessage(e) };
                 }
                 anyKey.Fetch().catch(() => { });
                 autofill?.Start();
@@ -2225,7 +2240,7 @@
                 }
                 catch (e) {
                     const m = _TF("Failed to sign out!", "Error text indicating that the sign out request failed");
-                    status.Set(m + " " + (e && e.message ? e.message : String(e)), "error");
+                    status.Set(m + " " + (Sw.ErrorMessage(e)), "error");
                 }
                 retry.E.hidden = false;
             }
@@ -2261,6 +2276,8 @@
         LoginMain,
         LogoutMain,
         LoadPassKeys,
+        PassKeys: passKeys,
+        WaitReason: waitReason,
         CheckLinkToken,
         LinkGone,
         IsLinkGone,
@@ -2272,15 +2289,8 @@
 
     // ------------------------------------------------------------------ legacy globals (old AuthUi.js api, for other projects)
 
-    /**
-     * Define a legacy global unless already defined.
-     * @param {string} name Name.
-     * @param {*} value Value.
-     */
-    function legacy(name, value) {
-        if (!(name in window))
-            window[name] = value;
-    }
+    /** Define a legacy global unless already defined (shared with Auth.js). */
+    const legacy = A.Legacy;
 
     /**
      * Legacy wrapper of a Sw.Button with the old member names.

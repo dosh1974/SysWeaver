@@ -17,7 +17,7 @@ These attributes are metadata only. [SysWeaver.HttpServer](../../SysWeaver.HttpS
 
 | Item | Description |
 |---|---|
-| [`WebApiAttribute.cs`](WebApiAttribute.cs) | `[WebApi]` (publish a method), plus `[WebApiRaw]` / `[WebApiRawText]` (pre-serialised responses), `[WebApiServiceRateLimit]` / `[WebApiSessionRateLimit]`, `[WebApiAudit]` and `[WebApiAuditFilterParams]` / `[WebApiAuditFilterReturn]` |
+| [`WebApiAttribute.cs`](WebApiAttribute.cs) | `[WebApi]` (publish a method), plus `[WebApiRaw]` / `[WebApiRawText]` (pre-serialised responses; `[WebApiRaw]` with a mime type returns readonly memory, without one (the default) the method returns a `MemoryFile` and its mime type is used per call), `[WebApiServiceRateLimit]` / `[WebApiSessionRateLimit]`, `[WebApiAudit]` and `[WebApiAuditFilterParams]` / `[WebApiAuditFilterReturn]` |
 | [`WebApiUrlAttribute.cs`](WebApiUrlAttribute.cs) | `[WebApiUrl]`: base URL (prefix) of the methods of a type |
 | [`WebApiAuthAttribute.cs`](WebApiAuthAttribute.cs) | `[WebApiAuth]`: authorisation required for a type or method |
 | [`IRunTimeWebApiAuth.cs`](IRunTimeWebApiAuth.cs) | Interface for services whose per-method auth is configured at run time (`MethodAuths`, `"*"` for all other methods) |

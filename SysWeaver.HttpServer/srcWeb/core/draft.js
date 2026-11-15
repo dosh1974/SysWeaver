@@ -187,6 +187,20 @@
     }
 
     /**
+     * The user the app shell above this page already asked for (Sw.Access.CachedUser of the top window), no request.
+     * @returns {?Promise<?object>} The shell's user promise; null outside the shell, when it knows none, or on another origin.
+     */
+    function shellUser() {
+        try {
+            const ta = window.top !== window ? window.top.Sw && window.top.Sw.Access : null;
+            return ta && typeof ta.CachedUser === "function" ? ta.CachedUser() : null;
+        }
+        catch {
+            return null;
+        }
+    }
+
+    /**
      * Remember the user part for this tab (see userCacheKey).
      * @param {string|null} v The user part, null to forget it.
      */
@@ -208,13 +222,7 @@
     function user() {
         if (!userP) {
             //  (inside the app shell the shell's user is reused: Sw.Access.CachedUser of the top window, no request of its own)
-            let shared = null;
-            try {
-                const ta = window.top !== window ? window.top.Sw && window.top.Sw.Access : null;
-                shared = ta && typeof ta.CachedUser === "function" ? ta.CachedUser() : null;
-            }
-            catch {
-            }
+            const shared = shellUser();
             //  (else the user this tab already knows, written by the app shell and forgotten on every sign in / out push: no request
             //  either; the original pages asked nothing)
             const known = shared ? null : knownUser();
@@ -244,15 +252,7 @@
      * @returns {boolean} True when user() sends no request.
      */
     function userFree() {
-        if (userP || knownUser())
-            return true;
-        try {
-            const ta = window.top !== window ? window.top.Sw && window.top.Sw.Access : null;
-            return !!(ta && typeof ta.CachedUser === "function" && ta.CachedUser());
-        }
-        catch {
-            return false;
-        }
+        return !!(userP || knownUser() || shellUser());
     }
 
     /**
@@ -1001,8 +1001,7 @@
                     if (userP)
                         part = await userP;
                     else {
-                        const ta = window.top !== window ? window.top.Sw && window.top.Sw.Access : null;
-                        const shared = ta && typeof ta.CachedUser === "function" ? ta.CachedUser() : null;
+                        const shared = shellUser();
                         part = shared ? userPart(await shared) : knownUser();
                     }
                 }

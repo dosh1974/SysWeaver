@@ -34,6 +34,9 @@ namespace SysWeaver.MicroService
             Recent = TimeSpan.FromMinutes(Math.Max(0, recentMinutes));
         }
 
+        /// <summary>
+        /// Release the resources used to wake up waiting pollers
+        /// </summary>
         public void Dispose() => Block.Dispose();
 
         readonly Func<T, String> GetId;

@@ -355,8 +355,7 @@
      */
     function CreateLink(url, text, target, title, isImage, o) {
         o = o || {};
-        if (Sw.Work && typeof Sw.Work.CheckOptions === "function")
-            Sw.Work.CheckOptions("Sw.Cells.CreateLink", o);
+        Sw.Work.CheckOptions("Sw.Cells.CreateLink", o);
         //  Target keywords are case-insensitive ("_TOP" is "_top"): compare the normalized target only
         target = Sw.Page && Sw.Page.Target ? Sw.Page.Target(target, "_self") : (target || "_self");
         const own = target === "_self";
@@ -1622,11 +1621,7 @@
      * @returns {string} The sentence ("" for none).
      */
     function sentence(s) {
-        s = String(s ?? "").trim();
-        if (!s)
-            return "";
-        s = s.charAt(0).toLocaleUpperCase() + s.slice(1);
-        return /[.!?…。！？]$/.test(s) ? s : s + ".";
+        return Sw.Net.Sentence(s, { Capital: true });
     }
 
     /**
@@ -2096,7 +2091,7 @@
      * @returns {Promise<boolean|object>} True if confirmed (with Prepare: the prepared object, truthy), false otherwise.
      */
     async function ConfirmDanger(o) {
-        if (o && !o.SwPrepared && Sw.Work && typeof Sw.Work.CheckOptions === "function")
+        if (o && !o.SwPrepared)
             Sw.Work.CheckOptions("Sw.Cells.ConfirmDanger", o, DangerSchema);
         if (o && typeof o.Prepare === "function") {
             const prep = await prepareDanger(o);
@@ -2325,8 +2320,7 @@
      */
     async function DangerRun(o) {
         o = o || {};
-        if (Sw.Work && typeof Sw.Work.CheckOptions === "function")
-            Sw.Work.CheckOptions("Sw.Danger.Run", o, DangerRunSchema);
+        Sw.Work.CheckOptions("Sw.Danger.Run", o, DangerRunSchema);
         if (typeof o.Run !== "function")
             throw new Error("Sw.Danger.Run: Run (the work) is required");
         if (!o.Action)

@@ -3,8 +3,12 @@ using System;
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// A text message to send
+    /// </summary>
     public class OutgoingTextMessage
     {
+        /// <inheritdoc />
         public override string ToString() => String.Concat(PhoneNumber, ": ", Text);
 
         /// <summary>
@@ -61,6 +65,10 @@ namespace SysWeaver.MicroService
         /// </summary>
         public String Reference;
 
+        /// <summary>
+        /// Create a shallow copy of this message
+        /// </summary>
+        /// <returns>The copy</returns>
         public OutgoingTextMessage Clone() => (OutgoingTextMessage)MemberwiseClone();
     }
 }

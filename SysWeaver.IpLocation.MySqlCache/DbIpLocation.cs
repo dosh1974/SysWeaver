@@ -6,6 +6,9 @@ using SysWeaver.Serialization;
 
 namespace SysWeaver.IpLocation.Caches
 {
+    /// <summary>
+    /// A cached ip location (a row in the database)
+    /// </summary>
     [Alias("IpLocations")]
     [PartitionByKey(nameof(Ip))]
     public sealed class DbIpLocation
@@ -28,7 +31,7 @@ namespace SysWeaver.IpLocation.Caches
         public DateTime Added { get; set; }
 
         /// <summary>
-        /// The data as json
+        /// The location as json, null if no location was found for the ip address
         /// </summary>
         [StringLength(16384)]
         [TableDataOrder(100)]
@@ -36,7 +39,7 @@ namespace SysWeaver.IpLocation.Caches
         public String Data { get; set; }
 
         /// <summary>
-        /// Link to map
+        /// The position as "latitude,longitude" (used to show a map image)
         /// </summary>
         [TableDataGoogleMapsPlaceImage]
         [Ignore]
@@ -52,7 +55,7 @@ namespace SysWeaver.IpLocation.Caches
         }
 
         /// <summary>
-        /// Country
+        /// The ISO country code (shown as a flag)
         /// </summary>
         [TableDataIsoCountryImage]
         [Ignore]

@@ -2,8 +2,12 @@
 
 namespace SysWeaver.AI
 {
+    /// <summary>
+    /// Defines a column of an <see cref="AiTable"/>
+    /// </summary>
     public sealed class AiTableColumn
     {
+        /// <inheritdoc />
         public override string ToString()
             => String.Concat(Name, " [", Type, ']');
 

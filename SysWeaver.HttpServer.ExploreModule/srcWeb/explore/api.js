@@ -348,7 +348,7 @@
                 new Sw.Button({
                     Text: _TF("All APIs", "Text of a button on the API inspector page that opens the table of all APIs"), Icon: "table", Kind: "ghost",
                     Title: _TF("Open the list of all APIs of the service", "Tool tip of a button that opens the table listing all APIs of the service"),
-                    OnClick: () => Sw.Page.Navigate("table.html?q=" + encodeURIComponent("../Api/debug/ApiTable"), "_self"),
+                    OnClick: openApiTable,
                 }),
             ];
             const h = Sw.PageHeader({ Title: t.Name, Description: d.Desc || "", Actions: actions, Class: "api-ph" });
@@ -729,7 +729,7 @@
                 v = JSON.parse(text);
             }
             catch (e) {
-                const msg = e && e.message ? e.message : String(e);
+                const msg = Sw.ErrorMessage(e);
                 //  "... at position 12" / "(line 3 column 5)": point at the line
                 let line = null;
                 const lm = /line (\d+)/i.exec(msg);
@@ -1120,6 +1120,11 @@
         }
     }
 
+    /** Open the table of all APIs of the service (the "All APIs" buttons of the inspector and of its error page). */
+    function openApiTable() {
+        return Sw.Page.Navigate("table.html?q=" + encodeURIComponent("../Api/debug/ApiTable"), "_self");
+    }
+
     /** @type {?Promise<?object>} The ApiIoInfo of the service (Api/debug/GetApiIoInfo, once; null when not available). */
     let ioInfo = null;
 
@@ -1402,7 +1407,7 @@
             Icon: "table",
             Kind: retry ? null : "primary",
             Title: _TF("Open the list of all APIs of the service", "Tool tip of a button that opens the table listing all APIs of the service"),
-            OnClick: () => Sw.Page.Navigate("table.html?q=" + encodeURIComponent("../Api/debug/ApiTable"), "_self"),
+            OnClick: openApiTable,
         }));
         const st = Sw.EmptyState({ Icon: retry ? "warning" : "info", Error: !!retry, Title: title, Text: text, Actions: actions });
         st.E.classList.add("api-message");
@@ -1488,7 +1493,7 @@
                     await showLocked(url, e);
                     return;
                 }
-                error = e && e.message ? e.message : String(e);
+                error = Sw.ErrorMessage(e);
             }
             if (!info) {
                 //  No error but no info: the server has no API at that url (GetApiInfo returns null); name the url and the rule
@@ -1510,7 +1515,7 @@
             document.title = _TF("API", "The page title prefix, is followed by the url to the API") + ": " + (Sw.Url.Get("q") || url);
         }
         catch (e) {
-            Sw.Fail(e && e.message ? e.message : String(e), true);
+            Sw.Fail(Sw.ErrorMessage(e), true);
         }
         finally {
             remove();

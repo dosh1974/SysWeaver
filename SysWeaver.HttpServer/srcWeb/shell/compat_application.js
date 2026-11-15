@@ -29,14 +29,8 @@
     }
     const Shell = Sw.Shell;
 
-    /**
-     * Define a global (a window property, like the old top level declarations).
-     * @param {string} name - The global name.
-     * @param {*} value - The value.
-     */
-    function def(name, value) {
-        window[name] = value;
-    }
+    //  Define a global (a window property, like the old top level declarations): the helper of core/legacy_session.js
+    const def = Sw.Legacy ? Sw.Legacy.Def : (name, value) => { window[name] = value; };
 
     // ------------------------------------------------------------------ menu model
 

@@ -3,10 +3,14 @@ using SysWeaver.Net;
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// A folder that is automatically synchronized (pulled) from a remote server
+    /// </summary>
     public sealed class FsRemoteFolder : CredentialParams
     {
         /// <summary>
-        /// If true, perform a sync when starting the service
+        /// If true, perform a sync when starting the service.
+        /// Defaults to true.
         /// </summary>
         public bool SyncOnStart = true;
 
@@ -26,7 +30,7 @@ namespace SysWeaver.MicroService
         public String RemoteName;
 
         /// <summary>
-        /// Optional cache folder on disc (defaults to using the SysWaver folders)
+        /// Optional cache folder on disc (defaults to using the SysWeaver folders)
         /// </summary>
         public String DiscFolder;
 
@@ -41,6 +45,7 @@ namespace SysWeaver.MicroService
         /// This is especially true when caching is involved.
         /// The only way to be sure that this can't happen is to make sure that url's of the new files haven't been used before (aka located in a unique folder).
         /// There are two methods to mitigate this.
+        /// Defaults to <see cref="WebFolderSwapMethods.IFramePage"/>.
         /// </summary>
         public WebFolderSwapMethods SwapMethod = WebFolderSwapMethods.IFramePage;
 
@@ -53,18 +58,21 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// If true and the swap method is an iframe page, version checking is available and auto reload may be activated. 
         /// Version checking/reloading can be done manually from the iframe page by sending a the message with the data { "Type": "CheckVersion" }.
+        /// Defaults to true.
         /// </summary>
         public bool VersionCheck = true;
 
         /// <summary>
         /// When the swap method is an iframe page, the web page can be auto reloaded if a new version is available, this value determines the version check interval in seconds.
         /// Set to zero to disable automatic version checking.
+        /// Defaults to 15.
         /// Version checking/reloading can be done manually from the iframe page by sending a the message with the data { "Type": "CheckVersion" }.
         /// </summary>
         public int AutoReload = 15;
 
         /// <summary>
-        /// Number of hours to keep old versions on disc
+        /// Number of hours to keep old versions on disc (at least 1).
+        /// Defaults to 4.
         /// </summary>
         public int DeleteAfterHours = 4;
     }

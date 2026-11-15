@@ -45,7 +45,7 @@
 }
 
     .md-grip:focus-visible {
-        outline: none;
+        outline: none;  /* the focus ring is on the bar inside (.md-grip-bar:focus-visible below) */
     }
 
 .md-grip-bar {
@@ -60,8 +60,14 @@
     transition: background-color var(--sw-dur-1, 0.1s);
 }
 
-.md-grip:hover .md-grip-bar, .md-grip-active .md-grip-bar {
+.md-grip-active .md-grip-bar {
     background: var(--sw-accent1, var(--sw-text-2));
+}
+
+@media (hover: hover) {
+    .md-grip:hover .md-grip-bar {
+        background: var(--sw-accent1, var(--sw-text-2));
+    }
 }
 
 .md-grip:focus-visible .md-grip-bar {

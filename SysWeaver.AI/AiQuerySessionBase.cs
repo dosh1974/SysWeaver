@@ -23,6 +23,16 @@ namespace SysWeaver.AI
     /// </summary>
     public abstract class AiQuerySessionBase : IAiQuerySession
     {
+        /// <summary>
+        /// Create a session
+        /// </summary>
+        /// <param name="model">The model name</param>
+        /// <param name="haveTemperature">True if the model supports setting the temperature</param>
+        /// <param name="supportSystemRole">True if the model supports a system role (else the system prompt is sent as a user message)</param>
+        /// <param name="supportParallelToolCalls">True if the model supports parallel tool calls, false if not, null if unknown or not applicable</param>
+        /// <param name="toolCache">Optional cache for tool results</param>
+        /// <param name="monitor">Optional performance monitor</param>
+        /// <param name="memory">Optional AI memory, if set the memory tools are added to the session</param>
         protected AiQuerySessionBase(String model, bool haveTemperature, bool supportSystemRole, bool? supportParallelToolCalls, IAiToolCache toolCache = null, PerfMonitor monitor = null, IAiMemory memory = null)
         {
             Model = model;
@@ -43,6 +53,9 @@ namespace SysWeaver.AI
 
         #region Memory
 
+        /// <summary>
+        /// The AI memory used by this session, null if none
+        /// </summary>
         protected IAiMemory Memory;
 
         /// <summary>
@@ -99,15 +112,38 @@ namespace SysWeaver.AI
 
         #region Model
 
+        /// <summary>
+        /// The performance monitor, null if none
+        /// </summary>
         protected readonly PerfMonitor Monitor;
+
+        /// <summary>
+        /// The cache used to get tools, null if none
+        /// </summary>
         protected readonly IAiToolCache ToolCache;
+
+        /// <summary>
+        /// The model name
+        /// </summary>
         public String Model { get; }
+
+        /// <summary>
+        /// True if the model supports setting the temperature
+        /// </summary>
         public bool HaveTemperature { get; }
+
+        /// <summary>
+        /// True if the model supports a system role (else the system prompt is sent as a user message)
+        /// </summary>
         public bool SupportSystemRole { get; }
+
+        /// <summary>
+        /// True if the model supports parallel tool calls, false if not, null if unknown or not applicable
+        /// </summary>
         public bool? SupportParallelToolCalls { get; }
 
         /// <summary>
-        /// Temperature of the AI model, lower is more cosistent and less random [0, 2] (1 is default).
+        /// Temperature of the AI model, lower is more consistent and less random [0, 2] (the default of this class is 0.2).
         /// </summary>
         public float Temperature { get; set; } = 0.2f;
 
@@ -122,6 +158,7 @@ namespace SysWeaver.AI
 
         internal readonly Dictionary<String, AiTool> Tools = new Dictionary<string, AiTool>(StringComparer.Ordinal);
 
+        /// <inheritdoc />
         public IEnumerable<KeyValuePair<String, AiTool>> ALlTools => Tools;
 
         volatile AiTool[] ToolArray;

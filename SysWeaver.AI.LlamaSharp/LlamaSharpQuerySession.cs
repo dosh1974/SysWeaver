@@ -10,14 +10,25 @@ namespace SysWeaver.AI
     /// </summary>
     public class LlamaSharpQuerySession : AiQuerySessionBase
     {
+        /// <summary>
+        /// Create a query session
+        /// </summary>
+        /// <param name="model">The loaded model to use</param>
+        /// <param name="toolCache">Optional cache for tool results</param>
+        /// <param name="monitor">Optional performance monitor</param>
+        /// <param name="memory">Optional AI memory</param>
         public LlamaSharpQuerySession(LlamaSharpModel model, IAiToolCache toolCache = null, PerfMonitor monitor = null, IAiMemory memory = null)
             : base(model.Name, true, model.Llm.SupportSystemRole, model.Llm.SupportTools ? true : null, toolCache, monitor, memory)
         {
             LlmModel = model;
         }
 
+        /// <summary>
+        /// The loaded model used by this session
+        /// </summary>
         protected readonly LlamaSharpModel LlmModel;
 
+        /// <inheritdoc />
         public override String SystemPrompt { get; set; }
 
         /// <summary>

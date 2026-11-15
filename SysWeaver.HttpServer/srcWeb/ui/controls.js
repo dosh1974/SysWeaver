@@ -47,6 +47,25 @@
         });
     }
 
+    /**
+     * The error line under an input control (div.sw-text-error, a polite live region the control fills with its validation message).
+     * @param {string} id The element id (the input's aria-describedby points at it).
+     * @returns {HTMLElement} The line.
+     */
+    function errorLine(id) {
+        return el("div.sw-text-error", { id, attrs: { "aria-live": "polite" } });
+    }
+
+    /**
+     * The Disabled option of every control (INP-12): true, or a string that is the reason shown and announced when the control is used.
+     * @param {object} t The control (has SetDisabled(disabled, reason)).
+     * @param {object} o The options.
+     */
+    function applyDisabled(t, o) {
+        if (o.Disabled)
+            t.SetDisabled(true, typeof o.Disabled === "string" ? o.Disabled : undefined);
+    }
+
     // ------------------------------------------------------------------ the options of each control (Sw.DevOptions, DevMode only)
 
     /** The type name of a text option (a constant: the schema below is no list of labels). */
@@ -129,9 +148,7 @@
         },
     };
     //  The one registry of option schemas (Sw.DevOptions.Register through Sw.Work.RegisterOptions): every control is known to it
-    if (Sw.Work && typeof Sw.Work.RegisterOptions === "function")
-        for (const k of Object.keys(Schema))
-            Sw.Work.RegisterOptions("Sw." + k, Schema[k]);
+    Sw.Work.OptionSet(Schema);
     if (Sw.DevOptions && typeof Sw.DevOptions.NoOptions === "function")
         Sw.DevOptions.NoOptions("Sw.ListPicker", "opts is the list of items; po goes to Sw.Popup.Show (checked there)");
 
@@ -917,8 +934,7 @@
             t.SetTitle(o.Title);
             if (o.Pressable)
                 t.SetPressed(!!o.Pressed);
-            if (o.Disabled)
-                t.SetDisabled(true, typeof o.Disabled === "string" ? o.Disabled : undefined);
+            applyDisabled(t, o);
             if (o.Working)
                 t.SetWorking(true);
             if (o.Menu) {
@@ -1297,17 +1313,6 @@
         }
     }
 
-    /**
-     * Log an error and show it as a fail toast (when overlays are loaded). A refused request (Sw.Access.IsDenied, 403) is no
-     * failure: a toast names the role needed and the button is disabled with that reason (Sw.Access.ActionDenied).
-     * @param {*} x The error.
-     * @param {Button} [b] The button whose action failed.
-     */
-    function reportError(x, b) {
-        //  (the one failure display of Sw.Work: a refused request names the role, a lost connection is calm, never "Failed to fetch")
-        Sw.Work.Error(x, { Name: b && b.Name ? b.Name() : "", Button: b });
-    }
-
     /** @type {Button|null} The button whose OnClick runs now (synchronously; Sw.Clipboard.Copy confirms on it). */
     Button.Current = null;
 
@@ -1453,8 +1458,7 @@
             t.Value = undefined;
             t.Set(o.Value !== undefined ? o.Value : (t.Items[0] ? t.Items[0].Value : null), true);
             //  Disabled: true | "reason" (INP-12), the same option as every Sw control
-            if (o.Disabled)
-                t.SetDisabled(true, typeof o.Disabled === "string" ? o.Disabled : undefined);
+            applyDisabled(t, o);
             ctlInit(t, "Sw.Segmented", Schema.Segmented, true);
         }
 
@@ -1535,8 +1539,7 @@
             t.E = el("div.sw-toggle", { tabIndex: 0, title: o.Title || null, attrs: { role: "switch" } }, el("span.sw-toggle-track"), t.LabelE);
             t.SetLabel(o.Label);
             t.Set(!!o.Value, true);
-            if (o.Disabled)
-                t.SetDisabled(true, typeof o.Disabled === "string" ? o.Disabled : undefined);
+            applyDisabled(t, o);
             if (o.Required)
                 t.E.setAttribute("aria-required", "true");
             const flip = e => {
@@ -1671,8 +1674,7 @@
             t.UpdateRangeAria();
             t.Set(o.Value ?? t.Min, true);
             t.Bind();
-            if (o.Disabled)
-                t.SetDisabled(true, typeof o.Disabled === "string" ? o.Disabled : undefined);
+            applyDisabled(t, o);
             if (t.Mark)
                 requestAnimationFrame(() => t.PlaceMark());
             ctlInit(t, "Sw.Slider", Schema.Slider, true);
@@ -2053,7 +2055,7 @@
         const cell = t.ErrorE && t.ErrorE.parentElement && t.ErrorE.parentElement.classList.contains("sw-reserve-stack") ? t.ErrorE.parentElement : t.ErrorE;
         const h0 = text && cell && cell.isConnected && t.ErrorE.classList.contains("sw-reserve") ? cell.getBoundingClientRect().height : 0;
         if (!t.ErrorE && text) {
-            t.ErrorE = el("div.sw-text-error", { id: uid("sw-err"), attrs: { "aria-live": "polite" } });
+            t.ErrorE = errorLine(uid("sw-err"));
             const host = t.E.classList.contains("sw-field") || t.E.classList.contains("sw-text") ? t.E : t.E.closest(".sw-field");
             if (host)
                 host.append(t.ErrorE);
@@ -2150,8 +2152,7 @@
             t.Disabled = false;
             /* SwWeb:allow ux-inp-12 (the legacy E.disabled = true setter carries no reason; the developer warning names the control) */
             Sw.Disabled.Shadow(t.Input, d => t.SetDisabled(d));
-            if (o.Disabled)
-                t.SetDisabled(true, typeof o.Disabled === "string" ? o.Disabled : undefined);
+            applyDisabled(t, o);
             /** @type {boolean} The box may be empty (Value null): Value null or Required. */
             t.Nullable = o.Value === null || !!o.Required;
             t.Value = o.Value === undefined && o.Required ? null : (o.Value ?? (t.Nullable ? null : 0));
@@ -2230,7 +2231,7 @@
             if (o.Required || o.Validate) {
                 if (t.E === t.Input)
                     t.E = el("div.sw-field.sw-field-number", null, t.Input);
-                t.ErrorE = el("div.sw-text-error", { id: uid("sw-num-err"), attrs: { "aria-live": "polite" } });
+                t.ErrorE = errorLine(uid("sw-num-err"));
                 t.ErrorE.hidden = true;
                 //  its line is there before the first message (LAY-9: typing never moves the fields below)
                 t.E.append(reserveError(t, o, requiredText(o)));
@@ -2483,7 +2484,7 @@
                 });
                 t.Field.append(rb.E);
             }
-            t.ErrorE = el("div.sw-text-error", { id: id + "-err", attrs: { "aria-live": "polite" } });
+            t.ErrorE = errorLine(id + "-err");
             t.ErrorE.hidden = true;
             //  a box that validates (Required, Validate) has its message line before the first message (LAY-9)
             const errorPart = o.Required || o.Validate ? reserveError(t, o, requiredText(o)) : t.ErrorE;
@@ -2850,8 +2851,7 @@
             t.Disabled = false;
             /* SwWeb:allow ux-inp-12 (the legacy E.disabled = true setter carries no reason; the developer warning names the control) */
             Sw.Disabled.Shadow(t.Button, d => t.SetDisabled(d));
-            if (o.Disabled)
-                t.SetDisabled(true, typeof o.Disabled === "string" ? o.Disabled : undefined);
+            applyDisabled(t, o);
             t.Render();
             t.Button.addEventListener("click", e => {
                 //  A modifier click only focuses (INP-2)
@@ -2882,7 +2882,7 @@
                 t.Button.setAttribute("aria-required", "true");
                 if (t.E === t.Button)
                     t.E = el("div.sw-field.sw-field-select", null, t.Button);
-                t.ErrorE = el("div.sw-text-error", { id: uid("sw-sel-err"), attrs: { "aria-live": "polite" } });
+                t.ErrorE = errorLine(uid("sw-sel-err"));
                 t.ErrorE.hidden = true;
                 //  its line is there before the first message (LAY-9)
                 t.E.append(reserveError(t, o, typeof o.Required === "string" ? o.Required : _TF("Choose a value", "Message under an empty drop down that must be filled in")));
@@ -3315,8 +3315,7 @@
             t.Disabled = false;
             /* SwWeb:allow ux-inp-12 (the legacy E.disabled = true setter carries no reason; the developer warning names the control) */
             Sw.Disabled.Shadow(t.E, d => t.SetDisabled(d));
-            if (o.Disabled)
-                t.SetDisabled(true, typeof o.Disabled === "string" ? o.Disabled : undefined);
+            applyDisabled(t, o);
             t.Set(o.Value || (o.Hex ? "#ffffff" : [1, 1, 1]), true);
             t.E.addEventListener("click", e => {
                 //  A modifier click only focuses (INP-2); a disabled picker is stopped by its guard (INP-12)
@@ -3561,8 +3560,7 @@
                     }
                 });
             }
-            if (o.Disabled)
-                t.SetDisabled(true, typeof o.Disabled === "string" ? o.Disabled : undefined);
+            applyDisabled(t, o);
             ctlInit(t, "Sw.Chip", Schema.Chip, true);
         }
 
@@ -4065,7 +4063,7 @@
         //  (the options as the page gave them: aliases are normalized after the check)
         const given = t.OGiven || t.O;
         t.OGiven = null;
-        if (Sw.Work && typeof Sw.Work.CheckOptions === "function" && given)
+        if (given)
             Sw.Work.CheckOptions(where, given, schema);
     }
 

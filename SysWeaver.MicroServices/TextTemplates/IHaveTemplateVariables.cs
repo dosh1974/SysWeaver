@@ -10,6 +10,9 @@ namespace SysWeaver.MicroService
     /// </summary>
     public interface IHaveTemplateVariables
     {
+        /// <summary>
+        /// The template variable groups, key = group name (a variable is referenced as "groupName.variableKey")
+        /// </summary>
         IReadOnlyDictionary<String, ITemplateVariableGroup> TemplateVariableGroups { get; }
 
     }

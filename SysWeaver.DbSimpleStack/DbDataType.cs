@@ -16,10 +16,20 @@ namespace SysWeaver.Db
 
 
 
+    /// <summary>
+    /// Cached, reflection built, table data information (columns, sort and filter actions) for a database row type
+    /// </summary>
+    /// <typeparam name="T">The row type</typeparam>
     public static class DbDataType<T>
     {
+        /// <summary>
+        /// The full text indexes defined on the type (see <see cref="SimpleStack.Orm.Attributes.FullTextSearchIndexAttribute"/>), by index name, value is the database column names
+        /// </summary>
         public static readonly IReadOnlyDictionary<String, String[]> FullTextIndexes;
 
+        /// <summary>
+        /// The default table name of the type (the SimpleStack model name)
+        /// </summary>
         public static readonly String DefaultTableName;
 
         static DbDataType()
@@ -426,26 +436,74 @@ namespace SysWeaver.Db
         }
 
 
+        /// <summary>
+        /// Maps a member name to its column index in <see cref="Cols"/> (and in the sort action arrays)
+        /// </summary>
         public static readonly IReadOnlyDictionary<String, int> MemberNameToColumn;
 
+        /// <summary>
+        /// Filter actions by member name, only for indexed columns.
+        /// Each array is indexed by (operator * 2), plus 1 if the filter is inverted. Entries may be null if not supported.
+        /// </summary>
         public static readonly IReadOnlyDictionary<String, Action<TypedSelectStatement<T>, String>[]> ColFilters;
+
+        /// <summary>
+        /// Actions that start an ascending order by, indexed by column (null if the column can't be sorted, only indexed columns can be sorted)
+        /// </summary>
         public static readonly Action<TypedSelectStatement<T>>[] Order;
+
+        /// <summary>
+        /// Actions that start a descending order by, indexed by column (null if the column can't be sorted, only indexed columns can be sorted)
+        /// </summary>
         public static readonly Action<TypedSelectStatement<T>>[] OrderDesc;
+
+        /// <summary>
+        /// Actions that add an ascending then by, indexed by column (null if the column can't be sorted, only indexed columns can be sorted)
+        /// </summary>
         public static readonly Action<TypedSelectStatement<T>>[] Then;
+
+        /// <summary>
+        /// Actions that add a descending then by, indexed by column (null if the column can't be sorted, only indexed columns can be sorted)
+        /// </summary>
         public static readonly Action<TypedSelectStatement<T>>[] ThenDesc;
 
+        /// <summary>
+        /// Same as <see cref="ColFilters"/>, but also includes non indexed columns
+        /// </summary>
         public static readonly IReadOnlyDictionary<String, Action<TypedSelectStatement<T>, String>[]> NoIndexColFilters;
+
+        /// <summary>
+        /// Same as <see cref="Order"/>, but also includes non indexed columns
+        /// </summary>
         public static readonly Action<TypedSelectStatement<T>>[] NoIndexOrder;
+
+        /// <summary>
+        /// Same as <see cref="OrderDesc"/>, but also includes non indexed columns
+        /// </summary>
         public static readonly Action<TypedSelectStatement<T>>[] NoIndexOrderDesc;
+
+        /// <summary>
+        /// Same as <see cref="Then"/>, but also includes non indexed columns
+        /// </summary>
         public static readonly Action<TypedSelectStatement<T>>[] NoIndexThen;
+
+        /// <summary>
+        /// Same as <see cref="ThenDesc"/>, but also includes non indexed columns
+        /// </summary>
         public static readonly Action<TypedSelectStatement<T>>[] NoIndexThenDesc;
 
 
 
+        /// <summary>
+        /// The table data columns of the type (properties adjusted for the database indexes)
+        /// </summary>
         public static TableDataColumn[] Cols;
 
     }
 
+    /// <summary>
+    /// Extension methods for sorting db queries
+    /// </summary>
     public static class DbDataTypeExt
     {
 

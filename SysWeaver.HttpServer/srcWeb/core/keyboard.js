@@ -174,15 +174,7 @@
             fullH = lh;
         const vv = window.visualViewport;
         const inset = (vv && (Math.abs(vv.scale - 1) < 0.01)) ? Math.max(0, Math.round(lh - vv.offsetTop - vv.height)) : 0;
-        let touch = !!L.Mobile;
-        if (!touch) {
-            try {
-                touch = window.matchMedia("(pointer: coarse)").matches;
-            }
-            catch {
-            }
-        }
-        const on = edit && touch && ((inset >= keyboardMin) || ((fullH - lh) >= keyboardMin));
+        const on = edit && L.IsTouchScreen() && ((inset >= keyboardMin) || ((fullH - lh) >= keyboardMin));
         const was = L.Keyboard;
         const wasInset = L.KeyboardInset;
         setKeyboard(on, on ? inset : 0);
@@ -211,6 +203,22 @@
     Sw.Layout.KeyboardInset = 0;
     //  Also run by core/layout.js on a window resize, before the layout is updated (the orientation stays while it is open)
     Sw.Layout.KeyboardCheck = keyboardCheck;
+    /**
+     * Sw.Layout.IsTouchScreen(): a touch screen: Mobile mode, or a coarse primary pointer (a phone, a tablet, a touch laptop in tablet mode).
+     * Defined here (not in core/layout.js: the small sw/session.js bundle has no use for it); shell/shell.js and the keyboard check use it.
+     * @returns {boolean} True on a touch screen.
+     */
+    Sw.Layout.IsTouchScreen = () => {
+        if (Sw.Layout.Mobile)
+            return true;
+        //  matchMedia can be missing or throw (old or embedded browsers, a detached frame): not a touch screen then
+        try {
+            return window.matchMedia("(pointer: coarse)").matches;
+        }
+        catch {
+            return false;
+        }
+    };
     if (window.parent !== window)
         return;
     const vv = window.visualViewport;

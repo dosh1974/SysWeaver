@@ -29,20 +29,28 @@ namespace SysWeaver.MicroService
 
         #region IHttpRequestHandler
 
+        /// <inheritdoc />
         public HttpServerRequest Redirected { get; set; }
 
+        /// <inheritdoc />
         public int ClientCacheDuration => 0;
 
+        /// <inheritdoc />
         public int RequestCacheDuration => 0;
 
+        /// <inheritdoc />
         public HttpCompressionPriority Compression => null;
 
+        /// <inheritdoc />
         public ICompDecoder Decoder => null;
 
+        /// <inheritdoc />
         public IReadOnlyList<string> Auth => null;
 
+        /// <inheritdoc />
         public ValueTask<String> GetCacheKey(HttpServerRequest request) => TaskExt.NullStringValueTask;
 
+        /// <inheritdoc />
         public string GetEtag(out bool useAsync, HttpServerRequest request)
         {
             useAsync = true;
@@ -50,11 +58,13 @@ namespace SysWeaver.MicroService
             return null;
         }
 
+        /// <inheritdoc />
         public HttpRequestData Get(HttpServerRequest request)
         {
             throw new NotImplementedException();
         }
 
+        /// <inheritdoc />
         public async ValueTask<HttpRequestData> GetAsync(HttpServerRequest request)
         {
             if (request.HttpMethod != HttpServerMethods.POST)
@@ -98,7 +108,8 @@ namespace SysWeaver.MicroService
 
         #region IHttpServerModule
 
-        public String[] OnlyForPrefixes { get; init; } = 
+        /// <inheritdoc />
+        public String[] OnlyForPrefixes { get; init; } =
         [
             "FolderSync/",
             "FolderSyncCdc/",
@@ -106,8 +117,10 @@ namespace SysWeaver.MicroService
             "FolderSyncCdcPullChunks/",
         ];
 
+        /// <inheritdoc />
         public PerfMonitor PerfMon { get; } = new PerfMonitor(nameof(FolderSyncService));
 
+        /// <inheritdoc />
         public IHttpRequestHandler Handler(HttpServerRequest context)
             => IsApiOrExplore(context.LocalUrl) ? null : this;
 
@@ -163,6 +176,11 @@ namespace SysWeaver.MicroService
 
         #endregion//IHttpServerModule
 
+        /// <summary>
+        /// Create the service, the folders in the parameters are added
+        /// </summary>
+        /// <param name="manager">The service manager</param>
+        /// <param name="p">Parameters, null to use the defaults</param>
         public FolderSyncService(ServiceManager manager, FolderSyncParams p)
         {
             p = p ?? new();
@@ -231,6 +249,11 @@ namespace SysWeaver.MicroService
         HttpServerBase HttpServer;
 
 
+        /// <summary>
+        /// Add a managed folder (and a shared folder for it, if pulling is allowed)
+        /// </summary>
+        /// <param name="x">The folder</param>
+        /// <returns>The full path of the folder on disc</returns>
         public async Task<String> AddManagedFolder(FsManagedFolder x)
         {
             var folders = ManagedFolders;
@@ -263,6 +286,11 @@ namespace SysWeaver.MicroService
             return path;
         }
 
+        /// <summary>
+        /// Remove a managed folder (and its shared folder, if any), nothing is deleted on disc
+        /// </summary>
+        /// <param name="x">The folder (identified by its name, or the name of its disc folder if it has no name)</param>
+        /// <returns>True if the folder was removed, false if it wasn't added</returns>
         public bool RemoveManagedFolder(FsManagedFolder x)
         {
             var path = Path.GetFullPath(PathTemplate.Resolve(x.DiscFolder));
@@ -281,6 +309,11 @@ namespace SysWeaver.MicroService
             return true;
         }
 
+        /// <summary>
+        /// Add a shared folder
+        /// </summary>
+        /// <param name="x">The folder</param>
+        /// <returns>The full path of the folder on disc</returns>
         public async Task<String> AddSharedFolder(FsSharedFolder x)
         {
             var folders = SharedFolders;
@@ -303,6 +336,11 @@ namespace SysWeaver.MicroService
             return path;
         }
 
+        /// <summary>
+        /// Remove a shared folder, nothing is deleted on disc
+        /// </summary>
+        /// <param name="x">The folder (identified by its name, or the name of its disc folder if it has no name)</param>
+        /// <returns>True if the folder was removed, false if it wasn't added</returns>
         public bool RemoveSharedFolder(FsSharedFolder x)
         {
             var path = Path.GetFullPath(PathTemplate.Resolve(x.DiscFolder));
@@ -461,6 +499,7 @@ namespace SysWeaver.MicroService
         readonly ConcurrentQueue<String> Scheduled = new ConcurrentQueue<string>();
 
 
+        /// <inheritdoc />
         public void Dispose()
         {
             Manager.OnServiceRemoved -= OnServiceRemoved;
@@ -518,6 +557,7 @@ namespace SysWeaver.MicroService
         }
 
 
+        /// <inheritdoc />
         public IEnumerable<Stats> GetStats()
         {
             const String n = nameof(FolderSyncService);

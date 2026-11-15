@@ -2,6 +2,9 @@
 
 namespace SysWeaver.FolderSync
 {
+    /// <summary>
+    /// The changes required to sync a managed folder
+    /// </summary>
     public sealed class ManagedFolderDiff
     {
         /// <summary>

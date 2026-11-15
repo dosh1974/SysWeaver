@@ -7,6 +7,7 @@ namespace SysWeaver.AI
     /// </summary>
     public sealed class AiTableRow
     {
+        /// <inheritdoc />
         public override string ToString()
             => String.Concat(ColumnData?.Length ?? 0, ": ", String.Join("; ", ColumnData?.Nullable()));
 

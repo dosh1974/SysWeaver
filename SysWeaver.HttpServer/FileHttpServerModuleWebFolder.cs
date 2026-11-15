@@ -7,6 +7,10 @@ namespace SysWeaver.Net
     /// </summary>
     public class FileHttpServerModuleWebFolder
     {
+        /// <summary>
+        /// The web folder, auth and pre compressed settings.
+        /// </summary>
+        /// <returns>A short text for debugging.</returns>
         public override string ToString() => String.Concat(
             nameof(WebFolder), ": ", WebFolder.ToQuoted(), ", ",
             nameof(Auth), ": ", Auth.ToQuoted(), ", ",

@@ -9,6 +9,9 @@ using SysWeaver.Docs;
 
 namespace SysWeaver.AI
 {
+    /// <summary>
+    /// Builds JSON schemas (as <see cref="JsonSchemaParam"/>) from .NET types, used to describe tool parameters to AI models
+    /// </summary>
     public static class JsonSchema
     {
 
@@ -19,6 +22,14 @@ namespace SysWeaver.AI
 
         const String OptPrefix = "[Optional] ";
 
+        /// <summary>
+        /// Get the (cached) schema of a type
+        /// </summary>
+        /// <param name="type">The type</param>
+        /// <param name="isOutput">True if the schema describes a return value, false for an argument</param>
+        /// <param name="description">Optional description of the value</param>
+        /// <param name="isOptional">If true, the description is prefixed with "[Optional]"</param>
+        /// <returns>The schema</returns>
         public static JsonSchemaParam Get(Type type, bool isOutput, String description = null, bool isOptional = false)
         {
             var cache = Cache;
@@ -48,6 +59,13 @@ namespace SysWeaver.AI
             IndentSize = 2,
         };
 
+        /// <summary>
+        /// Get the (cached) schema of a type as indented JSON
+        /// </summary>
+        /// <param name="type">The type</param>
+        /// <param name="isOutput">True if the schema describes a return value, false for an argument</param>
+        /// <param name="description">Optional description of the value</param>
+        /// <returns>The JSON schema, or "null" if the type has no schema</returns>
         public static String GetString(Type type, bool isOutput, String description = null)
         {
             var cache = StringCache;
@@ -66,6 +84,12 @@ namespace SysWeaver.AI
 
 
 
+        /// <summary>
+        /// Serialize a schema to JSON
+        /// </summary>
+        /// <param name="p">The schema</param>
+        /// <param name="verbose">True to use the verbose serializer options</param>
+        /// <returns>The JSON, or "null" if the schema is null</returns>
         public static String ToString(JsonSchemaParam p, bool verbose = false)
             => p == null ? "null" : JsonSerializer.Serialize(p, verbose ? SerVerboseOptions : SerOptions);
 
@@ -76,6 +100,12 @@ namespace SysWeaver.AI
         const String TypeName_Array = "array";
         const String TypeName_Object = "object";
 
+        /// <summary>
+        /// Try to get the JSON schema type name of a primitive type
+        /// </summary>
+        /// <param name="type">The type</param>
+        /// <param name="typeName">The schema type name (ex: "string", "integer"), if found</param>
+        /// <returns>True if the type is a primitive type</returns>
         public static bool TryGetPrim(Type type, out String typeName) =>
             Prims.TryGetValue(type, out typeName);
 
@@ -244,8 +274,19 @@ namespace SysWeaver.AI
 
     }
 
+    /// <summary>
+    /// A cache of tool parameter schemas
+    /// </summary>
     public static class JsonSchemaCache
     {
+        /// <summary>
+        /// Get the (cached) schema of a tool parameter, as an object schema with a single (required) property
+        /// </summary>
+        /// <param name="type">The type of the parameter</param>
+        /// <param name="paramName">The name of the property holding the parameter</param>
+        /// <param name="isOutput">True if the schema describes a return value, false for an argument</param>
+        /// <param name="description">Optional description of the parameter</param>
+        /// <returns>The JSON schema, or null if the type has no schema</returns>
         public static BinaryData GetBinaryDataParam(Type type, String paramName, bool isOutput, String description = null)
         {
             var cache = BinaryDataCache;

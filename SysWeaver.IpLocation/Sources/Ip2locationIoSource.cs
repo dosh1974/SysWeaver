@@ -6,8 +6,15 @@ using SysWeaver.Serialization;
 
 namespace SysWeaver.IpLocation.Sources
 {
+    /// <summary>
+    /// An ip location source that uses ip2location.io
+    /// </summary>
     public sealed class Ip2locationIoSource : IIpLocationSource, IDisposable
     {
+        /// <summary>
+        /// Create the source
+        /// </summary>
+        /// <param name="p">The api key, null to use the default <see cref="ApiKeyParams"/></param>
         public Ip2locationIoSource(ApiKeyParams p = null)
         {
             p = p ?? new ApiKeyParams();
@@ -20,6 +27,7 @@ namespace SysWeaver.IpLocation.Sources
 
         HttpClient Client;
 
+        /// <inheritdoc />
         public void Dispose()
         {
             Interlocked.Exchange(ref Client, null)?.Dispose();
@@ -27,8 +35,10 @@ namespace SysWeaver.IpLocation.Sources
 
         readonly String Api;
 
+        /// <inheritdoc />
         public override string ToString() => "Ip Location source: " + Name;
 
+        /// <inheritdoc />
         public string Name => "ip2location.io";
 
 #pragma warning disable CS0649
@@ -51,6 +61,7 @@ namespace SysWeaver.IpLocation.Sources
 
 #pragma warning restore CS0649
 
+        /// <inheritdoc />
         public async Task<IpLocation> LookUp(string ip)
         {
             var url = Api + ip;

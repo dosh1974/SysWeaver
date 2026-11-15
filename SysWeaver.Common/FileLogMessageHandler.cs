@@ -44,6 +44,10 @@ namespace SysWeaver
         public readonly String Filename;
         readonly long MaxSize;
 
+        /// <summary>
+        /// The quoted file name, mode and text style.
+        /// </summary>
+        /// <returns>A short text for debugging.</returns>
         public override string ToString()
         {
             return String.Concat(Filename.ToQuoted(), " ", Mode, " ", Style);
@@ -55,6 +59,11 @@ namespace SysWeaver
 
 
 
+        /// <summary>
+        /// Appends the text to the log file (when the file exceeds the maximum size, the oldest lines are removed so that about 75% of the maximum size remains).
+        /// </summary>
+        /// <param name="text">The formatted message text.</param>
+        /// <returns>A task that completes when the text is written.</returns>
         protected override async Task WriteText(string text)
         {
             var fn = Filename;

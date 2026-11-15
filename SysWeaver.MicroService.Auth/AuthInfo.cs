@@ -3,6 +3,9 @@ using System.Threading.Tasks;
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// Information about the authentication state of a session
+    /// </summary>
     public sealed class AuthInfo
     {
         /// <summary>
@@ -67,8 +70,14 @@ namespace SysWeaver.MicroService
         public bool AccountDisabled { get; set; }
 
 
+        /// <summary>
+        /// A shared "not logged in" result (<see cref="Succeeded"/> is false)
+        /// </summary>
         public static readonly AuthInfo Failed = new AuthInfo();
 
+        /// <summary>
+        /// A completed task returning <see cref="Failed"/>
+        /// </summary>
         public static readonly Task<AuthInfo> TaskFailed = Task.FromResult(Failed);
 
     }

@@ -2,10 +2,13 @@
 
 namespace SysWeaver.AI
 {
+    /// <summary>
+    /// Parameters for setting the value of a memory
+    /// </summary>
     public class AiMemorySet
     {
         /// <summary>
-        /// The unqiue key used to manage this memory.
+        /// The unique key used to manage this memory.
         /// This is listed in the system prompt.
         /// Max length is 32.
         /// </summary>

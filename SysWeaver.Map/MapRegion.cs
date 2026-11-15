@@ -2,6 +2,9 @@
 
 namespace SysWeaver.Map
 {
+    /// <summary>
+    /// A style that is applied to a single region of a map (overrides the base style).
+    /// </summary>
     public sealed class MapRegion : MapStyle
     {
         /// <summary>

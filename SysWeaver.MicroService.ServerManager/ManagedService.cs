@@ -2,6 +2,9 @@
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// A SysWeaver service that is managed by the <see cref="ServerManagerService"/>
+    /// </summary>
     public sealed class ManagedService
     {
         /// <summary>

@@ -421,7 +421,7 @@ component turned into text (`div.append(card)`, a template string) shows nothing
 A label stays on its input when page code changes the input's `id`. `Sw.Button({ Submit: true })` is the form's send button (type
 submit, primary unless a Kind is given); `Hidden: true` starts hidden.
 The options are checked as you wrote them (aliases are normalized after the check: `Sw.Select({ Items })` is quiet). **One registry:**
-every ui api registers its schema by name with `Sw.Work.RegisterOptions(where, schema)` (the core's `Sw.DevOptions.Register`, which
+every ui api registers its schema by name with `Sw.Work.RegisterOptions(where, schema)` (a whole set at once: `const check = Sw.Work.OptionSet({ Card: {...}, "Form field": {...} })` registers `Sw.Card`, `Sw.Form field` and returns `check(name, o)`) (the core's `Sw.DevOptions.Register`, which
 `core/optionstest.html` walks): the controls, `Sw.Group`, `Sw.Spinner`, `Sw.CopyButton`, the page parts (`Sw.Card`,
 `Sw.PageLayout`, `Sw.PageHeader`, `Sw.StateView`, `Sw.Meter`, `Sw.Facts` and its items, `Sw.Kpi`, `Sw.ListCard` and its items,
 `Sw.Grid`, `Sw.UploadButton`, `Sw.SelectList`, `Sw.ListDetail`, `Sw.Form`, **every `Sw.Form` field** (`{ Requred: true }` → "did you

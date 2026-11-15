@@ -187,12 +187,12 @@
                     const old = obj[mn];
                     if (old === v)
                         return;
-                    await editor.SetMemberValue(member, v, old, _T("Set value: \"{0}\"", v, "Command text stored in a log when a property value was changed.{0} is replaced with the new value."), token);
+                    await editor.SetMemberValue(member, v, old, E.Handler.SetText(v), token);
                 };
                 const tb = E.CreateTextInput(() => obj[mn], set, s => (s = ("" + s).trim().toLowerCase()) ? s : null, v => v ?? "",
                     _TF("Two letter ISO 639-1 code, ex: en", "Placeholder of a language code text box (shown when the language list is not available)"), null, "abcdefghijklmnopqrstuvwxyz", 2, def, readOnly);
                 tb.classList.add("sw-edit-langcode-input");
-                tb.setAttribute("aria-label", member.DisplayName || mn);
+                tb.setAttribute("aria-label", E.Handler.Label(member));
                 if (readOnly && !obj[mn])
                     tb.placeholder = "null";
                 editContext.Element.append(tb);
@@ -205,7 +205,7 @@
                 ? Sw.el("span.sw-edit-language.sw-edit-language-ro.EditReadOnly", { tabIndex: 0, attrs: { role: "textbox", "aria-readonly": "true" } }, img, text)
                 : Sw.el("button.sw-edit-language.SysWeaver-EditLanguage", { type: "button" }, img, text);
             if (readOnly)
-                b.setAttribute("aria-label", member.DisplayName || mn);
+                b.setAttribute("aria-label", E.Handler.Label(member));
             const update = () => {
                 const v = obj[mn];
                 let tip;
@@ -235,14 +235,16 @@
             };
             update();
             if (!readOnly) {
-                b.addEventListener("click", async () => {
+                b.addEventListener("click", async ev => {
+                    if (Sw.BadClick(ev, true))
+                        return;
                     const l = await EditTypeLanguage.Pick();
                     if (!l)
                         return;
                     const old = obj[mn];
                     if (old === l.Iso639_1)
                         return;
-                    await editor.SetMemberValue(member, l.Iso639_1, old, _T("Set value: \"{0}\"", l.Iso639_1, "Command text stored in a log when a property value was changed.{0} is replaced with the new value."));
+                    await editor.SetMemberValue(member, l.Iso639_1, old, E.Handler.SetText(l.Iso639_1));
                 });
             }
             editContext.Element.append(b);

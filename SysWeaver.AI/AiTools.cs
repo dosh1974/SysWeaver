@@ -10,6 +10,9 @@ using SysWeaver.Docs;
 namespace SysWeaver.AI
 {
 
+    /// <summary>
+    /// Helper functions for AI tools and messages
+    /// </summary>
     public static class AiTools
     {
         /// <summary>
@@ -62,6 +65,12 @@ namespace SysWeaver.AI
         /// </summary>
         const String MdEscapeCharList = @"\`*_{}[]<>()#+-!|";
 
+        /// <summary>
+        /// The chars that are escaped by <see cref="MdEscape(string)"/>
+        /// </summary>
+        /// <summary>
+        /// The chars that are escaped by <see cref="MdEscape(string)"/>
+        /// </summary>
         public static readonly IReadOnlySet<Char> MdEscapeChars = ReadOnlyData.Set(MdEscapeCharList.ToCharArray());
 
         /// <summary>
@@ -69,6 +78,11 @@ namespace SysWeaver.AI
         /// </summary>
         static readonly SearchValues<Char> MdEscapeSearch = SearchValues.Create(MdEscapeCharList);
 
+        /// <summary>
+        /// Escape all markdown special chars with a backslash
+        /// </summary>
+        /// <param name="s">The text, must not be null</param>
+        /// <returns>The escaped text (the same instance if nothing needed escaping)</returns>
         public static String MdEscape(String s)
         {
             //  Vectorized search for the first char to escape, most texts are returned as is (no allocation)
@@ -110,6 +124,12 @@ namespace SysWeaver.AI
 
 
 
+        /// <summary>
+        /// Indent all lines after the first by inserting a prefix after each line break
+        /// </summary>
+        /// <param name="t">The text</param>
+        /// <param name="i">The indent (prefix)</param>
+        /// <returns>The indented text, or the indent if the text is null or empty</returns>
         public static String Intendent(String t, String i)
         {
             if (String.IsNullOrEmpty(t))
@@ -119,6 +139,12 @@ namespace SysWeaver.AI
         }
 
 
+        /// <summary>
+        /// Format JSON with indentation
+        /// </summary>
+        /// <param name="json">The JSON text</param>
+        /// <param name="indent">The indent (prefix) for the result, also returned if the JSON is null or empty</param>
+        /// <returns>The formatted JSON</returns>
         public static String BeautifyJson(String json, String indent = "")
         {
             if (String.IsNullOrEmpty(json))

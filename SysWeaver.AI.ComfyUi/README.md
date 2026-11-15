@@ -96,4 +96,4 @@ The `ComfyUiExample` program in the SysWeaver.Tests repository has complete exam
 ## Relationships
 
 - **Project:** [`SysWeaver.AI.ComfyUi.csproj`](SysWeaver.AI.ComfyUi.csproj)
-- **Builds on:** [SysWeaver.MicroServices.ServiceManager](../SysWeaver.MicroServices.ServiceManager/README.md)
+- **Builds on:** [SysWeaver.AI](../SysWeaver.AI/README.md), [SysWeaver.MicroServices.ServiceManager](../SysWeaver.MicroServices.ServiceManager/README.md)

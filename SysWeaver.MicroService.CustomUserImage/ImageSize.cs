@@ -2,6 +2,9 @@
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// A size (and format) that an uploaded image is saved as
+    /// </summary>
     public sealed class ImageSize
     {
         /// <summary>
@@ -18,7 +21,9 @@ namespace SysWeaver.MicroService
         public int Height;
 
         /// <summary>
-        /// Name format, {0} is replaced with the original file name.
+        /// Name format, {0} is replaced with the original file name (without extension, the target extension is added).
+        /// Must contain "{0}" and differ from "{0}", names must be unique within a repository.
+        /// Defaults to "{0}".
         /// </summary>
         public String Name = "{0}";
 
@@ -31,11 +36,13 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Background color to use when transparent images isn't allowed.
         /// http://www.imagemagick.org/script/color.php
+        /// Defaults to "#000".
         /// </summary>
         public String Background = "#000";
 
         /// <summary>
-        /// Force an exact size
+        /// Force an exact size (the image is padded with the background color if it is fitted).
+        /// Defaults to false.
         /// </summary>
         public bool ExactSize;
 
@@ -48,12 +55,14 @@ namespace SysWeaver.MicroService
         public String Ext;
 
         /// <summary>
-        /// Target quality
+        /// Target quality, clamped to [10, 100].
+        /// Defaults to 80.
         /// </summary>
         public int Quality = 80;
 
         /// <summary>
-        /// If true the images may be semi transparent (will be fitted into the square instead of filled into).
+        /// If true the images may be semi transparent, else transparency is removed using <see cref="Background"/>.
+        /// Defaults to true.
         /// </summary>
         public bool AllowTransparent = true;
     }

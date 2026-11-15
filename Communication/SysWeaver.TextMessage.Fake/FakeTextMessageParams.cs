@@ -3,6 +3,9 @@ using SysWeaver.MicroService;
 
 namespace SysWeaver.TextMessage
 {
+    /// <summary>
+    /// Parameters for the <see cref="FakeTextMessageService"/>
+    /// </summary>
     public sealed class FakeTextMessageParams
     {
         /// <summary>

@@ -4,8 +4,15 @@ using System.Linq;
 
 namespace SysWeaver.Knowledge
 {
+    /// <summary>
+    /// Searches text for keywords and returns the info associated with them
+    /// </summary>
     public sealed class InfoSearcher
     {
+        /// <summary>
+        /// Create a searcher
+        /// </summary>
+        /// <param name="infoCollection">The keywords (lower case) and the info for each keyword</param>
         public InfoSearcher(IReadOnlyDictionary<String, Info> infoCollection)
         {
             InfoLookup = infoCollection;
@@ -155,6 +162,12 @@ namespace SysWeaver.Knowledge
         }
 
 
+        /// <summary>
+        /// Find the info of all keywords that start at the first word in the text that has any keyword starting at it
+        /// </summary>
+        /// <param name="pos">The character position of the word, or -1 if nothing was found</param>
+        /// <param name="text">The text to search</param>
+        /// <returns>The info of the matching keywords (longest keyword first), empty if nothing was found</returns>
         public IEnumerable<Info> FindFirst(out int pos, String text)
         {
             pos = -1;
@@ -185,6 +198,13 @@ namespace SysWeaver.Knowledge
             }).Where(x => x != null);
         }
 
+        /// <summary>
+        /// Find the first info (in text order) that starts at a word start and satisfies a predicate
+        /// </summary>
+        /// <param name="pos">The character position of the word, or -1 if nothing was found</param>
+        /// <param name="text">The text to search</param>
+        /// <param name="predicate">The predicate the info must satisfy</param>
+        /// <returns>The first matching info, or null if nothing was found</returns>
         public Info FindFirst(out int pos, String text, Func<Info, bool> predicate)
         {
             pos = -1;
@@ -213,6 +233,9 @@ namespace SysWeaver.Knowledge
             return res;
         }
 
+        /// <summary>
+        /// The tree of all keywords, used for the searching
+        /// </summary>
         public readonly StringTree T;
 
     }

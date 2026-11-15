@@ -7,8 +7,18 @@ using System.Buffers;
 
 namespace SysWeaver.Auth
 {
+    /// <summary>
+    /// Serializes and compresses objects to a byte array and back
+    /// </summary>
     public sealed class DataBlob
     {
+        /// <summary>
+        /// Get (a cached) blob handler for a serializer and compression type
+        /// </summary>
+        /// <param name="serType">The serializer type (extension), ex: "json"</param>
+        /// <param name="compType">The compression type (http encoding or extension), ex: "br"</param>
+        /// <param name="level">The compression level</param>
+        /// <returns>The blob handler</returns>
         public static DataBlob Get(String serType = "json", String compType = "br", CompEncoderLevels level = CompEncoderLevels.Balanced)
         {
             var b = Blobs;
@@ -36,6 +46,12 @@ namespace SysWeaver.Auth
         readonly ISerializerType Ser;
         readonly CompEncoderLevels Level;
 
+        /// <summary>
+        /// Serialize and compress an object
+        /// </summary>
+        /// <typeparam name="T">The type of the object</typeparam>
+        /// <param name="data">The object</param>
+        /// <returns>The compressed data</returns>
         public Byte[] ToData<T>(T data)
         {
             var mem = Ser.Serialize(data);
@@ -57,6 +73,12 @@ namespace SysWeaver.Auth
             }
         }
 
+        /// <summary>
+        /// Decompress and deserialize an object
+        /// </summary>
+        /// <typeparam name="T">The type of the object</typeparam>
+        /// <param name="data">The compressed data (from <see cref="ToData{T}(T)"/>)</param>
+        /// <returns>The object</returns>
         public T FromData<T>(ReadOnlySpan<Byte> data)
         {
             var l = data.Length;

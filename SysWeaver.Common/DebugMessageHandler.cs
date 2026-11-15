@@ -55,17 +55,29 @@ namespace SysWeaver
             new DebugMessageHandler(Message.TextStyles.Debug, Modes.Async),
         ];
 
+        /// <summary>
+        /// The handler type, mode and text style.
+        /// </summary>
+        /// <returns>A short text for debugging.</returns>
         public override string ToString()
         {
             return String.Concat("Debug ", Mode, " ", Style);
         }
         
+        /// <summary>
+        /// Writes the text to the debugger output (<see cref="Debug.Write(string)"/>).
+        /// </summary>
+        /// <param name="text">The formatted message text.</param>
+        /// <returns>A completed task.</returns>
         protected override Task WriteText(String text)
         {
             Debug.Write(text);
             return Task.CompletedTask;
         }
 
+        /// <summary>
+        /// Flushes the debug output (<see cref="Debug.Flush"/>).
+        /// </summary>
         protected override void OnFlush()
         {
             Debug.Flush();

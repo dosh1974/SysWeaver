@@ -1345,6 +1345,14 @@ window.Sw.Sources["core/base.js"] = "sw/core.js";
     Sw.Sleep = (ms, signal) => Sw.Util.Sleep(ms, signal);
 
     /**
+     * The plain text of a caught value: its message when it has one (an Error), else the value as a string. No server reason, no status
+     * (Sw.Net.Message composes the full failure sentence for people; this is only the raw text for a log, a detail line or a short toast).
+     * @param {*} e The caught value.
+     * @returns {string} The text.
+     */
+    Sw.ErrorMessage = e => e && e.message ? e.message : String(e);
+
+    /**
      * @namespace Sw.Util - UI-less helpers (async, bytes, hashing, json, frame loop).
      */
     Sw.Util = Object.assign(Sw.Util || {}, {
@@ -5522,23 +5530,25 @@ window.Sw.Sources["core/net.js"] = "sw/core.js";
     }
 
     /**
-     * What a failed status means for the user, and what to do: statusParts as one sentence.
-     * @param {number} s The HTTP status.
-     * @returns {string} The sentence.
-     */
-    function statusSentence(s) {
-        const p = statusParts(s);
-        return p.Do ? p.Why + " " + p.Do : p.Why;
-    }
-
-    /**
-     * End a sentence: a full stop unless it ends with one (., !, ?, …, :).
+     * End a sentence: a full stop unless it ends with one (., !, ?, …, and the CJK marks). The one sentence helper of the ui too
+     * (Sw.Net.Sentence): the options only change what the callers of the ui (table rows, cell actions) always did on top.
      * @param {string} s The text.
-     * @returns {string} The sentence.
+     * @param {{Capital: boolean, StatusLine: boolean, Marks: RegExp}} [o] Capital: the first letter is a capital. StatusLine: drop a
+     *   leading status line of an Error message ("409 - Conflict\n<reason>"). Marks: the end marks that need no full stop (default . ! ? … and CJK).
+     * @returns {string} The sentence ("" for nothing).
      */
-    function sentence(s) {
+    function sentence(s, o) {
         s = String(s ?? "").trim();
-        return !s || /[.!?…。！？]$/.test(s) ? s : s + ".";
+        if (o && o.StatusLine) {
+            const nl = s.indexOf("\n");
+            if (nl > 0 && /^\d{3}\b/.test(s))
+                s = s.slice(nl + 1).trim();
+        }
+        if (!s)
+            return s;
+        if (o && o.Capital)
+            s = s.charAt(0).toLocaleUpperCase() + s.slice(1);
+        return ((o && o.Marks) || /[.!?…。！？]$/).test(s) ? s : s + ".";
     }
 
     /**
@@ -5928,6 +5938,8 @@ window.Sw.Sources["core/net.js"] = "sw/core.js";
 
         /** Join "What: Why. Do." the one way (no ".: ", no repeated advice): Compose(what, why, todo) -> text. */
         Compose: compose,
+        /** End a text with a full stop: Sentence(text, { Capital, StatusLine, Marks }) -> text. */
+        Sentence: sentence,
 
         /**
          * The failure sentence of an action: FailText("End session (debug)", e) = "End session (debug): not done. The session has
@@ -6284,6 +6296,7 @@ window.Sw.Sources["core/net.js"] = "sw/core.js";
         Sw.DevOptions.Register("Sw.Net.Message", MessageOptions);
         Sw.DevOptions.Register("Sw.Net.MessageParts", MessageOptions);
         Sw.DevOptions.Register("Sw.Net.FailText", MessageOptions);
+        Sw.DevOptions.Register("Sw.Net.Sentence", { Capital: "boolean", StatusLine: "boolean", Marks: "object" });
         Sw.DevOptions.NoOptions("Sw.Net.IsWrite", "opts is the request's options (Send / Get) or a Request: read, not checked");
     }
 })();
@@ -8887,15 +8900,7 @@ window.Sw.Sources["core/keyboard.js"] = "sw/core.js";
             fullH = lh;
         const vv = window.visualViewport;
         const inset = (vv && (Math.abs(vv.scale - 1) < 0.01)) ? Math.max(0, Math.round(lh - vv.offsetTop - vv.height)) : 0;
-        let touch = !!L.Mobile;
-        if (!touch) {
-            try {
-                touch = window.matchMedia("(pointer: coarse)").matches;
-            }
-            catch {
-            }
-        }
-        const on = edit && touch && ((inset >= keyboardMin) || ((fullH - lh) >= keyboardMin));
+        const on = edit && L.IsTouchScreen() && ((inset >= keyboardMin) || ((fullH - lh) >= keyboardMin));
         const was = L.Keyboard;
         const wasInset = L.KeyboardInset;
         setKeyboard(on, on ? inset : 0);
@@ -8924,6 +8929,22 @@ window.Sw.Sources["core/keyboard.js"] = "sw/core.js";
     Sw.Layout.KeyboardInset = 0;
     //  Also run by core/layout.js on a window resize, before the layout is updated (the orientation stays while it is open)
     Sw.Layout.KeyboardCheck = keyboardCheck;
+    /**
+     * Sw.Layout.IsTouchScreen(): a touch screen: Mobile mode, or a coarse primary pointer (a phone, a tablet, a touch laptop in tablet mode).
+     * Defined here (not in core/layout.js: the small sw/session.js bundle has no use for it); shell/shell.js and the keyboard check use it.
+     * @returns {boolean} True on a touch screen.
+     */
+    Sw.Layout.IsTouchScreen = () => {
+        if (Sw.Layout.Mobile)
+            return true;
+        //  matchMedia can be missing or throw (old or embedded browsers, a detached frame): not a touch screen then
+        try {
+            return window.matchMedia("(pointer: coarse)").matches;
+        }
+        catch {
+            return false;
+        }
+    };
     if (window.parent !== window)
         return;
     const vv = window.visualViewport;
@@ -14058,6 +14079,20 @@ window.Sw.Sources["core/draft.js"] = "sw/core.js";
     }
 
     /**
+     * The user the app shell above this page already asked for (Sw.Access.CachedUser of the top window), no request.
+     * @returns {?Promise<?object>} The shell's user promise; null outside the shell, when it knows none, or on another origin.
+     */
+    function shellUser() {
+        try {
+            const ta = window.top !== window ? window.top.Sw && window.top.Sw.Access : null;
+            return ta && typeof ta.CachedUser === "function" ? ta.CachedUser() : null;
+        }
+        catch {
+            return null;
+        }
+    }
+
+    /**
      * Remember the user part for this tab (see userCacheKey).
      * @param {string|null} v The user part, null to forget it.
      */
@@ -14079,13 +14114,7 @@ window.Sw.Sources["core/draft.js"] = "sw/core.js";
     function user() {
         if (!userP) {
             //  (inside the app shell the shell's user is reused: Sw.Access.CachedUser of the top window, no request of its own)
-            let shared = null;
-            try {
-                const ta = window.top !== window ? window.top.Sw && window.top.Sw.Access : null;
-                shared = ta && typeof ta.CachedUser === "function" ? ta.CachedUser() : null;
-            }
-            catch {
-            }
+            const shared = shellUser();
             //  (else the user this tab already knows, written by the app shell and forgotten on every sign in / out push: no request
             //  either; the original pages asked nothing)
             const known = shared ? null : knownUser();
@@ -14115,15 +14144,7 @@ window.Sw.Sources["core/draft.js"] = "sw/core.js";
      * @returns {boolean} True when user() sends no request.
      */
     function userFree() {
-        if (userP || knownUser())
-            return true;
-        try {
-            const ta = window.top !== window ? window.top.Sw && window.top.Sw.Access : null;
-            return !!(ta && typeof ta.CachedUser === "function" && ta.CachedUser());
-        }
-        catch {
-            return false;
-        }
+        return !!(userP || knownUser() || shellUser());
     }
 
     /**
@@ -14872,8 +14893,7 @@ window.Sw.Sources["core/draft.js"] = "sw/core.js";
                     if (userP)
                         part = await userP;
                     else {
-                        const ta = window.top !== window ? window.top.Sw && window.top.Sw.Access : null;
-                        const shared = ta && typeof ta.CachedUser === "function" ? ta.CachedUser() : null;
+                        const shared = shellUser();
                         part = shared ? userPart(await shared) : knownUser();
                     }
                 }
@@ -15669,19 +15689,29 @@ window.Sw.Sources["core/access.js"] = "sw/core.js";
     }
 
     /**
-     * The signed in user if this page or the app shell above it already asked (no request), else null.
-     * @returns {?Promise<?object>} The user promise, or null when not known.
+     * The user the app shell above this page already asked for (Sw.Access.CachedUser of the top window), no request.
+     * @returns {?Promise<?object>} The shell's user promise; null outside the shell, when it knows none, or on another origin.
      */
-    function knownUser() {
+    function shellUser() {
         try {
-            const own = Sw.Access.CachedUser();
-            if (own)
-                return own;
             const ta = window.top !== window ? window.top.Sw && window.top.Sw.Access : null;
             return ta && ta !== Sw.Access && typeof ta.CachedUser === "function" ? ta.CachedUser() : null;
         }
         catch {
             //  Another origin above
+            return null;
+        }
+    }
+
+    /**
+     * The signed in user if this page or the app shell above it already asked (no request), else null.
+     * @returns {?Promise<?object>} The user promise, or null when not known.
+     */
+    function knownUser() {
+        try {
+            return Sw.Access.CachedUser() || shellUser();
+        }
+        catch {
             return null;
         }
     }
@@ -15837,17 +15867,11 @@ window.Sw.Sources["core/access.js"] = "sw/core.js";
             //  A page in the app shell (same origin) uses the user the shell just asked for (SeedUser), so a framed page sends no GetUser
             //  of its own (the original pages made none)
             if (!reload && (!userP || now >= userExp)) {
-                try {
-                    const ta = window.top !== window ? window.top.Sw && window.top.Sw.Access : null;
-                    const p = ta && ta !== Sw.Access && typeof ta.CachedUser === "function" ? ta.CachedUser() : null;
-                    if (p) {
-                        userP = p;
-                        userExp = now + userLifeMs;
-                        return userP;
-                    }
-                }
-                catch {
-                    //  (another origin above: ask the server)
+                const p = shellUser();
+                if (p) {
+                    userP = p;
+                    userExp = now + userLifeMs;
+                    return userP;
                 }
             }
             if (reload || !userP || now >= userExp) {

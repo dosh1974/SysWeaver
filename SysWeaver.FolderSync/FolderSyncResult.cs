@@ -2,6 +2,9 @@
 
 namespace SysWeaver.FolderSync
 {
+    /// <summary>
+    /// The result of a folder synchronization
+    /// </summary>
     public class FolderSyncResult
     {
         /// <summary>
@@ -49,6 +52,9 @@ namespace SysWeaver.FolderSync
     }
 
 
+    /// <summary>
+    /// The result of pulling (downloading) a shared folder
+    /// </summary>
     public class FolderPullSyncResult : FolderSyncResult
     {
         /// <summary>

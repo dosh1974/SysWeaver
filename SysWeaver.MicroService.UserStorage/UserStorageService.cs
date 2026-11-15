@@ -33,6 +33,11 @@ namespace SysWeaver.MicroService
     {
 
         readonly ServiceManager Manager;
+        /// <summary>
+        /// Create the service
+        /// </summary>
+        /// <param name="manager">The service manager</param>
+        /// <param name="p">Parameters, null uses defaults</param>
         public UserStorageService(ServiceManager manager, UserStorageParams p)
         {
             var fu = manager.TryGet<FileUploaderService>();
@@ -115,6 +120,7 @@ namespace SysWeaver.MicroService
             return new TextTemplate(et, "${", "}");
         }
 
+        /// <inheritdoc />
         public String[] OnlyForPrefixes { get; init; }
 
 
@@ -125,6 +131,7 @@ namespace SysWeaver.MicroService
 
         readonly FileUploaderService FileUploader;
 
+        /// <inheritdoc />
         public Task<String> GetBaseUrlPrefix() => Task.FromResult(BaseUrlPrefix);
 
 
@@ -132,6 +139,7 @@ namespace SysWeaver.MicroService
 
         readonly TextTemplate[] EmbeddTemplates;
 
+        /// <inheritdoc />
         public override string ToString() =>
             String.IsNullOrEmpty(BaseUrl) ?
                 String.Join("; ", Paths.Select(x => x.ToQuoted()))
@@ -302,6 +310,9 @@ namespace SysWeaver.MicroService
 
         PeriodicTask PruneTask;
 
+        /// <summary>
+        /// Stops pruning and removes the upload repositories
+        /// </summary>
         public void Dispose()
         {
             Interlocked.Exchange(ref PruneTask, null)?.Dispose();
@@ -381,6 +392,11 @@ namespace SysWeaver.MicroService
             }
         }
 
+        /// <summary>
+        /// Get the (url and file system safe) storage path of a user
+        /// </summary>
+        /// <param name="userGuid">The guid of the user</param>
+        /// <returns>The path element for the user</returns>
         public String GetUserPath(String userGuid)
         {
             var data = Encoding.UTF8.GetBytes(userGuid);
@@ -492,7 +508,7 @@ namespace SysWeaver.MicroService
             => InternalStoreLink(context, url, GetBasePath(false, context), storedFiles);
 
         /// <summary>
-        /// Store a link to something as public or protected, only accessible by the user who stored it
+        /// Store a link to something as public or protected, accessible to anyone that have the specified auth
         /// </summary>
         /// <param name="context">The request context that triggered this store</param>
         /// <param name="url">The link (url) to store</param>
@@ -571,7 +587,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Get the scope of a link or a file
         /// </summary>
-        /// <param name="context"></param>
+        /// <param name="context">The request context</param>
         /// <param name="url">Url to the file or link</param>
         /// <returns>The scope</returns>
         public Task<UserStorageScopes?> GetScope(HttpServerRequest context, string url)
@@ -706,6 +722,7 @@ namespace SysWeaver.MicroService
         }
 
 
+        /// <inheritdoc />
         public IHttpRequestHandler Handler(HttpServerRequest context)
         {
             var l = context.LocalUrl;
@@ -806,6 +823,7 @@ namespace SysWeaver.MicroService
             context.SetResHeader("Content-Security-Policy", String.IsNullOrEmpty(csp) ? SandboxPolicy : String.Concat(csp, "; ", SandboxPolicy));
         }
 
+        /// <inheritdoc />
         public IEnumerable<IHttpServerEndPoint> EnumEndPoints(string root = null) => HttpServerTools.NoEndPoints;
 
 
@@ -1003,11 +1021,11 @@ namespace SysWeaver.MicroService
 
 
         /// <summary>
-        /// Get all stored files
+        /// Get all stored files of the logged in user
         /// </summary>
-        /// <param name="context"></param>
-        /// <returns></returns>
-        /// <exception cref="NoUserLoggedInException"></exception>
+        /// <param name="context">The request context</param>
+        /// <returns>The stored files</returns>
+        /// <exception cref="NoUserLoggedInException">No user is logged in</exception>
         [WebApi]
         [WebApiAuth]
         public async Task<StoredFile[]> GetStoredFiles(HttpServerRequest context)
@@ -1015,11 +1033,11 @@ namespace SysWeaver.MicroService
 
 
         /// <summary>
-        /// Get all stored files
+        /// Get all stored files of the logged in user (without the storage details)
         /// </summary>
-        /// <param name="context"></param>
-        /// <returns></returns>
-        /// <exception cref="NoUserLoggedInException"></exception>
+        /// <param name="context">The request context</param>
+        /// <returns>The stored files</returns>
+        /// <exception cref="NoUserLoggedInException">No user is logged in</exception>
         [WebApi]
         [WebApiAuth]
         public async Task<StoredFileInfo[]> GetAllStoredFiles(HttpServerRequest context)
@@ -1028,9 +1046,9 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Get all stored files for the logged in user
         /// </summary>
-        /// <param name="context"></param>
+        /// <param name="context">The request context</param>
         /// <returns>The files and the the user path</returns>
-        /// <exception cref="NoUserLoggedInException"></exception>
+        /// <exception cref="NoUserLoggedInException">No user is logged in</exception>
         public ValueTask<Tuple<IReadOnlyList<StoredFile>, String>> InternalGetStoredFiles(HttpServerRequest context)
         {
             using var _ = PerfMon.Track(nameof(InternalGetStoredFiles));
@@ -1238,9 +1256,9 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Get all stored urls
         /// </summary>
-        /// <param name="context"></param>
-        /// <returns></returns>
-        /// <exception cref="NoUserLoggedInException"></exception>
+        /// <param name="context">The request context</param>
+        /// <returns>The stored urls</returns>
+        /// <exception cref="NoUserLoggedInException">No user is logged in</exception>
         [WebApi]
         [WebApiAuth]
         public async Task<StoredUrl[]> GetStoredUrls(HttpServerRequest context)
@@ -1250,9 +1268,9 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Get all stored links
         /// </summary>
-        /// <param name="context"></param>
-        /// <returns></returns>
-        /// <exception cref="NoUserLoggedInException"></exception>
+        /// <param name="context">The request context</param>
+        /// <returns>The stored links (without the storage details)</returns>
+        /// <exception cref="NoUserLoggedInException">No user is logged in</exception>
         [WebApi]
         [WebApiAuth]
         public async Task<StoredLinkInfo[]> GetAllStoredLinks(HttpServerRequest context)
@@ -1262,9 +1280,9 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Get all stored urls for the logged in user
         /// </summary>
-        /// <param name="context"></param>
+        /// <param name="context">The request context</param>
         /// <returns>The urls and the the user path</returns>
-        /// <exception cref="NoUserLoggedInException"></exception>
+        /// <exception cref="NoUserLoggedInException">No user is logged in</exception>
         public ValueTask<Tuple<IReadOnlyList<StoredUrl>, String>> InternalGetStoredUrls(HttpServerRequest context)
         {
             using var _ = PerfMon.Track(nameof(InternalGetStoredUrls));
@@ -1309,8 +1327,10 @@ namespace SysWeaver.MicroService
 
 
 
+        /// <inheritdoc />
         public PerfMonitor PerfMon { get; } = new PerfMonitor(nameof(UserStorageService));
 
+        /// <inheritdoc />
         public IEnumerable<Stats> GetStats()
         {
             foreach (var x in StoredFileCache.GetStats(nameof(UserStorageService), "FileCache."))

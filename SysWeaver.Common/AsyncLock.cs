@@ -397,6 +397,10 @@ namespace SysWeaver
 
 
 #if DEBUG
+        /// <summary>
+        /// Debug builds only: the semaphore count of the lock and the maximum concurrent access (count/max).
+        /// </summary>
+        /// <returns>A short text for debugging.</returns>
         public override string ToString() => String.Concat("Locked: ", D.S.CurrentCount, '/', A.MaxConcurrentAccess);
 #endif//DEBUG
 

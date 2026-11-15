@@ -6,8 +6,15 @@ using SysWeaver.Serialization;
 
 namespace SysWeaver.IpLocation.Sources
 {
+    /// <summary>
+    /// An ip location source that uses api.ipgeolocation.io
+    /// </summary>
     public sealed class AppIpgeolocationIoSource : IIpLocationSource, IDisposable
     {
+        /// <summary>
+        /// Create the source
+        /// </summary>
+        /// <param name="p">The api key, null to use the default <see cref="ApiKeyParams"/></param>
         public AppIpgeolocationIoSource(ApiKeyParams p = null)
         {
             p = p ?? new ApiKeyParams();
@@ -20,6 +27,7 @@ namespace SysWeaver.IpLocation.Sources
 
         HttpClient Client;
 
+        /// <inheritdoc />
         public void Dispose()
         {
             Interlocked.Exchange(ref Client, null)?.Dispose();
@@ -29,6 +37,7 @@ namespace SysWeaver.IpLocation.Sources
 
         public override string ToString() => "Ip Location source: " + Name;
 
+        /// <inheritdoc />
         public string Name => "api.ipgeolocation.io";
 
 
@@ -66,6 +75,7 @@ namespace SysWeaver.IpLocation.Sources
 
 #pragma warning restore CS0649
 
+        /// <inheritdoc />
         public async Task<IpLocation> LookUp(string ip)
         {
             var url = Api + ip;

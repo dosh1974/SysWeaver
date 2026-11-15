@@ -19,10 +19,16 @@ namespace SysWeaver.Compression
     {
         static CompManager()
         {
+#if NET11_0_OR_GREATER
             CompBrotliNETNew.Register();
-            //CompBrotliNET.Register();
+            CompDeflateNETNew.Register();
+            CompGZipNETNew.Register();
+            CompZStdNETNew.Register();
+#else//NET11_0_OR_GREATER
+            CompBrotliNETNew.Register();
             CompDeflateNET.Register();
             CompGZipNET.Register();
+#endif//NET11_0_OR_GREATER
         }
 
         /// <summary>

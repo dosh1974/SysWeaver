@@ -42,7 +42,7 @@ namespace SysWeaver.HttpBench
         public bool SendAsGet;
 
         /// <summary>
-        /// The compression of the api values (an http compression such as "br", "gzip", "deflate"), null or empty for none.
+        /// The compression of the api values (an http compression such as "br", "zstd", "gzip", "deflate"), null or empty for none.
         /// POST: the body is compressed (Content-Encoding). GET: the query string is "_" + the compression letter + the compressed json as
         /// base64url (without compression: the url encoded json).
         /// </summary>
@@ -345,28 +345,86 @@ namespace SysWeaver.HttpBench
     /// </summary>
     public sealed class BenchStatus
     {
+        /// <summary>
+        /// The id of the test.
+        /// </summary>
         public int Id;
+
+        /// <summary>
+        /// The state of the test.
+        /// </summary>
         public BenchStates State;
+
+        /// <summary>
+        /// True when the test is over.
+        /// </summary>
         public bool Done;
+
+        /// <summary>
+        /// The root url of the tested server.
+        /// </summary>
         public String Target;
+
+        /// <summary>
+        /// The utc time the test started.
+        /// </summary>
         public DateTime Started;
+
+        /// <summary>
+        /// The utc time the test ended, null while it is running.
+        /// </summary>
         public DateTime? Ended;
+
+        /// <summary>
+        /// The seconds the test has run.
+        /// </summary>
         public double ElapsedSeconds;
+
+        /// <summary>
+        /// The planned duration of the test in seconds.
+        /// </summary>
         public double DurationSeconds;
         /// <summary>
         /// 0 to 100.
         /// </summary>
         public double Progress;
+
+        /// <summary>
+        /// The number of workers.
+        /// </summary>
         public int Concurrency;
+
+        /// <summary>
+        /// The number of end points that are called.
+        /// </summary>
         public int EndPointCount;
+
+        /// <summary>
+        /// The compression of the api values (see <see cref="BenchStartRequest.RequestCompression"/>).
+        /// </summary>
         public String RequestCompression;
+
+        /// <summary>
+        /// The accepted response compressions (see <see cref="BenchStartRequest.ResponseCompression"/>).
+        /// </summary>
         public String ResponseCompression;
         /// <summary>
         /// How api values are sent: "POST" (body) or "GET" (query string).
         /// </summary>
         public String ValueMethod;
+        /// <summary>
+        /// The number of completed requests (including errors).
+        /// </summary>
         public long Requests;
+
+        /// <summary>
+        /// The number of requests that failed.
+        /// </summary>
         public long Errors;
+
+        /// <summary>
+        /// The percentage of the requests that failed.
+        /// </summary>
         public double ErrorPercent;
         /// <summary>
         /// Requests per second over the whole test.
@@ -376,21 +434,85 @@ namespace SysWeaver.HttpBench
         /// Requests per second of the last complete second.
         /// </summary>
         public double CurrentRps;
+
+        /// <summary>
+        /// The highest requests per second of any second.
+        /// </summary>
         public double PeakRps;
+
+        /// <summary>
+        /// The average request time in ms.
+        /// </summary>
         public double AvgMs;
+
+        /// <summary>
+        /// The average request time in ms of the last complete second.
+        /// </summary>
         public double CurrentAvgMs;
+
+        /// <summary>
+        /// The shortest request time in ms.
+        /// </summary>
         public double MinMs;
+
+        /// <summary>
+        /// The longest request time in ms.
+        /// </summary>
         public double MaxMs;
+
+        /// <summary>
+        /// The median request time in ms.
+        /// </summary>
         public double P50Ms;
+
+        /// <summary>
+        /// The 90th percentile of the request time in ms.
+        /// </summary>
         public double P90Ms;
+
+        /// <summary>
+        /// The 95th percentile of the request time in ms.
+        /// </summary>
         public double P95Ms;
+
+        /// <summary>
+        /// The 99th percentile of the request time in ms.
+        /// </summary>
         public double P99Ms;
+
+        /// <summary>
+        /// The average time to the first byte of the response in ms.
+        /// </summary>
         public double AvgTtfbMs;
+
+        /// <summary>
+        /// The bytes sent on the wire (headers and TLS included).
+        /// </summary>
         public long WireSent;
+
+        /// <summary>
+        /// The bytes received on the wire (headers and TLS included).
+        /// </summary>
         public long WireRecv;
+
+        /// <summary>
+        /// The body bytes sent.
+        /// </summary>
         public long BodySent;
+
+        /// <summary>
+        /// The response body bytes received.
+        /// </summary>
         public long BodyRecv;
+
+        /// <summary>
+        /// The number of connections that were opened.
+        /// </summary>
         public long Connections;
+
+        /// <summary>
+        /// A message that tells why the test failed, null if there is none.
+        /// </summary>
         public String Message;
     }
 }

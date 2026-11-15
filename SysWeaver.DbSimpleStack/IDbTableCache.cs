@@ -4,6 +4,9 @@ using System.Threading.Tasks;
 
 namespace SysWeaver.Db
 {
+    /// <summary>
+    /// A cache of a database table that can be synced explicitly
+    /// </summary>
     public interface IDbTableCache : IDisposable, IPerfMonitored
     {
         /// <summary>

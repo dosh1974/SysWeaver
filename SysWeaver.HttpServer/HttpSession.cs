@@ -26,6 +26,10 @@ namespace SysWeaver.Net
     public sealed class HttpSession : IDisposable
     {
 #if DEBUG
+        /// <summary>
+        /// Debug builds only: the session token, expiration time and auth.
+        /// </summary>
+        /// <returns>A short text for debugging.</returns>
         public override string ToString() => String.Concat("Token: ", Token, ", expires: ", new DateTime(ExpirationTime, DateTimeKind.Utc), ", auth: ", Auth);
 #endif//DEBUG
 

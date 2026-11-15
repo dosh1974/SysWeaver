@@ -10,6 +10,9 @@ using TiktokenSharp;
 namespace SysWeaver.AI
 {
 
+    /// <summary>
+    /// An AI service using the OpenAI API (or any OpenAI compatible end point)
+    /// </summary>
     [WebApiUrl("../" + ServiceName)]
     [RequiredDep<ApiHttpServerModule>]
     [OptionalDep<IUserStorageService>]
@@ -20,11 +23,11 @@ namespace SysWeaver.AI
     {
 
         /// <summary>
-        ///
+        /// Create the service
         /// </summary>
-        /// <param name="sm"></param>
-        /// <param name="p"></param>
-        /// <param name="msg"></param>
+        /// <param name="sm">The service manager, used to find optional dependencies</param>
+        /// <param name="p">Service parameters, null to use the defaults</param>
+        /// <param name="msg">Optional message host</param>
         public OpenAiService(ServiceManager sm = null, OpenAiParams p = null, IMessageHost msg = null)
             : this(sm, p ?? new OpenAiParams(), msg, 0)
         {

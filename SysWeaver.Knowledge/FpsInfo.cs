@@ -7,8 +7,16 @@ namespace SysWeaver.Knowledge
 {
 
 
+    /// <summary>
+    /// Keywords for frame rates
+    /// </summary>
     public static class FpsInfo
     {
+        /// <summary>
+        /// Get keywords describing a frame rate
+        /// </summary>
+        /// <param name="fps">The frame rate in frames per second</param>
+        /// <returns>"30 fps", "60 fps" or "120 fps" if the rate is approximately that, else an empty string</returns>
         public static String GetKeyWords(double fps)
         {
             if (fps <= 0)

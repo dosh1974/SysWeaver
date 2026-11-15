@@ -49,6 +49,10 @@ namespace SysWeaver.Chat
         }
 
 
+        /// <summary>
+        /// Get the intended user of this message
+        /// </summary>
+        /// <returns>The guid of the user that should receive the message, null or empty if it's for everyone</returns>
         public String GetTo() => To;
 
         /// <summary>
@@ -93,7 +97,18 @@ namespace SysWeaver.Chat
         static readonly HttpCompressionPriority Comp = HttpCompressionPriority.GetSupportedEncoders("br:Balanced, deflate:Balanced, gzip:Balanced");
         static readonly ICompType CompType = CompManager.GetFromHttp("br") ?? CompManager.GetFromHttp("deflate") ?? CompManager.GetFromHttp("gzip");
 
-        public String AddFileData(String mime, String data, String providerName, String providerChatId, IReadOnlyList<String> auth, HttpServerRequest request, String filename)
+        /// <summary>
+        /// Add a file to this message from a "data:...;base64," url, or from plain text (used as UTF8 and compressed) if it isn't a base64 data url.
+        /// </summary>
+        /// <param name="mime">The mime type</param>
+        /// <param name="data">A base64 data url or plain text</param>
+        /// <param name="providerName">The provider name (part of the url)</param>
+        /// <param name="providerChatId">The provider chat id (part of the url)</param>
+        /// <param name="auth">The auth required to get the file</param>
+        /// <param name="request">The request (not used)</param>
+        /// <param name="filename">The file name</param>
+        /// <returns>The local url of the file</returns>
+        public String AddFileData(String mime, String data,String providerName, String providerChatId, IReadOnlyList<String> auth, HttpServerRequest request, String filename)
             => AddFile(mime, data, default, false, providerName, providerChatId, auth, filename);
 
         /// <summary>
@@ -182,7 +197,15 @@ namespace SysWeaver.Chat
             return Convert.FromBase64String(data.Substring(start));
         }
 
-        public String AddData(Object o, String providerName, String providerChatId, HttpServerRequest request)
+        /// <summary>
+        /// Attach an object to this message, it can be retrieved with <see cref="GetData(string)"/> using the file id (the last part of the returned name).
+        /// </summary>
+        /// <param name="o">The object</param>
+        /// <param name="providerName">The provider name (part of the name)</param>
+        /// <param name="providerChatId">The provider chat id (part of the name)</param>
+        /// <param name="request">The request (not used)</param>
+        /// <returns>A name for the object (parts joined with '_')</returns>
+        public String AddData(Object o,String providerName, String providerChatId, HttpServerRequest request)
         {
             var f = Interlocked.Increment(ref FileId).ToString();
             var name = String.Join('_', "file", providerName, providerChatId, Id, f);
@@ -191,10 +214,20 @@ namespace SysWeaver.Chat
 
         }
 
+        /// <summary>
+        /// Get an object (or file handler) that was added to this message
+        /// </summary>
+        /// <param name="url">The key of the object (the file id or the name given to <see cref="AddNamedData(string, object)"/>)</param>
+        /// <returns>The object or null if unknown</returns>
         public Object GetData(String url)
             => Files.TryGetValue(url, out var f) ? f : null;
 
 
+        /// <summary>
+        /// Attach an object to this message using a name (an existing name is not replaced)
+        /// </summary>
+        /// <param name="name">The name (key)</param>
+        /// <param name="o">The object</param>
         public void AddNamedData(String name, Object o)
         {
             Files.TryAdd(name, o);

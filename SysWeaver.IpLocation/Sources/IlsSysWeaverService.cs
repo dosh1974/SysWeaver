@@ -7,9 +7,16 @@ using System.Threading.Tasks;
 namespace SysWeaver.IpLocation.Sources
 {
 
+    /// <summary>
+    /// An ip location source that asks another SysWeaver ip location service
+    /// </summary>
     public sealed class IlsSysWeaverService : IIpLocationSource, IDisposable
     {
 
+        /// <summary>
+        /// Create the source
+        /// </summary>
+        /// <param name="p">The connection to the other service, null to use the defaults</param>
         public IlsSysWeaverService(IlsSysWeaverServiceParams p)
         {
             p = p ?? new IlsSysWeaverServiceParams();
@@ -30,13 +37,16 @@ namespace SysWeaver.IpLocation.Sources
 
         readonly String Server;
 
+        /// <inheritdoc />
         public override string ToString() => Source;
 
+        /// <inheritdoc />
         public void Dispose()
         {
             Remote.Dispose();
         }
 
+        /// <inheritdoc />
         public async Task<IpLocation> LookUp(string ip)
         {
             var r = await Remote.GetLocation(ip).ConfigureAwait(false);
@@ -48,8 +58,12 @@ namespace SysWeaver.IpLocation.Sources
 
         readonly IRemote Remote;
 
+        /// <summary>
+        /// The base url of the other service
+        /// </summary>
         public string Source { get; init; }
 
+        /// <inheritdoc />
         public string Name => Source;
     }
 

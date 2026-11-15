@@ -5,10 +5,18 @@ using System.Windows.Forms;
 
 namespace SysWeaver.WebBrowser
 {
+    /// <summary>
+    /// A <see cref="TaskProxy"/> that runs all queued work on its own dedicated STA thread (with a message pump), as required by UI components like WebView2
+    /// </summary>
     public class DedicatedThreadTaskProxy : TaskProxy
     {
+        /// <inheritdoc />
         public override string ToString() => Name;
 
+        /// <summary>
+        /// Create the proxy and start its thread
+        /// </summary>
+        /// <param name="name">The name of the thread, null to use "Proxy #" followed by the thread id</param>
         public DedicatedThreadTaskProxy(String name = null)
         {
             Name = name;
@@ -62,6 +70,9 @@ namespace SysWeaver.WebBrowser
             }
         }
 
+        /// <summary>
+        /// Stop accepting work and wait for the thread to exit
+        /// </summary>
         public override void Dispose()
         {
             base.Dispose();

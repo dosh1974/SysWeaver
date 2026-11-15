@@ -5,10 +5,16 @@ using SysWeaver.Data;
 
 namespace SysWeaver.ReverseProxy
 {
+    /// <summary>
+    /// Detailed information about a client that is connected to a reverse proxy server
+    /// </summary>
     [SysWeaver.Data.TableDataCard("proxyclient@reverseproxy/cards")]
     public sealed class ReverseProxyClientDetail
     {
 
+        /// <summary>
+        /// Create an empty instance (for deserialization)
+        /// </summary>
         public ReverseProxyClientDetail()
         {
         }
@@ -87,18 +93,21 @@ namespace SysWeaver.ReverseProxy
 
         /// <summary>
         /// The ratio of cache hits
+        /// For GET requests.
         /// </summary>
         [TableDataPercentage]
         public double GetHitRatio;
 
         /// <summary>
         /// The ratio of semi cache hits (returned cached, but waited for pending result, so not optimal performance)
+        /// For GET requests.
         /// </summary>
         [TableDataPercentage]
         public double GetSemiHitRatio;
 
         /// <summary>
         /// The ratio of cache misses 
+        /// For GET requests.
         /// </summary>
         [TableDataPercentage]
         public double GetMissRatio;
@@ -106,18 +115,21 @@ namespace SysWeaver.ReverseProxy
 
         /// <summary>
         /// The ratio of cache hits
+        /// For HEAD requests.
         /// </summary>
         [TableDataPercentage]
         public double HeadHitRatio;
 
         /// <summary>
         /// The ratio of semi cache hits (returned cached, but waited for pending result, so not optimal performance)
+        /// For HEAD requests.
         /// </summary>
         [TableDataPercentage]
         public double HeadSemiHitRatio;
 
         /// <summary>
         /// The ratio of cache misses 
+        /// For HEAD requests.
         /// </summary>
         [TableDataPercentage]
         public double HeadMissRatio;
@@ -125,21 +137,25 @@ namespace SysWeaver.ReverseProxy
 
         /// <summary>
         /// Number of cache hits 
+        /// For GET requests.
         /// </summary>
         public long GetHitCount;
         
         /// <summary>
         /// Number of semi cache hits (returned cached, but waited for pending result, so not optimal performance)
+        /// For GET requests.
         /// </summary>
         public long GetSemiHitCount;
         
         /// <summary>
         /// Number of cache misses 
+        /// For GET requests.
         /// </summary>
         public long GetMissCount;
         
         /// <summary>
         /// Number of items in the cache
+        /// For GET requests.
         /// </summary>
         public long GetSize;
 
@@ -147,21 +163,25 @@ namespace SysWeaver.ReverseProxy
 
         /// <summary>
         /// Number of cache hits 
+        /// For HEAD requests.
         /// </summary>
         public long HeadHitCount;
 
         /// <summary>
         /// Number of semi cache hits (returned cached, but waited for pending result, so not optimal performance)
+        /// For HEAD requests.
         /// </summary>
         public long HeadSemiHitCount;
 
         /// <summary>
         /// Number of cache misses 
+        /// For HEAD requests.
         /// </summary>
         public long HeadMissCount;
 
         /// <summary>
         /// Number of items in the cache
+        /// For HEAD requests.
         /// </summary>
         public long HeadSize;
 

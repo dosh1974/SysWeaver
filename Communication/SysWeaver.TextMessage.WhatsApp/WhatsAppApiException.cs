@@ -19,6 +19,12 @@ namespace SysWeaver.TextMessage
         /// </summary>
         public const int ReEngagement = 131047;
 
+        /// <summary>
+        /// Create the exception
+        /// </summary>
+        /// <param name="error">The error returned by the API</param>
+        /// <param name="statusCode">The http status code (0 if unknown)</param>
+        /// <param name="inner">The exception that caused this one (may be null)</param>
         public WhatsAppApiException(WaError error, int statusCode, Exception inner) : base("WhatsApp error " + error, inner)
         {
             Error = error;

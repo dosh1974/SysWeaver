@@ -523,10 +523,10 @@ namespace SysWeaver.MicroService
         }
 
         /// <summary>
-        /// Touch a folder /setting last access time to now)
+        /// Touch a folder (setting its last access time to now)
         /// </summary>
-        /// <param name="r"></param>
-        /// <param name="context"></param>
+        /// <param name="r">The managed folder and the name of the folder (version) on disc</param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
         /// <returns>The chunk stats for a compressed file or null if no compressed file exist</returns>
         /// <exception cref="Exception"></exception>
         public async Task<CdcChunkStats> Touch(FolderSyncOperation r, HttpServerRequest context)
@@ -557,10 +557,10 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Verify the integrity of a compressed folder and return some stats
         /// </summary>
-        /// <param name="r"></param>
+        /// <param name="r">The managed folder and the name of the folder (version) on disc</param>
         /// <param name="getExpandedSize">If true, decompress the chunks to get the expanded size.
         /// WARNING! This is much slower!</param>
-        /// <param name="context"></param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
         /// <returns>The chunk stats for a compressed file or null if no compressed file exist</returns>
         /// <exception cref="Exception"></exception>
         public async Task<CdcChunkStats> Verify(FolderSyncOperation r, bool getExpandedSize, HttpServerRequest context)
@@ -592,8 +592,8 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Expand a folder
         /// </summary>
-        /// <param name="r"></param>
-        /// <param name="context"></param>
+        /// <param name="r">The managed folder and the name of the folder (version) on disc</param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
         /// <returns>The chunk stats for a compressed file or null if no compressed file exist</returns>
         public async Task<CdcChunkStats> Expand(FolderSyncOperation r, HttpServerRequest context)
         {
@@ -629,8 +629,8 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Compress a folder
         /// </summary>
-        /// <param name="r"></param>
-        /// <param name="context"></param>
+        /// <param name="r">The managed folder and the name of the folder (version) on disc</param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
         /// <returns>True if the folder was compressed or false if it was already compressed</returns>
         public async Task<bool> Compress(FolderSyncOperation r, HttpServerRequest context)
         {
@@ -661,11 +661,12 @@ namespace SysWeaver.MicroService
         }
 
         /// <summary>
-        /// Activate a folder
+        /// Activate a folder: make a version of a managed folder (a sibling folder on disc) the active one.
+        /// Fails if a folder sync is in progress, or if the version is already active or a temporary folder.
         /// </summary>
-        /// <param name="r"></param>
-        /// <param name="context"></param>
-        /// <returns></returns>
+        /// <param name="r">The managed folder and the name of the folder (version) on disc to activate</param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
+        /// <returns>True if the folder was activated (failures throw)</returns>
         /// <exception cref="Exception"></exception>
         [WebApi]
         [WebApiAuth("")]
@@ -708,11 +709,12 @@ namespace SysWeaver.MicroService
         }
 
         /// <summary>
-        /// Remove a folder
+        /// Remove a folder: delete a version of a managed folder (a sibling folder on disc).
+        /// Fails if a folder sync is in progress, or if the version is the active one or a temporary folder.
         /// </summary>
-        /// <param name="r"></param>
-        /// <param name="context"></param>
-        /// <returns></returns>
+        /// <param name="r">The managed folder and the name of the folder (version) on disc to delete</param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
+        /// <returns>True if the folder was deleted (failures throw)</returns>
         /// <exception cref="Exception"></exception>
         [WebApi]
         [WebApiAuth("")]
@@ -850,7 +852,7 @@ namespace SysWeaver.MicroService
         /// Check if there are any differences in the managed folder
         /// </summary>
         /// <param name="r">Folder and local files</param>
-        /// <param name="context"></param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
         /// <returns>Changes required to sync the managed folder</returns>
         /// <exception cref="Exception"></exception>
         [WebApi]
@@ -1096,9 +1098,18 @@ namespace SysWeaver.MicroService
 
         static readonly IEnumerable<ManagedFolderData> Empty = Array.Empty<ManagedFolderData>();
 
+        /// <summary>
+        /// Get the versions of a managed folder
+        /// </summary>
+        /// <param name="syncName">The name of the managed folder (case insensitive)</param>
+        /// <returns>One row per version, empty if there is no such managed folder</returns>
         public IEnumerable<ManagedFolderData> GetManagedFolders(String syncName)
             => ManagedFolders.TryGetValueLower(syncName, out var f) ? GetManagedFolders(f) : Empty;
 
+        /// <summary>
+        /// Get the versions of all managed folders
+        /// </summary>
+        /// <returns>One row per version</returns>
         public IEnumerable<ManagedFolderData> GetManagedFolders()
             => ManagedFolders.Values.SelectMany(GetManagedFolders);
 
@@ -1106,8 +1117,8 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// All managed folders as a table
         /// </summary>
-        /// <param name="r"></param>
-        /// <returns></returns>
+        /// <param name="r">Table request: paging, sorting and filtering (default order is by name, then newest first)</param>
+        /// <returns>Table data, one row per version of each managed folder</returns>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
         [WebMenuTable(null, HttpServerBase.MenuOperations + "/{0}", "Managed folders", "Details about folders that can be updated (managed) remotely", "IconSync", 20)]
@@ -1129,7 +1140,7 @@ namespace SysWeaver.MicroService
         /// Display the manifest of a folder
         /// </summary>
         /// <param name="folder">name/version, ex: "web/web_asas"</param>
-        /// <returns></returns>
+        /// <returns>The manifest text of the folder version (when it was uploaded, by whom, file counts and sizes)</returns>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
         [WebApiClientCache(4)]

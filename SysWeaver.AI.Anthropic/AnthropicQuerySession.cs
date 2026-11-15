@@ -14,6 +14,15 @@ namespace SysWeaver.AI
     /// </summary>
     public class AnthropicQuerySession : AiQuerySessionBase
     {
+        /// <summary>
+        /// Create a query session
+        /// </summary>
+        /// <param name="c">The Anthropic client to use</param>
+        /// <param name="p">Session parameters (model, reasoning, max tokens)</param>
+        /// <param name="promptCaching">True to enable prompt caching</param>
+        /// <param name="toolCache">Optional cache for tool results</param>
+        /// <param name="monitor">Optional performance monitor</param>
+        /// <param name="memory">Optional AI memory</param>
         public AnthropicQuerySession(IAnthropicClient c, AnthropicSessionParams p, bool promptCaching = true, IAiToolCache toolCache = null, PerfMonitor monitor = null, IAiMemory memory = null)
             : this(c, p, promptCaching, AnthropicModels.GetSettings(AnthropicModels.GetOptions(p.Model), p.Reasoning ?? AiReasoning.Low, p.MaxTokens ?? 32000), toolCache, monitor, memory)
         {
@@ -27,19 +36,23 @@ namespace SysWeaver.AI
             Client = c;
         }
 
+        /// <summary>
+        /// The Anthropic client used by this session
+        /// </summary>
         protected readonly IAnthropicClient Client;
         readonly AnthropicModels.Settings Settings;
         readonly bool PromptCaching;
 
+        /// <inheritdoc />
         public override String SystemPrompt { get; set; }
 
         /// <summary>
         /// Perform a query
         /// </summary>
         /// <param name="text">The query text</param>
-        /// <param name="debug">An optional obejct used to track tool calls etc</param>
+        /// <param name="debug">An optional object used to track tool calls etc</param>
         /// <param name="onUsage">An optional function to call when token in/out usage is changed</param>
-        /// <param name="extraData">optional attachements</param>
+        /// <param name="extraData">optional attachments</param>
         /// <returns>The Ai response, typically MD encoded text</returns>
         /// <exception cref="Exception"></exception>
         public override async Task<String> Query(String text, AiDebugMessage debug = null, Func<String, long, long, Task> onUsage = null, IReadOnlyList<ValueTuple<AiContentPart, String>> extraData = null)

@@ -102,7 +102,7 @@
                         Kind: "error",
                         Title: _TF("The file could not be loaded", "Title of the error state of a file viewer (markdown, html, json, xml, csv) when the file failed to load"),
                         Text: _T("Loading \"{0}\" failed. The server may be busy or restarting; try again in a moment.", ctx.Name || Sw.Url.Get("r") || "", "Text of the error state of a file viewer when the file failed to load. {0} is replaced by the file name"),
-                        Details: e && e.message ? e.message : String(e),
+                        Details: Sw.ErrorMessage(e),
                         Actions: [new Sw.Button({ Icon: "refresh", Text: _TF("Try again", "Text of a button that loads a page again after an error"), OnClick: () => location.reload() })],
                     });
             }

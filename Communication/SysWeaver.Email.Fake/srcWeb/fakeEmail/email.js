@@ -131,24 +131,11 @@
     function errText(e) {
         if (e && e.Text)
             return e.Text;
-        return (e && e.message) ? e.message : String(e);
+        return Sw.ErrorMessage(e);
     }
 
-    /**
-     * Create an element.
-     * @param {string} tag - Tag name.
-     * @param {?string} [cls] - Class name(s).
-     * @param {*} [text] - Text content.
-     * @returns {HTMLElement} The element.
-     */
-    function el(tag, cls, text) {
-        const e = document.createElement(tag);
-        if (cls)
-            e.className = cls;
-        if (text != null)
-            e.textContent = text;
-        return e;
-    }
+    //  el(tag, cls, text): a plain element with class(es) and text (Sw.el from sw/ui.js)
+    const el = (tag, cls, text) => Sw.el(tag, { class: cls, text });
 
     /**
      * A deterministic hue of a string (avatar colors).
@@ -1317,28 +1304,37 @@
             State.query = $("search").value.trim().toLowerCase();
             renderList();
         }, 120));
+        /**
+         * Run a function on a plain click of a button (a modifier click only focuses it, UX guide INP-2).
+         * @param {HTMLElement} b - The button.
+         * @param {function(HTMLElement):void} fn - The action (gets the button).
+         */
+        const onClick = (b, fn) => b.addEventListener("click", ev => {
+            if (!Sw.BadClick(ev, true))
+                fn(ev.currentTarget);
+        });
         for (const b of $("viewMode").children)
-            b.addEventListener("click", () => {
+            onClick(b, () => {
                 State.view = b.dataset.view;
                 renderBody();
             });
-        $("compose").addEventListener("click", () => openComposer());
-        $("reply").addEventListener("click", reply);
-        $("delete").addEventListener("click", deleteSelected);
-        $("openTab").addEventListener("click", openInTab);
-        $("back").addEventListener("click", () => showReader(false, true));
-        $("theme").addEventListener("click", ev => themeMenu(ev.currentTarget));
-        $("markAllRead").addEventListener("click", markAllRead);
-        $("clearAll").addEventListener("click", () => deleteAll());
-        $("markAllReadTop").addEventListener("click", markAllRead);
-        $("clearAllTop").addEventListener("click", () => deleteAll());
-        $("more").addEventListener("click", ev => moreMenu(ev.currentTarget));
+        onClick($("compose"), () => openComposer());
+        onClick($("reply"), () => reply());
+        onClick($("delete"), () => deleteSelected());
+        onClick($("openTab"), () => openInTab());
+        onClick($("back"), () => showReader(false, true));
+        onClick($("theme"), themeMenu);
+        onClick($("markAllRead"), () => markAllRead());
+        onClick($("clearAll"), () => deleteAll());
+        onClick($("markAllReadTop"), () => markAllRead());
+        onClick($("clearAllTop"), () => deleteAll());
+        onClick($("more"), moreMenu);
         for (const b of $("composeMode").children)
-            b.addEventListener("click", () => setComposeMode(b.dataset.mode));
+            onClick(b, () => setComposeMode(b.dataset.mode));
         for (const b of $("composeFormat").children)
-            b.addEventListener("click", () => setComposeFormat(b.dataset.format));
-        $("cPreviewBtn").addEventListener("click", () => showPreview($("cPreview").hidden));
-        $("composeCancel").addEventListener("click", closeComposer);
+            onClick(b, () => setComposeFormat(b.dataset.format));
+        onClick($("cPreviewBtn"), () => showPreview($("cPreview").hidden));
+        onClick($("composeCancel"), () => closeComposer());
         const form = $("composeForm");
         //  The composer checks (shared Sw.Form: the message under the field, the focus on the first bad one, Send only when valid):
         //  a user's From address when faking an incoming email, the recipient when the system sends; addresses must look like one

@@ -7,12 +7,23 @@ namespace SysWeaver.AI
     /// </summary>
     public sealed class LlamaSharpMessage
     {
+        /// <inheritdoc />
         public override string ToString() => String.Concat(Role, ": ", Content);
 
+        /// <summary>
+        /// Create an empty message (for deserialization)
+        /// </summary>
         public LlamaSharpMessage()
         {
         }
 
+        /// <summary>
+        /// Create a message
+        /// </summary>
+        /// <param name="role">The role, "user" or "assistant"</param>
+        /// <param name="content">The content of the message</param>
+        /// <param name="isToolCall">True if the message is a tool call made by the model</param>
+        /// <param name="isToolResponse">True if the message is the response of a tool call</param>
         public LlamaSharpMessage(String role, String content, bool isToolCall = false, bool isToolResponse = false)
         {
             Role = role;

@@ -1,5 +1,8 @@
 ﻿namespace SysWeaver.FolderSync
 {
+    /// <summary>
+    /// The events that are reported while a folder is synchronized
+    /// </summary>
     public enum FolderSyncEvents
     {
         /// <summary>

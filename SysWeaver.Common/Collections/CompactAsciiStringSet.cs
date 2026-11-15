@@ -31,6 +31,10 @@ namespace SysWeaver.Collections
     public sealed class CompactAsciiStringSet : IEnumerable<String>
     {
 #if DEBUG
+        /// <summary>
+        /// Debug builds only: the number of strings, the number of bytes used and the compression ratio.
+        /// </summary>
+        /// <returns>A short text for debugging.</returns>
         public override string ToString() => String.Concat(Count, " strings in ", ByteCount, " bytes @ ", (Compression * 100.0).ToString("0.00", CultureInfo.InvariantCulture), "% compression");
 #endif//DEBBUG
         /// <summary>

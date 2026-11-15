@@ -39,7 +39,7 @@ Implements `IBrowserService` from [SysWeaver.WebBrowser](../../SysWeaver.WebBrow
 
 ## Limitations and considerations
 
-- Windows only (`net10.0-windows`, Windows Chromium runtimes for x86, x64 and arm64)
+- Windows only (`net11.0-windows`, Windows Chromium runtimes for x86, x64 and arm64)
 - CEF is large and memory hungry
 - CEF logs verbosely unless `SmallLog` is set
 - The project references SysWeaver.MicroService.MySqlAudit, pulling database dependencies into consumers, although the code does not use it

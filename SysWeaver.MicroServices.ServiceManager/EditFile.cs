@@ -2,6 +2,9 @@ using System;
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// Identifies a file in an editor (base for the edit requests)
+    /// </summary>
     public class EditFile
     {
         /// <summary>

@@ -28,5 +28,5 @@ Each SVG has one `path` per region whose `class` is the region name; the matchin
 ## Relationships
 
 - **Part of:** [SysWeaver.Map](../README.md)
-- **Uses:** [Compress](../../_tools/compress/README.md) at build time
+- **Uses:** [Compress](https://github.com/dosh1974/SysWeaver.Tools/blob/main/Compress/README.md) at build time
 - **Used by:** [`MapCache.cs`](../MapCache.cs), [`MapTools.cs`](../MapTools.cs)

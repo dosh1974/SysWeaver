@@ -300,7 +300,7 @@
                 list.appendChild(Sw.StateView({ Title: _TF("No effects found.", "Shown in an effect gallery without effects"), Icon: "image" }).E);
         }
         catch (e) {
-            const msg = e && e.message ? e.message : ("" + e);
+            const msg = Sw.ErrorMessage(e);
             Sw.Fail(msg);
             list.replaceChildren(Sw.StateView({
                 Kind: "error",

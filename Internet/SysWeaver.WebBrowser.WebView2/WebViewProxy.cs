@@ -9,6 +9,9 @@ using System.Threading.Tasks;
 namespace SysWeaver.WebBrowser
 {
 
+    /// <summary>
+    /// Shares a single WebView2 environment (and its UI thread) between all <see cref="WebViewBrowser"/> instances in the process
+    /// </summary>
     public static class WebViewProxy
     {
 

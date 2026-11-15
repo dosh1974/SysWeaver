@@ -7,6 +7,9 @@ using System.Threading.Tasks;
 
 namespace SysWeaver.Db
 {
+    /// <summary>
+    /// Extension methods for SimpleStack OrmConnection
+    /// </summary>
     public static class OrmConnectionExt
     {
         /// <summary>

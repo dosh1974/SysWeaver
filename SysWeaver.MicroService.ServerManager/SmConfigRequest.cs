@@ -1,5 +1,8 @@
 ﻿namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// Identifies a configuration file of a managed service
+    /// </summary>
     public class SmConfigRequest
     {
         /// <summary>

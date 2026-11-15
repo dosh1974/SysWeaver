@@ -20,6 +20,14 @@ namespace SysWeaver.TextMessage
         const String LogPrefix = "[TextRouter] ";
         const char TokenSep = '|';
 
+        /// <summary>
+        /// Create the router and connect to the providers (providers that are added to or removed from the service manager later are connected or disconnected)
+        /// </summary>
+        /// <param name="sm">The service manager used to find the providers</param>
+        /// <param name="p">The parameters, at least one route is required</param>
+        /// <param name="msg">Optional message host used for logging</param>
+        /// <exception cref="ArgumentNullException"><paramref name="sm"/> is null</exception>
+        /// <exception cref="Exception">A parameter is invalid (no routes, duplicate route names)</exception>
         public TextMessageRouterService(ServiceManager sm, TextMessageRouterParams p = null, IMessageHost msg = null)
         {
             p = p ?? new TextMessageRouterParams();
@@ -57,6 +65,7 @@ namespace SysWeaver.TextMessage
 
         public override string ToString() => String.Join(", ", Routes.Select(x => x.ToString()));
 
+        /// <inheritdoc />
         public void Dispose()
         {
             Manager.OnServiceAdded -= Sm_OnServiceAdded;
@@ -494,7 +503,9 @@ namespace SysWeaver.TextMessage
         readonly TextMessageQueue<IncomingTextMessage> Incoming;
         readonly TextMessageQueue<TextMessageStatusUpdate> Statuses;
 
+        /// <inheritdoc />
         public event Action<IncomingTextMessage> OnIncoming;
+        /// <inheritdoc />
         public event Action<TextMessageStatusUpdate> OnStatus;
 
         static long Counter = DateTime.UtcNow.Ticks - new DateTime(2025, 1, 1).Ticks;
@@ -621,6 +632,7 @@ namespace SysWeaver.TextMessage
         readonly ExceptionTracker FallbackFails = new ExceptionTracker();
         readonly ExceptionTracker PollFails = new ExceptionTracker();
 
+        /// <inheritdoc />
         public IEnumerable<Stats> GetStats()
         {
             const String n = nameof(TextMessageRouterService);
@@ -632,6 +644,7 @@ namespace SysWeaver.TextMessage
                 yield return x;
         }
 
+        /// <inheritdoc />
         public PerfMonitor PerfMon { get; init; } = new PerfMonitor(nameof(TextMessageRouterService));
 
         #endregion//Stats

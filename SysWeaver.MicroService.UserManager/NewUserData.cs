@@ -3,32 +3,71 @@
 namespace SysWeaver.MicroService
 {
 
+    /// <summary>
+    /// The core data of a user
+    /// </summary>
     public interface IUserCoreData
     {
+        /// <summary>
+        /// The name of the user
+        /// </summary>
         String UserName { get; }
+
+        /// <summary>
+        /// Preferred language of the user
+        /// </summary>
         String Language { get; }
 
+        /// <summary>
+        /// Optional information for the user
+        /// </summary>
         String NickName { get; }
 
     }
 
+    /// <summary>
+    /// The data of a user (to be created)
+    /// </summary>
     public class UserData : IUserCoreData
     {
+        /// <inheritdoc />
         public String UserName { get; set; }
+
+        /// <summary>
+        /// The e-mail address of the user, can be null
+        /// </summary>
         public String Email { get; set; }
 
+        /// <summary>
+        /// The phone number of the user, can be null
+        /// </summary>
         public String Phone { get; set; }
 
+        /// <summary>
+        /// The security tokens of the user
+        /// </summary>
         public String[] Tokens { get; set; }
 
+        /// <summary>
+        /// The application specific domain of the user, null for the default
+        /// </summary>
         public String Domain { get; set; }
+
+        /// <inheritdoc />
         public String Language { get; set; }
 
+        /// <inheritdoc />
         public String NickName { get; set; }
     }
 
+    /// <summary>
+    /// The data of a user that is about to be created (stored with the action token)
+    /// </summary>
     public sealed class NewUserData : UserData
     {
+        /// <summary>
+        /// The salt that the client must use when hashing the password of the new user
+        /// </summary>
         public String Salt { get; set; }
 
         /// <summary>
@@ -40,10 +79,24 @@ namespace SysWeaver.MicroService
 
 
 
+    /// <summary>
+    /// The information needed by the client to choose a new password (from an action token)
+    /// </summary>
     public class NewPasswordData
     {
+        /// <summary>
+        /// The name of the user
+        /// </summary>
         public String UserName { get; set; }
+
+        /// <summary>
+        /// Optional information for the user
+        /// </summary>
         public String NickName { get; set; }
+
+        /// <summary>
+        /// The salt that the client must use when hashing the new password
+        /// </summary>
         public String Salt { get; set; }
 
         /// <summary>
@@ -62,8 +115,14 @@ namespace SysWeaver.MicroService
 
 
 
+    /// <summary>
+    /// <see cref="NewPasswordData"/> as stored with the action token (includes the id of the user)
+    /// </summary>
     public sealed class InternalNewPasswordData : NewPasswordData
     {
+        /// <summary>
+        /// The id of the user
+        /// </summary>
         public long UserId { get; set; }
 
     }

@@ -5,6 +5,9 @@ using System.Collections.Generic;
 namespace SysWeaver.Knowledge
 {
 
+    /// <summary>
+    /// All knowledge (the combined keywords of all knowledge sets)
+    /// </summary>
     public static class AllInfo
     {
         /// <summary>
@@ -85,6 +88,11 @@ namespace SysWeaver.Knowledge
         }
 
 
+        /// <summary>
+        /// Check if a word looks like a plural, i.e. ends with an 's' that is not part of "ss", "us", "is" or "os"
+        /// </summary>
+        /// <param name="s">The word, must not be empty</param>
+        /// <returns>True if the word looks like a plural</returns>
         public static bool IsMultiple(String s)
         {
             var l = s.Length - 1;

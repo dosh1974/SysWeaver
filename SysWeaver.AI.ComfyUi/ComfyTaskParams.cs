@@ -95,6 +95,9 @@ namespace SysWeaver.AI
     public abstract class ComfyParams
     {
 
+        /// <summary>
+        /// The default negative prompt used by the image and video task parameters
+        /// </summary>
         public const String DefNegativeImagePrompt = "ugly, tiling, poorly drawn hands, poorly drawn feet, poorly drawn face, out of frame, extra limbs, disfigured, deformed, body out of frame, bad anatomy, watermark, signature, cut off, low contrast, underexposed, overexposed, bad art, beginner, amateur, distorted face, blurry, draft, grainy";
 
         /// <summary>
@@ -263,6 +266,9 @@ namespace SysWeaver.AI
     public sealed class TextToImageParams : ComfyParams, IVisualComfyParams
     {
 
+        /// <summary>
+        /// Create parameters with the default negative prompt
+        /// </summary>
         public TextToImageParams()
         {
             NegativePrompt = DefNegativeImagePrompt;
@@ -282,6 +288,7 @@ namespace SysWeaver.AI
 
 
 
+        /// <inheritdoc/>
         [EditDefault(DefNegativeImagePrompt)]
         public override string NegativePrompt { get => base.NegativePrompt; set => base.NegativePrompt = value; }
     }
@@ -292,6 +299,9 @@ namespace SysWeaver.AI
     /// </summary>
     public sealed class ImagesToImageParams : ComfyParams, IVisualComfyParams, IReferenceComfyParams
     {
+        /// <summary>
+        /// Create parameters with the default negative prompt
+        /// </summary>
         public ImagesToImageParams()
         {
             NegativePrompt = DefNegativeImagePrompt;
@@ -315,6 +325,7 @@ namespace SysWeaver.AI
         /// </summary>
         public MemoryFile[] Files { get; set; }
 
+        /// <inheritdoc/>
         [EditDefault(DefNegativeImagePrompt)]
         public override string NegativePrompt { get => base.NegativePrompt; set => base.NegativePrompt = value; }
 
@@ -325,6 +336,9 @@ namespace SysWeaver.AI
     /// </summary>
     public sealed class TextToVideoParams : ComfyParams, IVisualComfyParams, IDurationComfyParams
     {
+        /// <summary>
+        /// Create parameters with the default negative prompt
+        /// </summary>
         public TextToVideoParams()
         {
             NegativePrompt = DefNegativeImagePrompt;
@@ -347,6 +361,7 @@ namespace SysWeaver.AI
         [EditDefault(15)]
         public double Duration { get; set; } = 15;
 
+        /// <inheritdoc/>
         [EditDefault(DefNegativeImagePrompt)]
         public override string NegativePrompt { get => base.NegativePrompt; set => base.NegativePrompt = value; }
 
@@ -358,6 +373,9 @@ namespace SysWeaver.AI
     /// </summary>
     public sealed class ImagesToVideoParams : ComfyParams, IVisualComfyParams, IReferenceComfyParams, IDurationComfyParams
     {
+        /// <summary>
+        /// Create parameters with the default negative prompt
+        /// </summary>
         public ImagesToVideoParams()
         {
             NegativePrompt = DefNegativeImagePrompt;
@@ -385,6 +403,7 @@ namespace SysWeaver.AI
         [EditDefault(15)]
         public double Duration { get; set; } = 15;
 
+        /// <inheritdoc/>
         [EditDefault(DefNegativeImagePrompt)]
         public override string NegativePrompt { get => base.NegativePrompt; set => base.NegativePrompt = value; }
 

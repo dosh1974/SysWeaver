@@ -7,6 +7,9 @@ using SimpleStack.Orm;
 
 namespace SysWeaver.Db
 {
+    /// <summary>
+    /// Extension methods for upserting rows using a SimpleStack connection to a MySql database
+    /// </summary>
     public static class MySqlOrmConnectionExt
     {
         /// <summary>
@@ -18,7 +21,7 @@ namespace SysWeaver.Db
         /// <param name="tableName">Optional table name</param>
         /// <param name="maxBatchSize">Number of rows per query</param>
         /// <param name="useInsert">Do a bulk insert instead of upsert</param>
-        /// <returns></returns>
+        /// <returns>A task that completes when all rows are written</returns>
         public static Task BulkUpsert<T>(this OrmConnection con, IReadOnlyList<T> data, String tableName = null, int maxBatchSize = 4096, bool useInsert = false)
             => MySqlDbSimpleStack.BulkUpsert(con, data, tableName, maxBatchSize, useInsert);
 
@@ -29,7 +32,7 @@ namespace SysWeaver.Db
         /// <param name="con">The connection to use</param>
         /// <param name="data">The data</param>
         /// <param name="tableName">Optional table name</param>
-        /// <returns></returns>
+        /// <returns>A task that completes when the row is written</returns>
         public static Task Upsert<T>(this OrmConnection con, T data, String tableName = null)
             => MySqlDbSimpleStack.Upsert(con, data, tableName);
 

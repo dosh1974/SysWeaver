@@ -23,6 +23,10 @@ namespace SysWeaver
     {
 
 #if DEBUG
+        /// <summary>
+        /// Debug builds only: describes the node (root mode, leaf values or number of child nodes).
+        /// </summary>
+        /// <returns>A short text for debugging.</returns>
         public override string ToString() =>
             Leaf != null ?
                 (Leaf == LeafList ?
@@ -631,6 +635,9 @@ namespace SysWeaver
         /// </summary>
         static long CountAllocNodes;
 
+        /// <summary>
+        /// Finalizer, updates the allocated node counter (see <see cref="AllocatedNodes"/>).
+        /// </summary>
         ~StringTreeList()
         {
             Interlocked.Decrement(ref CountAllocNodes);

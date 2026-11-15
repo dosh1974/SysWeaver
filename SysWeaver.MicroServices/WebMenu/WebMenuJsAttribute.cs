@@ -4,14 +4,14 @@
 namespace SysWeaver.MicroService
 {
     /// <summary>
-    /// Put this attribute on any type that is registered in the service manager to add it to a menu
+    /// Put this attribute on any type that is registered in the service manager to add a menu item that executes js code
     /// </summary>
     [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
     public class WebMenuJsAttribute : WebMenuAttribute
     {
 
         /// <summary>
-        /// Put this attribute on any type that is registered in the service manager to add it to a menu
+        /// Put this attribute on any type that is registered in the service manager to add a menu item that executes js code
         /// </summary>
         /// <param name="menu">Menu name to add it to (null for default)</param>
         /// <param name="id">Id of this item, this can be path separated by /, ex: "Debug/Data/CompressionTable"</param>

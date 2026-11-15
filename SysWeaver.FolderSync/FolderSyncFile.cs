@@ -2,8 +2,12 @@
 
 namespace SysWeaver.FolderSync
 {
+    /// <summary>
+    /// Information about a file of a folder that is synchronized
+    /// </summary>
     public sealed class FolderSyncFile
     {
+        /// <inheritdoc />
         public override string ToString() => Name;
 
         /// <summary>
@@ -17,7 +21,7 @@ namespace SysWeaver.FolderSync
         public String Hash;
 
         /// <summary>
-        /// Numer of milliseconds since the Unix epoch
+        /// When the file was last modified
         /// </summary>
         public DateTime LastModified;
     }

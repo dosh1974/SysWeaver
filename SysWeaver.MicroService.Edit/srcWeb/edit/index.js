@@ -182,7 +182,7 @@
                 this.Select(this.Pages[0]);
             }
             catch (e) {
-                Sw.Fail(e && e.message ? e.message : String(e));
+                Sw.Fail(Sw.ErrorMessage(e));
             }
             finally {
                 done();

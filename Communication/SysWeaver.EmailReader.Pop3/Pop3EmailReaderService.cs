@@ -20,6 +20,12 @@ namespace SysWeaver.EmailReader
     {
         const String LogPrefix = "[Pop3] ";
 
+        /// <summary>
+        /// Create the service and start reading emails in the background
+        /// </summary>
+        /// <param name="p">The parameters, <see cref="Pop3EmailReaderParams.Server"/> and the credentials are required</param>
+        /// <param name="msg">Optional message host used for logging</param>
+        /// <exception cref="Exception">A parameter is missing or invalid</exception>
         public Pop3EmailReaderService(Pop3EmailReaderParams p = null, IMessageHost msg = null)
         {
             p = p ?? new Pop3EmailReaderParams();
@@ -62,8 +68,12 @@ namespace SysWeaver.EmailReader
             Msg?.AddMessage(MessageLevels.Debug, $"{LogPrefix}Checking {Server.ToQuoted()} every {PollInterval / 1000} seconds{(DeleteAfterRead ? "" : ", emails are left on the server")}");
         }
 
+        /// <inheritdoc />
         public override string ToString() => Tos;
 
+        /// <summary>
+        /// Stop reading emails and release the queues
+        /// </summary>
         public void Dispose()
         {
             Cancel.Cancel();
@@ -309,6 +319,7 @@ namespace SysWeaver.EmailReader
         readonly ExceptionTracker PollFails = new ExceptionTracker();
         readonly ExceptionTracker ProcessFails = new ExceptionTracker();
 
+        /// <inheritdoc />
         public IEnumerable<Stats> GetStats()
         {
             const String n = nameof(Pop3EmailReaderService);
@@ -318,6 +329,7 @@ namespace SysWeaver.EmailReader
                 yield return x;
         }
 
+        /// <inheritdoc />
         public PerfMonitor PerfMon { get; init; } = new PerfMonitor(nameof(Pop3EmailReaderService));
 
         #endregion//Stats

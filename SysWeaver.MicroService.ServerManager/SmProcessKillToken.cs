@@ -6,7 +6,7 @@ using System.Text;
 namespace SysWeaver.MicroService
 {
     /// <summary>
-    /// Kill tokens: a process can only be killed (<see cref="ServerManagerService.KillProcess(string, HttpServerRequest)"/>) with a token
+    /// Kill tokens: a process can only be killed (<see cref="ServerManagerService.KillProcess"/>) with a token
     /// that was sent with the process list (<see cref="SmProcessMetrics.Actions"/>).
     /// A crafted link, a deep link scan or an image (a plain GET, CSRF style) can't kill a process since the token can't be guessed,
     /// it can only be read from the (authenticated, same origin) process list.

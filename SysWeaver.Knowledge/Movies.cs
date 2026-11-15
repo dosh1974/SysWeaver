@@ -5,6 +5,9 @@ using System.Collections.Generic;
 namespace SysWeaver.Knowledge
 {
 
+    /// <summary>
+    /// Info about a movie
+    /// </summary>
     public sealed class Movie : Info
     {
         internal Movie(string name, string desc, int year, String rating, String plot, String length, Info[] parent) : base(name, desc, Movies.Group, parent, true)
@@ -12,6 +15,7 @@ namespace SysWeaver.Knowledge
             Year = year;
             Rating = rating;
             Plot = plot;
+            Length = length;
         }
 
         /// <summary>
@@ -36,14 +40,32 @@ namespace SysWeaver.Knowledge
     }
 
 
+    /// <summary>
+    /// Knowledge about movies
+    /// </summary>
     public static class Movies
     {
+        /// <summary>
+        /// The group (category) name of all movie info
+        /// </summary>
         public const String Group = "Movies";
 
+        /// <summary>
+        /// Try to get info about a movie
+        /// </summary>
+        /// <param name="name">The title of the movie, any case</param>
+        /// <param name="info">The info if found</param>
+        /// <returns>True if info was found</returns>
         public static bool TryGet(String name, out Movie info) => Tags.TryGetValueLower(name, out info);
 
+        /// <summary>
+        /// All keyword/info pairs (the keys are lower case)
+        /// </summary>
         public static IEnumerable<KeyValuePair<String, Movie>> All => Tags;
 
+        /// <summary>
+        /// The number of keywords
+        /// </summary>
         public static int Count => Tags.Count;
 
         #region Setup

@@ -95,14 +95,15 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Restart the process
         /// </summary>
-        /// <returns>True if successful</returns>
+        /// <returns>True when the restart was started (never false: a restart that can't be done is a 409 with the reason)</returns>
+        /// <exception cref="HttpResponseException">409 with the reason: a restart is already under way, or this host can't restart the process</exception>
         [WebApi("admin/{0}")]
         [WebApiAuth(Roles.Admin)]
         [WebApiAudit(ServiceAudit)]
         public bool RestartProcess()
         {
             if (!Manager.RestartProcess())
-                return false;
+                throw HttpResponseException.Refused("Can't restart the process: a restart is already under way, or the host application doesn't support restarting");
             Server.PushMessageAllSessions(HttpServerBase.MessageServerRestart);
             return true;
         }

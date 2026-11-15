@@ -3,6 +3,9 @@ using SysWeaver.AI;
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// Font options for text in a chart
+    /// </summary>
     public sealed class ChartJsFontOptions
     {
         /// <summary>
@@ -32,7 +35,7 @@ namespace SysWeaver.MicroService
         public string weight;
 
         /// <summary>
-        /// Height of an individual line of text (scale);
+        /// Height of an individual line of text (as a multiple of the font size)
         /// </summary>
         [AiOptional]
         public double? lineHeight;

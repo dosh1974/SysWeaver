@@ -18,6 +18,9 @@ namespace SysWeaver.MicroService
             MemberName = memberName;
         }
 
+        /// <summary>
+        /// Name of the member (field, property or method) that determines if the API is exposed
+        /// </summary>
         public readonly String MemberName;
 
     }

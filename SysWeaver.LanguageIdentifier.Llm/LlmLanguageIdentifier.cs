@@ -11,10 +11,19 @@ using SysWeaver.MicroService;
 namespace SysWeaver.LanguageIdentifier
 {
 
+    /// <summary>
+    /// Language identification using an Llm (through the OpenAI service).
+    /// Slower than the FastText identifier (each new text is an Llm query).
+    /// </summary>
     [IsMicroService]
     [RequiredDep<OpenAiService>]
     public sealed class LlmLanguageIdentifier : ILanguageIdentifier, IDisposable, IPerfMonitored, IHaveStats
     {
+        /// <summary>
+        /// Create an Llm language identifier
+        /// </summary>
+        /// <param name="manager">The service manager, used to get the OpenAI service</param>
+        /// <param name="p">Optional parameters, if null the defaults are used</param>
         public LlmLanguageIdentifier(ServiceManager manager, LlmLanguageIdentifierParams p = null)
         {
             p = p ?? new LlmLanguageIdentifierParams();
@@ -35,6 +44,7 @@ namespace SysWeaver.LanguageIdentifier
         readonly FastMemCache<String, IdentifiedLanguage[]> CacheList;
 
 
+        /// <inheritdoc />
         public void Dispose()
         {
         }
@@ -94,6 +104,14 @@ namespace SysWeaver.LanguageIdentifier
         static String GetKey(String text, String userLanguge, double userLanguageBias, int numberOfResults)
             => $"{text}\n\r\t{userLanguge}\n\r\t{userLanguageBias}\n\r\t{numberOfResults}";
 
+        /// <summary>
+        /// Try to identify a language used by some text (minConfidence is not used by this implementation)
+        /// </summary>
+        /// <param name="text">The text to identify</param>
+        /// <param name="userLanguge">An optional two letter ISO 639-1 language code that the Llm is told to favor</param>
+        /// <param name="userLanguageBias">How much to bias the user language [0, 1]</param>
+        /// <param name="minConfidence">Not used</param>
+        /// <returns>A two letter ISO 639-1 language code of the identified language or null if the language couldn't be identified</returns>
         public ValueTask<string> Identify(string text, string userLanguge = null, double userLanguageBias = 0.2, double minConfidence = 0.05)
             => Cache.GetOrUpdateValueAsync(GetKey(text, userLanguge, userLanguageBias, minConfidence), async f =>
             {
@@ -128,6 +146,7 @@ namespace SysWeaver.LanguageIdentifier
         static readonly Char[] Trims = "\r\n\t\'\". ,-!*+".ToCharArray();
 
 
+        /// <inheritdoc />
         public ValueTask<IdentifiedLanguage[]> Identify(string text, int numberOfResults, string userLanguge = null, double userLanguageBias = 0.2)
             => CacheList.GetOrUpdateValueAsync(GetKey(text, userLanguge, userLanguageBias, numberOfResults), async f =>
             {
@@ -169,6 +188,7 @@ namespace SysWeaver.LanguageIdentifier
                 }
             });
 
+        /// <inheritdoc />
         public IEnumerable<Stats> GetStats()
         {
             foreach (var x in Cache.GetStats(nameof(LlmLanguageIdentifier), "Simple."))
@@ -179,6 +199,7 @@ namespace SysWeaver.LanguageIdentifier
                 yield return x;
         }
 
+        /// <inheritdoc />
         public PerfMonitor PerfMon { get; } = new PerfMonitor(nameof(LlmLanguageIdentifier));
 
     }

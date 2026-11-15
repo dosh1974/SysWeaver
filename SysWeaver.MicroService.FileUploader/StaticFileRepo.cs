@@ -11,6 +11,9 @@ using SysWeaver.Net;
 namespace SysWeaver.MicroService
 {
 
+    /// <summary>
+    /// A file repository that stores the uploaded files on disc (and optionally serves them), derive from it to add checks and processing
+    /// </summary>
     public class StaticFileRepo : IFileRepo
     {
         /// <summary>
@@ -24,7 +27,8 @@ namespace SysWeaver.MicroService
         public String UploadAuth { get; set; }
 
         /// <summary>
-        /// Maximum allowed file size allowed
+        /// Maximum allowed file size allowed in bytes.
+        /// Defaults to 10 MiB.
         /// </summary>
         public long MaxLength = 10L << 20;
 
@@ -39,7 +43,8 @@ namespace SysWeaver.MicroService
         public String DestPath;
 
         /// <summary>
-        /// If true, a subfolder per user is created (avoids collision of data)
+        /// If true, a subfolder per user is created (avoids collision of data).
+        /// Only used if <see cref="UploadAuth"/> isn't null (else there are no users).
         /// </summary>
         public bool AddUserFolder;
 
@@ -58,12 +63,14 @@ namespace SysWeaver.MicroService
         #region Serving files
 
         /// <summary>
-        /// Set to true to serve these files (as in being able to download them)
+        /// Set to true to serve these files (as in being able to download them).
+        /// Defaults to true.
         /// </summary>
         public bool ServeFiles = true;
 
         /// <summary>
         /// If true, compressed files that are uploaded will stay compressed on disc, files will be served assuming pre compressed, i.e "Test.txt.gzip" may be served in place of "Test.txt" if Test.txt is older or non existent.
+        /// Defaults to true.
         /// </summary>
         public bool SavePreCompressed = true;
 
@@ -73,22 +80,26 @@ namespace SysWeaver.MicroService
         public String WebFolder;
 
         /// <summary>
-        /// Number of seconds to cache the file on a client
+        /// Number of seconds to cache the file on a client.
+        /// Defaults to 5.
         /// </summary>
         public int ClientCacheDuration = 5;
-        
+
         /// <summary>
-        /// Number of seconds to cache any intermediate results (i.e small files that are compressed on the fly)
+        /// Number of seconds to cache any intermediate results (i.e small files that are compressed on the fly).
+        /// Defaults to 30.
         /// </summary>
         public int RequestCacheDuration = 30;
-        
+
         /// <summary>
-        /// The maximum size of a file that can be cached
+        /// The maximum size in bytes of a file that can be cached.
+        /// Defaults to 32768.
         /// </summary>
         public long MaxCacheSize = 32768;
-        
+
         /// <summary>
-        /// The preferred on the fly compression schemes
+        /// The preferred on the fly compression schemes.
+        /// Defaults to "br: Balanced, deflate: Balanced, gzip: Balanced".
         /// </summary>
         public String Compression = "br: Balanced, deflate: Balanced, gzip: Balanced";
         
@@ -133,6 +144,9 @@ namespace SysWeaver.MicroService
         String[] SaveFolders;
         FileHttpServerModuleFolder[] ServeFolders; 
 
+        /// <summary>
+        /// Resolve the settings (folders, extensions etc) the first time it's needed
+        /// </summary>
         protected void Cache()
         {
             if (IsCached)
@@ -191,6 +205,11 @@ namespace SysWeaver.MicroService
         }
 
 
+        /// <summary>
+        /// Remove the files that haven't been accessed for <see cref="RemoveIfUnusedDays"/> days
+        /// </summary>
+        /// <param name="tracker">Exceptions that occur while removing are reported here</param>
+        /// <returns>The number of files removed</returns>
         public async Task<int> RemoveOldFilesNow(ExceptionTracker tracker)
         {
             if (!IsCached)
@@ -307,6 +326,9 @@ namespace SysWeaver.MicroService
         protected virtual Task<Tuple<FileUploadStatus, Object>> OnRequest(HttpServerRequest r, bool isUpload) => DefaultOnRequest;
     
         
+        /// <summary>
+        /// The default result of <see cref="OnRequest"/>: status <see cref="FileUploadStatus.None"/> and no context
+        /// </summary>
         protected static readonly Task<Tuple<FileUploadStatus, Object>> DefaultOnRequest = Task.FromResult(Tuple.Create(FileUploadStatus.None, (Object)null));
 
 
@@ -343,10 +365,23 @@ namespace SysWeaver.MicroService
             return fullName;
         }
 
+        /// <summary>
+        /// Called after a file was saved, derived classes can process the file
+        /// </summary>
+        /// <param name="file">The saved file</param>
+        /// <param name="replacedSize">The size of the file that was replaced, if any</param>
+        /// <param name="info">Information about the uploaded file</param>
+        /// <param name="r">The request context</param>
+        /// <param name="context">As returned by <see cref="OnRequest"/></param>
+        /// <returns><see cref="FileUploadStatus.None"/> if everything is fine, else the status to report</returns>
         protected virtual Task<FileUploadStatus> OnUploaded(FileInfo file, long replacedSize, FileUploadInfo info, HttpServerRequest r, Object context)
             => NullTaskFileUploadStatus;
         static readonly Task<FileUploadStatus> NullTaskFileUploadStatus = Task.FromResult(FileUploadStatus.None);
 
+        /// <summary>
+        /// Create a folder if it doesn't exist (errors are ignored)
+        /// </summary>
+        /// <param name="path">The folder</param>
         protected static void EnsureFolder(String path)
         {
             if (Directory.Exists(path))
@@ -360,6 +395,7 @@ namespace SysWeaver.MicroService
             }
         }
 
+        /// <inheritdoc />
         public async Task<FileUploadResult[]> CanFileBeUploaded(FileUploadInfo[] info, HttpServerRequest r)
         {
             Cache();
@@ -497,6 +533,7 @@ namespace SysWeaver.MicroService
 
         readonly FastMemCache<String, Byte[]> ChunkCache = new FastMemCache<string, byte[]>(TimeSpan.FromMinutes(30), StringComparer.Ordinal);
 
+        /// <inheritdoc />
         public async Task<FileUploadResult> Upload(Stream s, FileUploadInfo file, HttpServerRequest r, ICompDecoder decoder)
         {
             Cache();

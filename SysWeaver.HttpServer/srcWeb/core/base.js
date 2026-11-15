@@ -850,6 +850,14 @@
     Sw.Sleep = (ms, signal) => Sw.Util.Sleep(ms, signal);
 
     /**
+     * The plain text of a caught value: its message when it has one (an Error), else the value as a string. No server reason, no status
+     * (Sw.Net.Message composes the full failure sentence for people; this is only the raw text for a log, a detail line or a short toast).
+     * @param {*} e The caught value.
+     * @returns {string} The text.
+     */
+    Sw.ErrorMessage = e => e && e.message ? e.message : String(e);
+
+    /**
      * @namespace Sw.Util - UI-less helpers (async, bytes, hashing, json, frame loop).
      */
     Sw.Util = Object.assign(Sw.Util || {}, {

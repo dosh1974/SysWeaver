@@ -25,6 +25,9 @@ namespace SysWeaver.AI
     public abstract partial class AiServiceBase 
     {
 
+        /// <summary>
+        /// The name of the request property that holds the <see cref="AiToolContext"/> of a tool call
+        /// </summary>
         public const String RequestAiToolContext = OpenAiToolExt.RequestAiToolContext;
 
         #region Default tools

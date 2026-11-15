@@ -33,8 +33,10 @@ namespace SysWeaver.TextMessage
 
         #region Http module
 
+        /// <inheritdoc />
         public String[] OnlyForPrefixes { get; }
 
+        /// <inheritdoc />
         public IHttpRequestHandler Handler(HttpServerRequest context)
         {
             if (context.HttpMethod != HttpServerMethods.POST)

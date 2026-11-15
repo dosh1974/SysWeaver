@@ -3,8 +3,14 @@ using SysWeaver.Remote;
 
 namespace SysWeaver.ReverseProxy
 {
+    /// <summary>
+    /// Parameters for the <see cref="ReverseProxyClient"/>
+    /// </summary>
     public sealed class ReverseProxyClientParams : RemoteConnection
     {
+        /// <summary>
+        /// Create the parameters, the authentication method defaults to <see cref="RemoteAuthMethod.SysWeaverLogin"/>
+        /// </summary>
         public ReverseProxyClientParams()
         {
             // Use strong auth method by default (no real reason to not use)
@@ -16,6 +22,8 @@ namespace SysWeaver.ReverseProxy
         /// This is part of the url to reach this client.
         /// For example, if the base url for the reverse proxy server is https://www.example.com/ReverseProxyFiles/ and ClientId is "TestClient", the (base) url to use to reach this client is:
         /// https://www.example.com/ReverseProxyFiles/TestClient/
+        /// Only the characters a-z, A-Z and 0-9 are valid (other characters are removed).
+        /// Defaults to "$(MachineName)".
         /// </summary>
         public String ClientId = "$(MachineName)";
 
@@ -30,7 +38,7 @@ namespace SysWeaver.ReverseProxy
         /// "https://www.example.com/ReverseProxyFiles/TestClient/Data/Logo.png" will read from "http://localhost/publicData/Logo.png"
         /// If not the data will be requested from the service that hosts this proxy, ex: "publicData"
         /// "https://www.example.com/ReverseProxyFiles/TestClient/Data/Logo.png" will read from this service at "publicData/Logo.png"
-        /// If no end points are specified, "name" will be empty and data will be empty, mapping the root of to the root of this service.
+        /// If no end points are specified, "name" will be empty and data will be empty, mapping the root of the client to the root of this service.
         /// "name" must be unique among the end points.
         /// "name" can't be empty for multiple end points.
         /// </summary>
@@ -40,6 +48,8 @@ namespace SysWeaver.ReverseProxy
         /// <summary>
         /// Number of connections (long polls) that wait for requests from the server, dont make this too low.
         /// A request that one of them gets is handled on its own task (see <see cref="MaxRequestsInProgress"/>), so it never blocks the polls.
+        /// If zero or negative it is relative to the number of processors.
+        /// Defaults to 8.
         /// </summary>
         public int MaxConcurrentRequests = 8;
 
@@ -49,11 +59,12 @@ namespace SysWeaver.ReverseProxy
         /// held up to 90 s) then never holds up the requests behind it, even with few connections.
         /// When this many are in progress, a connection handles its request itself (one at a time, as with 0).
         /// The remote connection's MaxConcurrency is raised to at least MaxConcurrentRequests + MaxRequestsInProgress.
+        /// Defaults to 32.
         /// </summary>
         public int MaxRequestsInProgress = 32;
 
         /// <summary>
-        /// The local server path to the revers proxy, this should match the BaseUrl of the ReverseProxyServerParams.
+        /// The local server path to the reverse proxy, this should match the BaseUrl of the <see cref="ReverseProxyServerParams"/>.
         /// Only used in debug tables.
         /// </summary>
         public String ServerBaseUrl;

@@ -2,6 +2,9 @@
 
 namespace SysWeaver.FolderSync
 {
+    /// <summary>
+    /// Identifies a folder that an operation (ex: activating a version) is done on
+    /// </summary>
     public sealed class FolderSyncOperation
     {
         /// <summary>

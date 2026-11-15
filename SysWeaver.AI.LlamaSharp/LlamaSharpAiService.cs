@@ -94,6 +94,7 @@ namespace SysWeaver.AI
             Models = models;
         }
 
+        /// <inheritdoc />
         public override void Dispose()
         {
             base.Dispose();
@@ -175,6 +176,7 @@ namespace SysWeaver.AI
             throw new Exception("No local LLM named " + name.ToQuoted() + " is loaded!");
         }
 
+        /// <inheritdoc />
         protected override Task<AiModels> FetchModels()
         {
             var llms = Models.Values.Select(x => new AiLlmModel
@@ -223,6 +225,7 @@ namespace SysWeaver.AI
             return s;
         }
 
+        /// <inheritdoc />
         protected override IAiChatSession CreateAiChatSession(bool isPrivate, AiSessionParams p, String joinAuth, String clearAuth, bool defaultTools, IAiMemory memory)
             => CreateChatSession(isPrivate, LlamaSharpSessionParams.From(p), joinAuth, clearAuth, defaultTools, memory);
 
@@ -242,6 +245,7 @@ namespace SysWeaver.AI
         public LlamaSharpQuerySession CreateQuerySession(String model)
             => CreateQuerySession(new LlamaSharpSessionParams { Model = model });
 
+        /// <inheritdoc />
         protected override IAiQuerySession CreateAiQuerySession(AiSessionParams p)
             => CreateQuerySession(LlamaSharpSessionParams.From(p));
 

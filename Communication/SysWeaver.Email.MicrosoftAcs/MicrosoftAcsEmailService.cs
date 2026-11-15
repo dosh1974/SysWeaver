@@ -11,8 +11,16 @@ namespace SysWeaver.Email
 {
 
 
+    /// <summary>
+    /// Email sender service that sends emails using Microsoft Azure Communication Services (ACS) Email
+    /// </summary>
     public sealed class MicrosoftAcsEmailService : IEmailSender, IHaveStats, IPerfMonitored
     {
+        /// <summary>
+        /// Create the service
+        /// </summary>
+        /// <param name="p">The parameters, <see cref="MicrosoftAcsEmailParams.From"/> and the api key (a connection string, or an access key together with <see cref="MicrosoftAcsEmailParams.Endpoint"/>) are required</param>
+        /// <exception cref="Exception">A required parameter is missing</exception>
         public MicrosoftAcsEmailService(MicrosoftAcsEmailParams p = null)
         {
             p = p ?? new MicrosoftAcsEmailParams();
@@ -39,8 +47,12 @@ namespace SysWeaver.Email
             }
             RetryCount = Math.Max(1, p.RetryCount) - 1;
         }
+        /// <inheritdoc />
         public override string ToString() => Tos;
         
+        /// <summary>
+        /// The from address that emails are sent from
+        /// </summary>
         public readonly String Sender;
 
         readonly WaitUntil Wait;
@@ -60,6 +72,12 @@ namespace SysWeaver.Email
             return true;
         }
 
+        /// <summary>
+        /// Send an email, failed attempts that can be retried (timeouts, throttling and server errors) are retried up to the configured number of attempts.
+        /// </summary>
+        /// <param name="msg">The message to send</param>
+        /// <returns>A task that completes when ACS has accepted the message (or when it has completed, if <see cref="MicrosoftAcsEmailParams.WaitForCompletion"/> is set)</returns>
+        /// <exception cref="Exception">The message could not be sent, or the operation reported failure (only if waiting for completion)</exception>
         public async Task SendEmail(OutgoingEmailMessage msg)
         {
             using var _ = PerfMon.Track(nameof(SendEmail));
@@ -99,6 +117,7 @@ namespace SysWeaver.Email
             }
         }
 
+        /// <inheritdoc />
         public IEnumerable<Stats> GetStats()
         {
             foreach (var x in SendFails.GetStats(nameof(MicrosoftAcsEmailService), "Send."))
@@ -107,12 +126,14 @@ namespace SysWeaver.Email
                 yield return x;
         }
 
+        /// <inheritdoc />
         public void Dispose()
         {
         }
 
         readonly EmailClient Client;
 
+        /// <inheritdoc />
         public PerfMonitor PerfMon { get; init; } = new PerfMonitor(nameof(MicrosoftAcsEmailService));
 
     }

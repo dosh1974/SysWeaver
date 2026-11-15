@@ -326,7 +326,7 @@
                 data = await TypeInfo.GetType(typeName);
             }
             catch (e) {
-                Sw.Fail(_T('Failed to get information about the type "{0}"', typeName, "An error message that is shown when the server failed to get information about an C# type.{0} is replaced with the C# type name") + "\n" + (e.message || e), true);
+                Sw.Fail(_T('Failed to get information about the type "{0}"', typeName, "An error message that is shown when the server failed to get information about an C# type.{0} is replaced with the C# type name") + "\n" + Sw.ErrorMessage(e), true);
                 return;
             }
             if (!data) {
@@ -343,7 +343,7 @@
             await typeAdd(page, data);
         }
         catch (e) {
-            Sw.Fail(e && e.message ? e.message : String(e), true);
+            Sw.Fail(Sw.ErrorMessage(e), true);
         }
         finally {
             done();

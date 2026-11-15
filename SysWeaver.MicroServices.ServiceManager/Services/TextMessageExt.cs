@@ -4,6 +4,9 @@ using System.Threading.Tasks;
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// Extension methods for text messages
+    /// </summary>
     public static class TextMessageExt
     {
         /// <summary>
@@ -63,6 +66,8 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// True if the status is final (no more updates are expected)
         /// </summary>
+        /// <param name="status">The status to check</param>
+        /// <returns>True if the status is <see cref="TextMessageStatuses.Read"/> or <see cref="TextMessageStatuses.Failed"/></returns>
         public static bool IsFinal(this TextMessageStatuses status)
             => (status == TextMessageStatuses.Read) || (status == TextMessageStatuses.Failed);
     }

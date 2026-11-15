@@ -1037,6 +1037,13 @@ namespace SysWeaver.Data
             return data;
         }
 
+        /// <summary>
+        /// Apply the column filters and the sorting of a request (without skip and take, see <see cref="SortAndFilterAndLimit"/>).
+        /// Filters of unknown columns or operations are ignored, if the request has no order the default order of the row type is used (if any).
+        /// </summary>
+        /// <param name="request">The request, may not be null.</param>
+        /// <param name="data">The source data.</param>
+        /// <returns>The resulting sequence, null if <paramref name="data"/> is null.</returns>
         public static IEnumerable<T> SortAndFilter(TableDataOrderRequest request, IEnumerable<T> data)
         {
             if (data == null)

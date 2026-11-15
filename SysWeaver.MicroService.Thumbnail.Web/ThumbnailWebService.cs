@@ -18,6 +18,7 @@ namespace SysWeaver.MicroService
 
 
     /// <summary>
+    /// Creates images (screenshots of web pages, media, effects and Google Maps) by rendering them in a browser window (<see cref="IBrowserService"/>)
     /// </summary>
     [IsMicroService]
     [RequiredDep(typeof(IBrowserService))]
@@ -25,6 +26,11 @@ namespace SysWeaver.MicroService
     public sealed partial class ThumbnailWebService :  IHttpServerModule, IPerfMonitored, IRunTimeWebApiAuth, IThumbnailWebService, IHaveStats
     {
 
+        /// <summary>
+        /// Create the service
+        /// </summary>
+        /// <param name="manager">The service manager (an <see cref="IBrowserService"/> is required)</param>
+        /// <param name="p">Parameters, null to use the defaults</param>
         public ThumbnailWebService(ServiceManager manager, ThumbnailWebParams p = null)
         {
             M = manager;
@@ -43,6 +49,13 @@ namespace SysWeaver.MicroService
             MaxScreenShotLock = new AsyncLock(Math.Max(1, p.MaxConcurrency));
         }
 
+        /// <summary>
+        /// Get the http prefix to use when the browser should load a page from this server
+        /// </summary>
+        /// <param name="context">The request, null to use the first prefix of the http server (with "*" replaced by "127.0.0.1")</param>
+        /// <param name="throwOnFail">True to throw if no prefix is found</param>
+        /// <returns>The prefix, null if none was found (and throwOnFail is false)</returns>
+        /// <exception cref="Exception">If no prefix was found and throwOnFail is true</exception>
         public String GetPrefix(HttpServerRequest context, bool throwOnFail = true)
         {
             if (context != null)
@@ -80,6 +93,11 @@ namespace SysWeaver.MicroService
             return Path.GetExtension(e).ToString();
         }
 
+        /// <summary>
+        /// Download an url and make the data available (for 60 seconds) from a temporary url of this server (a CORS proxy)
+        /// </summary>
+        /// <param name="url">The url to download</param>
+        /// <returns>The handler that serves the data (under "thumbnailWebProxy/"), null if the download failed</returns>
         public async Task<StaticMemoryHttpRequestHandler> GetProxiedUrl(String url)
         {
             var ext = GetUrlExtension(url);
@@ -116,12 +134,14 @@ namespace SysWeaver.MicroService
         readonly FastMemCache<String, StaticMemoryHttpRequestHandler> CorsProxy = new (TimeSpan.FromSeconds(60), StringComparer.Ordinal);
 
 
+        /// <inheritdoc />
         public void Dispose()
         {
         }
 
         readonly ServiceManager M;
 
+        /// <inheritdoc />
         public IReadOnlyDictionary<String, String> MethodAuths { get; init; }
 
         readonly AsyncLock MaxScreenShotLock;
@@ -130,8 +150,10 @@ namespace SysWeaver.MicroService
         readonly Tuple<string, bool> PngMime;
         readonly IBrowserService Browser;
 
+        /// <inheritdoc />
         public String[] OnlyForPrefixes { get; } = ["thumbnailWeb/", "thumbnailWebProxy/"];
 
+        /// <inheritdoc />
         public IHttpRequestHandler Handler(HttpServerRequest context)
         {
             var url = context.LocalUrl;
@@ -181,6 +203,18 @@ namespace SysWeaver.MicroService
             }, Options);
         }
 
+        /// <summary>
+        /// Take a screenshot of an url
+        /// </summary>
+        /// <param name="url">The url to load</param>
+        /// <param name="width">The width of the browser window in pixels</param>
+        /// <param name="height">The height of the browser window in pixels</param>
+        /// <param name="scale">The scale (dpi scaling) of the window</param>
+        /// <param name="format">The image format</param>
+        /// <param name="quality">The jpeg quality (only used for jpeg)</param>
+        /// <param name="optimizeForSpeed">True to optimize for speed rather than quality</param>
+        /// <param name="extraDelayMs">An extra time to wait (in ms) after the page was loaded, before the screenshot is taken</param>
+        /// <returns>The image data</returns>
         public async Task<Byte[]> GetImageAsync(String url, int width = 1920, int height = 1080, double scale = 1, ScreenshotImageFormats format = ScreenshotImageFormats.Png, int quality = 70, bool optimizeForSpeed = false, int extraDelayMs = 0)
         {
             using var _ = await MaxScreenShotLock.Lock().ConfigureAwait(false);
@@ -204,6 +238,7 @@ namespace SysWeaver.MicroService
 
         const String Prefix = "[" + ServiceName + "] ";
 
+        /// <inheritdoc />
         public PerfMonitor PerfMon { get; init; } = new PerfMonitor(ServiceName);
 
         static long PC;
@@ -213,12 +248,20 @@ namespace SysWeaver.MicroService
         long AdaptCount;
 
 
+        /// <summary>
+        /// Exposed to the page as "ErrorText": lets a page report an error text to the service while a screenshot is taken (a non empty text fails the screenshot)
+        /// </summary>
         [ClassInterface(ClassInterfaceType.AutoDual)]
         [ComVisible(true)]
 
         public sealed class TextResult
         {
 
+            /// <summary>
+            /// Called by the page to set the text
+            /// </summary>
+            /// <param name="text">The error text (null or empty for no error)</param>
+            /// <returns>A completed task</returns>
             public Task SetText(string text)
             {
                 Text = text;
@@ -229,6 +272,19 @@ namespace SysWeaver.MicroService
 
         }
 
+        /// <summary>
+        /// Take a screenshot of an url, if the page supports it (it is "aware") it controls the size of the window and when the screenshot is taken
+        /// </summary>
+        /// <param name="url">The url to load</param>
+        /// <param name="initWidth">The initial width of the browser window in pixels</param>
+        /// <param name="initHeight">The initial height of the browser window in pixels</param>
+        /// <param name="scale">The scale (dpi scaling) of the window</param>
+        /// <param name="format">The image format</param>
+        /// <param name="quality">The jpeg quality (only used for jpeg)</param>
+        /// <param name="optimizeForSpeed">True to optimize for speed rather than quality</param>
+        /// <param name="extraDelayMs">An extra time to wait (in ms) before the screenshot is taken</param>
+        /// <returns>The image data and information about the image (size, and for pages that are aware: duration, fps and load time)</returns>
+        /// <exception cref="Exception">If the page reports an error text</exception>
         public async Task<Tuple<Byte[], MediaInfo>> GetAdaptiveImageAsync(String url, int initWidth = 1920, int initHeight = 1080, double scale = 1, ScreenshotImageFormats format = ScreenshotImageFormats.Png, int quality = 70, bool optimizeForSpeed = false, int extraDelayMs = 0)
         {
             String prefix = "[ThumbnailWeb " + Interlocked.Increment(ref PC) + "] ";
@@ -396,11 +452,11 @@ namespace SysWeaver.MicroService
         #region Media Image
 
         /// <summary>
-        /// Get data from an image url
+        /// Get data from an image url: renders the image with the media viewer in a browser window and takes a screenshot
         /// </summary>
-        /// <param name="r"></param>
-        /// <param name="context"></param>
-        /// <returns></returns>
+        /// <param name="r">The image url, image options, the size of the screenshot, when to take it (position in seconds) and an optional extra delay</param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
+        /// <returns>The screenshot (png) and information about it (the size and the url)</returns>
         [WebApi]
         [WebApiClientCache(30)]
         [WebApiRequestCache(25, WebApiCaches.Globally)]
@@ -409,11 +465,11 @@ namespace SysWeaver.MicroService
             => InternalGetMedia(r, context);
 
         /// <summary>
-        /// Get a png from an image url
+        /// Get a png from an image url (see <see cref="GetMediaImage"/>, this returns only the image)
         /// </summary>
-        /// <param name="r"></param>
-        /// <param name="context"></param>
-        /// <returns></returns>
+        /// <param name="r">The image url, image options, the size of the screenshot, when to take it (position in seconds) and an optional extra delay</param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
+        /// <returns>The screenshot as png image data</returns>
         [WebApiClientCache(30)]
         [WebApiRequestCache(25, WebApiCaches.Globally)]
         [WebApiRaw("image/png", true)]
@@ -426,11 +482,11 @@ namespace SysWeaver.MicroService
         #region Media Video
 
         /// <summary>
-        /// Get data from a video url
+        /// Get data from a video url: renders a frame of the video with the media viewer in a browser window and takes a screenshot
         /// </summary>
-        /// <param name="r"></param>
-        /// <param name="context"></param>
-        /// <returns></returns>
+        /// <param name="r">The video url, video options, the size of the screenshot, when to take it (position in seconds into the video) and an optional extra delay</param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
+        /// <returns>The screenshot (png) and information about it (the size and the url)</returns>
         [WebApi]
         [WebApiClientCache(30)]
         [WebApiRequestCache(25, WebApiCaches.Globally)]
@@ -439,11 +495,11 @@ namespace SysWeaver.MicroService
             => InternalGetMedia(r, context);
 
         /// <summary>
-        /// Get a png from a video url
+        /// Get a png from a video url (see <see cref="GetMediaVideo"/>, this returns only the image)
         /// </summary>
-        /// <param name="r"></param>
-        /// <param name="context"></param>
-        /// <returns></returns>        
+        /// <param name="r">The video url, video options, the size of the screenshot, when to take it (position in seconds into the video) and an optional extra delay</param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
+        /// <returns>The screenshot as png image data</returns>
         [WebApiClientCache(30)]
         [WebApiRequestCache(25, WebApiCaches.Globally)]
         [WebApiRaw("image/png", true)]
@@ -456,11 +512,11 @@ namespace SysWeaver.MicroService
         #region Media Effect
 
         /// <summary>
-        /// Get data from an effect url
+        /// Get data from an effect url: renders the (shader) effect with the media viewer in a browser window and takes a screenshot
         /// </summary>
-        /// <param name="r"></param>
-        /// <param name="context"></param>
-        /// <returns></returns>
+        /// <param name="r">The effect url, effect options, the size of the screenshot, when to take it (position in seconds into the effect) and an optional extra delay</param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
+        /// <returns>The screenshot (png) and information about it (the size and the url)</returns>
         [WebApi]
         //[WebApiClientCache(30)]
         //[WebApiRequestCache(25, WebApiCaches.Globally)]
@@ -469,11 +525,11 @@ namespace SysWeaver.MicroService
             => InternalGetMedia(r, context);
 
         /// <summary>
-        /// Get a png from an effect url
+        /// Get a png from an effect url (see <see cref="GetMediaEffect"/>, this returns only the image)
         /// </summary>
-        /// <param name="r"></param>
-        /// <param name="context"></param>
-        /// <returns></returns>        
+        /// <param name="r">The effect url, effect options, the size of the screenshot, when to take it (position in seconds into the effect) and an optional extra delay</param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
+        /// <returns>The screenshot as png image data</returns>
         [WebApiClientCache(30)]
         [WebApiRequestCache(25, WebApiCaches.Globally)]
         [WebApiRaw("image/png", true)]
@@ -486,11 +542,11 @@ namespace SysWeaver.MicroService
         #region Media YouTube
 
         /// <summary>
-        /// Get data from a YouTube code
+        /// Get data from a YouTube code: renders a frame of the YouTube video with the media viewer in a browser window and takes a screenshot
         /// </summary>
-        /// <param name="r"></param>
-        /// <param name="context"></param>
-        /// <returns></returns>
+        /// <param name="r">The YouTube video code, the size of the screenshot, when to take it (position in seconds into the video) and an optional extra delay</param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
+        /// <returns>The screenshot (png) and information about it (the size and the url)</returns>
         [WebApi]
         [WebApiClientCache(30)]
         [WebApiRequestCache(25, WebApiCaches.Globally)]
@@ -499,11 +555,11 @@ namespace SysWeaver.MicroService
             => InternalGetMedia(r, context);
 
         /// <summary>
-        /// Get a png from a YouTube code
+        /// Get a png from a YouTube code (see <see cref="GetMediaYouTube"/>, this returns only the image)
         /// </summary>
-        /// <param name="r"></param>
-        /// <param name="context"></param>
-        /// <returns></returns>            
+        /// <param name="r">The YouTube video code, the size of the screenshot, when to take it (position in seconds into the video) and an optional extra delay</param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
+        /// <returns>The screenshot as png image data</returns>
         [WebApiClientCache(30)]
         [WebApiRequestCache(25, WebApiCaches.Globally)]
         [WebApiRaw("image/png", true)]
@@ -524,11 +580,12 @@ namespace SysWeaver.MicroService
             ];
 
         /// <summary>
-        /// Get a png from a google map position
+        /// Get a png from a google map position (requires a google maps key in the service parameters)
         /// </summary>
-        /// <param name="r"></param>
-        /// <param name="context"></param>
-        /// <returns></returns>            
+        /// <param name="r">The map: center (latitude, longitude), zoom, map type, language, size, dpi and an optional pin</param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
+        /// <returns>The map as png image data</returns>
+        /// <exception cref="Exception">No google maps key is configured, or the center is invalid</exception>
         [WebApiClientCache(30)]
         [WebApiRequestCache(25, WebApiCaches.Globally)]
         [WebApiRaw("image/png", true)]
@@ -538,11 +595,12 @@ namespace SysWeaver.MicroService
 
 
         /// <summary>
-        /// Get a jpg from a google map position
+        /// Get a jpg from a google map position (requires a google maps key in the service parameters)
         /// </summary>
-        /// <param name="r"></param>
-        /// <param name="context"></param>
-        /// <returns></returns>            
+        /// <param name="r">The map: center (latitude, longitude), zoom, map type, language, size, dpi, an optional pin and the jpeg quality</param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
+        /// <returns>The map as jpeg image data</returns>
+        /// <exception cref="Exception">No google maps key is configured, or the center is invalid</exception>
         [WebApiClientCache(30)]
         [WebApiRequestCache(25, WebApiCaches.Globally)]
         [WebApiRaw("image/jpeg", true)]
@@ -615,10 +673,12 @@ namespace SysWeaver.MicroService
         #endregion//Media Map
 
         /// <summary>
-        /// Get an image and meta data for a given url
+        /// Get an image and meta data for a given url (a screenshot of the page).
+        /// If the request has Control set, a page that is "aware" decides the size of the window and when the screenshot is taken, and the response includes information about the result.
         /// </summary>
-        /// <param name="r"></param>
-        /// <returns></returns>
+        /// <param name="r">The url, the size of the window, the scale (in percent, 0 is 100), the image format and quality, and optional delay and speed settings</param>
+        /// <returns>The image data, and information about the image if control was requested (size, and for pages that are aware: duration, fps and load time)</returns>
+        /// <exception cref="ArgumentException">No url was given</exception>
         [WebApi]
         [WebApiClientCache(5)]
         [WebApiRequestCache(4, WebApiCaches.Globally)]
@@ -648,10 +708,11 @@ namespace SysWeaver.MicroService
         }
 
         /// <summary>
-        /// Get an image (screenshot) from an url
+        /// Get a png image (screenshot) from an url
         /// </summary>
-        /// <param name="r">Parameters</param>
-        /// <returns>Response</returns>
+        /// <param name="r">The url, the size of the window, the scale and optional delay and speed settings</param>
+        /// <returns>The screenshot as png image data</returns>
+        /// <exception cref="ArgumentException">No request or no url was given</exception>
         [WebApiClientCache(30)] 
         [WebApiRequestCache(25, WebApiCaches.Globally)]
         [WebApiRaw("image/png", true)]
@@ -660,10 +721,11 @@ namespace SysWeaver.MicroService
             => (await GetImage(ScreenshotImageRequest.From(r ?? throw new ArgumentException("A request is required!"))).ConfigureAwait(false)).Data;
 
         /// <summary>
-        /// Get a jpeg (screenshot) from an url
+        /// Get a jpeg image (screenshot) from an url
         /// </summary>
-        /// <param name="r">Parameters</param>
-        /// <returns>Response</returns>
+        /// <param name="r">The url, the size of the window, the scale, the jpeg quality and optional delay and speed settings</param>
+        /// <returns>The screenshot as jpeg image data</returns>
+        /// <exception cref="ArgumentException">No request or no url was given</exception>
         [WebApiClientCache(30)]
         [WebApiRequestCache(25, WebApiCaches.Globally)]
         [WebApiRaw("image/jpeg", true)]
@@ -720,6 +782,11 @@ namespace SysWeaver.MicroService
 
         String EffectUrl(String name) => InternalGetMediaUrl(new GetMediaEffectRequest { Url = "backgroundEffects/" + name + ".glsl" }, null);
 
+        /// <summary>
+        /// Stress test: take screenshots of the background effects one at a time (the images are also saved in a temp folder)
+        /// </summary>
+        /// <param name="count">The number of screenshots to take</param>
+        /// <returns>The last screenshot as a "data:image/png;base64," url</returns>
         [WebApi]
         [WebApiAuth(Roles.Debug)]
         public async Task<String> StressTestSerial(int count)
@@ -751,6 +818,11 @@ namespace SysWeaver.MicroService
             return d;
         }
 
+        /// <summary>
+        /// Stress test: take screenshots of the background effects all at the same time (the images are also saved in a temp folder)
+        /// </summary>
+        /// <param name="count">The number of screenshots to take</param>
+        /// <returns>The last screenshot (the one with the highest index) as a "data:image/png;base64," url</returns>
         [WebApi]
         [WebApiAuth(Roles.Debug)]
         public async Task<String> StressTestParalell(int count)
@@ -793,8 +865,10 @@ namespace SysWeaver.MicroService
 
 
 
+        /// <inheritdoc />
         public IEnumerable<IHttpServerEndPoint> EnumEndPoints(string root = null) => HttpServerTools.NoEndPoints;
 
+        /// <inheritdoc />
         public IEnumerable<Stats> GetStats()
         {
             var j = Interlocked.Read(ref JsInControlCount);

@@ -17,12 +17,20 @@ using SysWeaver.Auth;
 namespace SysWeaver.MicroService
 {
 
+    /// <summary>
+    /// Handles file uploads to the registered file repositories (<see cref="IFileRepo"/>)
+    /// </summary>
     [WebApiUrl("../upload")]
     [IsMicroService]
     [OptionalDep<FileHttpServerModule, IFileRepo>]
     [WebMenuEmbedded(null, "Debug/FileUploader", "File upload test", "upload/Example.html", "Manually upload a file to some file repository", "IconUpload", 20, Roles.Dev)]
     public sealed class FileUploaderService : IHttpServerModule, IDisposable, IHaveStats
     {
+        /// <summary>
+        /// Create the service, the repositories of the parameters and all repositories (and repository containers) found in the manager are added
+        /// </summary>
+        /// <param name="manager">The service manager</param>
+        /// <param name="p">Parameters, null to use the defaults</param>
         public FileUploaderService(ServiceManager manager, FileUploaderParams p = null)
         {
             Manager = manager;
@@ -80,8 +88,13 @@ namespace SysWeaver.MicroService
         readonly ServiceManager Manager;
         readonly String UploadUrl;
 
+        /// <inheritdoc />
         public String[] OnlyForPrefixes { get; init;  }
 
+        /// <summary>
+        /// Add a repository (replaces a repository with the same key), its folders are exposed if there is a file http server module
+        /// </summary>
+        /// <param name="repo">The repository, ignored if null or if it has no key</param>
         public void AddRepo(IFileRepo repo)
         {
             if (repo == null)
@@ -103,6 +116,11 @@ namespace SysWeaver.MicroService
             }
         }
 
+        /// <summary>
+        /// Remove a repository, the folders it exposed are removed from the file http server module (if any)
+        /// </summary>
+        /// <param name="repo">The repository (the same instance that was added)</param>
+        /// <returns>True if the repository was removed</returns>
         public bool RemoveRepo(IFileRepo repo)
         {
             if (repo == null)
@@ -118,12 +136,19 @@ namespace SysWeaver.MicroService
                 if (rr.Item1 != repo)
                     return false;
                 repos.TryRemove(key, out rr);
+                //  The same folders that AddRepo exposed
+                foreach (var folder in repo.ExposeFolders.Nullable())
+                    FileMod?.RemoveFolder(folder);
                 return true;
             }
         }
 
 
 
+        /// <summary>
+        /// Add all repositories of a container
+        /// </summary>
+        /// <param name="container">The container, ignored if null</param>
         public void AddRepos(IFileRepoContainer container)
         {
             if (container == null)
@@ -137,6 +162,11 @@ namespace SysWeaver.MicroService
         }
 
 
+        /// <summary>
+        /// Remove all repositories of a container
+        /// </summary>
+        /// <param name="container">The container</param>
+        /// <returns>True if all repositories were removed</returns>
         public bool RemoveRepos(IFileRepoContainer container)
         {
             if (container == null)
@@ -153,6 +183,7 @@ namespace SysWeaver.MicroService
 
 
 
+        /// <inheritdoc />
         public void Dispose()
         {
             Interlocked.Exchange(ref PruneFilesTask, null)?.Dispose();
@@ -337,6 +368,7 @@ namespace SysWeaver.MicroService
 
         readonly ExceptionTracker UploadFailures = new ExceptionTracker();
 
+        /// <inheritdoc />
         public IEnumerable<Stats> GetStats()
         {
             yield return new Stats(nameof(FileUploaderService), nameof(FileCount), Interlocked.Read(ref FileCount), "Number of files that have been uploaded since the service started");

@@ -2,6 +2,9 @@ using System;
 
 namespace SysWeaver.AI
 {
+    /// <summary>
+    /// Parameters for generating an image with a Google (Gemini or Imagen) model
+    /// </summary>
     public class GoogleImagePrompt
     {
         /// <summary>
@@ -28,7 +31,7 @@ namespace SysWeaver.AI
         public String Title;
 
         /// <summary>
-        /// The image model to use, only set if the user required a specfifc model.
+        /// The image model to use, only set if the user required a specific model.
         /// Valid models are:
         /// * "gemini-2.5-flash-image" (default)
         /// * "gemini-3-pro-image-preview" (highest quality, supports large images)
@@ -39,6 +42,9 @@ namespace SysWeaver.AI
         public String Model;
     }
 
+    /// <summary>
+    /// Parameters for editing an existing image with a Google (Gemini) image model
+    /// </summary>
     public class GoogleImageEditPrompt : GoogleImagePrompt
     {
         /// <summary>

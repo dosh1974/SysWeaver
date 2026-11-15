@@ -10,13 +10,25 @@ namespace SysWeaver.AI
         /// </summary>
         protected sealed class AiModels
         {
+            /// <summary>
+            /// Create the model lists
+            /// </summary>
+            /// <param name="llmModels">The large language models, null for none</param>
+            /// <param name="imageModels">The image generation models, null for none</param>
             public AiModels(AiLlmModel[] llmModels, AiImageModel[] imageModels)
             {
                 LlmModels = llmModels ?? [];
                 ImageModels = imageModels ?? [];
             }
 
+            /// <summary>
+            /// The large language models
+            /// </summary>
             public readonly AiLlmModel[] LlmModels;
+
+            /// <summary>
+            /// The image generation models
+            /// </summary>
             public readonly AiImageModel[] ImageModels;
         }
 

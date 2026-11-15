@@ -3,6 +3,9 @@ using SysWeaver.AI;
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// Options for the legend of a chart
+    /// </summary>
     public sealed class ChartJsLegend
     {
         /// <summary>

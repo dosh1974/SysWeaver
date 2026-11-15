@@ -18,10 +18,19 @@ namespace SysWeaver.ReverseProxy
 {
 
 
+    /// <summary>
+    /// The client of a reverse proxy: connects to a reverse proxy server and answers the requests that the server gets for this client
+    /// (by reading from local end points)
+    /// </summary>
     public sealed partial class ReverseProxyClient : IDisposable, IHaveStats
     {
         static readonly Char[] TrimChars = " \t\r\n/".ToCharArray();
 
+        /// <summary>
+        /// Validate the name of an end point
+        /// </summary>
+        /// <param name="s">The name</param>
+        /// <exception cref="Exception">If the name contains any other character than a-z, A-Z or 0-9</exception>
         public static void ValidateEndPointName(String s)
         {
             foreach (var c in s)
@@ -35,6 +44,12 @@ namespace SysWeaver.ReverseProxy
                 throw new Exception(String.Concat("Invalid char '", c, "' found in end point name \"" + s + "\", only a-z, A-Z or 0-9 is allowed!"));
             }
         }
+        /// <summary>
+        /// Make a client id valid by removing all characters except a-z, A-Z and 0-9
+        /// </summary>
+        /// <param name="s">The client id</param>
+        /// <returns>The client id with only valid characters</returns>
+        /// <exception cref="Exception">If no valid characters are left</exception>
         public static String SanitizeClientId(String s)
         {
             var l = s.Length;
@@ -69,6 +84,11 @@ namespace SysWeaver.ReverseProxy
             return new string(temp[..o]);
         }
 
+        /// <summary>
+        /// Create the client and start connecting to the server
+        /// </summary>
+        /// <param name="manager">The service manager (requests to end points that aren't urls are handled by the services of the manager)</param>
+        /// <param name="p">Parameters</param>
         public ReverseProxyClient(ServiceManager manager, ReverseProxyClientParams p)
         {
             var maxThreads = Environment.ProcessorCount;
@@ -148,6 +168,7 @@ namespace SysWeaver.ReverseProxy
         readonly IReadOnlyDictionary<String, LocalEndPoint> EndPoints;
 
 
+        /// <inheritdoc />
         public IEnumerable<Stats> GetStats()
         {
             const String sys = nameof(ReverseProxyClient);
@@ -475,6 +496,7 @@ namespace SysWeaver.ReverseProxy
 
         volatile bool IsDisposing;
 
+        /// <inheritdoc />
         public void Dispose()
         {
             IsDisposing = true;

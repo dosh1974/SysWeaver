@@ -7,8 +7,15 @@ using SimpleStack.Orm;
 
 namespace SysWeaver.Db
 {
+    /// <summary>
+    /// Cached SimpleStack model information for a type
+    /// </summary>
+    /// <typeparam name="T">The model type</typeparam>
     public static class DbSimpleStackCache<T>
     {
+        /// <summary>
+        /// The SimpleStack model definition of T
+        /// </summary>
         public static readonly ModelDefinition Model = ModelDefinition<T>.Definition;
 
         static IReadOnlyDictionary<String, int> GetOrdinal()
@@ -24,6 +31,9 @@ namespace SysWeaver.Db
             return t.Freeze();
         }
 
+        /// <summary>
+        /// Maps field name to the index of the field in the model definition's field list
+        /// </summary>
         public static readonly IReadOnlyDictionary<String, int> Ordinal = GetOrdinal();
     }
 

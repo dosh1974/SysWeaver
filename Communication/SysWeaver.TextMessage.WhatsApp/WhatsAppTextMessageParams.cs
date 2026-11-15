@@ -5,8 +5,12 @@ namespace SysWeaver.TextMessage
     // ApiKey / CredFile = the access token (a system user token with the whatsapp_business_messaging permission),
     // used for all numbers that doesn't specify their own token.
 
+    /// <summary>
+    /// Parameters for the <see cref="WhatsAppTextMessageService"/>, the inherited api key is the default access token of the numbers
+    /// </summary>
     public sealed class WhatsAppTextMessageParams : ApiKeyParams
     {
+        /// <inheritdoc />
         public override string ToString() => String.Concat(Numbers?.Length ?? 0, " number(s), webhook: ", WebhookUrl.ToQuoted(), ", Auth: ", base.ToString());
 
         /// <summary>
@@ -89,8 +93,12 @@ namespace SysWeaver.TextMessage
         public int MaxPoll = 100;
     }
 
+    /// <summary>
+    /// A WhatsApp business phone number that the <see cref="WhatsAppTextMessageService"/> sends from and receives on
+    /// </summary>
     public sealed class WhatsAppNumberParams
     {
+        /// <inheritdoc />
         public override string ToString() => String.Concat(PhoneNumber, " [", PhoneNumberId, ']', String.IsNullOrEmpty(System) ? "" : " System: " + System);
 
         /// <summary>
@@ -123,8 +131,12 @@ namespace SysWeaver.TextMessage
         public ApiKeyParams Token;
     }
 
+    /// <summary>
+    /// A message template (for messages outside of the customer service window)
+    /// </summary>
     public sealed class WhatsAppTemplateParams
     {
+        /// <inheritdoc />
         public override string ToString() => String.Concat(Name, " [", Language, ']', AlwaysUse ? " always" : "");
 
         /// <summary>

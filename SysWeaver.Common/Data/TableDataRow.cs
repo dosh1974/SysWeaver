@@ -8,6 +8,10 @@ namespace SysWeaver.Data
     public sealed class TableDataRow
     {
 #if DEBUG
+        /// <summary>
+        /// Debug builds only: all values of the row separated by '|'.
+        /// </summary>
+        /// <returns>A short text for debugging.</returns>
         public override string ToString() => Values == null ? "null" : String.Join('|', Values);
 #endif//DEBUG
         /// <summary>

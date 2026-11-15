@@ -51,14 +51,14 @@ namespace SysWeaver.Chat
         Task<long> GetCurrentId(String providerChatId, HttpServerRequest request);
 
         /// <summary>
-        /// Get messages from the given chat session and chat parameters
+        /// Join a chat session, returns the session settings of the user together with the first messages
         /// </summary>
         /// <param name="providerChatId">The unique id of the chat session, as returned by the CreateNewChat method (or any static chat "channels" available)</param>
         /// <param name="request">The http request of the callee</param>
-        /// <param name="pivotId">The first message to retrieve (inclusive), if maxCount is zero or negative this is the last message to retrieve (exclusive).
+        /// <param name="pivotId">The first message to retrieve (inclusive), if maxCount is negative this is the last message to retrieve (exclusive).
         /// If equal or less than zero, get messages from the end</param>
         /// <param name="maxCount">The maximum number of messages to retrieve, if negative retrieve message up until the pivot message id</param>
-        /// <returns>An array of chat messages, can be empty or null if no new data exists</returns>
+        /// <returns>The join response (session information and the messages)</returns>
         Task<ChatJoinResponse> Join(String providerChatId, HttpServerRequest request, long pivotId, int maxCount);
 
         /// <summary>
@@ -66,7 +66,7 @@ namespace SysWeaver.Chat
         /// </summary>
         /// <param name="providerChatId">The unique id of the chat session, as returned by the CreateNewChat method (or any static chat "channels" available)</param>
         /// <param name="request">The http request of the callee</param>
-        /// <param name="pivotId">The first message to retrieve (inclusive), if maxCount is zero or negative this is the last message to retrieve (exclusive).
+        /// <param name="pivotId">The first message to retrieve (inclusive), if maxCount is negative this is the last message to retrieve (exclusive).
         /// If equal or less than zero, get messages from the end</param>
         /// <param name="maxCount">The maximum number of messages to retrieve, if negative retrieve message up until the pivot message id</param>
         /// <returns>An array of chat messages, can be empty or null if no new data exists</returns>
@@ -89,7 +89,7 @@ namespace SysWeaver.Chat
         /// <param name="request">The http request of the callee</param>
         /// <param name="messageId">The ID of the message, 0 for none messge specific values</param>
         /// <param name="key">The key of the value</param>
-        /// <param name="value"></param>
+        /// <param name="value">The new value</param>
         /// <returns>True if successful</returns>
         Task<bool> SetValue(String providerChatId, HttpServerRequest request, long messageId, String key, String value);
 

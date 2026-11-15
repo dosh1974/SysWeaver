@@ -4,6 +4,9 @@ using SysWeaver.AI;
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// The options of an axis (scale)
+    /// </summary>
     public sealed class ChartJsScaleOptions
     {
         /// <summary>
@@ -62,6 +65,9 @@ namespace SysWeaver.MicroService
     }
 
 
+    /// <summary>
+    /// Options for the point labels of a radial axis
+    /// </summary>
     public sealed class ChartJsPointLabel
     {
         /// <summary>

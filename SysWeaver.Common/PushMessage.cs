@@ -15,6 +15,10 @@ namespace SysWeaver
     public class PushMessage
     {
 #if DEBUG
+        /// <summary>
+        /// Debug builds only: the class name and the message type.
+        /// </summary>
+        /// <returns>A short text for debugging.</returns>
         public override string ToString() => String.Concat(this.GetType().Name, " \"", Type, '"');
 #endif//DEBUG
 
@@ -46,6 +50,10 @@ namespace SysWeaver
     public class PushMessageStringValue : PushMessage
     {
 #if DEBUG
+        /// <summary>
+        /// Debug builds only: the base description followed by the payload.
+        /// </summary>
+        /// <returns>A short text for debugging.</returns>
         public override string ToString() => String.Join(" = ", base.ToString(), Value);
 #endif//DEBUG
 
@@ -70,9 +78,13 @@ namespace SysWeaver
     /// <summary>
     /// A <see cref="PushMessage"/> with an integer payload.
     /// </summary>
-    public class PushMessagIntValue : PushMessage
+    public class PushMessageIntValue : PushMessage
     {
 #if DEBUG
+        /// <summary>
+        /// Debug builds only: the base description followed by the payload.
+        /// </summary>
+        /// <returns>A short text for debugging.</returns>
         public override string ToString() => String.Join(" = ", base.ToString(), Value);
 #endif//DEBUG
 
@@ -88,7 +100,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="type">The message type (name).</param>
         /// <param name="value">The payload.</param>
-        public PushMessagIntValue(string type, long value)
+        public PushMessageIntValue(string type, long value)
         {
             Type = type;
             Value = value;
@@ -98,9 +110,13 @@ namespace SysWeaver
     /// <summary>
     /// A <see cref="PushMessage"/> with a floating point payload.
     /// </summary>
-    public class PushMessagNumberValue: PushMessage
+    public class PushMessageNumberValue: PushMessage
     {
 #if DEBUG
+        /// <summary>
+        /// Debug builds only: the base description followed by the payload.
+        /// </summary>
+        /// <returns>A short text for debugging.</returns>
         public override string ToString() => String.Join(" = ", base.ToString(), Value);
 #endif//DEBUG
 
@@ -115,7 +131,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="type">The message type (name).</param>
         /// <param name="value">The payload.</param>
-        public PushMessagNumberValue(string type, double value)
+        public PushMessageNumberValue(string type, double value)
         {
             Type = type;
             Value = value;
@@ -129,6 +145,10 @@ namespace SysWeaver
     public class PushMessageStringArrayValue : PushMessage
     {
 #if DEBUG
+        /// <summary>
+        /// Debug builds only: the base description followed by the payload values.
+        /// </summary>
+        /// <returns>A short text for debugging.</returns>
         public override string ToString() => String.Concat(base.ToString(), " = [", String.Join(", ", Value ?? []), "]");
 #endif//DEBUG
 

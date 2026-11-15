@@ -11,17 +11,24 @@ namespace EffectWeaver.Shaders;
 /// </summary>
 public sealed class SnippetLibrary
 {
+    /// <summary>A snippet (a reusable GLSL function)</summary>
     public sealed class Snippet
     {
+        /// <summary>The id (the file name without extension)</summary>
         public required string Id;
+        /// <summary>The folder of the snippet in the library</summary>
         public required string Folder;
+        /// <summary>The summary (the first paragraph of the .md)</summary>
         public string Summary = "";
+        /// <summary>The signature (from the .md)</summary>
         public string Signature = "";
         /// <summary>Snippets this one calls (inserted before it)</summary>
         public string[] Requires = [];
         /// <summary>Number of places in the effects where it could be used (README summary table), 0 if unknown</summary>
         public int Places;
+        /// <summary>The .glsl file</summary>
         public required string GlslFile;
+        /// <summary>The .md file, null if none</summary>
         public string? MdFile;
         /// <summary>Lower case text for the search: id, summary, md, code</summary>
         public string SearchText = "";
@@ -35,8 +42,11 @@ public sealed class SnippetLibrary
         public string? UserPath;
     }
 
+    /// <summary>The root folder of the library</summary>
     public string Root { get; }
+    /// <summary>All snippets, sorted by folder and id</summary>
     public IReadOnlyList<Snippet> All { get; }
+    /// <summary>The distinct folders that contain snippets</summary>
     public IReadOnlyList<string> Folders { get; }
 
     readonly Dictionary<string, Snippet> Map;
@@ -69,6 +79,7 @@ public sealed class SnippetLibrary
                 .Where(x => !x.Equals(s.Id, StringComparison.Ordinal)).Distinct().ToArray();
     }
 
+    /// <summary>Get a snippet by id (case insensitive), null if unknown</summary>
     public Snippet? Get(string? id) => id != null && Map.TryGetValue(id, out var s) ? s : null;
 
     /// <summary>The snippet defining a name (function or EW_ macro), null if none</summary>

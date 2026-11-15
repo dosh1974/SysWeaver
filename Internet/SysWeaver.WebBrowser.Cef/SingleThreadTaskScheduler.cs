@@ -8,6 +8,9 @@ using System.Threading.Tasks;
 
 namespace SysWeaver
 {
+    /// <summary>
+    /// A task scheduler that runs all tasks, one at a time, on a single dedicated background thread (started on first use)
+    /// </summary>
     public sealed class SingleThreadTaskScheduler : TaskScheduler
     {
         [ThreadStatic]
@@ -18,8 +21,13 @@ namespace SysWeaver
         readonly BlockingCollection<Task> _taskQueue;
 
         readonly Lazy<Thread> _singleThread;
+        /// <inheritdoc />
         public override int MaximumConcurrencyLevel => 1;
 
+        /// <summary>
+        /// Create the scheduler
+        /// </summary>
+        /// <param name="cancellationToken">When canceled, the thread stops running queued tasks</param>
         public SingleThreadTaskScheduler(CancellationToken cancellationToken)
         {
             this._cancellationToken = cancellationToken;
@@ -53,8 +61,10 @@ namespace SysWeaver
             }
         }
 
+        /// <inheritdoc />
         protected override IEnumerable<Task> GetScheduledTasks() => _taskQueue.ToList();
 
+        /// <inheritdoc />
         protected override void QueueTask(Task task)
         {
             _ = _singleThread.Value;
@@ -67,8 +77,13 @@ namespace SysWeaver
         }
 
 
+        /// <summary>
+        /// Queue a task (that is not started yet) to be run by the scheduler thread
+        /// </summary>
+        /// <param name="task">The task</param>
         public void AddTask(Task task) => QueueTask(task);
 
+        /// <inheritdoc />
         protected override bool TryExecuteTaskInline(Task task, bool taskWasPreviouslyQueued)
         {
             // We'd need to remove the task from queue if it was already queued. 
@@ -79,12 +94,34 @@ namespace SysWeaver
         }
 
 
+        /// <summary>
+        /// Run an asynchronous function on the scheduler thread
+        /// </summary>
+        /// <param name="task">The function</param>
+        /// <returns>A task that completes when the function has completed</returns>
         public Task RunTask(Func<Task> task) => Task.Factory.StartNew(task, CancellationToken.None, Task.Factory.CreationOptions, this);
 
+        /// <summary>
+        /// Run an asynchronous function on the scheduler thread
+        /// </summary>
+        /// <typeparam name="R">The result type</typeparam>
+        /// <param name="task">The function</param>
+        /// <returns>A task that completes with the result of the function</returns>
         public Task<R> RunTask<R>(Func<Task<R>> task) => Task.Factory.StartNew(task, CancellationToken.None, Task.Factory.CreationOptions, this).Unwrap();
 
+        /// <summary>
+        /// Run an action on the scheduler thread
+        /// </summary>
+        /// <param name="action">The action</param>
+        /// <returns>A task that completes when the action has completed</returns>
         public Task Run(Action action) => Task.Factory.StartNew(action, CancellationToken.None, Task.Factory.CreationOptions, this);
 
+        /// <summary>
+        /// Run a function on the scheduler thread
+        /// </summary>
+        /// <typeparam name="R">The result type</typeparam>
+        /// <param name="task">The function</param>
+        /// <returns>A task that completes with the result of the function</returns>
         public Task<R> Run<R>(Func<R> task) => Task.Factory.StartNew(task, CancellationToken.None, Task.Factory.CreationOptions, this);
 
     }

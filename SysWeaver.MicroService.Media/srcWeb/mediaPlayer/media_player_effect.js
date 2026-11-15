@@ -220,6 +220,7 @@ class MediaPlayerEffect {
                     console.warn("Failed to build effect \"" + name + "\"");
                 return r?.Program ? r : null;
             }
+            /* SwWeb:allow ux-fbk-5 (a server build that fails is not a user action: the effect then compiles from its own source, and a source that fails shows its compile error) */
             catch (e) {
                 console.warn("Failed to build effect \"" + name + "\", " + e.message);
                 return null;
@@ -1897,10 +1898,11 @@ class MediaPlayerEffect {
 
 /**
  * Texture provider for an image, created by the createTextureFn passed from MediaPlayer.Create
- * (Image + Effect) to MediaPlayerEffect, which calls it from InitGL. Duck-typed interface shared with
- * MediaPlayerTextTexture: Cache(haveLod), Apply(uv, size), ApplyClip(p), Dispose(), Width/Height.
+ * (Image + Effect) to MediaPlayerEffect, which calls it from InitGL. The provider interface and the upload are those of
+ * MediaPlayerTexture (media_player_tools.js, shared with MediaPlayerTextTexture); only the way the picture is loaded differs.
+ * Extra instance field: Image (the loaded <img>).
  */
-class MediaPlayerImageTexture {
+class MediaPlayerImageTexture extends MediaPlayerTexture {
 
     /**
      * @param {WebGLRenderingContext|WebGL2RenderingContext} gl - Effect context.
@@ -1908,129 +1910,26 @@ class MediaPlayerImageTexture {
      * @param {string} url - Image URL.
      */
     constructor(gl, params, url) {
-        const t = this;
-        const texture = gl.createTexture();
         //  The image defaults under the given params (a share link leaves out defaults, ex: EffectSizeFromImage = true, which keeps
         //  the shape of the picture), as the text texture does
-        t.Params = typeof MediaPlayerParamsImage === "function" ? Object.assign(new MediaPlayerParamsImage(), params) : params;
-        t.Url = url;
-        t.GL = gl;
-        t.Texture = texture;
+        super(gl, typeof MediaPlayerParamsImage === "function" ? Object.assign(new MediaPlayerParamsImage(), params) : params, url);
     }
 
     /**
-     * Loads the image (MediaPlayerTools.waitEvent2), stores Image/Width/Height and uploads it flipped-Y with
-     * clamp-to-edge wrapping and linear filtering. Generates mipmaps (LINEAR_MIPMAP_LINEAR) when haveLod or
-     * Params.EffectParams.MipMap; WebGL1 requires power-of-two sizes, otherwise a warning is logged and mipmaps
-     * are skipped.
+     * Loads the image (MediaPlayerTools.waitEvent2), stores it in Image and uploads it (MediaPlayerTexture.Upload: Width / Height,
+     * mipmaps when haveLod or Params.EffectParams.MipMap).
      * @param {boolean} haveLod - The effect uses texture2DLod.
      * @returns {Promise<Array<number>|null|false>} [w,h] when Params.EffectSizeFromImage, null otherwise,
      * false if the image failed to load.
      */
     async Cache(haveLod) {
         const t = this;
-        const gl = t.GL;
-        const texture = t.Texture;
         const image = new Image();
         const res = await MediaPlayerTools.waitEvent2(image, "load", "error", () => image.src = t.Url);
         if (res.type == "error")
             return false;
         t.Image = image;
-        t.Width = image.width;
-        t.Height = image.height;
-        gl.bindTexture(gl.TEXTURE_2D, texture);
-        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-        const tp = t.Params;
-        const ep = tp.EffectParams;
-        while (haveLod || (ep && ep.MipMap)) {
-            if (!(gl instanceof WebGL2RenderingContext)) {
-                /**
-                 * Power-of-two test.
-                 * @param {number} v - Value.
-                 * @returns {boolean} True if v is a power of two.
-                 */
-                function powerOf2(v) {
-                    return v && !(v & (v - 1));
-                }
-                if (!powerOf2(image.width)) {
-                    console.warn("Need to enabled WebGL2 to have mipmaps of images then has a non power of two dimension, width = " + image.width);
-                    break;
-                }
-                if (!powerOf2(image.height)) {
-                    console.warn("Need to enabled WebGL2 to have mipmaps of images then has a non power of two dimension, height = " + image.height);
-                    break;
-                }
-            }
-            gl.generateMipmap(gl.TEXTURE_2D);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
-            break;
-        }
-        if (!tp.EffectSizeFromImage)
-            return null;
-        return [image.width, image.height];
-    }
-
-    /**
-     * Binds the texture and sets the uv transform and size uniforms: with a clip, texUv = (UvA, UvB, UvC, UvD)
-     * and texSize = clip size; otherwise texUv = (1, -1, 0, 1) and texSize = image size.
-     * @param {WebGLUniformLocation|null} uvScaleAndOffset - texUv uniform (vec4 scale.xy, offset.xy).
-     * @param {WebGLUniformLocation|null} texSize - texSize uniform (vec2).
-     * @returns {void}
-     */
-    Apply(uvScaleAndOffset, texSize) {
-
-        const t = this;
-        const gl = t.GL;
-        const texture = t.Texture;
-        gl.bindTexture(gl.TEXTURE_2D, texture);
-        if (t.HaveClip) {
-            if (uvScaleAndOffset)
-                gl.uniform4f(uvScaleAndOffset, t.UvA, t.UvB, t.UvC, t.UvD);
-            if (texSize)
-                gl.uniform2f(texSize, t.ClipWidth, t.ClipHeight);
-            return;
-        }
-        if (uvScaleAndOffset)
-            gl.uniform4f(uvScaleAndOffset, 1.0, -1.0, 0.0, 1.0);
-        if (texSize)
-            gl.uniform2f(texSize, t.Width, t.Height);
-    }
-
-    /**
-     * Converts a crop into a UV scale/offset (UvA..UvD) using MediaPlayerTools.ComputeClip (which sets
-     * ClipX/ClipB/ClipWidth/ClipHeight); HaveClip tells Apply whether to use it.
-     * @param {object} [p] - Params with a Crop (defaults to this provider's Params).
-     * @returns {void}
-     */
-    ApplyClip(p) {
-        const t = this;
-        t.HaveClip = false;
-        p = p ?? t.Params;
-        if (!MediaPlayerTools.ComputeClip(t, p))
-            return;
-        t.HaveClip = true;
-        const ow = t.Width;
-        const oh = t.Height;
-        const cw = t.ClipWidth;
-        const ch = t.ClipHeight;
-        t.UvA = cw / ow;
-        t.UvB = -ch / oh;
-        t.UvC = t.ClipX / ow;
-        t.UvD = (oh - t.ClipB) / oh;
-    }
-
-    /**
-     * Deletes the GL texture.
-     * @returns {void}
-     */
-    Dispose() {
-        const t = this;
-        t.GL.deleteTexture(t.Texture);
+        return t.Upload(image, haveLod);
     }
 }
 

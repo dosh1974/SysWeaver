@@ -20,6 +20,7 @@ namespace SysWeaver.AI
     /// </summary>
     public sealed class LlamaSharpModel : IDisposable
     {
+        /// <inheritdoc />
         public override string ToString() => String.Concat(Name, " : ", FilePath);
 
         /// <summary>
@@ -100,6 +101,7 @@ namespace SysWeaver.AI
                 _ => null,
             };
 
+        /// <inheritdoc />
         public void Dispose() => Weights.Dispose();
 
         /// <summary>

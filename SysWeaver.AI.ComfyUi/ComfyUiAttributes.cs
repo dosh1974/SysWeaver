@@ -13,6 +13,10 @@ namespace SysWeaver.AI
     [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field, AllowMultiple = false)]
     public sealed class ComfyUiNameAttribute : Attribute
     {
+        /// <summary>
+        /// Map the property or field to a workflow value
+        /// </summary>
+        /// <param name="name">The mapping, "tag.input" for an input, "tag" for a bool node tag or an output (see the class description)</param>
         public ComfyUiNameAttribute(String name)
         {
             Name = name;

@@ -66,6 +66,7 @@ namespace SysWeaver.AI
     /// </summary>
     public sealed class AiCompletionToolCall
     {
+        /// <inheritdoc />
         public override string ToString() => String.Concat(Name, "(", Arguments, ")");
 
         /// <summary>
@@ -95,6 +96,7 @@ namespace SysWeaver.AI
     /// </summary>
     public sealed class AiCompletionMessage
     {
+        /// <inheritdoc />
         public override string ToString() => String.Concat(Role.ToString(), ": ", Text);
 
         /// <summary>
@@ -188,6 +190,7 @@ namespace SysWeaver.AI
     /// </summary>
     public sealed class AiCompletionResult
     {
+        /// <inheritdoc />
         public override string ToString() => String.Concat(Model, ": ", Text);
 
         /// <summary>

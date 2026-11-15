@@ -2,6 +2,9 @@
 
 namespace SysWeaver.FolderSync
 {
+    /// <summary>
+    /// The changes required to sync a local folder with a shared folder
+    /// </summary>
     public sealed class SharedFolderDiff
     {
         /// <summary>
@@ -15,7 +18,7 @@ namespace SysWeaver.FolderSync
         public String[] Keep;
 
         /// <summary>
-        /// If non-null and the CdcProps.Default.Key matches this string, prefer to use Cdc for upload
+        /// If non-null and the CdcProps.Default.Key matches this string, prefer to use Cdc for download
         /// </summary>
         public String Cdc;
 

@@ -90,6 +90,7 @@ namespace SysWeaver.AI
         public void AddTool_EditImage(IAiChatSession s) =>
             s.AddTool(this, Method_EditImage, null, PerfMon, "Debug,Content");
 
+        /// <inheritdoc />
         protected override void AddDefaultTools(IAiChatSession s)
         {
             base.AddDefaultTools(s);

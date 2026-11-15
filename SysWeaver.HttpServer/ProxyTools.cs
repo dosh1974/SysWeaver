@@ -14,6 +14,10 @@ namespace SysWeaver.Net
     public class ProxyData
     {
         #if DEBUG
+        /// <summary>
+        /// Debug builds only: the method, status code and body size.
+        /// </summary>
+        /// <returns>A short text for debugging.</returns>
         public override string ToString() => String.Concat(Method, " (", StatusCode, ") @ ", Data?.Length ?? 0, " bytes");
         
         #endif//DEBUG

@@ -29,6 +29,12 @@ namespace SysWeaver.TextMessage
         const String WhatsAppPrefix = "whatsapp:";
         const String RcsPrefix = "rcs:";
 
+        /// <summary>
+        /// Create the service
+        /// </summary>
+        /// <param name="p">The parameters, the credentials, at least one sender and the <see cref="TwilioTextMessageParams.WebhookUrl"/> are required</param>
+        /// <param name="msg">Optional message host used for logging</param>
+        /// <exception cref="Exception">A parameter is missing or invalid</exception>
         public TwilioTextMessageService(TwilioTextMessageParams p = null, IMessageHost msg = null)
         {
             p = p ?? new TwilioTextMessageParams();
@@ -90,8 +96,10 @@ namespace SysWeaver.TextMessage
             Msg?.AddMessage(MessageLevels.Debug, $"{LogPrefix}Using {Senders.Length} sender(s), webhooks at {url.ToQuoted()}");
         }
 
+        /// <inheritdoc />
         public override string ToString() => Tos;
 
+        /// <inheritdoc />
         public void Dispose()
         {
             Incoming.Dispose();
@@ -559,7 +567,9 @@ namespace SysWeaver.TextMessage
         readonly TextMessageQueue<IncomingTextMessage> Incoming;
         readonly TextMessageQueue<TextMessageStatusUpdate> Statuses;
 
+        /// <inheritdoc />
         public event Action<IncomingTextMessage> OnIncoming;
+        /// <inheritdoc />
         public event Action<TextMessageStatusUpdate> OnStatus;
 
         readonly LinkedList<TwilioTextMessage> Messages = new();
@@ -671,6 +681,7 @@ namespace SysWeaver.TextMessage
         readonly ExceptionTracker RetryFails = new ExceptionTracker();
         readonly ExceptionTracker WebhookFails = new ExceptionTracker();
 
+        /// <inheritdoc />
         public IEnumerable<Stats> GetStats()
         {
             const String n = nameof(TwilioTextMessageService);
@@ -682,6 +693,7 @@ namespace SysWeaver.TextMessage
                 yield return x;
         }
 
+        /// <inheritdoc />
         public PerfMonitor PerfMon { get; init; } = new PerfMonitor(nameof(TwilioTextMessageService));
 
         #endregion//Stats

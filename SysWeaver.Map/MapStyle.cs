@@ -5,6 +5,10 @@ using SysWeaver.AI;
 
 namespace SysWeaver.Map
 {
+    /// <summary>
+    /// Style settings (colors, strokes, extrusion, text and tooltips) for a map region.
+    /// Null values are inherited from the base style (<see cref="MapStyleBase"/>), then from built-in defaults.
+    /// </summary>
     public class MapStyle
     {
         /// <summary>
@@ -89,7 +93,7 @@ namespace SysWeaver.Map
         public String TextSize = "75%";
 
         /// <summary>
-        /// The tooltip to show when hovering over a text.
+        /// The tooltip to show when hovering over a text, if null <see cref="ToolTip"/> is used.
         /// {0} = Is replaced with the region name (typically country code).
         /// {1} = Is replaced with the country name if the region is a country code (else the region name is used).
         /// Use "\n" to insert a new line.
@@ -125,6 +129,12 @@ namespace SysWeaver.Map
         [AiOptional]
         public String ToolTip;
 
+        /// <summary>
+        /// Write the CSS rule for filling and stroking a region.
+        /// </summary>
+        /// <param name="sb">Where to write the CSS</param>
+        /// <param name="className">The CSS class name of the rule</param>
+        /// <param name="baseStyle">The style used for values that are not set in this style, may be null</param>
         public void WriteCss(StringBuilder sb, String className, MapStyleBase baseStyle)
         {
             sb.Append('.');
@@ -139,6 +149,12 @@ namespace SysWeaver.Map
         }
 
 
+        /// <summary>
+        /// Write the CSS rule for the (shadowed) side polygons of an extruded region.
+        /// </summary>
+        /// <param name="sb">Where to write the CSS</param>
+        /// <param name="className">The CSS class name of the rule</param>
+        /// <param name="baseStyle">The style used for values that are not set in this style, may be null</param>
         public void WriteShadowCss(StringBuilder sb, String className, MapStyleBase baseStyle)
         {
             sb.Append('.');
@@ -155,6 +171,12 @@ namespace SysWeaver.Map
         }
 
 
+        /// <summary>
+        /// Write the CSS rule for the text of a region.
+        /// </summary>
+        /// <param name="sb">Where to write the CSS</param>
+        /// <param name="className">The CSS class name of the rule</param>
+        /// <param name="baseStyle">The style used for values that are not set in this style, may be null</param>
         public void WriteTextCss(StringBuilder sb, String className, MapStyleBase baseStyle)
         {
             sb.Append('.');

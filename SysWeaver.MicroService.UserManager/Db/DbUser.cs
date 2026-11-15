@@ -5,6 +5,9 @@ using SysWeaver.Data;
 
 namespace SysWeaver.MicroService.Db
 {
+    /// <summary>
+    /// A user
+    /// </summary>
     [Alias("Users")]
     //[PartitionByKey(nameof(Id), nameof(UserName))]
     public sealed class DbUser

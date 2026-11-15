@@ -28,6 +28,7 @@ All data that SysWeaver moves — web API payloads, stored values, remote API ca
 
 - Registered for `swbin` (`application/x-swbin`) with priority 0, the only bundled `swbin` serializer.
 - `SysWeaverBinarySerializer` (singleton `Instance`, binary only) writes with `BinaryWriterInspector` (into pooled buffers) and reads with `BinaryReaderInspector`.
+- Reading reuses a stream and binary reader cached per thread (a nested read on the same thread gets its own, a read that throws drops it), so a read allocates only the inspector and the result (88 bytes of overhead instead of 232), and short strings that repeat are shared (`SpanStringCache`, see SysWeaver.Common).
 - Versioned, inspection-based encoding with no external dependency.
 - Registered through the manifest like any service, or with one static call in code.
 

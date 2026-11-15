@@ -3,10 +3,16 @@ using SysWeaver.Data;
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// Storage statistics of a folder with chunks (content defined chunking storage)
+    /// </summary>
     [SysWeaver.Data.TableDataCard("storage@ServerManager/cards")]
     [TableDataPrimaryKey(nameof(Folder))]
     public sealed class SmChunkFolderStats
     {
+        /// <summary>
+        /// Create an empty instance (for deserialization)
+        /// </summary>
         public SmChunkFolderStats()
         {
         }
@@ -45,7 +51,7 @@ namespace SysWeaver.MicroService
         public long ChunkSize;
 
         /// <summary>
-        /// Chunks that haven't been used before this time is considered old (as do zero size shunks and other files)
+        /// Chunks that haven't been used since this time are considered old (as are zero size chunks and other files)
         /// </summary>
         public DateTime Old;
 
@@ -55,7 +61,7 @@ namespace SysWeaver.MicroService
         public long OldCount;
 
         /// <summary>
-        /// The estimated number of true bytes used by old files (will be recalimed soon)
+        /// The estimated number of true bytes used by old files (will be reclaimed soon)
         /// </summary>
         [TableDataByteSize]
         public long OldSize;

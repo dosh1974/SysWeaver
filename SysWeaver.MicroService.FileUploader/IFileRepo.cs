@@ -7,6 +7,9 @@ using SysWeaver.Net;
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// A repository that files can be uploaded to using the <see cref="FileUploaderService"/>
+    /// </summary>
     public interface IFileRepo
     {
         /// <summary>
@@ -33,7 +36,7 @@ namespace SysWeaver.MicroService
         Task<FileUploadResult> Upload(Stream s, FileUploadInfo file, HttpServerRequest r, ICompDecoder decoder);
 
         /// <summary>
-        /// If non-null, the files in these folders (typically where the uploaded files end up) will be accessable 
+        /// If non-null, the files in these folders (typically where the uploaded files end up) will be accessible
         /// </summary>
         IReadOnlyList<FileHttpServerModuleFolder> ExposeFolders { get; }
 

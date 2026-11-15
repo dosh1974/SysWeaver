@@ -3,10 +3,13 @@
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// Parameters for the <see cref="NetworkService"/>
+    /// </summary>
     public sealed class NetworkServiceParams
     {
         /// <summary>
-        /// Number of seconds to wait for a network connection
+        /// Number of seconds to wait for a LAN ip (at least 5 seconds is used)
         /// </summary>
         public int TimeOutSeconds = 30;
 
@@ -26,7 +29,7 @@ namespace SysWeaver.MicroService
         public bool WaitForInternet = false;
 
         /// <summary>
-        /// Number of seconds to wait for a internet
+        /// Number of seconds to wait for an internet connection (only used if <see cref="WaitForInternet"/> is true, 0 or less skips the wait)
         /// </summary>
         public int InternetTimeOutSeconds = 60;
 

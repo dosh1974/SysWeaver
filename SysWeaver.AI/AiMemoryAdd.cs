@@ -2,6 +2,9 @@
 
 namespace SysWeaver.AI
 {
+    /// <summary>
+    /// Parameters for adding a memory
+    /// </summary>
     public class AiMemoryAdd : AiMemorySet
     {
         /// <summary>

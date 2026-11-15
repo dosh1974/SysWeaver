@@ -3,6 +3,9 @@ using SysWeaver.AI;
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// Options for the tick labels of an axis
+    /// </summary>
     public sealed class ChartJsTickOptions
     {
         /// <summary>

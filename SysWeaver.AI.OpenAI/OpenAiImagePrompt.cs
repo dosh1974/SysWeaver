@@ -4,6 +4,9 @@ using System;
 namespace SysWeaver.AI
 {
 
+    /// <summary>
+    /// Parameters for generating an image with an OpenAI image model
+    /// </summary>
     public class OpenAiImagePrompt
     {
         /// <summary>
@@ -41,7 +44,7 @@ namespace SysWeaver.AI
         public String Title;
 
         /// <summary>
-        /// The image model to use, only set if the user required a specfifc model or if transparency is requested.
+        /// The image model to use, only set if the user required a specific model or if transparency is requested.
         /// Valid models are: 
         /// * "gpt-image-1" 
         /// * "gpt-image-1.5" (use if transparency is required)

@@ -111,7 +111,7 @@ The rendered bitmaps are cached in memory. The server checks the source svg for 
 ## Key components
 
 - [`HttpServerBase`](HttpServerBase.cs) — the abstract pipeline (partial, split over `HttpServerBase*.cs`), configured by [`HttpServerBaseParams`](HttpServerBaseParams.cs)
-- [`ApiHttpServerModule`](ApiHttpServerModule.cs) — the Web API engine, with [`ApiHttpEntry`](ApiHttpEntry.cs) as a compiled API method
+- [`ApiHttpServerModule`](ApiHttpServerModule.cs) — the Web API engine, with [`ApiHttpEntry`](ApiHttpEntry.cs) as a compiled API method; a `[WebApiRaw]` method without a mime type returns a `MemoryFile` (`ApiMemoryFile`: the mime type is taken from the file per call, or derived from its name, and a name is sent as an `inline` `Content-Disposition`)
 - [`HttpSession`](HttpSession.cs) — per client session state, user and push message queue
 - [`FileHttpServerModule`](FileHttpServerModule.cs) — serves folders on disc
 - [`CachedTransformer`](CachedTransformer/CachedTransformer.cs) — base class of the disc-cached file transformers

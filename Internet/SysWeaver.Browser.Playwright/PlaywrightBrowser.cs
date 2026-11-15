@@ -16,10 +16,24 @@ using System.Threading.Tasks;
 namespace SysWeaver.WebBrowser
 {
 
+    /// <summary>
+    /// Parameters for the <see cref="PlaywrightBrowser"/>
+    /// </summary>
     public sealed class PlaywrightBrowserParams
     {
+        /// <summary>
+        /// The Chromium browser engine (see <see cref="Browser"/>)
+        /// </summary>
         public const String BrowserChromium = "Chromium";
+
+        /// <summary>
+        /// The Firefox browser engine (see <see cref="Browser"/>)
+        /// </summary>
         public const String BrowserFirefox = "Firefox";
+
+        /// <summary>
+        /// The Webkit browser engine (see <see cref="Browser"/>)
+        /// </summary>
         public const String BrowserWebkit = "Webkit";
 
         /// <summary>
@@ -128,6 +142,11 @@ namespace SysWeaver.WebBrowser
     /// </summary>
     public sealed class PlaywrightBrowser : IBrowserService, IDisposable, IHaveStats
     {
+        /// <summary>
+        /// Create the browser service (the browser is started on first use)
+        /// </summary>
+        /// <param name="messageHost">Optional message host used for logging</param>
+        /// <param name="p">The parameters, null to use the defaults</param>
         public PlaywrightBrowser(IMessageHost messageHost = null, PlaywrightBrowserParams p = null)
         {
             Params = p ?? new();
@@ -278,6 +297,7 @@ namespace SysWeaver.WebBrowser
             }, TaskScheduler.Default);
         }
 
+        /// <inheritdoc />
         public IEnumerable<Stats> GetStats()
         {
             const String sys = "Playwright";
@@ -598,6 +618,10 @@ namespace SysWeaver.WebBrowser
             return w;
         }
 
+        /// <summary>
+        /// Open a browser window, starts the browser if needed. If the browser has died or can't open a window, a new browser is started and the open is tried once more.
+        /// </summary>
+        /// <returns>The window, dispose it to close it</returns>
         public async Task<IBrowserWindow> OpenWindow()
         {
             var s = await GetSession().ConfigureAwait(false);
@@ -621,6 +645,9 @@ namespace SysWeaver.WebBrowser
             }
         }
 
+        /// <summary>
+        /// Close all browsers (waits up to 5 seconds for them to stop)
+        /// </summary>
         public void Dispose()
         {
             Disposed = true;

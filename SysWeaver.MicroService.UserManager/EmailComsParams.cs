@@ -6,11 +6,14 @@ namespace SysWeaver.MicroService
 {
 
 
+    /// <summary>
+    /// Parameters for the e-mail communication method of the user manager (<see cref="EmailComs"/>)
+    /// </summary>
     public sealed class EmailComsParams : ComsParams
     {
 
         /// <summary>
-        /// If non-empty, only email addresses that ends in one of the supplied prefixes are valid.
+        /// If non-empty, only email addresses that ends in one of the supplied suffixes (case insensitive, ex: "@example.org") can be sent to.
         /// </summary>
         public String[] WhiteListPrefixes;
 
@@ -118,8 +121,14 @@ namespace SysWeaver.MicroService
     }
 
 
+    /// <summary>
+    /// The default mail header template (embedded resource data.HeaderMail.html)
+    /// </summary>
     public sealed class MailHeader : ManagedMailMessage
     {
+        /// <summary>
+        /// Create the template with the default embedded body
+        /// </summary>
         public MailHeader()
         {
             Subject = "";
@@ -128,8 +137,14 @@ namespace SysWeaver.MicroService
         }
     }
 
+    /// <summary>
+    /// The default mail footer template (embedded resource data.FooterMail.html)
+    /// </summary>
     public sealed class MailFooter : ManagedMailMessage
     {
+        /// <summary>
+        /// Create the template with the default embedded body
+        /// </summary>
         public MailFooter()
         {
             Subject = "";
@@ -140,8 +155,14 @@ namespace SysWeaver.MicroService
 
 
 
+    /// <summary>
+    /// The default template (embedded resources) of the <see cref="UserManagerComOps.Invite"/> e-mail
+    /// </summary>
     public sealed class InviteMail : ManagedMailMessage
     {
+        /// <summary>
+        /// Create the template with the default embedded subject and body
+        /// </summary>
         public InviteMail()
         {
             Subject = "data.InviteMail.txt";
@@ -151,8 +172,14 @@ namespace SysWeaver.MicroService
     }
 
 
+    /// <summary>
+    /// The default template (embedded resources) of the <see cref="UserManagerComOps.SignUp"/> e-mail
+    /// </summary>
     public sealed class SignUpMail : ManagedMailMessage
     {
+        /// <summary>
+        /// Create the template with the default embedded subject and body
+        /// </summary>
         public SignUpMail()
         {
             Subject = "data.SignUpMail.txt";
@@ -161,8 +188,14 @@ namespace SysWeaver.MicroService
         }
     }
 
+    /// <summary>
+    /// The default template (embedded resources) of the <see cref="UserManagerComOps.DeleteUser"/> e-mail
+    /// </summary>
     public sealed class DeleteUserMail : ManagedMailMessage
     {
+        /// <summary>
+        /// Create the template with the default embedded subject and body
+        /// </summary>
         public DeleteUserMail()
         {
             Subject = "data.DeleteUserMail.txt";
@@ -171,8 +204,14 @@ namespace SysWeaver.MicroService
         }
     }
 
+    /// <summary>
+    /// The default template (embedded resources) of the <see cref="UserManagerComOps.ResetPassword"/> e-mail
+    /// </summary>
     public sealed class ResetPasswordMail : ManagedMailMessage
     {
+        /// <summary>
+        /// Create the template with the default embedded subject and body
+        /// </summary>
         public ResetPasswordMail()
         {
             Subject = "data.ResetPasswordMail.txt";
@@ -182,8 +221,14 @@ namespace SysWeaver.MicroService
     }
 
 
+    /// <summary>
+    /// The default template (embedded resources) of the <see cref="UserManagerComOps.ForcedResetPassword"/> e-mail
+    /// </summary>
     public sealed class ForcedResetPasswordMail : ManagedMailMessage
     {
+        /// <summary>
+        /// Create the template with the default embedded subject and body
+        /// </summary>
         public ForcedResetPasswordMail()
         {
             Subject = "data.ForcedResetPasswordMail.txt";
@@ -193,8 +238,14 @@ namespace SysWeaver.MicroService
     }
 
 
+    /// <summary>
+    /// The default template (embedded resources) of the <see cref="UserManagerComOps.AddPassword"/> e-mail
+    /// </summary>
     public sealed class AddPasswordMail : ManagedMailMessage
     {
+        /// <summary>
+        /// Create the template with the default embedded subject and body
+        /// </summary>
         public AddPasswordMail()
         {
             Subject = "data.AddPasswordMail.txt";
@@ -203,8 +254,14 @@ namespace SysWeaver.MicroService
         }
     }
 
+    /// <summary>
+    /// The default template (embedded resources) of the <see cref="UserManagerComOps.DeletePassword"/> e-mail
+    /// </summary>
     public sealed class DeletePasswordMail : ManagedMailMessage
     {
+        /// <summary>
+        /// Create the template with the default embedded subject and body
+        /// </summary>
         public DeletePasswordMail()
         {
             Subject = "data.DeletePasswordMail.txt";
@@ -215,8 +272,14 @@ namespace SysWeaver.MicroService
 
 
 
+    /// <summary>
+    /// The default template (embedded resources) of the <see cref="UserManagerComOps.AddEmail"/> e-mail
+    /// </summary>
     public sealed class AddEmailMail : ManagedMailMessage
     {
+        /// <summary>
+        /// Create the template with the default embedded subject and body
+        /// </summary>
         public AddEmailMail()
         {
             Subject = "data.AddEmailMail.txt";
@@ -225,8 +288,14 @@ namespace SysWeaver.MicroService
         }
     }
 
+    /// <summary>
+    /// The default template (embedded resources) of the <see cref="UserManagerComOps.ChangeEmail"/> e-mail
+    /// </summary>
     public sealed class ChangeEmailMail : ManagedMailMessage
     {
+        /// <summary>
+        /// Create the template with the default embedded subject and body
+        /// </summary>
         public ChangeEmailMail()
         {
             Subject = "data.ChangeEmailMail.txt";
@@ -235,8 +304,14 @@ namespace SysWeaver.MicroService
         }
     }
 
+    /// <summary>
+    /// The default template (embedded resources) of the <see cref="UserManagerComOps.AddEmailNoCode"/> e-mail
+    /// </summary>
     public sealed class AddEmailNoCodeMail : ManagedMailMessage
     {
+        /// <summary>
+        /// Create the template with the default embedded subject and body
+        /// </summary>
         public AddEmailNoCodeMail()
         {
             Subject = "data.AddEmailNoCodeMail.txt";
@@ -245,8 +320,14 @@ namespace SysWeaver.MicroService
         }
     }
 
+    /// <summary>
+    /// The default template (embedded resources) of the <see cref="UserManagerComOps.ChangeEmailNoCode"/> e-mail
+    /// </summary>
     public sealed class ChangeEmailNoCodeMail : ManagedMailMessage
     {
+        /// <summary>
+        /// Create the template with the default embedded subject and body
+        /// </summary>
         public ChangeEmailNoCodeMail()
         {
             Subject = "data.ChangeEmailNoCodeMail.txt";
@@ -257,8 +338,14 @@ namespace SysWeaver.MicroService
 
 
 
+    /// <summary>
+    /// The default template (embedded resources) of the <see cref="UserManagerComOps.DeletedEmail"/> e-mail
+    /// </summary>
     public sealed class DeletedEmailMail : ManagedMailMessage
     {
+        /// <summary>
+        /// Create the template with the default embedded subject and body
+        /// </summary>
         public DeletedEmailMail()
         {
             Subject = "data.DeletedEmailMail.txt";
@@ -268,6 +355,9 @@ namespace SysWeaver.MicroService
     }
 
 
+    /// <summary>
+    /// The default template (embedded resources) of the <see cref="UserManagerComOps.ChangedEmail"/> e-mail
+    /// </summary>
     public sealed class ChangedEmailMail : ManagedMailMessage
     {
         /// <summary>
@@ -275,6 +365,9 @@ namespace SysWeaver.MicroService
         /// </summary>
         public static readonly IReadOnlySet<String> UserManagerVars = ReadOnlyData.Set(StringComparer.OrdinalIgnoreCase, "[UndoLink]");
 
+        /// <summary>
+        /// Create the template with the default embedded subject and body
+        /// </summary>
         public ChangedEmailMail() : base(UserManagerVars)
         {
             Subject = "data.ChangedEmailMail.txt";
@@ -285,8 +378,14 @@ namespace SysWeaver.MicroService
 
 
 
+    /// <summary>
+    /// The default template (embedded resources) of the <see cref="UserManagerComOps.AddPhone"/> e-mail
+    /// </summary>
     public sealed class AddPhoneMail : ManagedMailMessage
     {
+        /// <summary>
+        /// Create the template with the default embedded subject and body
+        /// </summary>
         public AddPhoneMail()
         {
             Subject = "data.AddPhoneMail.txt";
@@ -295,8 +394,14 @@ namespace SysWeaver.MicroService
         }
     }
 
+    /// <summary>
+    /// The default template (embedded resources) of the <see cref="UserManagerComOps.ChangePhone"/> e-mail
+    /// </summary>
     public sealed class ChangePhoneMail : ManagedMailMessage
     {
+        /// <summary>
+        /// Create the template with the default embedded subject and body
+        /// </summary>
         public ChangePhoneMail()
         {
             Subject = "data.ChangePhoneMail.txt";
@@ -304,8 +409,14 @@ namespace SysWeaver.MicroService
             IsHtml = true;
         }
     }
+    /// <summary>
+    /// The default template (embedded resources) of the <see cref="UserManagerComOps.DeletedPhone"/> e-mail
+    /// </summary>
     public sealed class DeletedPhoneMail : ManagedMailMessage
     {
+        /// <summary>
+        /// Create the template with the default embedded subject and body
+        /// </summary>
         public DeletedPhoneMail()
         {
             Subject = "data.DeletedPhoneMail.txt";

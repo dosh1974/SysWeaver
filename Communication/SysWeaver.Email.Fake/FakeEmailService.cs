@@ -9,6 +9,9 @@ using SysWeaver.MicroService;
 namespace SysWeaver.Email
 {
 
+    /// <summary>
+    /// A fake email service that sends and receives emails to and from an in memory inbox (for testing and development), it has a web page to view and fake emails.
+    /// </summary>
     [WebApiUrl("fakeEmail")]
     [WebMenuEmbedded(null, "Debug/FakeEmail", "Fake email inbox", "fakeEmail/index.html", "Show the fake email inbox (emails sent by the system and faked incoming emails)", "IconEmail", 0, null, false, nameof(IsMenuAllowed))]
     public sealed class FakeEmailService : IEmailSender, IEmailReceiverService, IRunTimeWebApiAuth
@@ -29,6 +32,10 @@ namespace SysWeaver.Email
         /// </summary>
         public IReadOnlyDictionary<String, String> MethodAuths { get; }
 
+        /// <summary>
+        /// Create the service
+        /// </summary>
+        /// <param name="p">The parameters, null to use the defaults</param>
         public FakeEmailService(FakeEmailParams p = null)
         {
             p = p ?? new FakeEmailParams();
@@ -47,12 +54,14 @@ namespace SysWeaver.Email
             Incoming = new(x => x.Id, x => x.System, x => x.Clone(), Size, TimeOut, maxPoll);
         }
 
+        /// <inheritdoc />
         public void Dispose()
         {
             Incoming.Dispose();
             Changed.Dispose();
         }
 
+        /// <inheritdoc />
         public override string ToString() => String.Concat(Sender, " (", Messages.Count, " emails)");
 
         readonly int Size;
@@ -105,6 +114,11 @@ namespace SysWeaver.Email
             return m;
         }
 
+        /// <summary>
+        /// Send an email, it's added to the inbox (marked as failed if the receiver is in one of the <see cref="FakeEmailParams.FailDomains"/>)
+        /// </summary>
+        /// <param name="msg">The message to send</param>
+        /// <returns>A completed task, or a faulted task if the address is invalid or the delivery was set to fail</returns>
         [WebApi]
         public Task SendEmail(OutgoingEmailMessage msg)
         {

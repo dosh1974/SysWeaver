@@ -3,10 +3,13 @@ using SysWeaver.Auth;
 
 namespace SysWeaver.Chat
 {
+    /// <summary>
+    /// Settings and access rules of a chat session (room).
+    /// </summary>
     public class ChatSessionParams
     {
         /// <summary>
-        /// Auth required to join, null to allow joining anonomously
+        /// Auth required to join (comma separated tokens), null to allow joining anonymously, empty for any logged in user, '-' for no one.
         /// </summary>
         public String Auth = "";
 
@@ -98,10 +101,10 @@ namespace SysWeaver.Chat
         public bool CanJoin(Authorization auth) => auth.IsValid(RequiredTokensCache.Get(ref AuthTokens, Auth));
 
         /// <summary>
-        /// Check if the supplied auth (of the user making the request) can join this session
+        /// Check if the supplied auth (of the user making the request) can post messages to this session
         /// </summary>
         /// <param name="auth">The auth of the user making the request</param>
-        /// <returns>True if the user should be able to join</returns>
+        /// <returns>True if the user should be able to post messages</returns>
         public bool CanPost(Authorization auth) => auth.IsValid(RequiredTokensCache.Get(ref PostAuthTokens, PostAuth ?? Auth));
 
         /// <summary>

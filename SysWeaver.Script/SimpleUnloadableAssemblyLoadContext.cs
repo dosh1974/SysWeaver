@@ -17,6 +17,7 @@ namespace SysWeaver.Script
         {
         }
 
+        /// <inheritdoc />
         protected override Assembly Load(AssemblyName assemblyName)
         {
             return null;

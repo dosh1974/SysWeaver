@@ -5,8 +5,14 @@ using SysWeaver.Data;
 
 namespace SysWeaver.ReverseProxy
 {
+    /// <summary>
+    /// Brief information about a client that is connected to a reverse proxy server
+    /// </summary>
     public sealed class ReverseProxyClientBrief
     {
+        /// <summary>
+        /// Create an empty instance (for deserialization)
+        /// </summary>
         public ReverseProxyClientBrief()
         {
         }

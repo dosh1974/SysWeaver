@@ -15,6 +15,14 @@ namespace SysWeaver.AI
     /// </summary>
     public class OpenAiQuerySession : AiQuerySessionBase
     {
+        /// <summary>
+        /// Create a query session
+        /// </summary>
+        /// <param name="c">The chat client to use</param>
+        /// <param name="p">Session parameters (model, reasoning, service tier)</param>
+        /// <param name="toolCache">Optional cache for tool results</param>
+        /// <param name="monitor">Optional performance monitor</param>
+        /// <param name="memory">Optional AI memory</param>
         public OpenAiQuerySession(ChatClient c, OpenAiSessionParams p, IAiToolCache toolCache = null, PerfMonitor monitor = null, IAiMemory memory = null)
             : this(c, p, OpenAiModels.GetOptions(p.Model), toolCache, monitor, memory)
         {
@@ -39,11 +47,16 @@ namespace SysWeaver.AI
         readonly ChatReasoningEffortLevel? ReasonigLevel;
         readonly ChatServiceTier? Tier;
 
+        /// <inheritdoc />
         protected override void OnToolsChanged()
         {
             Options = null;
         }
 
+        /// <summary>
+        /// Create the chat completion options for a request (tools, temperature, reasoning level and service tier)
+        /// </summary>
+        /// <returns>The options</returns>
         protected ChatCompletionOptions CreateOptions()
         {
             var options = Options;
@@ -57,8 +70,12 @@ namespace SysWeaver.AI
 #pragma warning restore OPENAI001
 
 
+        /// <summary>
+        /// The chat client used by this session
+        /// </summary>
         protected readonly ChatClient Client;
 
+        /// <inheritdoc />
         public override String SystemPrompt
         {
             get =>
@@ -76,6 +93,9 @@ namespace SysWeaver.AI
                                 new UserChatMessage(value));
         }
 
+        /// <summary>
+        /// The system prompt as an API message (a system message, or a user message if the model has no system role), null if no system prompt is set
+        /// </summary>
         public ChatMessage MsgSystemPrompt { get; private set; }
 
         /// <summary>

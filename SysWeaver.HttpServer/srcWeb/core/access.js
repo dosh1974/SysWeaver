@@ -128,19 +128,29 @@
     }
 
     /**
-     * The signed in user if this page or the app shell above it already asked (no request), else null.
-     * @returns {?Promise<?object>} The user promise, or null when not known.
+     * The user the app shell above this page already asked for (Sw.Access.CachedUser of the top window), no request.
+     * @returns {?Promise<?object>} The shell's user promise; null outside the shell, when it knows none, or on another origin.
      */
-    function knownUser() {
+    function shellUser() {
         try {
-            const own = Sw.Access.CachedUser();
-            if (own)
-                return own;
             const ta = window.top !== window ? window.top.Sw && window.top.Sw.Access : null;
             return ta && ta !== Sw.Access && typeof ta.CachedUser === "function" ? ta.CachedUser() : null;
         }
         catch {
             //  Another origin above
+            return null;
+        }
+    }
+
+    /**
+     * The signed in user if this page or the app shell above it already asked (no request), else null.
+     * @returns {?Promise<?object>} The user promise, or null when not known.
+     */
+    function knownUser() {
+        try {
+            return Sw.Access.CachedUser() || shellUser();
+        }
+        catch {
             return null;
         }
     }
@@ -296,17 +306,11 @@
             //  A page in the app shell (same origin) uses the user the shell just asked for (SeedUser), so a framed page sends no GetUser
             //  of its own (the original pages made none)
             if (!reload && (!userP || now >= userExp)) {
-                try {
-                    const ta = window.top !== window ? window.top.Sw && window.top.Sw.Access : null;
-                    const p = ta && ta !== Sw.Access && typeof ta.CachedUser === "function" ? ta.CachedUser() : null;
-                    if (p) {
-                        userP = p;
-                        userExp = now + userLifeMs;
-                        return userP;
-                    }
-                }
-                catch {
-                    //  (another origin above: ask the server)
+                const p = shellUser();
+                if (p) {
+                    userP = p;
+                    userExp = now + userLifeMs;
+                    return userP;
                 }
             }
             if (reload || !userP || now >= userExp) {

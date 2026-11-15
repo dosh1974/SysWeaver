@@ -5,6 +5,9 @@ using System.Threading.Tasks;
 
 namespace SysWeaver.WebBrowser
 {
+    /// <summary>
+    /// A queue of work that is executed by a derived class on a thread of its choice (see <see cref="DedicatedThreadTaskProxy"/>)
+    /// </summary>
     public abstract class TaskProxy : IDisposable
     {
         interface IDoOne
@@ -135,6 +138,12 @@ namespace SysWeaver.WebBrowser
             }
         }
 
+        /// <summary>
+        /// Queue an asynchronous function to be run by the proxy
+        /// </summary>
+        /// <typeparam name="T">The result type</typeparam>
+        /// <param name="func">The function</param>
+        /// <returns>A task that completes with the result of the function</returns>
         public Task<T> Run<T>(Func<Task<T>> func)
         {
             var comp = new TaskCompletionSource<T>();
@@ -143,6 +152,11 @@ namespace SysWeaver.WebBrowser
             return comp.Task;
         }
 
+        /// <summary>
+        /// Queue an asynchronous function to be run by the proxy
+        /// </summary>
+        /// <param name="func">The function</param>
+        /// <returns>A task that completes when the function has completed</returns>
         public Task Run(Func<Task> func)
         {
             var comp = new TaskCompletionSource();
@@ -151,12 +165,24 @@ namespace SysWeaver.WebBrowser
             return comp.Task;
         }
 
+        /// <summary>
+        /// Queue an action to be run by the proxy (fire and forget)
+        /// </summary>
+        /// <param name="a">The action</param>
+        /// <param name="onException">Optional callback that is invoked if the action throws</param>
         public void Run(Action a, Action<Exception> onException = null)
         {
             Tasks.Enqueue(new DoOneAction(a, onException));
             W.Set();
         }
 
+        /// <summary>
+        /// Queue a function to be run by the proxy (fire and forget)
+        /// </summary>
+        /// <typeparam name="T">The result type</typeparam>
+        /// <param name="f">The function</param>
+        /// <param name="onResult">Callback that is invoked with the result of the function</param>
+        /// <param name="onException">Optional callback that is invoked if the function throws</param>
         public void Run<T>(Func<T> f, Action<T> onResult, Action<Exception> onException = null)
         {
             Tasks.Enqueue(new DoOneFunc<T>(f, onResult, onException));
@@ -183,6 +209,11 @@ namespace SysWeaver.WebBrowser
             return IsDisposed;
         }
 
+        /// <summary>
+        /// Spin until there is work queued (or the proxy is disposed), calling a function each time it spins
+        /// </summary>
+        /// <param name="onSpin">Called repeatedly while waiting (ex: to pump messages)</param>
+        /// <returns>True if the proxy is disposed</returns>
         protected bool SpinWait(Action onSpin)
         {
             if (IsDisposed)
@@ -200,9 +231,17 @@ namespace SysWeaver.WebBrowser
             return false;
         }
 
+        /// <summary>
+        /// Take the next queued work item and start it
+        /// </summary>
+        /// <returns>The started task, or null if nothing is queued</returns>
         protected Task NextTask()
             => Tasks.TryDequeue(out var d) ? d.Do() : null;
 
+        /// <summary>
+        /// Run all queued work items, one at a time, until the queue is empty
+        /// </summary>
+        /// <returns>A task that completes when the queue is empty</returns>
         protected async Task Consume()
         {
             var t = Tasks;
@@ -210,6 +249,9 @@ namespace SysWeaver.WebBrowser
                 await d.Do();
         }
 
+        /// <summary>
+        /// Mark the proxy as disposed and wake up the worker
+        /// </summary>
         public virtual void Dispose()
         {
             IsDisposed = true;

@@ -2,8 +2,12 @@
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// Base class for requests that capture data (ex: a screenshot) from a web page
+    /// </summary>
     public abstract class GetDataRequestBase
     {
+        /// <inheritdoc/>
         public override string ToString() => String.Concat(Width, 'x', Height, " from ", Url);
 
         /// <summary>

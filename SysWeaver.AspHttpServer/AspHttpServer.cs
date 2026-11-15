@@ -31,6 +31,9 @@ namespace SysWeaver.Net
 
     //https://learn.microsoft.com/en-us/dotnet/api/microsoft.aspnetcore.server.kestrel.core.kestrelserver?view=aspnetcore-8.0
 
+    /// <summary>
+    /// An HTTP server based on Kestrel (ASP.NET Core), see <see cref="AspHttpServerParams"/> for the configuration.
+    /// </summary>
     public class AspHttpServer : HttpServerBase, IDisposable, IHttpApplication<HttpContext>
     {
         sealed class Log : ILoggerProvider, ILogger
@@ -113,6 +116,17 @@ namespace SysWeaver.Net
         }
 
 
+        /// <summary>
+        /// Create a server (the server is not started until <see cref="Start"/> is called).
+        /// Prefixes that can't be used are ignored (with a warning) if <see cref="AspHttpServerParams.IgnoreBadPrefixes"/> is set, else an exception is thrown.
+        /// </summary>
+        /// <param name="msg">Optional message host used for logging.</param>
+        /// <param name="translator">The translator used to translate responses.</param>
+        /// <param name="audit">The API audit service.</param>
+        /// <param name="certProviders">The available certificate providers by name (required for prefixes that specify a certificate).</param>
+        /// <param name="auth">The authentication manager.</param>
+        /// <param name="firewallHandler">Handler used to add the prefixes to the firewall.</param>
+        /// <param name="p">Optional parameters, null to use the defaults.</param>
         public AspHttpServer(IMessageHost msg, ITranslator translator, IApiAuditService audit, IReadOnlyDictionary<String, ICertificateProvider> certProviders, AuthManager auth, IFirewallHandler firewallHandler, AspHttpServerParams p = null)
             : base(msg, translator, audit, auth, firewallHandler, p, null)
         {
@@ -351,12 +365,25 @@ namespace SysWeaver.Net
         readonly Stack<Action> BeforeCertChanged = new Stack<Action>();
 
             
+        /// <summary>
+        /// Part of <see cref="IHttpApplication{TContext}"/>, creates the http context for a request.
+        /// </summary>
+        /// <param name="contextFeatures">The features of the request.</param>
+        /// <returns>A new context.</returns>
         public HttpContext CreateContext(IFeatureCollection contextFeatures) => Factory.Create(contextFeatures);
 
+        /// <summary>
+        /// Part of <see cref="IHttpApplication{TContext}"/>, disposes the http context of a request.
+        /// </summary>
+        /// <param name="context">The context to dispose.</param>
+        /// <param name="exception">The exception that terminated the request (ignored).</param>
         public void DisposeContext(HttpContext context, Exception exception) => Factory.Dispose(context);
 
 
         readonly IFirewallHandler FirewallHandler;
+        /// <summary>
+        /// The number of seconds to wait for pending requests when shutting down (see <see cref="AspHttpServerParams.SecondsToWait"/>).
+        /// </summary>
         public readonly int SecondsToWait;
 
 
@@ -364,8 +391,15 @@ namespace SysWeaver.Net
 
         readonly Object Lock = new object();
 
+        /// <summary>
+        /// A completed task that returns a null string.
+        /// </summary>
         public static readonly Task<String> NullStringTask = Task.FromResult<String>(null);
 
+        /// <summary>
+        /// Start the Kestrel server and listen for requests.
+        /// </summary>
+        /// <returns>False if the server was already started.</returns>
         public bool Start()
         {
             lock (Lock)
@@ -386,6 +420,7 @@ namespace SysWeaver.Net
 
 
 
+        /// <inheritdoc/>
         protected override Task<bool> OnNewCert(ICertificateProvider cert, String pre)
         {
             lock (Lock)
@@ -426,6 +461,10 @@ namespace SysWeaver.Net
         }
 
 
+        /// <summary>
+        /// Stop listening for requests. Ongoing requests are asked to cancel and given about 3 seconds to complete.
+        /// </summary>
+        /// <returns>False if the server wasn't started.</returns>
         public bool Stop()
         {
             lock (Lock)
@@ -457,6 +496,7 @@ namespace SysWeaver.Net
         }
 
 
+        /// <inheritdoc/>
         public override void Pause()
         {
             lock (Lock)
@@ -471,6 +511,7 @@ namespace SysWeaver.Net
             }
         }
 
+        /// <inheritdoc/>
         public override void Continue()
         {
             lock (Lock)
@@ -484,6 +525,9 @@ namespace SysWeaver.Net
             }
         }
 
+        /// <summary>
+        /// An empty list of end points.
+        /// </summary>
         public static readonly IReadOnlyList<IHttpServerEndPoint> NoEndPoints = new List<IHttpServerEndPoint>();
 
         Task WriteResponseString(HttpResponse res, String text, String mime = HttpServerTools.TextMime)
@@ -604,6 +648,7 @@ namespace SysWeaver.Net
             }
         }
 
+        /// <inheritdoc/>
         protected override void OnDispose()
         {
             Stop();

@@ -9,8 +9,15 @@ namespace SysWeaver.MicroService
 {
 
 
+    /// <summary>
+    /// Email sender service that sends emails using an SMTP server
+    /// </summary>
     public sealed class SmtpEmailService : IEmailSender, IHaveStats, IPerfMonitored
     {
+        /// <summary>
+        /// Create the service
+        /// </summary>
+        /// <param name="p">The parameters (the user name and password are required)</param>
         public SmtpEmailService(SmtpEmailParams p = null)
         {
             p = p ?? new SmtpEmailParams();
@@ -25,8 +32,12 @@ namespace SysWeaver.MicroService
             };
             RetryCount = Math.Max(1, p.RetryCount) - 1;
         }
+        /// <inheritdoc />
         public override string ToString() => Tos;
         
+        /// <summary>
+        /// The from address that emails are sent from (the user name)
+        /// </summary>
         public readonly String Sender;
         readonly String Tos;
         readonly ExceptionTracker RetryFails = new ExceptionTracker();
@@ -34,6 +45,12 @@ namespace SysWeaver.MicroService
 
         readonly int RetryCount;
 
+        /// <summary>
+        /// Send an email, failed attempts are retried up to the configured number of attempts
+        /// </summary>
+        /// <param name="msg">The message to send</param>
+        /// <returns>A task that completes when the SMTP server has accepted the message</returns>
+        /// <exception cref="Exception">The message could not be sent (the last error is thrown), or an address is invalid</exception>
         public async Task SendEmail(OutgoingEmailMessage msg)
         {
             using var _ = PerfMon.Track(nameof(SendEmail));
@@ -66,11 +83,13 @@ namespace SysWeaver.MicroService
             }
         }
 
+        /// <inheritdoc />
         public void Dispose()
         {
             Client.Dispose();
         }
 
+        /// <inheritdoc />
         public IEnumerable<Stats> GetStats()
         {
             foreach (var x in SendFails.GetStats(nameof(SmtpEmailService), "Send."))
@@ -81,6 +100,7 @@ namespace SysWeaver.MicroService
 
         readonly SmtpClient Client;
 
+        /// <inheritdoc />
         public PerfMonitor PerfMon { get; init; } = new PerfMonitor(nameof(SmtpEmailService));
 
     }

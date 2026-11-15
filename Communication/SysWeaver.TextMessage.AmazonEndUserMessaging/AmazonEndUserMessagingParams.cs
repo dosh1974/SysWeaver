@@ -6,8 +6,12 @@ namespace SysWeaver.TextMessage
     // If no credentials are given (no CredFile, User and Password empty), the default AWS credential chain is used
     // (environment variables, ~/.aws/credentials profile, EC2/ECS instance role etc).
 
+    /// <summary>
+    /// Parameters for the <see cref="AmazonEndUserMessagingTextMessageService"/>
+    /// </summary>
     public sealed class AmazonEndUserMessagingParams : CredentialParams
     {
+        /// <inheritdoc />
         public override string ToString() => String.Concat(Region, ", ", Senders?.Length ?? 0, " sender(s), ", QueueUrls?.Length ?? 0, " queue(s), Auth: ", base.ToString());
 
         /// <summary>
@@ -101,8 +105,12 @@ namespace SysWeaver.TextMessage
         public int MaxPoll = 100;
     }
 
+    /// <summary>
+    /// A sender (origination identity) that the <see cref="AmazonEndUserMessagingTextMessageService"/> can send from
+    /// </summary>
     public sealed class AmazonSenderParams
     {
+        /// <inheritdoc />
         public override string ToString() => String.Concat(OriginationIdentity, String.IsNullOrEmpty(System) ? "" : " System: " + System);
 
         /// <summary>

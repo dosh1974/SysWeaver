@@ -3,12 +3,15 @@
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// Parameters for the WhatsApp communication method of the user manager (<see cref="WhatsAppComs"/>)
+    /// </summary>
     public sealed class WhatsAppComsParams : ComsParams
     {
 
 
         /// <summary>
-        /// An optional instance name of the ITextMessageSender and ITextMessageReceiverService to use.
+        /// An optional instance name of the ITextMessageSender to use.
         /// If null, the first instance will be used.
         /// Default: "useradmin".
         /// </summary>

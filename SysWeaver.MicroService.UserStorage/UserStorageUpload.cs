@@ -2,6 +2,9 @@
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// Settings for uploading files of one scope (public, protected or private) to the user storage
+    /// </summary>
     public sealed class UserStorageUpload
     {
         /// <summary>
@@ -15,24 +18,24 @@ namespace SysWeaver.MicroService
         public long MaxFileSize;
 
         /// <summary>
-        /// Extensions that is allowed seprated by a comma.
+        /// Extensions that are allowed, separated by a comma (null = no whitelist).
         /// There is no point having a whitelist and blacklist.
         /// </summary>
         public String Whitelist;
 
         /// <summary>
-        /// Extensions that isn't allowed seprated by a comma.
+        /// Extensions that aren't allowed, separated by a comma (null = no blacklist).
         /// There is no point having a whitelist and blacklist.
         /// </summary>
         public String Blacklist;
 
         /// <summary>
-        /// Allow multiple files to be uploaded in paralell
+        /// Allow multiple files to be uploaded in parallel (default is true)
         /// </summary>
         public bool AllowMultiple = true;
 
         /// <summary>
-        /// If true, keep files that are sent compressed, compressed on disc
+        /// If true (the default), keep files that are sent compressed, compressed on disc
         /// </summary>
         public bool AllowPreCompressed = true;
 

@@ -241,9 +241,9 @@
                 const old = obj[mn];
                 if (old === v)
                     return;
-                await editor.SetMemberValue(member, v, old, _T("Set value: \"{0}\"", t.ToString(v, member), "Command text stored in a log when a property value was changed.{0} is replaced with the new value."));
+                await editor.SetMemberValue(member, v, old, E.Handler.SetText(t.ToString(v, member)));
             }, values, def, readOnly, i.IsFlags, openFn);
-            sel.setAttribute("aria-label", member.DisplayName || mn);
+            sel.setAttribute("aria-label", E.Handler.Label(member));
             editContext.Element.append(sel);
             return E.Handler.Item(obj, editor, member, {
                 Focus: sel, Title: addLine(null, _TF("Default value", "Header of a tool tip row with the default value of a property"), defText),

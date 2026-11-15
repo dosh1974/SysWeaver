@@ -3,11 +3,21 @@ using System.Collections.Generic;
 
 namespace SysWeaver.Knowledge
 {
+    /// <summary>
+    /// Keywords for screen resolutions and aspect ratios
+    /// </summary>
     public static class ScreenResolutionInfo
     {
 
 
 
+        /// <summary>
+        /// Check if a value is approximately equal to a value, or inside a range
+        /// </summary>
+        /// <param name="value">The value to check</param>
+        /// <param name="min">The value to compare to (within 0.1%), or the lower end of the range (with a 0.01% margin) if max is set</param>
+        /// <param name="max">The upper end of the range (with a 0.01% margin), or null to compare to min</param>
+        /// <returns>True if the value is approximately equal to min, or inside the range</returns>
         public static bool ApproxEqual(double value, double min, double? max = null)
         {
             if (max == null)
@@ -20,6 +30,12 @@ namespace SysWeaver.Knowledge
             return true;
         }
 
+        /// <summary>
+        /// Get keywords describing a screen resolution (the resolution name, if known, and the aspect ratio)
+        /// </summary>
+        /// <param name="width">The width in pixels</param>
+        /// <param name="height">The height in pixels</param>
+        /// <returns>The keywords, or an empty string if the size is not valid</returns>
         public static String GetKeyWords(int width, int height)
         {
             if ((width <= 0) || (height <= 0))

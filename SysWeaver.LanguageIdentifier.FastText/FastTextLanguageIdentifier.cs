@@ -20,6 +20,11 @@ namespace SysWeaver.LanguageIdentifier
     /// </summary>
     public sealed class FastTextLanguageIdentifier : ILanguageIdentifier, IDisposable, IPerfMonitored, IHaveStats
     {
+        /// <summary>
+        /// Create a FastText language identifier, loads the model
+        /// </summary>
+        /// <param name="p">Optional parameters, if null the defaults are used (embedded model)</param>
+        /// <exception cref="Exception">If the model could not be loaded or isn't ready</exception>
         public FastTextLanguageIdentifier(FastTextLanguageIdentifierParams p = null)
         {
             p = p ?? new FastTextLanguageIdentifierParams();
@@ -49,6 +54,7 @@ namespace SysWeaver.LanguageIdentifier
         readonly FastMemCache<String, ValueTask<string>> Cache;
         readonly FastMemCache<String, ValueTask<IdentifiedLanguage[]>> CacheList;
 
+        /// <inheritdoc />
         public void Dispose()
         {
             FT.Dispose();
@@ -65,6 +71,7 @@ namespace SysWeaver.LanguageIdentifier
         static String GetKey(String text, int numberOfResults, String userLanguge, double userLanguageBias)
             => $"{text}\n\r\t{numberOfResults}\n\r\t{userLanguge}\n\r\t{userLanguageBias}";
 
+        /// <inheritdoc />
         public ValueTask<string> Identify(string text, string userLanguge = null, double userLanguageBias = 0.2, double minConfidence = 0.05)
             => Cache.GetOrUpdate(GetKey(text, userLanguge, userLanguageBias, minConfidence), f =>
             {
@@ -116,6 +123,7 @@ namespace SysWeaver.LanguageIdentifier
         static readonly ValueTask<IdentifiedLanguage[]> NoTask = ValueTask.FromResult<IdentifiedLanguage[]>(null);
 
 
+        /// <inheritdoc />
         public ValueTask<IdentifiedLanguage[]> Identify(String text, int numberOfResults, String userLanguge = null, double userLanguageBias = 0.2)
             => CacheList.GetOrUpdate(GetKey(text, numberOfResults, userLanguge, userLanguageBias), f =>
             {
@@ -150,6 +158,7 @@ namespace SysWeaver.LanguageIdentifier
                 }
             });
 
+        /// <inheritdoc />
         public IEnumerable<Stats> GetStats()
         {
             foreach (var x in Cache.GetStats(nameof(FastTextLanguageIdentifier), "Simple."))
@@ -160,6 +169,7 @@ namespace SysWeaver.LanguageIdentifier
                 yield return x;
         }
 
+        /// <inheritdoc />
         public PerfMonitor PerfMon { get; } = new PerfMonitor(nameof(FastTextLanguageIdentifier));
 
     }

@@ -26,7 +26,8 @@ namespace SysWeaver.Inspection.Implementation
         /// <returns>The handler</returns>
         public static TypeHandler<T> GetHandler(T value)
         {
-            if (IsNullableValueType)
+            //  A value type (also a Nullable<U>, the runtime type of a value is U) can't have another runtime type
+            if (typeof(T).IsValueType)
                 return Handler;
             Type type = typeof(T);
             bool nullable = HelpersTypeHandler.IsNullable(type);
@@ -74,7 +75,8 @@ namespace SysWeaver.Inspection.Implementation
         /// <returns>The handler</returns>
         public static TypeHandler<T> GetHandler(ref T value)
         {
-            if (IsNullableValueType)
+            //  A value type (also a Nullable<U>) can't have another runtime type: no value.GetType(), that boxes the value (enum and struct items of collections, key value pairs)
+            if (typeof(T).IsValueType)
                 return Handler;
             var tt = typeof(T);
             Type type = value?.GetType() ?? tt;

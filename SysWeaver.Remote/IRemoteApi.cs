@@ -39,12 +39,12 @@ namespace SysWeaver.Remote
         void Cancel();
 
         /// <summary>
-        /// Invoked before any remote api call (after any payload serilization), not invoked for responses served from the response cache.
+        /// Invoked before any remote api call (after any payload serialization), not invoked for responses served from the response cache.
         /// </summary>
         event RemoteApiCallBegin OnCallBegin;
 
         /// <summary>
-        /// Invoked after any remote api call (before any response payload deserilization).
+        /// Invoked after any remote api call (before any response payload deserialization).
         /// Will always get called if OnCallBegin is called, that way calls in progress can be tracked and so on.
         /// </summary>
         event RemoteApiCallEnd OnCallEnd;

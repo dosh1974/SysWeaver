@@ -83,6 +83,13 @@ function usersCloseToasts(...names) {
 }
 
 /**
+ * The error of a lookup that found no user (at the field of the user dialog, or as the toast of a forced reset).
+ * @param {string} user What was typed.
+ * @returns {string} The text.
+ */
+const usersNoUser = user => _T("There is no user {0}. Check the user name, email address or phone number.", user, "Error of a forced password reset when the user was not found.{0} is replaced with what was typed");
+
+/**
  * Ask for the user of a forced password reset: the user id (user name, e-mail address or phone number), checked on the server
  * (FindPasswordResetUser, nothing is changed) before the dialog closes, so an unknown user or a user without a password is told at the
  * field, before any confirmation.
@@ -132,7 +139,7 @@ async function usersAskUser(o) {
         try {
             const r = await Sw.Net.Send(Sw.Url.Root + "Api/auth/FindPasswordResetUser", user, { NoNavigate: true, ReadOnly: true });
             if (!r || !r.Found) {
-                tb.SetError(_T("There is no user {0}. Check the user name, email address or phone number.", user, "Error of a forced password reset when the user was not found.{0} is replaced with what was typed"));
+                tb.SetError(usersNoUser(user));
                 return false;
             }
             const why = o.Accept ? o.Accept(r, user) : null;
@@ -208,7 +215,7 @@ async function usersForceReset() {
         const r = await Sw.Net.Send(Sw.Url.Root + "Api/auth/ForcePasswordResetUser", user, { NoNavigate: true });
         const name = r && r.UserName ? r.UserName : user;
         if (!r || !r.Found)
-            usersToast(Sw.Fail(_T("There is no user {0}. Check the user name, email address or phone number.", user, "Error of a forced password reset when the user was not found.{0} is replaced with what was typed")), user);
+            usersToast(Sw.Fail(usersNoUser(user)), user);
         else if (!r.HadPassword)
             usersToast(Sw.Info(_T("{0} has no password, nothing was changed.", r.UserName || user, "Message when a forced password reset found no password (ex: a passkey only user).{0} is replaced with the user")), user, name);
         else if (r.SignedOut > 0)
@@ -338,13 +345,8 @@ function usersMain() {
         if (canInvite !== false) {
             //  How an invitation can be sent (the coms of the server: Email; Sms and WhatsApp send to a phone number): none = no way to
             //  invite, the button says why (an older server without the props: by e-mail, as before)
-            let coms = null;
-            try {
-                const p = await Sw.Net.Send(root + "Api/auth/UserManagerProps");
-                coms = p && Array.isArray(p.Coms) ? p.Coms : null;
-            }
-            catch {
-            }
+            const p = await Sw.Net.Send(root + "Api/auth/UserManagerProps").catch(() => null);
+            const coms = p && Array.isArray(p.Coms) ? p.Coms : null;
             const byEmail = !coms || coms.includes("Email");
             const byPhone = !!coms && coms.some(x => x === "Sms" || x === "WhatsApp");
             page.Header.AddAction(new Sw.Button({

@@ -15,7 +15,7 @@
     width: 100%;
     min-height: 0;
     border: 0;
-    background: #fff;
+    background: #fff; /* SwWeb:allow-design (a page is made for the browser default white, also in the dark themes) */
     color-scheme: light;
 }
 

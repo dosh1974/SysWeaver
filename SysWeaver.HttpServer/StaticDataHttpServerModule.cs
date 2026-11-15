@@ -42,6 +42,10 @@ namespace SysWeaver.Net
             Compression = HttpCompressionPriority.GetSupportedEncoders(p.Compression);
         }
 
+        /// <summary>
+        /// The number of handlers served by this module.
+        /// </summary>
+        /// <returns>A short text for debugging.</returns>
         public override string ToString() => String.Concat(
             nameof(Handlers), ": ", Handlers.Count);
 

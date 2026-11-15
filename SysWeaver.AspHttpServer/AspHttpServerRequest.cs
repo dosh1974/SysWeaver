@@ -10,8 +10,23 @@ using Microsoft.Extensions.Primitives;
 
 namespace SysWeaver.Net
 {
+    /// <summary>
+    /// A request handled by <see cref="AspHttpServer"/>, a wrapper around an <see cref="HttpContext"/>.
+    /// </summary>
     public sealed class AspHttpServerRequest : HttpServerRequest
     {
+        /// <summary>
+        /// Create a request from a http context (created by <see cref="AspHttpServer"/>).
+        /// </summary>
+        /// <param name="context">The http context.</param>
+        /// <param name="rawUrl">The raw url (including the query string).</param>
+        /// <param name="url">The url.</param>
+        /// <param name="prefix">The prefix the request was received on.</param>
+        /// <param name="server">The server that handles the request.</param>
+        /// <param name="host">The host info of the request.</param>
+        /// <param name="queryStart">The index of the query start in the url.</param>
+        /// <param name="didIndex">True if the url was changed to an index document.</param>
+        /// <param name="newMethod">Optional method to use instead of the method of the context.</param>
         public AspHttpServerRequest(HttpContext context, String rawUrl, String url, String prefix, AspHttpServer server, HttpServerHostInfo host, int queryStart, bool didIndex, String newMethod = null)
             : base(
                     newMethod ?? context.Request.Method,
@@ -26,10 +41,13 @@ namespace SysWeaver.Net
         internal readonly HttpRequest Req;
         internal readonly HttpResponse Res;
 
+        /// <inheritdoc/>
         public override IEnumerable<KeyValuePair<String, IReadOnlyList<String>>> AllReqHeaders => Req.Headers.Select(x => new KeyValuePair<String, IReadOnlyList<String>>(x.Key, x.Value.ToList()));
+        /// <inheritdoc/>
         public override IEnumerable<KeyValuePair<String, IReadOnlyList<String>>> AllResHeaders => Res.Headers.Select(x => new KeyValuePair<String, IReadOnlyList<String>>(x.Key, x.Value.ToList()));
 
 
+        /// <inheritdoc/>
         public override String IfNoneMatch
         {
             get
@@ -40,25 +58,37 @@ namespace SysWeaver.Net
             }
         }
 
+        /// <inheritdoc/>
         public override string AcceptEncoding => Req.Headers.AcceptEncoding;
 
+        /// <inheritdoc/>
         public override Stream InputStream => Req.Body;
+        /// <inheritdoc/>
         public override Stream OutputStream => Res.Body;
 
+        /// <inheritdoc/>
         public override long ReqContentLength => Req.ContentLength ?? 0;
+        /// <inheritdoc/>
         public override String GetReqHeader(String name) => Req.Headers[name];
 
+        /// <inheritdoc/>
         public override String GetResHeader(String name) => Res.Headers[name];
 
+        /// <inheritdoc/>
         public override String GetResMime() => Res.ContentType;
 
+        /// <inheritdoc/>
         public override void SetResMime(String mime) => Res.ContentType = mime;
 
+        /// <inheritdoc/>
         public override String ProtocolVersion => Req.Protocol;
 
+        /// <inheritdoc/>
         public override void SetResContentLength(long length) => Res.ContentLength = length;
 
+        /// <inheritdoc/>
         public override void SetResStatusCode(int statusCode) => Res.StatusCode = statusCode;
+        /// <inheritdoc/>
         public override int GetResStatusCode() => Res.StatusCode;
 
 
@@ -79,6 +109,7 @@ namespace SysWeaver.Net
         }
 
 
+        /// <inheritdoc/>
         public override void UpdateCookie(String str)
         {
             Res.Headers.Append("Set-Cookie", str);
@@ -86,6 +117,7 @@ namespace SysWeaver.Net
 
 
 
+        /// <inheritdoc/>
         public override void SetResBody(ReadOnlySpan<Byte> data)
         {
             var r = Res;
@@ -93,6 +125,7 @@ namespace SysWeaver.Net
             r.Body.Write(data);
         }
 
+        /// <inheritdoc/>
         public override async Task SetResBodyAsync(ReadOnlyMemory<Byte> data)
         {
             var r = Res;
@@ -100,12 +133,14 @@ namespace SysWeaver.Net
             await r.Body.WriteAsync(data).ConfigureAwait(false);
         }
 
+        /// <inheritdoc/>
         public override void SetResBody(Byte[] data, int offset, int length)
         {
             var r = Res;
             r.ContentLength = length;
             r.Body.Write(data, offset, length);
         }
+        /// <inheritdoc/>
         public override Task SetResBodyAsync(Byte[] data, int offset, int length)
         {
             var r = Res;
@@ -114,8 +149,10 @@ namespace SysWeaver.Net
         }
 
 
+        /// <inheritdoc/>
         public override void SetResHeader(String header, String value) => Res.Headers[header] = value;
 
+        /// <inheritdoc/>
         public override IPAddress GetIP()
         {
             var a = Context.Connection.RemoteIpAddress;
@@ -124,6 +161,7 @@ namespace SysWeaver.Net
 
         bool InternalIsDead;
 
+        /// <inheritdoc/>
         public override bool IsDead()
         {
             if (InternalIsDead)
@@ -145,6 +183,7 @@ namespace SysWeaver.Net
             { "Content-Type", (to, vals) => to.ContentType = vals.First() },
         }.Freeze();
 
+        /// <inheritdoc/>
         public override void SetResHeaders(int status, IEnumerable<KeyValuePair<String, IReadOnlyList<String>>> headers, IReadOnlySet<String> ignore)
 
         {
@@ -171,6 +210,7 @@ namespace SysWeaver.Net
             to.StatusCode = status;
         }
 
+        /// <inheritdoc/>
         public override HttpServerRequest ReplaceUrl(string newUrl, HttpServerHostInfo host, String prefix, int queryStart, HttpServerBase server, String newMethod = null)
         {
             var h = new AspHttpServerRequest(Context, newUrl, newUrl, prefix, server as AspHttpServer, host, queryStart, false, newMethod);
@@ -178,12 +218,14 @@ namespace SysWeaver.Net
             return h;
         }
 
+        /// <inheritdoc/>
         public override void Dispose()
         {
             OnDispose();
             base.Dispose();
         }
 
+        /// <inheritdoc/>
         public override string GetRawQuery(string def = "")
         {
             var qs = Req.QueryString;

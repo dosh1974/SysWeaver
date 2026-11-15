@@ -3,6 +3,9 @@
 namespace SysWeaver.MicroService
 {
 
+    /// <summary>
+    /// A text file that can be viewed (and optionally edited or deleted) through the server manager
+    /// </summary>
     public class SmTextFile
     {
         /// <summary>
@@ -16,26 +19,32 @@ namespace SysWeaver.MicroService
         public String Desc;
 
         /// <summary>
-        /// The auth required to view this file
+        /// The auth required to view this file.
+        /// Defaults to <see cref="Roles.AdminOps"/>.
         /// </summary>
         public String Auth = Roles.AdminOps;
 
         /// <summary>
-        /// If true, the file way be deleted
+        /// If true, the file may be deleted
         /// </summary>
         public bool AllowDelete;
 
         /// <summary>
-        /// If true, the file way be edited (and saved)
+        /// If true, the file may be edited (and saved)
         /// </summary>
         public bool AllowEdit;
 
 
         /// <summary>
-        /// If true, scroll to the end of the file by default
+        /// If true, scroll to the end of the file by default.
+        /// Defaults to true.
         /// </summary>
         public bool ScrollToEnd = true;
 
+        /// <summary>
+        /// Copy all settings from another text file
+        /// </summary>
+        /// <param name="s">The text file to copy from</param>
         public void CopyFrom(SmTextFile s)
         {
             Filename = s.Filename;
@@ -49,25 +58,32 @@ namespace SysWeaver.MicroService
 
 
 
+    /// <summary>
+    /// Parameters for the <see cref="ServerManagerService"/>
+    /// </summary>
     public sealed class ServerManagerParams
     {
         /// <summary>
-        /// If true, service versions are compressed, saving disc space and transfer size at the cost of slower switching
+        /// If true, service versions are compressed, saving disc space and transfer size at the cost of slower switching.
+        /// Defaults to true.
         /// </summary>
         public bool CompressServices = true;
 
         /// <summary>
-        /// Where managed services are located
+        /// Where managed services are located, multiple folders can be separated by ";" (path templates are resolved).
+        /// If null or empty, "$(CommonApplicationData)/SysWeaver/ManagedServices" is used.
         /// </summary>
         public String ServiceFolder;
 
         /// <summary>
-        /// The number of days to keep backup's
+        /// The number of days to keep backup's (at least 3).
+        /// Defaults to 365.
         /// </summary>
         public int RemoveServiceBackupsDays = 365;
 
         /// <summary>
-        /// Default auth for folders and services
+        /// Default auth for folders and services.
+        /// Defaults to <see cref="Roles.Admin"/>.
         /// </summary>
         public String SyncAuth = Roles.Admin;
 
@@ -87,29 +103,34 @@ namespace SysWeaver.MicroService
         public SmTextFile[] TextFiles;
 
         /// <summary>
-        /// If true, the hosts file is readable
+        /// If true, the hosts file is readable.
+        /// Defaults to true.
         /// </summary>
         public bool AllowHosts = true;
 
         /// <summary>
-        /// If true, the hosts file may be edited
+        /// If true, the hosts file may be edited (only used if <see cref="AllowHosts"/> is true).
+        /// Defaults to true.
         /// </summary>
         public bool AllowHostsEdit = true;
 
         /// <summary>
-        /// The maximum number of seconds that a service verb (start, stop, restart, ...) may take before it's process is killed (the service itself isn't killed)
+        /// The maximum number of seconds that a service verb (start, stop, restart, ...) may take before it's process is killed (the service itself isn't killed), at least 5.
+        /// Defaults to 120.
         /// </summary>
         public int VerbTimeoutSeconds = 120;
 
         /// <summary>
         /// When activating a version: the maximum number of seconds to wait for the running service to uninstall (stop),
-        /// after that every process running from the active folder is killed and the activation continues
+        /// after that every process running from the active folder is killed and the activation continues (at least 1).
+        /// Defaults to 10.
         /// </summary>
         public int SwapStopTimeoutSeconds = 10;
 
         /// <summary>
         /// When the server manager activates a version of itself (a self update, done by a detached script):
-        /// the number of seconds that the new version must keep running, else the previous version is restored and started
+        /// the number of seconds that the new version must keep running, else the previous version is restored and started (at least 4).
+        /// Defaults to 30.
         /// </summary>
         public int SelfUpdateStableSeconds = 30;
 

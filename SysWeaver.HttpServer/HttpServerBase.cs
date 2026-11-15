@@ -57,6 +57,9 @@ namespace SysWeaver.Net
     public abstract partial class HttpServerBase : IPerfMonitored, IHaveStats, IServicePausable, IDisposable
     {
 
+        /// <summary>
+        /// The prefix used for the messages that the server adds to the message host.
+        /// </summary>
         protected const String Prefix = "[HttpServer] ";
 
         /// <summary>

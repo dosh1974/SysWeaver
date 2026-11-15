@@ -32,7 +32,7 @@ async function smEditNewService() {
             editor = new Sw.Edit(typeInfo, undefined, opt);
             await editor.SetObject(null);
             return Sw.el("div.ss-edit", null,
-                Sw.el("p.sw-dialog-text", { text: SmLines(
+                Sw.el("p.sw-dialog-text", { text: SmShared.Lines(
                     _TF("Enter a valid service name below and select Add.", "Help text of the add service dialog"),
                     _TF("The name may only contain valid filename characters", "Help text of the add service dialog")) }),
                 editor.Element);
@@ -52,15 +52,6 @@ async function smEditNewService() {
         ],
     });
     return v === true ? result : null;
-}
-
-/**
- * Join lines (translated literals may not contain line breaks).
- * @param {...string} lines - Lines.
- * @returns {string} The text.
- */
-function SmLines(...lines) {
-    return lines.join("\n");
 }
 
 /**

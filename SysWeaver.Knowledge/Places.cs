@@ -6,16 +6,44 @@ namespace SysWeaver.Knowledge
 {
 
 
+    /// <summary>
+    /// What kind of location a place is in
+    /// </summary>
     public enum PlaceLocations
     {
+        /// <summary>
+        /// The location is unknown
+        /// </summary>
         Unknown,
+        /// <summary>
+        /// The place is in a capital city
+        /// </summary>
         Capital,
+        /// <summary>
+        /// The place is in a city (that is not a capital)
+        /// </summary>
         City,
+        /// <summary>
+        /// The place is in a country (no specific city)
+        /// </summary>
         Country
     }
 
+    /// <summary>
+    /// Info about a place
+    /// </summary>
     public sealed class Place : Info, IGoogleInfo
     {
+        /// <summary>
+        /// Create place info
+        /// </summary>
+        /// <param name="loc">The kind of location of the place</param>
+        /// <param name="location">The name of the location (city or country)</param>
+        /// <param name="name">The name of the place</param>
+        /// <param name="desc">The description</param>
+        /// <param name="category">The category of the info</param>
+        /// <param name="pop">Popularity (measured as number of hits when searching)</param>
+        /// <param name="parent">Optional parent info</param>
         public Place(PlaceLocations loc, String location, string name, string desc, string category, long pop, Info[] parent = null)
             : base(name, desc, category, parent, true)
         {
@@ -23,8 +51,15 @@ namespace SysWeaver.Knowledge
             Location = location;
             Pop = pop;
         }
-        
+
+        /// <summary>
+        /// What kind of location the place is in
+        /// </summary>
         public readonly PlaceLocations LocationType;
+
+        /// <summary>
+        /// The name of the location (city or country) the place is in
+        /// </summary>
         public readonly String Location;
 
         /// <summary>
@@ -34,14 +69,32 @@ namespace SysWeaver.Knowledge
 
     }
 
+    /// <summary>
+    /// Knowledge about places (landmarks and other places of interest)
+    /// </summary>
     public static class Places
     {
+        /// <summary>
+        /// The group (category) name of all place info
+        /// </summary>
         public const String Group = "Places";
 
+        /// <summary>
+        /// Try to get info about a place
+        /// </summary>
+        /// <param name="name">The name of the place, any case</param>
+        /// <param name="info">The info if found</param>
+        /// <returns>True if info was found</returns>
         public static bool TryGet(String name, out Place info) => Tags.TryGetValueLower(name, out info);
 
+        /// <summary>
+        /// All keyword/info pairs (the keys are lower case)
+        /// </summary>
         public static IEnumerable<KeyValuePair<String, Place>> All => Tags;
 
+        /// <summary>
+        /// The number of keywords
+        /// </summary>
         public static int Count => Tags.Count;
 
         #region Setup

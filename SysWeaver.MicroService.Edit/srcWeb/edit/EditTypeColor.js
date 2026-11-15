@@ -447,7 +447,7 @@
                 const v = t.FromColor(c, old ?? def);
                 if (!E.IsDifferent(old, v))
                     return;
-                await editor.SetMemberValue(member, v, old, undoText || _T("Set value: \"{0}\"", t.ToText(v), "Command text stored in a log when a property value was changed.{0} is replaced with the new value."), token);
+                await editor.SetMemberValue(member, v, old, undoText || E.Handler.SetText(t.ToText(v)), token);
             };
             const wrap = Sw.el("div.sw-edit-color");
             //  The swatch (picker): rgb only, alpha and intensity have their own controls
@@ -473,7 +473,7 @@
                     sync();
                     return;
                 }
-                await editor.SetMemberValue(member, v, old, _T("Set value: \"{0}\"", t.ToText(v), "Command text stored in a log when a property value was changed.{0} is replaced with the new value."), token);
+                await editor.SetMemberValue(member, v, old, E.Handler.SetText(t.ToText(v)), token);
             }, s => {
                 s = ("" + s).trim();
                 if (!s)

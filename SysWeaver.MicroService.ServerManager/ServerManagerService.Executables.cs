@@ -705,7 +705,7 @@ namespace SysWeaver.MicroService
         /// The executable is used for all service operations (status, start, stop ...) as long as it exists, it's never replaced automatically.
         /// </summary>
         /// <param name="r">The service name and the executable (one of <see cref="SmServiceDetail.Executables"/>), an empty name selects automatically (the best guess, replaced if it doesn't respond as a service)</param>
-        /// <param name="context"></param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
         /// <returns>Updated service details</returns>
         [WebApi]
         [WebApiAuth]

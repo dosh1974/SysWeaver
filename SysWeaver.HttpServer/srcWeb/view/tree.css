@@ -109,8 +109,10 @@
     cursor: pointer;
 }
 
-.tv-row:hover {
-    background: color-mix(in oklab, var(--sw-accent1, var(--sw-info)) 7%, transparent);
+@media (hover: hover) {
+    .tv-row:hover {
+        background: color-mix(in oklab, var(--sw-accent1, var(--sw-info)) 7%, transparent);
+    }
 }
 
 .tv-item:focus-visible > .tv-row {
@@ -139,15 +141,15 @@
 }
 
 .tv-key, .tv-tag {
-    color: var(--sw-accent1-fg, var(--sw-accent1));
+    color: var(--sw-text-accent);
 }
 
 .tv-attr {
-    color: color-mix(in oklab, var(--sw-accent1-fg, var(--sw-accent1)) 70%, var(--sw-text));
+    color: color-mix(in oklab, var(--sw-text-accent) 70%, var(--sw-text));
 }
 
 .tv-str, .tv-aval {
-    color: color-mix(in oklab, var(--sw-success, #2a7) 75%, var(--sw-text));
+    color: color-mix(in oklab, var(--sw-ok) 75%, var(--sw-text));
 }
 
 .tv-num {
@@ -171,7 +173,7 @@
 .tv-hit {
     background: color-mix(in srgb, var(--sw-warning) 35%, transparent);
     color: inherit;
-    border-radius: 2px;
+    border-radius: var(--sw-radius-sm);
 }
 
 /* Narrow: the tools show their icons only (the text stays the accessible name), the status goes */

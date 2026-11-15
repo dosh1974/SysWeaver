@@ -253,6 +253,7 @@
         kill: '<circle cx="12" cy="12" r="9"/><path d="m9 9 6 6M15 9l-6 6"/>',
         braces: '<path d="M8 3H7a2 2 0 0 0-2 2v4a2 2 0 0 1-2 2 2 2 0 0 1 2 2v4a2 2 0 0 0 2 2h1M16 3h1a2 2 0 0 1 2 2v4a2 2 0 0 0 2 2 2 2 0 0 0-2 2v4a2 2 0 0 1-2 2h-1"/>',
         folder: '<path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2h8.5A1.5 1.5 0 0 1 21 8.5v10a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5Z"/>',
+        inbox: '<path d="M3 13h5l1.5 3h5L16 13h5"/><path d="M5.5 5h13L21 13v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-6Z"/>',
         format: '<path d="M4 6h16M4 10h10M4 14h16M4 18h10"/>',
         density: '<path d="M4 5h16M4 9.5h16M4 14h16M4 18.5h16"/><path d="M2 3v18M22 3v18" stroke-opacity=".45"/>',
         circle: '<circle cx="12" cy="12" r="9"/>',
@@ -1315,6 +1316,23 @@
     }
 
     /**
+     * Register a whole set of schemas ({ Card: {...}, "Form field": {...} } registers "Sw.Card", "Sw.Form field") and give back the
+     * checker of the set: what the layout, page and controls files each used to write by hand.
+     * @param {Object<string, object>} schemas The schemas by api name (without "Sw.").
+     * @returns {function(string, object):object} check(name, o): the developer check of o against schemas[name] (DevMode; a non-object
+     *   is not checked); returns o.
+     */
+    function OptionSet(schemas) {
+        for (const k of Object.keys(schemas))
+            RegisterOptions("Sw." + k, schemas[k]);
+        return (name, o) => {
+            if (o && typeof o === "object")
+                DevOptions("Sw." + name, o, schemas[name]);
+            return o;
+        };
+    }
+
+    /**
      * Check an options object against the schema registered for the api (DevMode; a non-object is the api's short form: not checked).
      * @param {string} where The api ("Sw.OnClick"). @param {*} o The options.
      */
@@ -2046,6 +2064,8 @@
         CheckOptions: DevOptions,
         /** Register a ui api's options schema by name (Sw.DevOptions.Register of the core too): RegisterOptions(where, schema). */
         RegisterOptions,
+        /** Register a set of schemas ("Sw." + name) and get their checker: OptionSet(schemas) -> check(name, o). */
+        OptionSet,
         /**
          * Show the outcome of work in exactly one place (FBK-2, FBK-5): nothing when the work showed something itself (o.Said) or when
          * the caller shows it in place; else a failure toast (Work.Error), "<name>: not done." for a false result that said nothing (and a

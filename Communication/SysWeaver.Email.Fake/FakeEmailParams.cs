@@ -2,6 +2,9 @@ using System;
 
 namespace SysWeaver.Email
 {
+    /// <summary>
+    /// Parameters for the <see cref="FakeEmailService"/>
+    /// </summary>
     public sealed class FakeEmailParams
     {
         /// <summary>

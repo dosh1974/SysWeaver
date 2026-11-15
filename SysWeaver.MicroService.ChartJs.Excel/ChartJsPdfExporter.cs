@@ -11,25 +11,37 @@ using SysWeaver.MicroService;
 
 namespace SysWeaver.Chart
 {
+    /// <summary>
+    /// Exports a chart as a PDF document, from the SVG image of the chart (a base64 data url)
+    /// </summary>
     public sealed class ChartJsPdfExporter : IChartExporter
     {
+        /// <summary>
+        /// The shared instance
+        /// </summary>
         public static readonly ChartJsPdfExporter Instance = new ChartJsPdfExporter();
 
         ChartJsPdfExporter()
         {
         }
 
-        public string Name => "PDF document";
+        /// <inheritdoc />
+        public string Name =>"PDF document";
 
-        public string Desc => "Save the chart as a PDF document file";
+        /// <inheritdoc />
+        public string Desc =>"Save the chart as a PDF document file";
 
-        public string Icon => "IconFilePdf";
+        /// <inheritdoc />
+        public string Icon =>"IconFilePdf";
 
-        public double Order => -1;
+        /// <inheritdoc />
+        public double Order =>-1;
 
-        public bool RequireUser => false;
+        /// <inheritdoc />
+        public bool RequireUser =>false;
 
-        public ChartExportInputTypes InputType => ChartExportInputTypes.Svg;
+        /// <inheritdoc />
+        public ChartExportInputTypes InputType =>ChartExportInputTypes.Svg;
 
 
         static XElement FindFirst(XElement element, String name)
@@ -68,6 +80,7 @@ namespace SysWeaver.Chart
             return b;
         }
 
+        /// <inheritdoc />
         public Task<MemoryFile> Export(object data, object context, ChartExportOptions options = null)
         {
             options = options ?? new ChartExportOptions();

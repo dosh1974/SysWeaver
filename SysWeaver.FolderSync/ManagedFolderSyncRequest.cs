@@ -4,6 +4,9 @@ namespace SysWeaver.FolderSync
 {
 
 
+    /// <summary>
+    /// A request to check what is required to sync a managed folder
+    /// </summary>
     public sealed class ManagedFolderSyncRequest
     {
         /// <summary>

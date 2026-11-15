@@ -24,6 +24,7 @@ flowchart LR
 ## Key features
 
 - Little endian values; strings are UTF-16 by default (any `Encoding` can be passed, the reader must use the same).
+- The reader shares short strings that repeat across reads (`SpanStringCache` in SysWeaver.Common: at most 32 chars, UTF-16 little endian or UTF-8 ASCII, and only where the result is the same as `Encoding.GetString`; `SpanStringCache.Enabled = false` turns it off).
 - Objects and strings written more than once are written once, then as a back reference, so shared references and cycles survive a round trip.
 - Values are written as their declared type; a type name is only written when the runtime type differs (polymorphic members, values written as an object).
 - Each object carries its type version, so older data can be read by newer code (see [SysWeaver.Inspection](../SysWeaver.Inspection/README.md)).

@@ -28,6 +28,12 @@ namespace SysWeaver.TextMessage
         const String ContextReference = "reference";
         const String ContextSystem = "system";
 
+        /// <summary>
+        /// Create the service and start polling the queues in the background
+        /// </summary>
+        /// <param name="p">The parameters, null to use the defaults</param>
+        /// <param name="msg">Optional message host used for logging</param>
+        /// <exception cref="Exception">A parameter is invalid</exception>
         public AmazonEndUserMessagingTextMessageService(AmazonEndUserMessagingParams p = null, IMessageHost msg = null)
         {
             p = p ?? new AmazonEndUserMessagingParams();
@@ -84,8 +90,10 @@ namespace SysWeaver.TextMessage
             Msg?.AddMessage(MessageLevels.Debug, $"{LogPrefix}Using {Senders.Length} sender(s) in {p.Region ?? "us-east-1"}, polling {queues.Length} queue(s)");
         }
 
+        /// <inheritdoc />
         public override string ToString() => Tos;
 
+        /// <inheritdoc />
         public void Dispose()
         {
             Cancel.Cancel();
@@ -412,7 +420,9 @@ namespace SysWeaver.TextMessage
         readonly TextMessageQueue<IncomingTextMessage> Incoming;
         readonly TextMessageQueue<TextMessageStatusUpdate> Statuses;
 
+        /// <inheritdoc />
         public event Action<IncomingTextMessage> OnIncoming;
+        /// <inheritdoc />
         public event Action<TextMessageStatusUpdate> OnStatus;
 
         readonly LinkedList<AmazonTextMessage> Messages = new();
@@ -525,6 +535,7 @@ namespace SysWeaver.TextMessage
         readonly ExceptionTracker PollFails = new ExceptionTracker();
         readonly ExceptionTracker ProcessFails = new ExceptionTracker();
 
+        /// <inheritdoc />
         public IEnumerable<Stats> GetStats()
         {
             const String n = nameof(AmazonEndUserMessagingTextMessageService);
@@ -538,6 +549,7 @@ namespace SysWeaver.TextMessage
                 yield return x;
         }
 
+        /// <inheritdoc />
         public PerfMonitor PerfMon { get; init; } = new PerfMonitor(nameof(AmazonEndUserMessagingTextMessageService));
 
         #endregion//Stats

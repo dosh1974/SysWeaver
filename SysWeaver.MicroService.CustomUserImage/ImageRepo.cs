@@ -8,6 +8,9 @@ using SysWeaver.Net;
 namespace SysWeaver.MicroService
 {
 
+    /// <summary>
+    /// A file repository for images: an uploaded image is saved in each of the configured sizes
+    /// </summary>
     public sealed class ImageRepo : StaticFileRepo
     {
                 
@@ -49,8 +52,8 @@ namespace SysWeaver.MicroService
                 var bgCol = new MagickColor(size.Background ?? "#000");
                 if ((!size.AllowTransparent) && (img.HasAlpha))
                 {
-                    img.BackgroundColor = bgCol;
-                    img.Alpha(AlphaAction.Remove);
+                    resized.BackgroundColor = bgCol;
+                    resized.Alpha(AlphaAction.Remove);
                 }
 
                 int w = (int)resized.Width;

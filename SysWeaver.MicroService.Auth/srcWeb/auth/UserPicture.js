@@ -27,14 +27,8 @@
         return (a[0] & 0x7fffffff) || 1;
     }
 
-    function el(tag, cls, text) {
-        const e = document.createElement(tag);
-        if (cls)
-            e.className = cls;
-        if (text)
-            e.textContent = text;
-        return e;
-    }
+    //  el(tag, cls, text): a plain element with class(es) and text (Sw.el from sw/ui.js)
+    const el = (tag, cls, text) => Sw.el(tag, { class: cls, text });
 
     /**
      * Open the picture dialog.
@@ -141,7 +135,9 @@
                     img.loading = "lazy";
                     img.src = root + "Avatars/" + seed + ".svg";
                     b.appendChild(img);
-                    b.addEventListener("click", () => {
+                    b.addEventListener("click", ev => {
+                        if (Sw.BadClick(ev, true))
+                            return;
                         for (const x of grid.children)
                             x.setAttribute("aria-checked", "false");
                         b.setAttribute("aria-checked", "true");
@@ -239,13 +235,13 @@
             generated ? _T("A generated picture replaces your uploaded photo. The photo is deleted.", "Text of the question before a generated picture replaces the uploaded user picture") : _T("Your uploaded photo is deleted and your generated picture shows again.", "Text of the question before the uploaded user picture is removed"),
             _T("Remove photo", "Button that confirms removing the uploaded user picture"), { Danger: true });
 
-        /** Remove the uploaded picture (quiet: no toast, a missing picture is no error). */
+        /** Remove the uploaded picture (quiet: no toast, a failure is thrown with the reason, or swallowed when quiet). */
         async function removeUpload(quiet) {
             try {
                 const r = await Sw.Net.Send(root + "Api/RemoveUserImage", null, { Reload: true });
                 if (!quiet) {
                     changedNow();
-                    Sw.Toast(r ? _T("Your uploaded picture is removed.", "Toast after removing the uploaded user picture") : _T("You have no uploaded picture.", "Toast when there was no uploaded user picture to remove"), { Kind: r ? "ok" : "info" });
+                    Sw.Toast(_T("Your uploaded picture is removed.", "Toast after removing the uploaded user picture"), { Kind: "ok" });
                 }
                 return r;
             }

@@ -31,7 +31,8 @@ flowchart LR
 - Path parsing, bounds, transforms and shape generation (n-gons, rounded and fancy rects, extrusion, bending)
 - Scene builder with css styles, gradients, masks, drop shadows and 3D-style extruded faces, plus generated favicons
 - XDocument based canvas for editing and combining existing SVG documents (embedding, fitting, inlining styles, recolouring)
-- Text converted to glyph paths using embedded fonts (Montserrat Black, Atari Classic and others) or font files found on disc
+- Text converted to glyph paths using the embedded brand fonts (`BrandFonts`: Saira Semi Condensed SemiBold, Barlow Regular and Medium) or font files found on disc
+- Generated brand marks: app icons, user icons, app logos and banners built from a name's initials with woven thread motifs and a `BrandPalette` derived from `HashColors` (`SvgScene.AddAppIcon`, `AddUserIcon`, `AddAppLogo`, `AddAppBanner` in `SvgSceneBrandExt`); the same name, colors and seed always give the same result
 - Code 128 (numeric, also GS1-128), Code 39 and ITF-14 barcodes as SVG paths
 - Layered composition templates built from SVG/bitmap files selected by variables, with caching
 - SVG to PNG/JPEG rendering with Svg.Skia, also on Linux
@@ -43,6 +44,8 @@ flowchart LR
 - [`SvgScene`](SvgScene.cs) — builds a styled SVG document from shapes and text
 - [`SvgCanvas`](SvgCanvas.cs) — XDocument based SVG editing
 - [`SvgFont`](SvgFont.cs) — embedded and file based fonts for text to path conversion
+- [`BrandFonts`](BrandFonts.cs) — the embedded brand fonts (`Saira`, `BarlowMedium`, `BarlowRegular`)
+- [`SvgSceneBrandExt`](SvgSceneBrandExt.cs), [`MarkDesign`](MarkDesign.cs), [`BrandPalette`](BrandPalette.cs), [`BrandText`](BrandText.cs) — the generated brand icons, logos and banners
 - [`SvgBitmapRenderer`](SvgBitmapRenderer.cs) — SVG to PNG/JPEG via Skia
 
 ## Limitations and considerations
@@ -52,13 +55,13 @@ flowchart LR
 - `SvgCanvas.Image(url)` reads local files, don't pass untrusted urls
 - `SvgFont.AddFontPath` and the font cache are global (static) state
 - Rendering fidelity follows the Skia-based SVG renderer's feature coverage
-- On Linux the referenced `SkiaSharp.NativeAssets.Linux.NoDependencies` needs no fontconfig or fonts, but installed fonts are not used: text elements fall back to font files from `SvgFont.AddFontPath` folders or the embedded `MontserratBlack`. Convert text to paths (`SvgCanvas.RasterizeText`, `SvgScene.AddText`) for identical output on every machine
+- On Linux the referenced `SkiaSharp.NativeAssets.Linux.NoDependencies` needs no fontconfig or fonts, but installed fonts are not used: text elements fall back to font files from `SvgFont.AddFontPath` folders or the embedded `BrandFonts.BarlowRegular`. Convert text to paths (`SvgCanvas.RasterizeText`, `SvgScene.AddText`) for identical output on every machine
 
 ## Folder layout
 
 | Folder | Content |
 |---|---|
-| [`srcData/`](srcData/README.md) | TrueType fonts embedded for text-to-path conversion (`SvgFont`) |
+| [`srcData/`](srcData/README.md) | TrueType fonts embedded for text-to-path conversion (`BrandFonts`, `SvgFont`) |
 
 ## Relationships
 

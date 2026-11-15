@@ -11,7 +11,7 @@
 
 ## Purpose
 
-[`SvgFont`](../SvgFont.cs) exposes each font in this folder as a static property (`SvgFont.MontserratBlack`, `SvgFont.AtariClassic`, ...) that is loaded on first use. `MontserratBlack` is also the fallback font when text is rasterised and no matching font file is found (see the Linux note in the project README).
+[`BrandFonts`](../BrandFonts.cs) exposes the fonts in this folder as static properties (`BrandFonts.Saira`, `BrandFonts.BarlowMedium`, `BrandFonts.BarlowRegular`) that are loaded on first use. `BarlowRegular` is also the fallback font when text is rasterised and no matching font file is found (see the Linux note in the project README).
 
 ## How it is built
 
@@ -21,20 +21,17 @@ The `EmbedLocal` target of [`SysWeaver.Media.Svg.csproj`](../SysWeaver.Media.Svg
 
 | Item | Description |
 |---|---|
-| [`AsianNinja.ttf`](AsianNinja.ttf) | Decorative font, `SvgFont.AsianNinja` |
-| [`AstroSpace.ttf`](AstroSpace.ttf) | Decorative font, `SvgFont.AstroSpace` |
-| [`AtariClassic.ttf`](AtariClassic.ttf) | Pixel / retro font, `SvgFont.AtariClassic` |
-| [`MontserratBlack.ttf`](MontserratBlack.ttf) | Heavy sans-serif font, `SvgFont.MontserratBlack` (default fallback) |
-| [`RedemtionRegular.ttf`](RedemtionRegular.ttf) | Decorative font, `SvgFont.RedemtionRegular` |
-| [`RoTwimchRegular.ttf`](RoTwimchRegular.ttf) | Decorative font, `SvgFont.RoTwimchRegular` |
-| [`VegapunkFree.ttf`](VegapunkFree.ttf) | Decorative font, `SvgFont.VegapunkFree` |
+| [`SairaSemiCondensed-SemiBold.ttf`](SairaSemiCondensed-SemiBold.ttf) | The display font (initials, wordmarks), `BrandFonts.Saira` |
+| [`Barlow-Medium.ttf`](Barlow-Medium.ttf) | The text font, emphasis, `BrandFonts.BarlowMedium` |
+| [`Barlow-Regular.ttf`](Barlow-Regular.ttf) | The text font (default fallback), `BrandFonts.BarlowRegular` |
+| [`OFL-Barlow.txt`](OFL-Barlow.txt), [`OFL-SairaSemiCondensed.txt`](OFL-SairaSemiCondensed.txt) | The SIL Open Font License 1.1 of the fonts |
 
 ## Limitations and considerations
 
-- The licences of the fonts are not recorded in this folder; check them before redistributing.
-- Adding a font here also requires a matching static property in `SvgFont.cs` to be reachable by name.
+- The fonts are licensed under the SIL Open Font License 1.1 (the licence texts are in this folder); keep them with the fonts when redistributing.
+- Adding a font here also requires a matching static property in `BrandFonts.cs` to be reachable by name.
 
 ## Relationships
 
 - **Part of:** [SysWeaver.Media.Svg](../README.md)
-- **Used by:** [`SvgFont`](../SvgFont.cs), and through it `SvgScene`, `SvgCanvas.RasterizeText` and [`SvgBitmapRenderer`](../SvgBitmapRenderer.cs) (Montserrat Black as the fallback typeface when rendering)
+- **Used by:** [`SvgFont`](../SvgFont.cs), and through it `SvgScene`, `SvgCanvas.RasterizeText` and [`SvgBitmapRenderer`](../SvgBitmapRenderer.cs) (Barlow Regular as the fallback typeface when rendering), [`BrandFonts`](../BrandFonts.cs)

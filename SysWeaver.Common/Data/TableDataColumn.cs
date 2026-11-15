@@ -10,6 +10,10 @@ namespace SysWeaver.Data
     public class TableDataBaseColumn
     {
 #if DEBUG
+        /// <summary>
+        /// Debug builds only: the name of the column.
+        /// </summary>
+        /// <returns>The column name.</returns>
         public override string ToString() => Name;
 #endif//DEBUG
         /// <summary>

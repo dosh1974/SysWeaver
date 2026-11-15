@@ -50,7 +50,7 @@ No other SysWeaver project references it; it is a standalone data library for ap
 
 | Folder | Content |
 |---|---|
-| [`data/`](data/README.md) | The embedded knowledge data files (Brotli compressed JSON, `*.db`) |
+| [`data/`](data) | The embedded knowledge data files (Brotli compressed JSON, `*.db`) |
 
 ## Relationships
 

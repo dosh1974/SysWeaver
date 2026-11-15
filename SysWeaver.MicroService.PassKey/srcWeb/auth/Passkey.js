@@ -74,6 +74,41 @@
     }
 
     /**
+     * Post the browser's credential (assertion or attestation) to the submit api of a ceremony.
+     * @param {object} c The challenge options ({challengeId, ...}).
+     * @param {PublicKeyCredential} cc The credential the browser returned.
+     * @param {string} submitName Submit api ("Auth", "Create", "New").
+     * @param {?object} response The type specific part of the response (already base64), or null.
+     * @returns {Promise<object>} The server's result ({Error, User?, ...}); throws when the service didn't answer.
+     */
+    async function submitCredential(c, cc, submitName, response) {
+        const r = await PassKey.Call(submitName, {
+            challengeId: c.challengeId,
+            authenticatorAttachment: cc.authenticatorAttachment,
+            id: cc.id,
+            rawId: b64(cc.rawId),
+            response,
+            type: cc.type,
+        });
+        if (!r)
+            throw new Error(_TF("No response from the service", "Error message shown when the service didn't respond to a passkey request"));
+        return r;
+    }
+
+    /**
+     * Note the outcome of a submitted credential: on success the device hint, and the signed in user of the result.
+     * @param {PublicKeyCredential} cc The credential.
+     * @param {object} r The server's result.
+     * @returns {object} The result.
+     */
+    function finishCredential(cc, r) {
+        if (r.Error == 0)
+            PassKey.SetHint(cc.authenticatorAttachment, cc.id);
+        PassKey.SetUser(r);
+        return r;
+    }
+
+    /**
      * A server challenge fetched before the user starts the ceremony (navigator.credentials is then called directly from
      * the user gesture, as Safari requires).
      */
@@ -444,21 +479,12 @@
             if (!cc)
                 return { Error: PassKey.Errors.Cancelled };
             const res = cc.response;
-            const r = await PassKey.Call(submitName, {
-                challengeId: c.challengeId,
-                authenticatorAttachment: cc.authenticatorAttachment,
-                id: cc.id,
-                rawId: b64(cc.rawId),
-                response: res ? {
-                    authenticatorData: b64(res.authenticatorData),
-                    clientDataJSON: b64(res.clientDataJSON),
-                    signature: b64(res.signature),
-                    userHandle: b64(res.userHandle),
-                } : null,
-                type: cc.type,
-            });
-            if (!r)
-                throw new Error(_TF("No response from the service", "Error message shown when the service didn't respond to a passkey request"));
+            const r = await submitCredential(c, cc, submitName, res ? {
+                authenticatorData: b64(res.authenticatorData),
+                clientDataJSON: b64(res.clientDataJSON),
+                signature: b64(res.signature),
+                userHandle: b64(res.userHandle),
+            } : null);
             if (r.Error == PassKey.Errors.UnknownCredential && PublicKeyCredential.signalUnknownCredential) {
                 //  Let the passkey provider remove (or hide) the passkey
                 try {
@@ -467,10 +493,7 @@
                 catch {
                 }
             }
-            if (r.Error == 0)
-                PassKey.SetHint(cc.authenticatorAttachment, cc.id);
-            PassKey.SetUser(r);
-            return r;
+            return finishCredential(cc, r);
         }
 
         /**
@@ -500,24 +523,11 @@
             }
             catch {
             }
-            const r = await PassKey.Call(submitName, {
-                challengeId: c.challengeId,
-                authenticatorAttachment: cc.authenticatorAttachment,
-                id: cc.id,
-                rawId: b64(cc.rawId),
-                response: res ? {
-                    attestationObject: b64(res.attestationObject),
-                    clientDataJSON: b64(res.clientDataJSON),
-                    transports,
-                } : null,
-                type: cc.type,
-            });
-            if (!r)
-                throw new Error(_TF("No response from the service", "Error message shown when the service didn't respond to a passkey request"));
-            if (r.Error == 0)
-                PassKey.SetHint(cc.authenticatorAttachment, cc.id);
-            PassKey.SetUser(r);
-            return r;
+            return finishCredential(cc, await submitCredential(c, cc, submitName, res ? {
+                attestationObject: b64(res.attestationObject),
+                clientDataJSON: b64(res.clientDataJSON),
+                transports,
+            } : null));
         }
 
         /**
@@ -569,7 +579,7 @@
          * Rename a passkey.
          * @param {string} id Credential id.
          * @param {string} name New name.
-         * @returns {Promise<boolean>} Falsy if the passkey doesn't exist (any more).
+         * @returns {Promise<boolean>} True (a passkey that doesn't exist any more throws with the reason).
          */
         static async Rename(id, name) {
             return await PassKey.Call("RenamePassKey", { Id: id, Name: name });

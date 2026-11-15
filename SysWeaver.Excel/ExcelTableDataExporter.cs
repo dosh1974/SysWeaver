@@ -16,9 +16,16 @@ namespace SysWeaver.Excel
     public sealed class ExcelTableDataExporter : ITableDataExporter
     {
 
+        /// <inheritdoc />
         public override string ToString() => Name;
 
+        /// <summary>
+        /// Exports to an Excel workbook (xlsx)
+        /// </summary>
         public static readonly ExcelTableDataExporter Xlsx = new ExcelTableDataExporter(false, "Excel Workbook", "An Excel workbook file", "IconFileXlsx", 0);
+        /// <summary>
+        /// Exports to a PDF document
+        /// </summary>
         public static readonly ExcelTableDataExporter Pdf = new ExcelTableDataExporter(true, "PDF document", "A Portable Document File", "IconFilePdf", 1);
 
         ExcelTableDataExporter(bool pdf, String name, String desc, String icon, double order)
@@ -30,15 +37,24 @@ namespace SysWeaver.Excel
             Order = order;
         }
 
+        /// <summary>
+        /// True if this exporter creates a PDF document, false for an Excel workbook
+        /// </summary>
         public readonly bool IsPdf;
 
+        /// <inheritdoc />
         public String Name { get; init; }
 
+        /// <inheritdoc />
         public String Desc { get; init; }
 
+        /// <inheritdoc />
         public String Icon { get; init; }
+
+        /// <inheritdoc />
         public double Order { get; init; }
 
+        /// <inheritdoc />
         public bool RequireUser => false;
 
         /// <summary>
@@ -47,6 +63,7 @@ namespace SysWeaver.Excel
         public const String UtcSuffix = " (UTC)";
 
 
+        /// <inheritdoc />
         public Task<MemoryFile> Export(BaseTableData tableData, Object context, TableDataExportOptions options = null)
         {
             options = options ?? new TableDataExportOptions();

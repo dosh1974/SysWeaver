@@ -12,6 +12,10 @@ namespace SysWeaver.Auth
     /// </summary>
     public sealed class UserPasswordDontExistException : Exception, IHttpRefusal
     {
+        /// <summary>
+        /// Create the exception
+        /// </summary>
+        /// <param name="id">The id of the user</param>
         public UserPasswordDontExistException(long id) : base("No password exist for user " + id)
         {
         }
@@ -26,6 +30,10 @@ namespace SysWeaver.Auth
     /// </summary>
     public sealed class InvalidEmailException : Exception, IHttpRefusal
     {
+        /// <summary>
+        /// Create the exception
+        /// </summary>
+        /// <param name="email">The invalid e-mail address</param>
         public InvalidEmailException(String email) : base("The e-mail address " + email.ToQuoted() + " is not valid")
         {
         }
@@ -39,6 +47,10 @@ namespace SysWeaver.Auth
     /// </summary>
     public sealed class InvalidPhoneException : Exception, IHttpRefusal
     {
+        /// <summary>
+        /// Create the exception
+        /// </summary>
+        /// <param name="phone">The invalid phone number</param>
         public InvalidPhoneException(String phone) : base("The phone number " + phone.ToQuoted() + " is not valid")
         {
         }
@@ -52,6 +64,10 @@ namespace SysWeaver.Auth
     /// </summary>
     public sealed class EmailAlreadyAssignedException : Exception, IHttpRefusal
     {
+        /// <summary>
+        /// Create the exception
+        /// </summary>
+        /// <param name="email">The e-mail address</param>
         public EmailAlreadyAssignedException(String email) : base("The e-mail address " + email.ToQuoted() + " is already the address of this account")
         {
         }
@@ -65,6 +81,10 @@ namespace SysWeaver.Auth
     /// </summary>
     public sealed class PhoneAlreadyAssignedException : Exception, IHttpRefusal
     {
+        /// <summary>
+        /// Create the exception
+        /// </summary>
+        /// <param name="phone">The phone number</param>
         public PhoneAlreadyAssignedException(String phone) : base("The phone number " + phone.ToQuoted() + " is already the number of this account")
         {
         }
@@ -78,6 +98,10 @@ namespace SysWeaver.Auth
     /// </summary>
     public sealed class EmailInUseException : Exception, IHttpRefusal
     {
+        /// <summary>
+        /// Create the exception
+        /// </summary>
+        /// <param name="email">The e-mail address</param>
         public EmailInUseException(String email) : base("The e-mail address " + email.ToQuoted() + " belongs to another account")
         {
         }
@@ -91,6 +115,10 @@ namespace SysWeaver.Auth
     /// </summary>
     public sealed class PhoneInUseException : Exception, IHttpRefusal
     {
+        /// <summary>
+        /// Create the exception
+        /// </summary>
+        /// <param name="phone">The phone number</param>
         public PhoneInUseException(String phone) : base("The phone number " + phone.ToQuoted() + " belongs to another account")
         {
         }
@@ -111,6 +139,9 @@ namespace SysWeaver.Auth
         /// </summary>
         public const String Reason = "This account is disabled. Contact the administrator of this site.";
 
+        /// <summary>
+        /// Create the exception
+        /// </summary>
         public UserDisabledException() : base(Reason)
         {
         }
@@ -125,6 +156,9 @@ namespace SysWeaver.Auth
     /// </summary>
     public sealed class UserHaveNoComs : Exception, IHttpRefusal
     {
+        /// <summary>
+        /// Create the exception
+        /// </summary>
         public UserHaveNoComs() : base("The account has no e-mail address or phone number to send the message to: add one first, so you can't be locked out")
         {
         }
@@ -138,6 +172,9 @@ namespace SysWeaver.Auth
     /// </summary>
     public sealed class UserAlreadyHaveEmail : Exception, IHttpRefusal
     {
+        /// <summary>
+        /// Create the exception
+        /// </summary>
         public UserAlreadyHaveEmail() : base("The account already has an e-mail address: change it instead")
         {
         }
@@ -151,6 +188,9 @@ namespace SysWeaver.Auth
     /// </summary>
     public sealed class UserDontHaveEmail : Exception, IHttpRefusal
     {
+        /// <summary>
+        /// Create the exception
+        /// </summary>
         public UserDontHaveEmail() : base("The account has no e-mail address")
         {
         }
@@ -165,6 +205,9 @@ namespace SysWeaver.Auth
     /// </summary>
     public sealed class UserAlreadyHavePhone : Exception, IHttpRefusal
     {
+        /// <summary>
+        /// Create the exception
+        /// </summary>
         public UserAlreadyHavePhone() : base("The account already has a phone number: change it instead")
         {
         }
@@ -178,6 +221,9 @@ namespace SysWeaver.Auth
     /// </summary>
     public sealed class UserDontHavePhone : Exception, IHttpRefusal
     {
+        /// <summary>
+        /// Create the exception
+        /// </summary>
         public UserDontHavePhone() : base("The account has no phone number")
         {
         }
@@ -192,6 +238,9 @@ namespace SysWeaver.Auth
     /// </summary>
     public sealed class CantDeleteLastUserCom : Exception, IHttpRefusal
     {
+        /// <summary>
+        /// Create the exception
+        /// </summary>
         public CantDeleteLastUserCom() : base("The last e-mail address or phone number can't be removed: you would be locked out of the account")
         {
         }
@@ -239,6 +288,9 @@ namespace SysWeaver.Auth
     /// </summary>
     public sealed class UserAlreadyHavePassword : Exception, IHttpRefusal
     {
+        /// <summary>
+        /// Create the exception
+        /// </summary>
         public UserAlreadyHavePassword() : base("The account already has a password: change it instead")
         {
         }
@@ -252,6 +304,9 @@ namespace SysWeaver.Auth
     /// </summary>
     public sealed class UserDontHavePassword : Exception, IHttpRefusal
     {
+        /// <summary>
+        /// Create the exception
+        /// </summary>
         public UserDontHavePassword() : base("The account has no password")
         {
         }

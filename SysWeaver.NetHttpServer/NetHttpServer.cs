@@ -12,6 +12,9 @@ using SysWeaver.Translation;
 namespace SysWeaver.Net
 {
 
+    /// <summary>
+    /// An HTTP server based on <see cref="HttpListener"/> (http.sys on Windows), see <see cref="NetHttpServerParams"/> for the configuration.
+    /// </summary>
     public class NetHttpServer : HttpServerBase, IDisposable
     {
 
@@ -31,6 +34,18 @@ namespace SysWeaver.Net
             }
         }
 
+        /// <summary>
+        /// Create a server (the server is not started until <see cref="Start"/> is called).
+        /// Prefixes that can't be used are ignored (with a warning) if <see cref="NetHttpServerParams.IgnoreBadPrefixes"/> is set, else an exception is thrown.
+        /// </summary>
+        /// <param name="msg">Optional message host used for logging.</param>
+        /// <param name="translator">The translator used to translate responses.</param>
+        /// <param name="audit">The API audit service.</param>
+        /// <param name="certProviders">The available certificate providers by name (required for prefixes that specify a certificate).</param>
+        /// <param name="auth">The authentication manager.</param>
+        /// <param name="firewallHandler">Handler used to add the prefixes to the firewall.</param>
+        /// <param name="p">Optional parameters, null to use the defaults.</param>
+        /// <exception cref="Exception">Thrown if <see cref="HttpListener"/> isn't supported, or a prefix or certificate provider is invalid and bad prefixes are not ignored.</exception>
         public NetHttpServer(IMessageHost msg, ITranslator translator, IApiAuditService audit, IReadOnlyDictionary<String, ICertificateProvider> certProviders, AuthManager auth, IFirewallHandler firewallHandler, NetHttpServerParams p = null)
             : base(msg, translator, audit, auth, firewallHandler, p, typeof(HttpListenerException))
         {
@@ -205,6 +220,9 @@ namespace SysWeaver.Net
         }
 
 
+        /// <summary>
+        /// The number of seconds to wait for pending requests when shutting down (see <see cref="NetHttpServerParams.SecondsToWait"/>).
+        /// </summary>
         public readonly int SecondsToWait;
 
 
@@ -214,6 +232,9 @@ namespace SysWeaver.Net
         readonly HttpListener Listener;
         SemaphoreSlim IsListening;
 
+        /// <summary>
+        /// True if the server isn't listening (not started, or stopped).
+        /// </summary>
         public bool IsStopped
         {
             get
@@ -223,6 +244,7 @@ namespace SysWeaver.Net
             }
         }
 
+        /// <inheritdoc/>
         protected override Task<bool> OnNewCert(ICertificateProvider certProvider, String pre)
         {
             lock (Listener)
@@ -241,6 +263,10 @@ namespace SysWeaver.Net
             }
         }
 
+        /// <summary>
+        /// Start listening for requests.
+        /// </summary>
+        /// <returns>False if the server was already started.</returns>
         public bool Start()
         {
             lock (Listener)
@@ -256,6 +282,10 @@ namespace SysWeaver.Net
             return true;
         }
 
+        /// <summary>
+        /// Stop listening for requests. Ongoing requests are asked to cancel and given about 3 seconds to complete.
+        /// </summary>
+        /// <returns>False if the server wasn't started.</returns>
         public bool Stop()
         {
             lock (Listener)
@@ -286,6 +316,7 @@ namespace SysWeaver.Net
         }
 
 
+        /// <inheritdoc/>
         public override void Pause()
         {
             lock (Listener)
@@ -303,6 +334,7 @@ namespace SysWeaver.Net
             }
         }
 
+        /// <inheritdoc/>
         public override void Continue()
         {
             lock (Listener)
@@ -327,6 +359,7 @@ namespace SysWeaver.Net
         /// </summary>
         readonly ExceptionTracker LocalOnlyRefused = new ExceptionTracker();
 
+        /// <inheritdoc/>
         public override IEnumerable<Stats> GetStats()
         {
             foreach (var x in base.GetStats())
@@ -545,6 +578,7 @@ namespace SysWeaver.Net
             }
         }
 
+        /// <inheritdoc/>
         protected override void OnDispose()
         {
             Stop();

@@ -9,8 +9,16 @@ namespace SysWeaver.IpLocation.Caches
 {
 
 
+    /// <summary>
+    /// An ip location cache that stores the locations in a MySql database (with a memory cache in front of it)
+    /// </summary>
     public sealed class IpLocationMySqlCache : IIpLocationCache
     {
+        /// <summary>
+        /// Create the cache (the database tables are created in the background)
+        /// </summary>
+        /// <param name="msg">Optional message host, used to report database messages</param>
+        /// <param name="p">Parameters, null to use the defaults</param>
         public IpLocationMySqlCache(IMessageHost msg = null, IpLocationMySqlCacheParams p = null)
         {
             p = p ?? new IpLocationMySqlCacheParams();
@@ -37,6 +45,7 @@ namespace SysWeaver.IpLocation.Caches
             }
         }
 
+        /// <inheritdoc />
         public ValueTask<IpLocation> Get(string ip, Func<string, Task<IpLocation>> getFromSource)
             => Cache.GetOrUpdateAsync(ip, DbGet, getFromSource);
 
@@ -79,8 +88,8 @@ namespace SysWeaver.IpLocation.Caches
         /// <summary>
         /// All locations cached in the DB
         /// </summary>
-        /// <param name="r"></param>
-        /// <returns></returns>
+        /// <param name="r">The table request</param>
+        /// <returns>The table data (at most 2000 rows)</returns>
         [WebApi("Debug/{0}")]
         [WebApiAuth(Roles.Debug)]
         [WebMenuTable(null, "Locations", "Locations", null, null)]

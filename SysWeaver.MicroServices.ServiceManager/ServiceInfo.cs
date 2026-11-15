@@ -63,7 +63,7 @@ namespace SysWeaver.MicroService
         long IntUseCount;
 
         /// <summary>
-        /// Number of times something have requested this serice
+        /// Number of times something has requested this service
         /// </summary>
         public long UseCount => Interlocked.Read(ref IntUseCount);
 
@@ -79,6 +79,10 @@ namespace SysWeaver.MicroService
         /// </summary>
         public readonly Type ParamType;
 
+        /// <summary>
+        /// Get a name that identifies this instance (the type name, followed by the instance name in brackets if it has one)
+        /// </summary>
+        /// <returns>The unique name</returns>
         public String GetUniqueName()
         {
             var n = Name;

@@ -18,6 +18,21 @@
     const el = Sw.el;
 
     /**
+     * The text of a failed ceremony result: its translated error text and the browser's message, if any.
+     * @param {object} r The result ({Error, Message?}).
+     * @returns {string} The text.
+     */
+    const resultText = r => P.ErrorText(r) + (r.Message ? "\n" + r.Message : "");
+
+    /**
+     * The text of a failure by exception: what failed, then the reason.
+     * @param {string} what What failed, ex: "Failed to add the passkey."
+     * @param {*} e The exception.
+     * @returns {string} The text.
+     */
+    const failText = (what, e) => what + "\n" + Sw.ErrorMessage(e);
+
+    /**
      * Show the result of a ceremony error: the status text, and a fail toast unless cancelled.
      * @param {object} r The result.
      * @param {object} status The Sw.AuthUi.Status.
@@ -25,7 +40,64 @@
     function showError(r, status) {
         status.Set(P.ErrorText(r), r.Error == P.Errors.Cancelled ? "warning" : "error");
         if (r.Error != P.Errors.Cancelled)
-            Sw.Fail(P.ErrorText(r) + (r.Message ? "\n" + r.Message : ""));
+            Sw.Fail(resultText(r));
+    }
+
+    /**
+     * Pre-fetch the challenge of a ceremony, so the browser prompt opens directly from the click (Safari). Ends the page
+     * (stop) when the challenge can't be had.
+     * @param {object} page The AuthPage.
+     * @param {object} status The status line.
+     * @param {PassKeyChallenge} ceremony The ceremony.
+     * @returns {Promise<boolean>} True when the challenge is ready.
+     */
+    async function prefetch(page, status, ceremony) {
+        let c;
+        try {
+            c = await ceremony.Fetch();
+        }
+        catch (e) {
+            stop(page, status, failText(P.ErrorText({ Error: P.Errors.NotSupported }), e));
+            return false;
+        }
+        if (c.error) {
+            stop(page, status, P.ErrorText({ Error: c.error }));
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Run the ceremony of a passkey page from its button: the status shows the progress and the result; a failure is also a toast
+     * (not a cancelled ceremony); the challenge is fetched again for a retry.
+     * @param {PassKeyChallenge} ceremony The ceremony.
+     * @param {object} status The status line.
+     * @param {Sw.Button} button The page's button (hidden with the status when done).
+     * @param {object} o Options: { Busy (text while the user acts), Done (text), Failed (text of an exception), SignedIn(r) (true:
+     * the ceremony signed in, go to the start page), Final(r) (optional: true when it ends the page for that error result) }.
+     * @returns {Promise<void>}
+     */
+    async function runCeremony(ceremony, status, button, o) {
+        status.Set(o.Busy, "info");
+        try {
+            const r = await ceremony.Run();
+            if (r.Error == 0) {
+                status.Set(o.Done, "ok");
+                U.Hide(status, button);
+                if (o.SignedIn(r))
+                    await Sw.Auth.StartPage();
+                return;
+            }
+            if (o.Final && o.Final(r))
+                return;
+            showError(r, status);
+        }
+        catch (e) {
+            const m = failText(o.Failed, e);
+            status.Set(m, "error");
+            Sw.Fail(m);
+        }
+        ceremony.Fetch().catch(() => { });
     }
 
     /**
@@ -54,41 +126,20 @@
             if (user)
                 return stop(page, status, _T("The user {0} is already signed in!", user.Username, "Message shown when trying to sign in with a passkey while a user is signed in, {0} is replaced with the user name") + "\n" + _TF("Please sign out before signing in with another user.", "Message shown when trying to sign in with a passkey while a user is signed in"));
             const ceremony = P.SignIn();
-            //  Pre-fetch so the browser prompt opens directly from the click (Safari)
-            let c;
-            try {
-                c = await ceremony.Fetch();
-            }
-            catch (e) {
-                return stop(page, status, P.ErrorText({ Error: P.Errors.NotSupported }) + "\n" + (e.message || e));
-            }
-            if (c.error)
-                return stop(page, status, P.ErrorText({ Error: c.error }));
+            if (!await prefetch(page, status, ceremony))
+                return;
             status.Set(_TF("Use the button below to sign in with a passkey. A passkey on your phone or a security key can also be used.", "Instruction shown on the sign in with passkey page"));
             const button = U.Button(U.Buttons(page), {
                 Text: _TF("Sign in with passkey", "Text of a button that when pressed will sign in using a passkey"),
                 Title: _TF("Sign in using a passkey", "Tool tip of a button that when pressed will sign in using a passkey"),
                 Icon: "IconUsePasskey", Submit: true,
             }, page);
-            page.OnSubmit = async () => {
-                status.Set(_TF("Select your passkey..", "Message shown while the user should select a passkey"), "info");
-                try {
-                    const r = await ceremony.Run();
-                    if (r.Error == 0) {
-                        status.Set(_TF("Signed in!", "Message shown when a user signed in successfully"), "ok");
-                        U.Hide(status, button);
-                        await Sw.Auth.StartPage();
-                        return;
-                    }
-                    showError(r, status);
-                }
-                catch (e) {
-                    const m = _TF("Failed to sign in.", "Error message shown when a passkey sign in failed") + "\n" + (e.message || e);
-                    status.Set(m, "error");
-                    Sw.Fail(m);
-                }
-                ceremony.Fetch().catch(() => { });
-            };
+            page.OnSubmit = () => runCeremony(ceremony, status, button, {
+                Busy: _TF("Select your passkey..", "Message shown while the user should select a passkey"),
+                Done: _TF("Signed in!", "Message shown when a user signed in successfully"),
+                Failed: _TF("Failed to sign in.", "Error message shown when a passkey sign in failed"),
+                SignedIn: () => true,
+            });
             page.Focus(button.E);
         });
     }
@@ -116,15 +167,8 @@
             if (!token && !user)
                 return stop(page, status, _TF("No user is signed in!", "Message shown when no user is signed in while trying to add a passkey") + "\n" + _TF("Please sign in before adding a passkey.", "Message shown when no user is signed in while trying to add a passkey"));
             const ceremony = token ? P.AttachUsingToken(token) : P.Attach();
-            let c;
-            try {
-                c = await ceremony.Fetch();
-            }
-            catch (e) {
-                return stop(page, status, P.ErrorText({ Error: P.Errors.NotSupported }) + "\n" + (e.message || e));
-            }
-            if (c.error)
-                return stop(page, status, P.ErrorText({ Error: c.error }));
+            if (!await prefetch(page, status, ceremony))
+                return;
             const name = ceremony.UserName ?? user?.Username;
             if (name)
                 heading.textContent = _T("Add a passkey for {0}", name, "Label on the add passkey page, {0} is replaced with the user name of the account that the passkey is added to");
@@ -134,28 +178,19 @@
                 Title: _TF("Add a passkey on this device", "Tool tip of a button that when pressed will add a passkey"),
                 Icon: "IconAddPasskey", Submit: true,
             }, page);
-            page.OnSubmit = async () => {
-                status.Set(_TF("Follow the instructions of your browser or device..", "Message shown while a passkey is being added"), "info");
-                try {
-                    const r = await ceremony.Run();
-                    if (r.Error == 0) {
-                        status.Set(_TF("Passkey added!", "Message shown when a passkey was added"), "ok");
-                        U.Hide(status, button);
-                        if (token || r.User)
-                            await Sw.Auth.StartPage();
-                        return;
-                    }
-                    if (r.Error == P.Errors.TokenExpired || r.Error == P.Errors.AlreadyRegistered || r.Error == P.Errors.AlreadyOnDevice)
-                        return stop(page, status, P.ErrorText(r), button);
-                    showError(r, status);
-                }
-                catch (e) {
-                    const m = _TF("Failed to add the passkey.", "Error message shown when a passkey couldn't be added") + "\n" + (e.message || e);
-                    status.Set(m, "error");
-                    Sw.Fail(m);
-                }
-                ceremony.Fetch().catch(() => { });
-            };
+            page.OnSubmit = () => runCeremony(ceremony, status, button, {
+                Busy: _TF("Follow the instructions of your browser or device..", "Message shown while a passkey is being added"),
+                Done: _TF("Passkey added!", "Message shown when a passkey was added"),
+                Failed: _TF("Failed to add the passkey.", "Error message shown when a passkey couldn't be added"),
+                SignedIn: r => !!(token || r.User),
+                //  A link that died, or a passkey that is there already: the page ends (nothing to retry)
+                Final: r => {
+                    if (r.Error != P.Errors.TokenExpired && r.Error != P.Errors.AlreadyRegistered && r.Error != P.Errors.AlreadyOnDevice)
+                        return false;
+                    stop(page, status, P.ErrorText(r), button);
+                    return true;
+                },
+            });
             page.Focus(button.E);
         }, accountOpts);
     }
@@ -166,24 +201,15 @@
      * @returns {Promise<void>}
      */
     async function addPassKeyOtherMain() {
-        let user = null;
-        try {
-            user = await P.GetLoggedInUser();
-        }
-        catch {
-        }
+        const user = await P.GetLoggedInUser().catch(() => null);
         if (!user) {
             await U.Page("IconWarning", async page => {
                 new U.Status(page).Set(_TF("No user is signed in!", "Message shown when no user is signed in while trying to add a passkey") + "\n" + _TF("Please sign in before adding a passkey.", "Message shown when no user is signed in while trying to add a passkey"), "warning");
             });
             return;
         }
-        let minutes = 15;
-        try {
-            minutes = (await P.Call("GetQRLifeTime", null)) ?? minutes;
-        }
-        catch {
-        }
+        //  (the lifetime of the code in minutes; 15 when the service doesn't say)
+        const minutes = (await P.Call("GetQRLifeTime", null).catch(() => null)) ?? 15;
         await U.Page(P.ApiPrefix + "GetQR.svg", async page => {
             page.IconE.alt = _TF("QR code", "Alternative text of a QR code image");
             //  The server refuses the QR code (ex: 401 for an account the passkey service does not manage): say so instead of a broken image
@@ -264,7 +290,7 @@
                         : P.ErrorText(r));
                 }
                 catch (e) {
-                    Sw.Fail(_TF("Failed to remove the passkey.", "Error message shown when a passkey couldn't be removed") + "\n" + (e.message || e));
+                    Sw.Fail(failText(_TF("Failed to remove the passkey.", "Error message shown when a passkey couldn't be removed"), e));
                 }
             }
 
@@ -325,15 +351,14 @@
                         return;
                     tb.Input.readOnly = true;
                     try {
-                        if (await P.Rename(key.Id, tb.Get().trim())) {
-                            d.Close(true);
-                            await rebuild();
-                            return;
-                        }
-                        Sw.Fail(_TF("The passkey doesn't exist any more.", "Error message shown when trying to rename a passkey that was removed"));
+                        //  A passkey that doesn't exist (any more) throws with the reason (shown below)
+                        await P.Rename(key.Id, tb.Get().trim());
+                        d.Close(true);
+                        await rebuild();
+                        return;
                     }
                     catch (e) {
-                        Sw.Fail(_TF("Failed to rename the passkey.", "Error message shown when a passkey couldn't be renamed") + "\n" + (e.message || e));
+                        Sw.Fail(failText(_TF("Failed to rename the passkey.", "Error message shown when a passkey couldn't be renamed"), e));
                     }
                     tb.Input.readOnly = false;
                 }
@@ -404,11 +429,11 @@
                                 return await rebuild();
                             }
                             if (r.Error != P.Errors.Cancelled)
-                                Sw.Fail(P.ErrorText(r) + (r.Message ? "\n" + r.Message : ""));
+                                Sw.Fail(resultText(r));
                             add.Fetch().catch(() => { });
                         }
                         catch (e) {
-                            Sw.Fail(_TF("Failed to add the passkey.", "Error message shown when a passkey couldn't be added") + "\n" + (e.message || e));
+                            Sw.Fail(failText(_TF("Failed to add the passkey.", "Error message shown when a passkey couldn't be added"), e));
                         }
                     },
                 });

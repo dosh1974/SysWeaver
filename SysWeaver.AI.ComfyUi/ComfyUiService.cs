@@ -21,6 +21,7 @@ namespace SysWeaver.AI
     /// </summary>
     public sealed partial class ComfyUiService
     {
+        /// <inheritdoc/>
         public override string ToString() => String.Concat("End point: ", EndPoint.ToString().ToQuoted(), ", Workflow folder: ", WorkflowFolder.ToFilename());
 
         /// <summary>

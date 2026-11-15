@@ -2,10 +2,13 @@
 
 namespace SysWeaver.Map
 {
+    /// <summary>
+    /// Information about a single region of a map (bounding box, label position etc).
+    /// </summary>
     public sealed class MapRegionInfo
     {
         /// <summary>
-        /// Name of the region
+        /// Name (id) of the region, typically the ISO 3166 country code
         /// </summary>
         public String N;
         
@@ -30,7 +33,7 @@ namespace SysWeaver.Map
         public double H;
 
         /// <summary>
-        /// Original order
+        /// Index of the region in the original map data (original order)
         /// </summary>
         public int I;
         

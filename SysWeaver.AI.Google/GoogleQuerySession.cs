@@ -13,6 +13,14 @@ namespace SysWeaver.AI
     /// </summary>
     public class GoogleQuerySession : AiQuerySessionBase
     {
+        /// <summary>
+        /// Create a query session
+        /// </summary>
+        /// <param name="c">The Google GenAI client to use</param>
+        /// <param name="p">Session parameters (model, reasoning, service tier)</param>
+        /// <param name="toolCache">Optional cache for tool results</param>
+        /// <param name="monitor">Optional performance monitor</param>
+        /// <param name="memory">Optional AI memory</param>
         public GoogleQuerySession(Client c, GoogleSessionParams p, IAiToolCache toolCache = null, PerfMonitor monitor = null, IAiMemory memory = null)
             : this(c, p, GoogleModels.GetOptions(p.Model), toolCache, monitor, memory)
         {
@@ -26,12 +34,20 @@ namespace SysWeaver.AI
             Client = c;
         }
 
+        /// <summary>
+        /// The Google GenAI client used by this session
+        /// </summary>
         protected readonly Client Client;
         readonly ThinkingConfig Thinking;
         readonly ServiceTier? Tier;
 
+        /// <inheritdoc />
         public override String SystemPrompt { get; set; }
 
+        /// <summary>
+        /// Create the generate content config for a request (tools, temperature, thinking, service tier and system prompt)
+        /// </summary>
+        /// <returns>The config</returns>
         protected GenerateContentConfig CreateConfig()
             => GoogleModels.BuildConfig(GetTools(), HaveTemperature, Temperature, Thinking, Tier, SupportSystemRole ? SystemPrompt : null);
 

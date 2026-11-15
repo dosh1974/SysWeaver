@@ -17,6 +17,7 @@ namespace SysWeaver.AI
     /// </summary>
     public sealed partial class ComfyUiWorkflow
     {
+        /// <inheritdoc/>
         public override string ToString() => String.Concat(Name.ToQuoted(), " (", Inputs.Count.ToString(), " input tags, ", Outputs.Count.ToString(), " output tags)");
 
         /// <summary>

@@ -5,14 +5,32 @@ using System.Linq;
 namespace SysWeaver.Knowledge
 {
 
+    /// <summary>
+    /// Knowledge about animals (species, groups and pets)
+    /// </summary>
     public static class Animals
     {
+        /// <summary>
+        /// The group (category) name of all animal info
+        /// </summary>
         public const String Group = "Animals";
 
+        /// <summary>
+        /// Try to get info about an animal
+        /// </summary>
+        /// <param name="name">The name of the animal, any case</param>
+        /// <param name="info">The info if found</param>
+        /// <returns>True if info was found</returns>
         public static bool TryGet(String name, out Info info) => Tags.TryGetValueLower(name, out info);
 
+        /// <summary>
+        /// All keyword/info pairs (the keys are lower case)
+        /// </summary>
         public static IEnumerable<KeyValuePair<String, Info>> All => Tags;
 
+        /// <summary>
+        /// The number of keywords
+        /// </summary>
         public static int Count => Tags.Count;
 
         #region Setup

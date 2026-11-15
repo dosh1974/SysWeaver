@@ -73,6 +73,7 @@ The `ServiceManager` *is* a `MessageHost`, so every service logs through the sam
 - [`Config`](Config.cs) — layered configuration files and mapping of JSON onto parameter objects
 - [`PathTemplate`](PathTemplate.cs) / [`Folders`](Folders.cs) — path variables and the standard data folders
 - [`MessageHost`](MessageHost.cs) — the message/logging hub that the service manager derives from
+- [`SpanStringCache` / `SpanStringCacheTable`](SpanStringCache.cs) — bounded, lock free caches that turn a span (chars or ASCII bytes) into a shared string, so parsers allocate a value that repeats only once (used by the json and binary readers and for the local url of http requests). A string is cached the second time it is seen (one-off values such as ids and tokens are never kept) and the content is compared on every hit. `SpanStringCache.Enabled = false` turns all of them off (never keeps a parsed string alive after its result is gone)
 - [`TypeFinder`](TypeFinder.cs) — type resolution by name for manifests and plug-ins
 - [`PlatformTools`](PlatformTools.cs) — the `IPlatformTools` contract and its runtime resolution
 

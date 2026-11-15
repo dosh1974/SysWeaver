@@ -12,22 +12,31 @@ namespace EffectWeaver.Shaders;
 /// </summary>
 public class SettingDef
 {
+    /// <summary>The unique key (name) of the setting</summary>
     public string Key { get; set; } = "";
+    /// <summary>The display name</summary>
     public string Label { get; set; } = "";
     /// <summary>float, int, bool, enum, vec2, vec3, vec4, color, color4</summary>
     public string Type { get; set; } = "float";
+    /// <summary>The default value</summary>
     public JsonNode? Default { get; set; }
+    /// <summary>The minimum value (numeric types)</summary>
     public double? Min { get; set; }
+    /// <summary>The maximum value (numeric types)</summary>
     public double? Max { get; set; }
+    /// <summary>The slider step (numeric types)</summary>
     public double? Step { get; set; }
     /// <summary>Use a logarithmic slider (for wide ranges like speed)</summary>
     public bool? Log { get; set; }
+    /// <summary>The unit shown after the value (ex: "%")</summary>
     public string? Unit { get; set; }
     /// <summary>The display of a value (a template: "{0} BPM", "{0:1} %" = 1 decimal, "{0:0}" = whole numbers), wins over Unit; from "format" of a "var:" annotation</summary>
     public string? Format { get; set; }
     /// <summary>The display scale ("scale" of a "var:" annotation, default 1): the value is shown and typed × Scale (0.3 with Scale 100 and Unit "%" shows as 30 %)</summary>
     public double? Scale { get; set; }
+    /// <summary>A description of the setting</summary>
     public string? Desc { get; set; }
+    /// <summary>The options of an enum</summary>
     public List<SettingOption>? Options { get; set; }
     /// <summary>Vectors: names of the components (default x, y, z, w)</summary>
     public List<string>? Names { get; set; }
@@ -37,6 +46,9 @@ public class SettingDef
     public bool? Sliders { get; set; }
 }
 
+/// <summary>An option of an enum setting</summary>
+/// <param name="Value">The value</param>
+/// <param name="Label">The display name</param>
 public sealed record SettingOption(JsonNode Value, string Label);
 
 /// <summary>A fragment shader source in parts: head (version, precision, uniforms ...), body (the shader), tail (main() if added)</summary>
@@ -60,11 +72,16 @@ public sealed class EffectVar : SettingDef
     [JsonIgnore] public bool BoolAsInt;
 }
 
+/// <summary>Information about a parsed effect (see <see cref="ShaderParser.Parse"/>)</summary>
 public sealed class EffectInfo
 {
+    /// <summary>The id of the effect</summary>
     public required string Id { get; init; }
+    /// <summary>The display name</summary>
     public required string Name { get; init; }
+    /// <summary>The source lines</summary>
     public required string[] Lines { get; init; }
+    /// <summary>The tunable variables</summary>
     public required List<EffectVar> Vars { get; init; }
     /// <summary>Folder on disk, null if embedded</summary>
     public string? SourceDir { get; init; }
@@ -72,18 +89,23 @@ public sealed class EffectInfo
     public string Folder { get; set; } = "";
     /// <summary>Keywords from the "Keywords" section of the description (.md), filled by the effect library</summary>
     public string[] Keywords { get; set; } = [];
+    /// <summary>The shader has a ShaderToy style mainImage function</summary>
     public bool HasMainImage { get; init; }
+    /// <summary>The shader has its own main function</summary>
     public bool HasMain { get; init; }
     /// <summary>A ShaderToy style shader with a vertex stage (void vertexMain(vec2 fragCoord), see <see cref="ShaderStages"/>)</summary>
     public bool HasVertexMain { get; init; }
     /// <summary>The shader is built with a vertex stage: vertexMain + mainImage, no own main()</summary>
     public bool UsesVertexStage => HasVertexMain && HasMainImage && !HasMain;
+    /// <summary>The shader uses derivative functions (dFdx, dFdy, fwidth)</summary>
     public bool UsesDerivatives { get; init; }
+    /// <summary>The shader uses texture2DLod</summary>
     public bool UsesLod { get; init; }
     /// <summary>The shader uses texture2D (not available in GLSL ES 3.00)</summary>
     public bool UsesTexture2D { get; init; }
     /// <summary>Uniforms declared by the shader itself (not declared again by the ShaderToy prefix)</summary>
     public HashSet<string> Uniforms { get; init; } = [];
+    /// <summary>The comment at the top of the source, if any</summary>
     public string? HeaderComment { get; init; }
     /// <summary>The iMouse channels x, y, z, w (always 4), from "// iMouse.x = Name | Description | Default" comments</summary>
     public MouseChannel[] Mouse { get; init; } = ShaderParser.ParseMouse(new Dictionary<char, string>());
@@ -94,18 +116,23 @@ public sealed class EffectInfo
 /// <summary>An iMouse channel (x, y, z or w), a controller value in [0, 1]</summary>
 public sealed class MouseChannel
 {
+    /// <summary>The name of the channel</summary>
     public string Name { get; set; } = "";
+    /// <summary>The description of the channel</summary>
     public string Desc { get; set; } = "";
+    /// <summary>The default value of the channel [0, 1]</summary>
     public double Default { get; set; } = ShaderParser.MouseDefault;
     /// <summary>Described by the effect (an "iMouse.x = ..." comment)</summary>
     public bool Known { get; set; }
-    /// <summary>Read by the effect's code (see <see cref="ShaderParser.MarkMouseUsage"/>)</summary>
-    /// <summary>The values the 0..1 control drives (optional 4th part "Min .. Max"), shown next to it: "= 3000"</summary>
+    /// <summary>The value that the 0..1 control drives at 0 (optional 4th part "Min .. Max"), shown next to it: "= 3000"</summary>
     public double? Min { get; set; }
+    /// <summary>The value that the 0..1 control drives at 1 (see <see cref="Min"/>)</summary>
     public double? Max { get; set; }
     /// <summary>The unit of the driven value (optional 5th part, ex: "BPM"), or a template with {0} (see <see cref="SettingDef.Format"/>) in Format</summary>
     public string? Unit { get; set; }
+    /// <summary>A display template of the driven value, wins over <see cref="Unit"/> (see <see cref="SettingDef.Format"/>)</summary>
     public string? Format { get; set; }
+    /// <summary>Read by the effect's code (see <see cref="ShaderParser.MarkMouseUsage"/>)</summary>
     public bool Used { get; set; }
 }
 
@@ -209,6 +236,9 @@ public static class ShaderParser
         public JsonObject? Annotation;
     }
 
+    /// <summary>Split a line of code into the code and a trailing comment ("//" or "/* */")</summary>
+    /// <param name="text">The text to split</param>
+    /// <returns>The code part, the comment text and the column where the comment starts (-1 if there is no comment)</returns>
     public static (string Value, string Comment, int CommentCol) SplitComment(string text)
     {
         var ci = text.IndexOf("//", StringComparison.Ordinal);
@@ -344,6 +374,12 @@ public static class ShaderParser
         return r;
     }
 
+    /// <summary>Parse the source of an effect (finds the tunable variables, the entry points, used features and iMouse descriptions)</summary>
+    /// <param name="id">The id of the effect</param>
+    /// <param name="src">The shader source</param>
+    /// <param name="dir">The folder on disk, null if embedded</param>
+    /// <param name="displayName">The display name, null to make one from the id</param>
+    /// <returns>Information about the effect</returns>
     public static EffectInfo Parse(string id, string src, string? dir, string? displayName = null)
     {
         src = src.TrimStart((char)0xFEFF);
@@ -838,6 +874,9 @@ public static class ShaderParser
 
     #region Building
 
+    /// <summary>Format a number as a GLSL float literal (invariant culture, at least one and at most 10 decimals, NaN and infinity become 0)</summary>
+    /// <param name="v">The value</param>
+    /// <returns>The literal</returns>
     public static string FormatFloat(double v)
     {
         if (double.IsNaN(v) || double.IsInfinity(v))
@@ -846,6 +885,10 @@ public static class ShaderParser
         return s;
     }
 
+    /// <summary>Convert a json value (number, bool or numeric string) to a double</summary>
+    /// <param name="n">The value</param>
+    /// <param name="def">The result if the value is missing, not finite or can't be converted</param>
+    /// <returns>The number (true is 1, false is 0)</returns>
     public static double ToDouble(JsonNode? n, double def)
     {
         if (n is JsonValue jv)
@@ -860,6 +903,10 @@ public static class ShaderParser
         return def;
     }
 
+    /// <summary>Format a value of a tunable variable as a GLSL literal of its type</summary>
+    /// <param name="v">The variable</param>
+    /// <param name="value">The value, null (or invalid) uses the default of the variable</param>
+    /// <returns>The literal (negative values of a #define are put in parentheses)</returns>
     public static string FormatValue(EffectVar v, JsonNode? value)
     {
         switch (v.GlslType)

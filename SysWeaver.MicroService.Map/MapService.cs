@@ -8,20 +8,27 @@ using SysWeaver.Net;
 namespace SysWeaver.MicroService
 {
 
+    /// <summary>
+    /// Service for generating customizable SVG maps (web api and AI tools)
+    /// </summary>
     [AiToolPrefix("")]
     public sealed class MapService : IHaveAiTools
     {
-        public MapService() 
+        /// <summary>
+        /// Create the service
+        /// </summary>
+        public MapService()
         { 
         }
 
+        /// <inheritdoc />
         public override string ToString() => "Cached maps: " + MapGen.CacheSize;
 
         /// <summary>
         /// Generate a map
         /// </summary>
-        /// <param name="p"></param>
-        /// <returns></returns>
+        /// <param name="p">The map to generate</param>
+        /// <returns>The map as UTF-8 encoded SVG</returns>
         [WebApi]
         [WebApiAuth]
         [WebApiRaw("image/svg+xml")]
@@ -35,8 +42,8 @@ namespace SysWeaver.MicroService
         /// Always use the GetMapRegions first to discover what regions can be marked.
         /// </summary>
         /// <param name="map">The data required to generate the map</param>
-        /// <param name="request"></param>
-        /// <returns>An url to a svg image with the generated map</returns>
+        /// <param name="request">The current request (must be an AI tool request, handled internally)</param>
+        /// <returns>An url to a svg image with the generated map, null if the request is not from an AI tool context</returns>
         [AiUse]
         [AiTool("🗺️✨")]
         public String BuildMap(MapGenParams map, HttpServerRequest request)

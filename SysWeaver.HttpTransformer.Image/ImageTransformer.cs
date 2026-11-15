@@ -4,9 +4,16 @@
 namespace SysWeaver.HttpTransformer
 {
 
+    /// <summary>
+    /// A cached transformer that builds optimized variants of images (avif, webp, png, jpg) using ImageMagick, see <see cref="ImageTransformerParams"/>.
+    /// </summary>
     public sealed class ImageTransformer : CachedTransformer
     {
 
+        /// <summary>
+        /// Create the transformer and register the image file extensions selected by the parameters.
+        /// </summary>
+        /// <param name="p">Optional parameters, null to use the defaults.</param>
         public ImageTransformer(ImageTransformerParams p = null)
             : base(p ?? new ImageTransformerParams())
         {

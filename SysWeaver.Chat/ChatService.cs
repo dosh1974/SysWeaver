@@ -33,12 +33,15 @@ namespace SysWeaver.Chat
     [AiToolPrefix("")]
     public sealed class ChatService : IDisposable, IHttpServerModule, IHaveAiTools
     {
+        /// <inheritdoc/>
         public override string ToString() => "Providers: " + String.Join(", ", Providers.Values.Select(x => x.Provider.Name));
 
         #region IHttpServerModule
 
+        /// <inheritdoc/>
         public String[] OnlyForPrefixes { get; } = ["chat/file/"];
 
+        /// <inheritdoc/>
         public Func<HttpServerRequest, ValueTask<IHttpRequestHandler>> AsyncHandler { get; init; }
 
         async ValueTask<IHttpRequestHandler> GetChatFile(String l, HttpServerRequest context)
@@ -74,6 +77,11 @@ namespace SysWeaver.Chat
         #endregion//IHttpServerModule
 
 
+        /// <summary>
+        /// Create the chat service, all chat providers and link handlers in the service manager are registered (also those added later).
+        /// </summary>
+        /// <param name="manager">The service manager to find providers in</param>
+        /// <param name="p">Parameters, null uses the defaults</param>
         public ChatService(ServiceManager manager, ChatServiceParams p = null)
         {
             p = p ?? new ChatServiceParams();
@@ -97,6 +105,11 @@ namespace SysWeaver.Chat
         /// </summary>
         readonly bool AllowPublicStore;
 
+        /// <summary>
+        /// Add a handler for chat store links
+        /// </summary>
+        /// <param name="h">The handler (null is ignored)</param>
+        /// <returns>True if added, false if null or already added</returns>
         public bool AddLinkHandler(IChatStoreLinkHandler h)
         {
             if (h == null)
@@ -104,6 +117,11 @@ namespace SysWeaver.Chat
             return LinkHandlers.TryAdd(h, h);
         }
 
+        /// <summary>
+        /// Remove a handler for chat store links
+        /// </summary>
+        /// <param name="h">The handler (null is ignored)</param>
+        /// <returns>True if removed, false if null or not added</returns>
         public bool RemoveLinkHandler(IChatStoreLinkHandler h)
         {
             if (h == null)
@@ -119,6 +137,9 @@ namespace SysWeaver.Chat
         readonly IUserStorageService UserStore;
         readonly ServiceManager Manager;
 
+        /// <summary>
+        /// Stop listening to services added to or removed from the service manager
+        /// </summary>
         public void Dispose()
         {
             var m = Manager;
@@ -185,6 +206,12 @@ namespace SysWeaver.Chat
 
         #region Manually adding/removing providers
 
+        /// <summary>
+        /// Register a chat provider (providers in the service manager are registered automatically)
+        /// </summary>
+        /// <param name="chatProvider">The provider (null is ignored)</param>
+        /// <returns>The controller the provider should use to push actions to clients, null if the provider was null</returns>
+        /// <exception cref="Exception">The provider name is empty or the provider (name) is already registered</exception>
         public IChatController AddChatProvider(IChatProvider chatProvider)
         {
             if (chatProvider == null)
@@ -200,6 +227,11 @@ namespace SysWeaver.Chat
             return c;
         }
 
+        /// <summary>
+        /// Unregister a chat provider (its controller is reset by calling <see cref="IChatProvider.OnInit"/> with null)
+        /// </summary>
+        /// <param name="chatProvider">The provider (null is ignored)</param>
+        /// <exception cref="Exception">The provider isn't registered</exception>
         public void RemoveChatProvider(IChatProvider chatProvider)
         {
             if (chatProvider == null)
@@ -247,7 +279,7 @@ namespace SysWeaver.Chat
 
             public void RemoveMessage(string providerChatId, long messageId, HttpSession session, ChatScopes scope)
             {
-                Service.PushMessage(new PushMessagIntValue(MessageName("Remove", providerChatId), messageId), session, scope);
+                Service.PushMessage(new PushMessageIntValue(MessageName("Remove", providerChatId), messageId), session, scope);
             }
 
             public void ReplaceMessage(string providerChatId, ChatMessage message, HttpSession session, ChatScopes scope)
@@ -305,14 +337,17 @@ namespace SysWeaver.Chat
         /// </summary>
         /// <param name="chatId">The unique id of the chat session, as returned by the CreateNewChat method (or any static chat "channels" available)</param>
         /// <param name="context">The context for the http request (ignore)</param>
-        /// <returns>True if successful</returns>
-        /// <exception cref="ArgumentException"></exception>
+        /// <returns>True when the chat was cleared (never false: failures throw)</returns>
+        /// <exception cref="ArgumentException">Unknown chat id</exception>
+        /// <exception cref="HttpResponseException">409 with the reason: the chat doesn't support being cleared</exception>
         [WebApi]
-        public Task<bool> ClearAllMessages(String chatId, HttpServerRequest context)
+        public async Task<bool> ClearAllMessages(String chatId, HttpServerRequest context)
         {
             if (!TryGetController(chatId, out var c, out var pid))
                 throw new ArgumentException("Unknown chat id!", nameof(chatId));
-            return c.Provider.Clear(pid, context);
+            if (!await c.Provider.Clear(pid, context).ConfigureAwait(false))
+                throw HttpResponseException.Refused("Can't clear the chat " + chatId.ToQuoted() + ": it doesn't support being cleared");
+            return true;
         }
 
         /// <summary>
@@ -320,13 +355,17 @@ namespace SysWeaver.Chat
         /// </summary>
         /// <param name="msgRequest">The parameters for the post message request</param>
         /// <param name="context">The context for the http request (ignore)</param>
-        /// <returns>True if successful</returns>
+        /// <returns>True when the message was removed (never false: failures throw)</returns>
+        /// <exception cref="ArgumentException">Unknown chat id</exception>
+        /// <exception cref="HttpResponseException">409 with the reason: the message could not be removed</exception>
         [WebApi]
-        public Task<bool> RemoveMessage(ChatMessageIdRequest msgRequest, HttpServerRequest context)
+        public async Task<bool> RemoveMessage(ChatMessageIdRequest msgRequest, HttpServerRequest context)
         {
             if (!TryGetController(msgRequest.ChatId, out var c, out var pid))
                 throw new ArgumentException("Unknown chat id!", nameof(msgRequest.ChatId));
-            return c.Provider.RemoveMessage(pid, msgRequest.MessageId, context);
+            if (!await c.Provider.RemoveMessage(pid, msgRequest.MessageId, context).ConfigureAwait(false))
+                throw HttpResponseException.Refused("Can't remove message #" + msgRequest.MessageId + " from the chat " + msgRequest.ChatId.ToQuoted() + ": the chat refused to remove it");
+            return true;
         }
 
 
@@ -493,9 +532,11 @@ namespace SysWeaver.Chat
         /// </summary>
         /// <param name="msgRequest">The parameters for the post message request</param>
         /// <param name="context">The context for the http request (ignore)</param>
-        /// <returns>True if the message was poseted successfully</returns>
+        /// <returns>True when the message was posted (never false: failures throw)</returns>
+        /// <exception cref="ArgumentException">Unknown chat id</exception>
+        /// <exception cref="HttpResponseException">400: the message format is not allowed; 409 with the reason: the chat refused the message</exception>
         [WebApi]
-        public Task<bool> UserMessage(ChatMessageRequest msgRequest, HttpServerRequest context)
+        public async Task<bool> UserMessage(ChatMessageRequest msgRequest, HttpServerRequest context)
         {
             if (!TryGetController(msgRequest.ChatId, out var c, out var pid))
                 throw new ArgumentException("Unknown chat id!", nameof(msgRequest.ChatId));
@@ -508,7 +549,9 @@ namespace SysWeaver.Chat
                 throw new HttpResponseException(400, "Users may not send HTML messages");
             if ((body.Format != ChatMessageFormats.Text) && (body.Format != ChatMessageFormats.MarkDown))
                 throw new HttpResponseException(400, "Unknown message format");
-            return c.Provider.UserMessage(pid, context, body);
+            if (!await c.Provider.UserMessage(pid, context, body).ConfigureAwait(false))
+                throw HttpResponseException.Refused("Can't post the message to the chat " + msgRequest.ChatId.ToQuoted() + ": the chat refused it");
+            return true;
         }
 
 
@@ -517,16 +560,20 @@ namespace SysWeaver.Chat
         /// </summary>
         /// <param name="request">The parameters for the request</param>
         /// <param name="context">The context for the http request (ignore)</param>
-        /// <returns>True if the value was set successfully</returns>
+        /// <returns>True when the value was set (never false: failures throw)</returns>
+        /// <exception cref="ArgumentException">Unknown chat id</exception>
+        /// <exception cref="HttpResponseException">409 with the reason: the chat refused to set the value</exception>
         [WebApi]
-        public Task<bool> SetValue(ChatValueRequest request, HttpServerRequest context)
+        public async Task<bool> SetValue(ChatValueRequest request, HttpServerRequest context)
         {
             if (!TryGetController(request.ChatId, out var c, out var pid))
                 throw new ArgumentException("Unknown chat id!", nameof(request.ChatId));
             var key = request.Key?.Trim();
             if (String.IsNullOrEmpty(key))
                 throw new ArgumentNullException("No key supplied!", nameof(request.Key));
-            return c.Provider.SetValue(pid, context, request.Id, key, request.Value);
+            if (!await c.Provider.SetValue(pid, context, request.Id, key, request.Value).ConfigureAwait(false))
+                throw HttpResponseException.Refused("Can't set the value " + key.ToQuoted() + " in the chat " + request.ChatId.ToQuoted() + ": the chat refused it");
+            return true;
         }
 
 

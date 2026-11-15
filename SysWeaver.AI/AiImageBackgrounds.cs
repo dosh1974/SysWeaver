@@ -1,9 +1,12 @@
 ﻿namespace SysWeaver.AI
 {
+    /// <summary>
+    /// The background type of a generated image
+    /// </summary>
     public enum AiImageBackgrounds
     {
         /// <summary>
-        /// Automatically select background depeneding on context
+        /// Automatically select background depending on context
         /// </summary>
         Auto,
         /// <summary>

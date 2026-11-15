@@ -6,6 +6,7 @@ namespace SysWeaver.AI
 {
     public sealed partial class AnthropicAiService
     {
+        /// <inheritdoc />
         protected override async Task<AiModels> FetchModels()
         {
             List<AiLlmModel> llms = new();

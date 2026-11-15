@@ -8,13 +8,19 @@ namespace SysWeaver.MicroService
 
 
     /// <summary>
-    /// Service that wait for the computer to get a LAN ip.
+    /// Service that controls the cpu usage of the process (priority class, priority boost and core affinity), the original settings are restored when disposed.
     /// </summary>
     [IsMicroService]
     public sealed class CpuService : IDisposable
     {
         const String Prefix = "[CPU] ";
 
+        /// <summary>
+        /// Apply the cpu settings to the current process
+        /// </summary>
+        /// <param name="manager">The service manager</param>
+        /// <param name="p">The parameters, null to use the defaults</param>
+        /// <exception cref="Exception">If the affinity mask or the priority class is invalid</exception>
         public CpuService(ServiceManager manager, CpuServiceParams p = null)
         {
             p = p ?? new CpuServiceParams();
@@ -101,6 +107,9 @@ namespace SysWeaver.MicroService
             }
         }
 
+        /// <summary>
+        /// Restore the process settings that were changed by this service
+        /// </summary>
         public void Dispose()
         {
             var manager = Manager;

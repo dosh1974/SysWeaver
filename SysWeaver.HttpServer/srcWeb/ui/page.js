@@ -24,20 +24,6 @@
     const Sw = window.Sw = window.Sw || {};
     const el = Sw.el;
 
-    //  Line icons used by the dashboards (24 grid, stroked with currentColor; registered only when the icon set lacks them)
-    const ExtraIcons = {
-        cpu: '<rect x="6" y="6" width="12" height="12" rx="1.5"/><rect x="9.5" y="9.5" width="5" height="5"/><path d="M9 2.5v3M15 2.5v3M9 18.5v3M15 18.5v3M2.5 9h3M2.5 15h3M18.5 9h3M18.5 15h3"/>',
-        memory: '<rect x="3" y="7" width="18" height="10" rx="1.5"/><path d="M7.5 7v10M12 7v10M16.5 7v10M6 17v3M18 17v3"/>',
-        drive: '<rect x="2.5" y="13" width="19" height="7" rx="2"/><path d="M5.5 13 8 5h8l2.5 8"/><path d="M6.5 16.5h.01M10 16.5h.01" stroke-width="2.5"/>',
-        folder: '<path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2h8.5A1.5 1.5 0 0 1 21 8.5v10a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5Z"/>',
-        grid: '<rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/>',
-        inbox: '<path d="M3 13h5l1.5 3h5L16 13h5"/><path d="M5.5 5h13L21 13v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-6Z"/>',
-    };
-    if (Sw.Icons && Sw.Icons.Has)
-        for (const k in ExtraIcons)
-            if (!Sw.Icons.Has(k))
-                Sw.Icons.Add(k, ExtraIcons[k]);
-
     /**
      * Make an icon element: an inline svg icon name, a SysWeaver icon class or url (Sw.Icon handles both), or an element as is.
      * @param {string|Element} [icon] The icon.
@@ -116,9 +102,8 @@
         Steps: { Steps: "array", Label: S, FinishText: S, OnFinish: "function", OnCancel: "function", NextText: S, BackText: S, Class: S, Start: "number" },
         "Steps step": { Title: S, Sub: S, Content: Any, Form: Any, Validate: "function", OnShow: "function" },
     };
-    if (Sw.Work && typeof Sw.Work.RegisterOptions === "function")
-        for (const k of Object.keys(PageSchema))
-            Sw.Work.RegisterOptions("Sw." + k, PageSchema[k]);
+    /** Check the options of a page part (DevMode; nothing in production): checkOpts("Card", o) -> o. */
+    const checkOpts = Sw.Work.OptionSet(PageSchema);
     if (Sw.DevOptions && typeof Sw.DevOptions.NoOptions === "function")
         Sw.DevOptions.NoOptions("Sw.FillTable", "o are Sw.Table.Create options (checked there)");
     //  Schemas of ui apis whose files check nothing yet (registered here, the last ui part, so the registry knows them; their files can
@@ -128,18 +113,6 @@
         Sw.Work.RegisterOptions("Sw.FullScreen.OnCorner", { Corner: { Type: S, Check: v => /^(top|bottom)-(left|right)$/.test(v) ? "" : '"' + v + '" is no corner (top-right, top-left, bottom-right, bottom-left).' }, Size: "number", Area: Any });
         Sw.Work.RegisterOptions("Sw.PropertyEditor", { Defs: "array", Values: "object", OnInput: "function", OnChange: "function", Realtime: "boolean", ResetButtons: "boolean", Hints: "boolean", Label: S });
         Sw.Work.RegisterOptions("Sw.SearchSelection", { Id: S, GetId: "function", MaxRecent: "number", Render: "function", Find: "function" });
-    }
-
-    /**
-     * Check the options of a page part (DevMode; nothing in production).
-     * @param {string} name The part ("Card", "Form field").
-     * @param {object} o The options.
-     * @returns {object} o.
-     */
-    function checkOpts(name, o) {
-        if (o && typeof o === "object" && Sw.Work && typeof Sw.Work.CheckOptions === "function")
-            Sw.Work.CheckOptions("Sw." + name, o, PageSchema[name]);
-        return o;
     }
 
     /**
@@ -917,12 +890,7 @@
             //  (disabled with its reason, INP-12: the reason is the tool tip and what an attempt says; setting "disabled" first gave
             //  "Not available right now")
             const why = _TF("File uploads are not available on this service", "Tool tip of an upload button when the file upload service is missing");
-            if (Sw.Disabled && typeof Sw.Disabled.Set === "function")
-                Sw.Disabled.Set(e, true, why);
-            else {
-                e.disabled = true;
-                e.title = why;
-            }
+            Sw.Disabled.Set(e, true, why);
             return false;
         }
         window.fileUploaderSetup(e, repo, null, (ev, res, files) => ReportUpload(res, files, onUploaded), null, true);

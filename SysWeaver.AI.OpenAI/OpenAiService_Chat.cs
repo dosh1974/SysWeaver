@@ -84,6 +84,7 @@ namespace SysWeaver.AI
             return s;
         }
 
+        /// <inheritdoc />
         protected override IAiChatSession CreateAiChatSession(bool isPrivate, AiSessionParams p, String joinAuth, String clearAuth, bool defaultTools, IAiMemory memory)
             => CreateChatSession(isPrivate, OpenAiSessionParams.From(p), joinAuth, clearAuth, defaultTools, memory);
 
@@ -113,6 +114,7 @@ namespace SysWeaver.AI
         public OpenAiQuerySession CreateQuerySession(String model)
             => CreateQuerySession(new OpenAiSessionParams { Model = model });
 
+        /// <inheritdoc />
         protected override IAiQuerySession CreateAiQuerySession(AiSessionParams p)
             => CreateQuerySession(OpenAiSessionParams.From(p));
 

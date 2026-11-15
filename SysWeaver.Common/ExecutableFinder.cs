@@ -37,6 +37,10 @@ namespace SysWeaver
     /// </summary>
     public sealed class ExecutableFile
     {
+        /// <summary>
+        /// Short description of the executable, the name followed by the format in brackets.
+        /// </summary>
+        /// <returns>A short text representation.</returns>
         public override string ToString() => String.Concat(Name, " [", Format, "]");
 
         /// <summary>

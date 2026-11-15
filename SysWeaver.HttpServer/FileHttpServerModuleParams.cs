@@ -8,6 +8,10 @@ namespace SysWeaver.Net
     /// </summary>
     public class FileHttpServerModuleParams
     {
+        /// <summary>
+        /// All configured folders, one per line.
+        /// </summary>
+        /// <returns>A short text for debugging.</returns>
         public override string ToString() => String.Concat(
             nameof(Folders), ":\n    ", Folders == null ? "null" : String.Join("\n    ", Folders.Select(x => x == null ? "null" : String.Join(x.ToString(), '{', '}'))));
 

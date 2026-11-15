@@ -10,8 +10,15 @@ using SysWeaver.Net;
 namespace SysWeaver.TextMessage
 {
 
+    /// <summary>
+    /// A fake text message service that sends and receives messages to and from an in memory inbox (for testing and development)
+    /// </summary>
     public sealed class FakeTextMessageService : ITextMessageSender, ITextMessageReceiverService, ITextMessageStatusService, ITextMessageEvents, IDisposable, IRunTimeWebApiAuth
     {
+        /// <summary>
+        /// Create the service
+        /// </summary>
+        /// <param name="p">The parameters, null to use the defaults</param>
         public FakeTextMessageService(FakeTextMessageParams p = null)
         {
             p = p ?? new FakeTextMessageParams();
@@ -52,6 +59,7 @@ namespace SysWeaver.TextMessage
             }
         }
 
+        /// <inheritdoc />
         public void Dispose()
         {
             Incoming.Dispose();
@@ -69,7 +77,9 @@ namespace SysWeaver.TextMessage
         readonly TextMessageQueue<IncomingTextMessage> Incoming;
         readonly TextMessageQueue<TextMessageStatusUpdate> Statuses;
 
+        /// <inheritdoc />
         public event Action<IncomingTextMessage> OnIncoming;
+        /// <inheritdoc />
         public event Action<TextMessageStatusUpdate> OnStatus;
 
         static String GetDigits(String s)

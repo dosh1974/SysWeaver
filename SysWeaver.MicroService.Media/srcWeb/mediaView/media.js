@@ -79,7 +79,7 @@
      * Change it here to use another effect, or set it to "" for no default effect.
      * @type {string}
      */
-    const DefaultAudioEffect = "audioEffects/corridor.glsl";
+    const DefaultAudioEffect = "audioEffects/Corridor.glsl";
 
     /** @type {string} The folder of this script (DefaultAudioEffect is relative to it, the pages using it can be elsewhere). */
     const ScriptBase = document.currentScript ? document.currentScript.src : document.baseURI;

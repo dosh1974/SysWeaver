@@ -5,6 +5,9 @@ using System.Runtime.CompilerServices;
 namespace SysWeaver.ExchangeRate
 {
 
+    /// <summary>
+    /// A set of exchange rates prepared for fast lookups when converting between currencies
+    /// </summary>
     public sealed class RateCache
     {
 #if DEBUG
@@ -12,6 +15,11 @@ namespace SysWeaver.ExchangeRate
             => string.Join(": ", Reference, " @ ", LastUpdated, " (",Count, " currencies) from ", Source);
 #endif//DEBUG
 
+        /// <summary>
+        /// Create the cache
+        /// </summary>
+        /// <param name="rates">The rates</param>
+        /// <param name="oldToNewMap">A map from a (fictive) currency code to the code of the currency that it gets the rate of, mappings to currencies that are missing are ignored. Can be null.</param>
         public RateCache(Rates rates, IReadOnlyDictionary<String, String> oldToNewMap)
         {
             Original = rates;
@@ -64,8 +72,8 @@ namespace SysWeaver.ExchangeRate
         /// </summary>
         /// <param name="from">Convert from this currency (as a three letter ISO 4217 currency code)</param>
         /// <param name="to">Convert to this currency (as a three letter ISO 4217 currency code)</param>
-        /// <returns>The value to multiple with</returns>
-        /// <exception cref="Exception"></exception>
+        /// <returns>The value to multiply with</returns>
+        /// <exception cref="Exception">If the rate of the from or to currency is unknown</exception>
         public Decimal GetRate(String from, String to)
         {
             //  Upper case ASCII codes (the common case) are looked up as is (FastToUpper returns them), others are upper cased on the stack
@@ -92,7 +100,7 @@ namespace SysWeaver.ExchangeRate
         /// </summary>
         /// <param name="from">Convert from this currency (as a three letter ISO 4217 currency code)</param>
         /// <param name="to">Convert to this currency (as a three letter ISO 4217 currency code)</param>
-        /// <returns>The value to multiple with or -1 if the from or to currency is unknown</returns>
+        /// <returns>The value to multiply with or -1 if the from or to currency is unknown</returns>
         public Decimal GetRateNoThrow(String from, String to)
         {
             //  Upper case ASCII codes (the common case) are looked up as is (FastToUpper returns them), others are upper cased on the stack

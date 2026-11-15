@@ -4,6 +4,9 @@ using System.Collections.Generic;
 namespace SysWeaver.Knowledge
 {
 
+    /// <summary>
+    /// Info about a car brand
+    /// </summary>
     public sealed class CarBrandInfo : Info
     {
         internal CarBrandInfo(string name, string desc, string category, int start, int end, String cc, long sold, Info[] parent) : base(name, desc, category, parent, true)
@@ -32,14 +35,32 @@ namespace SysWeaver.Knowledge
 
     }
 
+    /// <summary>
+    /// Knowledge about car brands
+    /// </summary>
     public static class CarBrands
     {
+        /// <summary>
+        /// The group (category) name of all car brand info
+        /// </summary>
         public const String Group = "Cars";
 
+        /// <summary>
+        /// Try to get info about a car brand
+        /// </summary>
+        /// <param name="name">The name of the car brand, any case</param>
+        /// <param name="info">The info if found</param>
+        /// <returns>True if info was found</returns>
         public static bool TryGet(String name, out CarBrandInfo info) => Tags.TryGetValueLower(name, out info);
 
+        /// <summary>
+        /// All keyword/info pairs (the keys are lower case)
+        /// </summary>
         public static IEnumerable<KeyValuePair<String, CarBrandInfo>> All => Tags;
-        
+
+        /// <summary>
+        /// The number of keywords
+        /// </summary>
         public static int Count => Tags.Count;
 
         #region Setup

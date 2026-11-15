@@ -23,6 +23,7 @@ namespace SysWeaver.AI
 
         readonly ConcurrentDictionary<String, AiTool> ApiTools = new ConcurrentDictionary<string, AiTool>(StringComparer.OrdinalIgnoreCase);
 
+        /// <inheritdoc />
         public AiTool GetTool(String apiName, String fn = null)
         {
             if (Api == null)
@@ -37,6 +38,7 @@ namespace SysWeaver.AI
         static String GetToolName(MethodInfo method)
             => AiTool.GetToolName(method);
 
+        /// <inheritdoc />
         public AiTool GetTool(Object instance, MethodInfo method, String fn = null, PerfMonitor perfMonitor = null, String defaultAuth = ApiHttpEntry.DefaultAuth, String defaultCachedCompression = ApiHttpEntry.DefaultCachedCompression, String defaultCompression = ApiHttpEntry.DefaultCompression, String locationPrefix = ApiHttpEntry.DefaultLocationPrefix)
         {
             if (Api != null)
@@ -67,6 +69,7 @@ namespace SysWeaver.AI
         }
 
 
+        /// <inheritdoc />
         public AiTool GetRegisteredTool(String fn)
             => 
             ApiTools.TryGetValue(fn, out var tool) ? tool : null;
@@ -132,6 +135,13 @@ namespace SysWeaver.AI
 
         readonly String SessionChatPrefix;
 
+        /// <summary>
+        /// Add a shared chat session to this service
+        /// </summary>
+        /// <param name="chat">The session (may only be added once)</param>
+        /// <param name="name">The chat id</param>
+        /// <returns>False if a chat with the same name already exists</returns>
+        /// <exception cref="Exception">If the session was already added</exception>
         public bool AddChat(IAiChatSession chat, String name)
         {
             lock (chat)
@@ -146,6 +156,11 @@ namespace SysWeaver.AI
             return false;
         }
 
+        /// <summary>
+        /// Remove a shared chat session
+        /// </summary>
+        /// <param name="name">The chat id</param>
+        /// <returns>True if the chat was removed</returns>
         public bool RemoveChat(String name)
         {
             if (!ChatSessions.TryRemove(name, out var chat))
@@ -157,6 +172,14 @@ namespace SysWeaver.AI
             return true;
         }
 
+        /// <summary>
+        /// Add a chat session that is stored in the http session of the user
+        /// </summary>
+        /// <param name="chat">The session (may only be added once)</param>
+        /// <param name="name">The chat id</param>
+        /// <param name="request">The request (holding the http session)</param>
+        /// <returns>False if a chat with the same name already exists in the http session</returns>
+        /// <exception cref="Exception">If the session was already added</exception>
         public bool AddChatSession(IAiChatSession chat, String name, HttpServerRequest request)
         {
             lock (chat)
@@ -171,11 +194,24 @@ namespace SysWeaver.AI
             return false;
         }
 
+        /// <summary>
+        /// Try to get a chat session stored in the http session of the user
+        /// </summary>
+        /// <param name="name">The chat id</param>
+        /// <param name="request">The request (holding the http session)</param>
+        /// <param name="chat">The chat session if found</param>
+        /// <returns>True if found</returns>
         public bool TryGetSession(String name, HttpServerRequest request, out IAiChatSession chat)
         {
             return request.Session.TryGet(SessionChatPrefix + name, out chat);
         }
 
+        /// <summary>
+        /// Remove a chat session stored in the http session of the user
+        /// </summary>
+        /// <param name="name">The chat id</param>
+        /// <param name="request">The request (holding the http session)</param>
+        /// <returns>The removed session, or null if not found</returns>
         public IAiChatSession RemoveChatSession(String name, HttpServerRequest request)
         {
             if (!request.Session.TryRemove(SessionChatPrefix + name, out IAiChatSession chat))
@@ -237,6 +273,7 @@ namespace SysWeaver.AI
             return auth.IsValid(tokens);
         }
 
+        /// <inheritdoc />
         public string Name { get; init; }
 
 
@@ -244,11 +281,13 @@ namespace SysWeaver.AI
 
 
 
+        /// <inheritdoc />
         public Task<string> CreateNewChat(string type, HttpServerRequest request)
         {
             throw new NotImplementedException();
         }
 
+        /// <inheritdoc />
         public async Task<bool> Clear(string providerChatId, HttpServerRequest request)
         {
             var s = GetValidatedSession(out var c, out var scope, providerChatId, request);
@@ -272,6 +311,7 @@ namespace SysWeaver.AI
             return true;
         }
 
+        /// <inheritdoc />
         public async Task<bool> ForceClear(string providerChatId, HttpServerRequest request)
         {
             var s = GetValidatedSession(out var c, out var scope, providerChatId, request);
@@ -295,6 +335,7 @@ namespace SysWeaver.AI
 
 
 
+        /// <inheritdoc />
         public async Task<bool> RemoveMessage(string providerChatId, long messageId, HttpServerRequest request)
         {
             var s = GetValidatedSession(out var c, out var scope, providerChatId, request);
@@ -321,6 +362,7 @@ namespace SysWeaver.AI
         }
 
 
+        /// <inheritdoc />
         public Task<long> GetCurrentId(string providerChatId, HttpServerRequest request)
         {
             var s = GetValidatedSession(out var c, out var scope, providerChatId, request);
@@ -400,12 +442,14 @@ namespace SysWeaver.AI
         }
 
 
+        /// <inheritdoc />
         public Task<Chat.ChatMessage[]> GetMessages(string providerChatId, HttpServerRequest request, long pivotId, int maxCount)
         {
             var s = GetValidatedSession(out var c, out var scope, providerChatId, request);
             return Task.FromResult(InternalGetMessages(s, request.Session.Auth?.Guid, pivotId, maxCount));
         }
 
+        /// <inheritdoc />
         public Task<ChatJoinResponse> Join(string providerChatId, HttpServerRequest request, long pivotId, int maxCount)
         {
             var s = GetValidatedSession(out var c, out var scope, providerChatId, request);
@@ -444,12 +488,14 @@ namespace SysWeaver.AI
             });
         }
 
+        /// <inheritdoc />
         public Task<bool> SetValue(String providerChatId, HttpServerRequest request, long messageId, String key, String value)
         {
             var s = GetValidatedSession(out var c, out var scope, providerChatId, request);
             return s.SetValue(c, providerChatId, scope, request.Session, messageId, key, value);
         }
 
+        /// <inheritdoc />
         public bool SendMessageAs(string providerChatId, HttpServerRequest request, ChatMessageBody message, String from = null, String fromImage = null, String toUserGuid = null)
         {
             var s = GetValidatedSession(out var c, out var scope, providerChatId, request);
@@ -512,6 +558,14 @@ namespace SysWeaver.AI
 
         readonly ConcurrentDictionary<String, AiCommand> Commands = new(StringComparer.Ordinal);
 
+        /// <summary>
+        /// Add a command (ex: "/help") that is available in all chats of this service
+        /// </summary>
+        /// <param name="name">The name of the command</param>
+        /// <param name="func">The function that runs the command (arguments, session, request), returns the message to show</param>
+        /// <param name="args">A description of the arguments (null if none)</param>
+        /// <param name="desc">A description of what the command does</param>
+        /// <param name="auths">The auth required to run the command</param>
         public void AddCommand(String name, Func<String, IAiChatSession, HttpServerRequest, Task<Chat.ChatMessage>> func, String args, String desc, params String[] auths)
         {
             Commands.TryAdd(name, new AiCommand(name, auths, func, args, desc));
@@ -648,6 +702,13 @@ namespace SysWeaver.AI
         }
 
 
+        /// <summary>
+        /// Called when token usage is reported
+        /// </summary>
+        /// <param name="request">The request</param>
+        /// <param name="inputTokens">The number of input tokens</param>
+        /// <param name="outputTokens">The number of output tokens</param>
+        /// <returns>A task that completes when the usage is handled</returns>
         public delegate Task UsageDelegate(HttpServerRequest request, long inputTokens, long outputTokens);
 
 
@@ -705,6 +766,7 @@ namespace SysWeaver.AI
             return images.Count <= 0 ? null : images;
         }
 
+        /// <inheritdoc />
         public async Task<bool> UserMessage(string providerChatId, HttpServerRequest request, ChatMessageBody message)
         {
             var s = GetValidatedSession(out var c, out var scope, providerChatId, request);
@@ -982,6 +1044,7 @@ namespace SysWeaver.AI
 
         
 
+        /// <inheritdoc />
         public Task<Chat.ChatMessage> GetChatMessage(String providerChatId, long messageId, HttpServerRequest request)
         {
             var s = GetValidatedSession(out var c, out var scope, providerChatId, request);
@@ -992,6 +1055,7 @@ namespace SysWeaver.AI
             }
         }
 
+        /// <inheritdoc />
         public void OnInit(IChatController controller)
         {
             ChatController = controller;

@@ -9,17 +9,27 @@ using System.Web;
 namespace SysWeaver.MicroService.ExtensionHandlers
 {
 
+    /// <summary>
+    /// Creates language templates from html files (registered when created, unregistered when disposed)
+    /// </summary>
     public sealed class HtmlTranslation : IDisposable
     {
 
+        /// <inheritdoc />
         public override string ToString() => "Handle .html file translations";
 
+        /// <summary>
+        /// Create the instance and register the handlers for "html" and "htm" files
+        /// </summary>
         public HtmlTranslation()
         {
             LanguageTemplate.AddHandler("html", CreateTemplate);
             LanguageTemplate.AddHandler("htm", CreateTemplate);
         }
 
+        /// <summary>
+        /// Unregister the handlers for "html" and "htm" files
+        /// </summary>
         public void Dispose()
         {
             LanguageTemplate.RemoveHandler("htm");
@@ -255,6 +265,13 @@ namespace SysWeaver.MicroService.ExtensionHandlers
             return didRemove;
         }
 
+        /// <summary>
+        /// Create a language template from html text
+        /// </summary>
+        /// <param name="text">The html</param>
+        /// <param name="willTranslate">True if the template will be translated (affects how the html is prepared)</param>
+        /// <param name="allowBrowserTranslation">True if the browser is allowed to translate the page</param>
+        /// <returns>The template (the translatable texts are replaced with variables)</returns>
         public static LanguageTemplate CreateTemplate(String text, bool willTranslate, bool allowBrowserTranslation)
         {
             var vars = TranslationTools.GetVars();

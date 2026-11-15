@@ -11,10 +11,24 @@ namespace SysWeaver.MicroService
     {
 
 
+        /// <summary>
+        /// Exposed to the page as "ScreenShotHost": lets a page that is "aware" take control of a screenshot of itself.
+        /// The page tells that it's supported (<see cref="isSupported"/>), may change the size of the window (<see cref="setSize"/>) and tells when it's ready to be captured (<see cref="doIt"/>).
+        /// </summary>
         [ClassInterface(ClassInterfaceType.AutoDual)]
         [ComVisible(true)]
         public sealed class AdaptiveSize : IDisposable
         {
+            /// <summary>
+            /// Create the screenshot controller for one browser window
+            /// </summary>
+            /// <param name="m">Where messages are logged</param>
+            /// <param name="prefix">The prefix of the log messages</param>
+            /// <param name="format">The image format of the screenshot</param>
+            /// <param name="quality">The jpeg quality (only used for jpeg)</param>
+            /// <param name="optimizeForSpeed">True to optimize for speed rather than quality</param>
+            /// <param name="extraDelay">An extra time to wait (in ms) before the screenshot is taken</param>
+            /// <param name="scale">The scale (dpi scaling) of the window, used when the page doesn't supply one</param>
             public AdaptiveSize(IMessageHost m, String prefix, ScreenshotImageFormats format, int quality, bool optimizeForSpeed, int extraDelay, double scale = 1)
             {
                 M = m;
@@ -37,8 +51,14 @@ namespace SysWeaver.MicroService
             readonly SemaphoreSlim JsBlocker = new SemaphoreSlim(0, 1);
             readonly int ExtraDelay;
 
+            /// <summary>
+            /// True when the screenshot is done (or failed, or this object was disposed), calls from the page are ignored after that
+            /// </summary>
             public bool Dead;
 
+            /// <summary>
+            /// Called by the page to tell that it is "aware": it takes control of the size of the window and of when the screenshot is taken
+            /// </summary>
             public void isSupported()
             {
                 JsIsInControl = true;
@@ -85,6 +105,14 @@ namespace SysWeaver.MicroService
 
             internal bool IsCapturing;
 
+            /// <summary>
+            /// Called by the page when it's ready to be captured (or has failed): takes the screenshot (after the extra delay).
+            /// </summary>
+            /// <param name="duration">The duration of the media (or effect) in seconds</param>
+            /// <param name="fps">The frame rate of the media</param>
+            /// <param name="error">An error text if the page failed (no screenshot is taken then), else null</param>
+            /// <param name="loadTime">The time the page spent loading, in seconds</param>
+            /// <returns>A task that completes when the screenshot is taken</returns>
             public async Task doIt(double duration, double fps, String error, double loadTime)
             {
                 if (Dead)
@@ -147,16 +175,30 @@ namespace SysWeaver.MicroService
             }
 
     
+            /// <summary>
+            /// The duration of the media (or effect) in seconds, as reported by the page
+            /// </summary>
             public double Duration;
+
+            /// <summary>
+            /// The frame rate of the media, as reported by the page
+            /// </summary>
             public double Fps;
 
+            /// <summary>
+            /// The time the page spent loading, as reported by the page
+            /// </summary>
             public double LoadTime;
 
+            /// <summary>
+            /// The error text reported by the page (null if none)
+            /// </summary>
             public String Error;
 
             volatile Byte[] Data;
             internal volatile bool JsIsInControl;
 
+            /// <inheritdoc />
             public void Dispose()
             {
                 Dead = true;

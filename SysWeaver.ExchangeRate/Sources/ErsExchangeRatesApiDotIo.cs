@@ -10,9 +10,17 @@ namespace SysWeaver.ExchangeRate.Sources
 {
 
 
+    /// <summary>
+    /// A rate source that gets the rates from exchangeratesapi.io
+    /// </summary>
     public sealed class ErsExchangeRatesApiDotIo : IRateSource, IDisposable
     {
 
+        /// <summary>
+        /// Create the source
+        /// </summary>
+        /// <param name="p">Parameters (the reference currency must be a valid currency)</param>
+        /// <exception cref="Exception">If the reference currency isn't valid</exception>
         public ErsExchangeRatesApiDotIo(ErsExchangeRatesApiDotIoParams p)
         {
             P = p;
@@ -27,6 +35,7 @@ namespace SysWeaver.ExchangeRate.Sources
 
         HttpClient Client;
 
+        /// <inheritdoc />
         public void Dispose()
         {
             Interlocked.Exchange(ref Client, null)?.Dispose();
@@ -36,10 +45,15 @@ namespace SysWeaver.ExchangeRate.Sources
         readonly ISerializerType S;
         readonly ErsExchangeRatesApiDotIoParams P;
 
+        /// <inheritdoc />
         public string Source => "https://exchangeratesapi.io/";
 
+        /// <summary>
+        /// The reference currency (a three letter ISO 4217 code)
+        /// </summary>
         public readonly String Reference;
 
+        /// <inheritdoc />
         public int RefreshMinutes { get; init; }
 
 #pragma warning disable CS0649
@@ -62,6 +76,7 @@ namespace SysWeaver.ExchangeRate.Sources
 
 #pragma warning restore
 
+        /// <inheritdoc />
         public async Task<Rates> GetRates()
         {
             var b = Reference;

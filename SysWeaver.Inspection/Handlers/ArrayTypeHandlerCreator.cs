@@ -45,46 +45,90 @@ namespace SysWeaver.Inspection.Implementation
             return l.Compile();
         }
 
+        /// <summary>
+        /// The body for a byte array: the length (<see cref="IInspectorImplementation.Array_Length(ref int)"/>, a local, nothing is allocated), a new array if the length differs (or the array is null), then the bytes as one block
+        /// </summary>
         private static Expression MakeByteArrayBody(Type type, Expression inspector, Expression array, bool forceNull)
         {
-
             var isDiff = Expression.Variable(typeof(bool), "isDiff");
             var notNull = Expression.Variable(typeof(bool), "notNull");
-            var negOne = Expression.Constant(-1);
-
-            var lengths = Expression.Variable(typeof(int[]), "lengths");
-            var getLengthFromNull = new List<Expression>();
-            getLengthFromNull.Add(Expression.Assign(lengths, Expression.NewArrayInit(typeof(int), negOne)));
-            getLengthFromNull.Add(Expression.Call(inspector, InspectorImplementationInfo<IInspectorImplementation>.ArrayLenghts, lengths));
-
-            var getLength = new List<Expression>();
+            var length = Expression.Variable(typeof(int), "length");
+            var arrayLength = InspectorImplementationInfo<IInspectorImplementation>.ArrayLength;
             var len = Expression.Property(array, "Length");
-            getLength.Add(Expression.Assign(lengths, Expression.NewArrayInit(typeof(int), len)));
-            getLength.Add(Expression.Call(inspector, InspectorImplementationInfo<IInspectorImplementation>.ArrayLenghts, lengths));
-            getLength.Add(Expression.Assign(isDiff, Expression.NotEqual(len, Expression.ArrayAccess(lengths, Expression.Constant(0)))));
-            var allParams = new List<ParameterExpression>();
-            allParams.Add(lengths);
-            allParams.Add(isDiff);
-            allParams.Add(notNull);
-            var body = Expression.Block(allParams,
+            var body = Expression.Block(new[] { length, isDiff, notNull },
                 Expression.Assign(isDiff, Expression.Constant(true)),
                 Expression.Assign(notNull, Expression.NotEqual(array, Expression.Constant(null))),
                 Expression.IfThenElse(notNull,
-                    Expression.Block(getLength)
-                    ,
-                    Expression.Block(getLengthFromNull)
+                    Expression.Block(
+                        Expression.Assign(length, len),
+                        Expression.Call(inspector, arrayLength, length),
+                        Expression.Assign(isDiff, Expression.NotEqual(len, length))
+                    ),
+                    Expression.Block(
+                        Expression.Assign(length, Expression.Constant(-1)),
+                        Expression.Call(inspector, arrayLength, length)
+                    )
                 ),
-/*                    Expression.IfThenElse(Expression.Equal(Expression.ArrayAccess(lengths, Expression.Constant(0)), negOne),
-                    Expression.Assign(array, Expression.Constant(null, type)),
-                Expression.Block(
-*/                        Expression.IfThen(isDiff, Expression.Block(
-                        Expression.Assign(array, Expression.NewArrayBounds(typeof(Byte), Expression.ArrayAccess(lengths, Expression.Constant(0)))),
-                        Expression.Call(inspector, InspectorInfo<IInspector>.OnNew.MakeGenericMethod(type), array, notNull)
-                    )),
-                    Expression.Call(inspector, InspectorImplementationInfo<IInspectorImplementation>.ArrayByteArray, Expression.ArrayAccess(lengths, Expression.Constant(0)), array)
-//                    ))
-                );
+                Expression.IfThen(isDiff, Expression.Block(
+                    Expression.Assign(array, Expression.NewArrayBounds(typeof(Byte), length)),
+                    Expression.Call(inspector, InspectorInfo<IInspector>.OnNew.MakeGenericMethod(type), array, notNull)
+                )),
+                Expression.Call(inspector, InspectorImplementationInfo<IInspectorImplementation>.ArrayByteArray, length, array)
+            );
             return body;
+        }
+
+        /// <summary>
+        /// The body for a one dimensional array: the same as <see cref="MakeBody"/>, but the length is a local (<see cref="IInspectorImplementation.Array_Length(ref int)"/>),
+        /// so describing an array doesn't allocate the two length arrays
+        /// </summary>
+        static Expression MakeBody1(Type type, Expression inspector, Expression array, bool forceNull, Func<Expression, Expression> writeArray)
+        {
+            var elementType = type.GetElementType();
+            var arrayLength = InspectorImplementationInfo<IInspectorImplementation>.ArrayLength;
+            var length = Expression.Variable(typeof(int), "length");
+            var prev = Expression.Variable(typeof(int), "prev");
+            var i = Expression.Variable(typeof(int), "i0");
+            var isDiff = Expression.Variable(typeof(bool), "isDiff");
+            var notNull = Expression.Variable(typeof(bool), "notNull");
+            var brk = Expression.Label("break0");
+            var fieldMethod = InspectorInfo<IInspector>.GetRegFieldMethod(elementType);
+            var loop = Expression.Block(
+                Expression.Assign(i, Expression.Constant(0)),
+                Expression.Loop(
+                    Expression.IfThenElse(Expression.LessThan(i, length),
+                        Expression.Block(Expression.Call(inspector, fieldMethod, Expression.ArrayAccess(array, i)), Expression.AddAssign(i, Expression.Constant(1))),
+                        Expression.Break(brk)),
+                    brk));
+            if (forceNull)
+            {
+                return Expression.Block(new[] { length, i },
+                    Expression.Assign(length, Expression.Constant(-1)),
+                    Expression.Call(inspector, arrayLength, length),
+                    Expression.Assign(array, Expression.NewArrayBounds(elementType, length)),
+                    Expression.Call(inspector, InspectorInfo<IInspector>.OnNew.MakeGenericMethod(type), array, Expression.Constant(false)),
+                    loop);
+            }
+            return Expression.Block(new[] { length, prev, i, isDiff, notNull },
+                Expression.Assign(isDiff, Expression.Constant(true)),
+                Expression.Assign(notNull, Expression.NotEqual(array, Expression.Constant(null))),
+                Expression.IfThenElse(notNull,
+                    Expression.Block(
+                        Expression.Assign(prev, Expression.Call(array, GetLength, Expression.Constant(0))),
+                        Expression.Assign(length, prev),
+                        Expression.Call(inspector, arrayLength, length),
+                        Expression.Assign(isDiff, Expression.NotEqual(prev, length))
+                    ),
+                    Expression.Block(
+                        Expression.Assign(length, Expression.Constant(-1)),
+                        Expression.Call(inspector, arrayLength, length)
+                    )
+                ),
+                Expression.IfThen(isDiff, Expression.Block(
+                    writeArray(Expression.NewArrayBounds(elementType, length)),
+                    Expression.Call(inspector, InspectorInfo<IInspector>.OnNew.MakeGenericMethod(type), array, notNull)
+                )),
+                loop);
         }
 
         static Expression MakeBody(Type type, Expression inspector, Expression array, bool forceNull)
@@ -96,6 +140,9 @@ namespace SysWeaver.Inspection.Implementation
                 array = Expression.Convert(array, type);
             }
             int rank = type.GetArrayRank();
+            //  One dimensional arrays (also a T[*] of rank 1, created with NewArrayBounds like before) use locals for the length
+            if (rank == 1)
+                return MakeBody1(type, inspector, array, forceNull, writeArray);
             var elementType = type.GetElementType();
 
             var isDiff = Expression.Variable(typeof(bool), "isDiff");

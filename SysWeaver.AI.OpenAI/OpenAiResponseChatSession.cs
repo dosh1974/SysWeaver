@@ -20,6 +20,7 @@ namespace SysWeaver.AI
     /// </summary>
     public sealed class OpenAiResponseChatSession : AiChatSessionBase, IOpenAiChatSession
     {
+        /// <inheritdoc />
         public OpenAiChatApi ChatApi => OpenAiChatApi.Responses;
 
         internal OpenAiResponseChatSession(bool isPrivate, ResponsesClient c, OpenAiSessionParams p, IAiToolCache toolCache, String joinAuth, String clearAuth, PerfMonitor monitor, AsyncLock chatLock, IAiMemory memory)
@@ -47,6 +48,7 @@ namespace SysWeaver.AI
 
         volatile ResponseTool[] ApiTools;
 
+        /// <inheritdoc />
         protected override void OnToolsChanged()
         {
             ApiTools = null;
@@ -99,6 +101,7 @@ namespace SysWeaver.AI
 
         #endregion//Options
 
+        /// <inheritdoc />
         public override String SystemPrompt
         {
             get =>
@@ -116,6 +119,9 @@ namespace SysWeaver.AI
                                 ResponseItem.CreateUserMessageItem(value));
         }
 
+        /// <summary>
+        /// The system prompt as an API item, null if no system prompt is set
+        /// </summary>
         public MessageResponseItem MsgSystemPrompt { get; private set; }
 
         /// <summary>
@@ -308,6 +314,7 @@ namespace SysWeaver.AI
         }
 
 
+        /// <inheritdoc />
         public override async Task<String> Complete(String text, HttpServerRequest request, AiDebugMessage debug = null, String from = null, Func<String, long, long, Task> onUsage = null)
         {
             using var _a = Monitor?.Track(nameof(Complete));
@@ -317,6 +324,7 @@ namespace SysWeaver.AI
         }
 
 
+        /// <inheritdoc />
         public override async Task<String> CompleteUpdate(String text,
             IReadOnlyList<ValueTuple<AiContentPart, String>> extraData,
             HttpServerRequest request,
@@ -462,8 +470,10 @@ namespace SysWeaver.AI
             return "No text response!";
         }
 
+        /// <inheritdoc />
         public override void ClearApiMessages() => ApiMessages.Clear();
 
+        /// <inheritdoc />
         protected override void WriteConversation(Utf8JsonWriter writer)
         {
             var opt = ModelReaderWriterOptions.Json;

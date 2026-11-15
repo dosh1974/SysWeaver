@@ -7,6 +7,7 @@ namespace SysWeaver.AI
     /// </summary>
     public sealed class AiTable
     {
+        /// <inheritdoc />
         public override string ToString()
             => String.Concat(Columns?.Length ?? 0, "x", Rows?.Length ?? 0, " (Columns x Rows)");
 

@@ -128,6 +128,11 @@ namespace SysWeaver.MicroService
         readonly bool DisableLogin;
 
 
+        /// <summary>
+        /// Get the id of a user from its guid
+        /// </summary>
+        /// <param name="userGuid">The guid of the user (see <see cref="MakeGuid(long)"/>)</param>
+        /// <returns>The id of the user, 0 if the guid isn't a guid of this service</returns>
         public long GetUserId(String userGuid)
         {
             var prefix = GuidPrefix;

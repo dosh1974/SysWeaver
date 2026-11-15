@@ -10,6 +10,10 @@ namespace SysWeaver.Data
     public class TableDataFilterBase
     {
 #if DEBUG
+        /// <summary>
+        /// Debug builds only: the filter operation and value, as text.
+        /// </summary>
+        /// <returns>A short text for debugging.</returns>
         public override string ToString() => String.Concat( Invert ? "Not " : "", Op, ' ', Value, CaseSensitive ? " (case sensitive)" : "");
 #endif//DEBUG
         /// <summary>
@@ -53,6 +57,10 @@ namespace SysWeaver.Data
     public sealed class TableDataFilter : TableDataFilterBase
     {
 #if DEBUG
+        /// <summary>
+        /// Debug builds only: the column name followed by the filter operation and value, as text.
+        /// </summary>
+        /// <returns>A short text for debugging.</returns>
         public override string ToString() => String.Concat( '"', ColName, "\" ", base.ToString());
 #endif//DEBUG
         /// <summary>

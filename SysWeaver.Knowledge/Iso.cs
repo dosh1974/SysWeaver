@@ -7,6 +7,9 @@ using SysWeaver.IsoData;
 
 namespace SysWeaver.Knowledge
 {
+    /// <summary>
+    /// Info about a country
+    /// </summary>
     public sealed class Country : Info
     {
         internal Country(string desc, IsoCountry c, Info[] parent) : base(c.CommonName, desc, Countries.Group, parent, false)
@@ -38,14 +41,32 @@ namespace SysWeaver.Knowledge
 
     }
 
+    /// <summary>
+    /// Knowledge about countries
+    /// </summary>
     public static class Countries
     {
+        /// <summary>
+        /// The group (category) name of all country info
+        /// </summary>
         public const String Group = "Countries";
 
+        /// <summary>
+        /// Try to get info about a country
+        /// </summary>
+        /// <param name="name">The name of the country, any case</param>
+        /// <param name="info">The info if found</param>
+        /// <returns>True if info was found</returns>
         public static bool TryGet(String name, out Country info) => Tags.TryGetValueLower(name, out info);
 
+        /// <summary>
+        /// All keyword/info pairs (the keys are lower case)
+        /// </summary>
         public static IEnumerable<KeyValuePair<String, Country>> All => Tags;
 
+        /// <summary>
+        /// The number of keywords
+        /// </summary>
         public static int Count => Tags.Count;
 
         #region Setup
@@ -110,6 +131,9 @@ namespace SysWeaver.Knowledge
             }
         }
 
+        /// <summary>
+        /// The parent info of all countries
+        /// </summary>
         public static readonly Info TagCountries = new Info("Country", "Any country", Group, null);
         static readonly Info[] C =
         [

@@ -3,8 +3,12 @@ using SysWeaver.MicroService;
 
 namespace SysWeaver.TextMessage
 {
+    /// <summary>
+    /// Parameters for the <see cref="TextMessageRouterService"/>
+    /// </summary>
     public sealed class TextMessageRouterParams
     {
+        /// <inheritdoc />
         public override string ToString() => String.Concat(Routes?.Length ?? 0, " route(s)");
 
         /// <summary>
@@ -52,8 +56,12 @@ namespace SysWeaver.TextMessage
         public int PollRetryDelay = 10;
     }
 
+    /// <summary>
+    /// A route (provider and the rules for when it is used) of the <see cref="TextMessageRouterService"/>
+    /// </summary>
     public sealed class TextMessageRouteParams
     {
+        /// <inheritdoc />
         public override string ToString() => String.Concat(Name ?? Instance, " (", Channels, ')');
 
         /// <summary>

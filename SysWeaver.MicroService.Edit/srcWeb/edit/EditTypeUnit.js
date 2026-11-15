@@ -248,7 +248,7 @@
                     sync();
                     return;
                 }
-                await editor.SetMemberValue(member, v, old, _T("Set value: \"{0}\"", t.ToString(v), "Command text stored in a log when a property value was changed.{0} is replaced with the new value."), token);
+                await editor.SetMemberValue(member, v, old, E.Handler.SetText(t.ToString(v)), token);
             };
             const ph = u.Kind === "Duration" ? _TF("ex: 90, 90s, 1h 30m, 2d", "Placeholder of the text box of a duration number (the member has a time unit)")
                 : u.Kind === "Bytes" ? _TF("ex: 2048, 2 MB, 512k", "Placeholder of the text box of a byte size number")

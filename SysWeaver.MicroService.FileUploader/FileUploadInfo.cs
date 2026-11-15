@@ -8,6 +8,7 @@ namespace SysWeaver.MicroService
     /// </summary>
     public sealed class FileUploadInfo
     {
+        /// <inheritdoc />
         public override string ToString() => Name;
 
         /// <summary>

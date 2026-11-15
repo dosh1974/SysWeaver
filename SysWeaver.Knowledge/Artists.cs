@@ -5,6 +5,9 @@ using System.Collections.Generic;
 namespace SysWeaver.Knowledge
 {
 
+    /// <summary>
+    /// Info about an artist
+    /// </summary>
     public sealed class Artist : Info, IGoogleInfo
     {
         internal Artist(string name, string desc, DateOnly born, DateOnly died, long pop, Info[] parent) : base(name, desc, Artists.Group, parent, true)
@@ -30,14 +33,32 @@ namespace SysWeaver.Knowledge
 
     }
 
+    /// <summary>
+    /// Knowledge about artists
+    /// </summary>
     public static class Artists
     {
+        /// <summary>
+        /// The group (category) name of all artist info
+        /// </summary>
         public const String Group = "Artists";
 
+        /// <summary>
+        /// Try to get info about an artist
+        /// </summary>
+        /// <param name="name">The name of the artist, any case</param>
+        /// <param name="info">The info if found</param>
+        /// <returns>True if info was found</returns>
         public static bool TryGet(String name, out Artist info) => Tags.TryGetValueLower(name, out info);
 
+        /// <summary>
+        /// All keyword/info pairs (the keys are lower case)
+        /// </summary>
         public static IEnumerable<KeyValuePair<String, Artist>> All => Tags;
 
+        /// <summary>
+        /// The number of keywords
+        /// </summary>
         public static int Count => Tags.Count;
 
         #region Setup

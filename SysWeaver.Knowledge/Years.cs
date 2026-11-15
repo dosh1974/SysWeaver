@@ -4,14 +4,32 @@ using System.Linq;
 
 namespace SysWeaver.Knowledge
 {
+    /// <summary>
+    /// Knowledge about years, decades and centuries
+    /// </summary>
     public static class Years
     {
+        /// <summary>
+        /// The group (category) name of all year info
+        /// </summary>
         public const String Group = "Years";
 
+        /// <summary>
+        /// Try to get info about a year, decade or century
+        /// </summary>
+        /// <param name="name">The name (ex: "1984", "1980s"), any case</param>
+        /// <param name="info">The info if found</param>
+        /// <returns>True if info was found</returns>
         public static bool TryGet(String name, out Info info) => Tags.TryGetValueLower(name, out info);
 
+        /// <summary>
+        /// All keyword/info pairs (the keys are lower case)
+        /// </summary>
         public static IEnumerable<KeyValuePair<String, Info>> All => Tags;
 
+        /// <summary>
+        /// The number of keywords
+        /// </summary>
         public static int Count => Tags.Count;
 
         #region Setup

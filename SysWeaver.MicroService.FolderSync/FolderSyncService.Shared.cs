@@ -50,8 +50,8 @@ namespace SysWeaver.MicroService
         /// Check if a new version of a shared folder is available
         /// </summary>
         /// <param name="r">Folder name and version (aka hash)</param>
-        /// <param name="context"></param>
-        /// <returns>True if a new version is available</returns>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
+        /// <returns>True if a new version is available (false if it's the same version, or the folder is being updated right now)</returns>
         [WebApi]
         [WebApiAuth("")]
         public bool SharedFolderHasChanged(SharedFolderSyncRequest r, HttpServerRequest context)
@@ -72,11 +72,11 @@ namespace SysWeaver.MicroService
 
 
         /// <summary>
-        /// Wait until a a new version of a shared folder is available (or the request time's out)
+        /// Wait until a new version of a shared folder is available (or the request times out, after about 5 minutes)
         /// </summary>
-        /// <param name="r">Folder name and version (aka hash)</param>
-        /// <param name="context"></param>
-        /// <returns>True if a new version is available</returns>
+        /// <param name="r">Folder name and version (aka hash), the version the caller currently has</param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
+        /// <returns>True if a new version is available, false if the wait timed out or failed</returns>
         [WebApi]
         [WebApiAuth("")]
         public async Task<bool> WaitUntilSharedFolderHasChanged(SharedFolderSyncRequest r, HttpServerRequest context)
@@ -103,7 +103,7 @@ namespace SysWeaver.MicroService
         /// Check for updates against a shared folder
         /// </summary>
         /// <param name="r">Folder and local files</param>
-        /// <param name="context"></param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
         /// <returns>Changes required to sync the local folder</returns>
         /// <exception cref="Exception"></exception>
         [WebApi]
@@ -158,7 +158,7 @@ namespace SysWeaver.MicroService
         /// Get the list of chunk hashes for a file
         /// </summary>
         /// <param name="r">Folder and file to get hash chunks for</param>
-        /// <param name="context"></param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
         /// <returns>Hashes for the chunks that make up the file</returns>
         /// <exception cref="Exception"></exception>
         [WebApi]
@@ -236,6 +236,10 @@ namespace SysWeaver.MicroService
         }
 
 
+        /// <summary>
+        /// Get information about all shared folders
+        /// </summary>
+        /// <returns>One row per shared folder</returns>
         public IEnumerable<SharedFolderData> GetSharedFolderData()
             => SharedFolders.Values.Select(GetPullFolderData);
 
@@ -243,8 +247,8 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// All shared folders as a table
         /// </summary>
-        /// <param name="r"></param>
-        /// <returns></returns>
+        /// <param name="r">Table request: paging, sorting and filtering</param>
+        /// <returns>Table data, one row per shared folder</returns>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
         [WebMenuTable(null, HttpServerBase.MenuOperations + "/{0}", "Shared folders", "Details about folders that can be synced (downloaded)", "IconSync", 21)]

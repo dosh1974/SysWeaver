@@ -2,6 +2,9 @@
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// Information about an international phone number prefix
+    /// </summary>
     public sealed class PhonePrefixInfo
     {
         /// <summary>

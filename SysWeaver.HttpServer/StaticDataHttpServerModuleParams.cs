@@ -7,6 +7,10 @@ namespace SysWeaver.Net
     /// </summary>
     public class StaticDataHttpServerModuleParams
     {
+        /// <summary>
+        /// The url root, client cache duration and compression settings.
+        /// </summary>
+        /// <returns>A short text for debugging.</returns>
         public override string ToString() =>
             String.Concat(
                 nameof(UrlRoot), ": ", UrlRoot.ToQuoted(), ", ",

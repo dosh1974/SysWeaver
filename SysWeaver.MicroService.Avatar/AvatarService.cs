@@ -15,8 +15,15 @@ namespace SysWeaver.MicroService
 {
 
 
+    /// <summary>
+    /// Serves generated avatar images (as "Avatars/[seed].svg") from a set of SVG images
+    /// </summary>
     public sealed class AvatarService : IAvatarService, IPerfMonitored, IHaveStats, IHttpServerModule
     {
+        /// <summary>
+        /// Create the service, loads the images from <see cref="AvatarParams.DiscFolder"/> or from the embedded resources
+        /// </summary>
+        /// <param name="p">Parameters, null uses defaults</param>
         public AvatarService(AvatarParams p)
         {
             p = p ?? new AvatarParams();
@@ -50,9 +57,11 @@ namespace SysWeaver.MicroService
 
         const int PrefixLen = 8;
 
+        /// <inheritdoc />
         public String[] OnlyForPrefixes { get; } = ["Avatars/"];
 
 
+        /// <inheritdoc />
         public Func<HttpServerRequest, ValueTask<IHttpRequestHandler>> AsyncHandler { get; init; }
 
 
@@ -100,9 +109,9 @@ namespace SysWeaver.MicroService
         }
 
         /// <summary>
-        /// Reload all avatar images from disc
+        /// Reload all avatar images from disc (does nothing if no valid folder is configured)
         /// </summary>
-        /// <returns></returns>
+        /// <returns>Always true</returns>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
         public bool ReloadFiles()
@@ -255,12 +264,19 @@ namespace SysWeaver.MicroService
 
         readonly FastMemCache<int, Task<IHttpRequestHandler>> Cache;
 
+        /// <summary>
+        /// Get the avatar of a user, the image is selected from a hash of the user guid
+        /// </summary>
+        /// <param name="userGuid">The guid of the user</param>
+        /// <param name="size">Ignored, avatars are scalable</param>
+        /// <returns>A request handler, see <see cref="Get(int)"/></returns>
         public Task<IHttpRequestHandler> Get(string userGuid, int size)
         {
             var seed = (int)QuickHash.Hash(userGuid);
             return Get(seed);
         }
 
+        /// <inheritdoc />
         public IEnumerable<Stats> GetStats()
         {
             var g = nameof(AvatarService);
@@ -271,6 +287,7 @@ namespace SysWeaver.MicroService
 
         static readonly HttpCompressionPriority SvgCompression = HttpCompressionPriority.GetSupportedEncoders();
 
+        /// <inheritdoc />
         public PerfMonitor PerfMon { get; } = new PerfMonitor(nameof(AvatarService));
     }
 }

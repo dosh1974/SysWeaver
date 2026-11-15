@@ -4,6 +4,9 @@ namespace SysWeaver.MicroService.Db
 {
 
 
+    /// <summary>
+    /// The password of a user
+    /// </summary>
     [Alias("AuthPasswords")]
     [PartitionByKey(nameof(Id))]
     public sealed class DbAuthPassword : DbAuthMethod

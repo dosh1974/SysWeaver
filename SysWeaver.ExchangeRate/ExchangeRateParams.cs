@@ -2,6 +2,9 @@
 
 namespace SysWeaver.ExchangeRate
 {
+    /// <summary>
+    /// Parameters for the <see cref="ExchangeRateService"/>
+    /// </summary>
     public sealed class ExchangeRateParams
     {
         /// <summary>
@@ -28,6 +31,7 @@ namespace SysWeaver.ExchangeRate
         /// <summary>
         /// Can contain a map for some fictive symbol to a real symbol.
         /// Ex: "NLE=SLL".
+        /// Defaults to "NLE=SLL".
         /// </summary>
         public String[] OldToNewRateMap = [
             "NLE=SLL"

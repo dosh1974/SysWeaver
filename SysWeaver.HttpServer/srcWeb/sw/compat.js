@@ -2863,12 +2863,7 @@ window.Sw.Sources["shell/shell.js"] = "sw/compat.js";
                 //  Text size: a section on touch screens and phones, else a submenu in the Density section (or a section without it)
                 const size = p.SettingsTextSize ? t.TextSizeMenu() : null;
                 if (size) {
-                    let touch = !!Sw.Layout.Mobile;
-                    try {
-                        touch = touch || window.matchMedia("(pointer: coarse)").matches;
-                    }
-                    catch {
-                    }
+                    const touch = Sw.Layout.IsTouchScreen();
                     const dens = p.SettingsDensity ? menu.Items[menu.Items.length - 1] : null;
                     if (!touch && dens)
                         dens.Children.push(size);
@@ -3254,13 +3249,7 @@ window.Sw.Sources["shell/shell.js"] = "sw/compat.js";
             const P = Sw.Popup;
             if (t.PopupGuard || !P || typeof P.Depth !== "function" || !(P.Depth() > 0) || t.CanGoBack())
                 return;
-            let touch = !!Sw.Layout.Mobile;
-            try {
-                touch = touch || window.matchMedia("(pointer: coarse)").matches;
-            }
-            catch {
-            }
-            if (!touch)
+            if (!Sw.Layout.IsTouchScreen())
                 return;
             t.PopupGuard = true;
             try {
@@ -8838,14 +8827,8 @@ window.Sw.Sources["shell/compat_application.js"] = "sw/compat.js";
     }
     const Shell = Sw.Shell;
 
-    /**
-     * Define a global (a window property, like the old top level declarations).
-     * @param {string} name - The global name.
-     * @param {*} value - The value.
-     */
-    function def(name, value) {
-        window[name] = value;
-    }
+    //  Define a global (a window property, like the old top level declarations): the helper of core/legacy_session.js
+    const def = Sw.Legacy ? Sw.Legacy.Def : (name, value) => { window[name] = value; };
 
     // ------------------------------------------------------------------ menu model
 

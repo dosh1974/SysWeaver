@@ -12,6 +12,9 @@ namespace SysWeaver.MicroService
 
 
 
+    /// <summary>
+    /// A database row with the (compressed) translated text of a cached translation
+    /// </summary>
     [Alias("Translations")]
     [PartitionByKey(nameof(Hash))]
     public sealed class DbTranslation
@@ -38,14 +41,22 @@ namespace SysWeaver.MicroService
         public Byte[] Translated { get; set; }
 
         /// <summary>
-        /// Time stamp when translation was performed
+        /// Time stamp (UTC ticks) when the translation expires, <see cref="DbInput.Max"/> for a manual translation
         /// </summary>
         [Required]
         [Index]
-        [Default(638984160000000000L)] 
+        [Default(638984160000000000L)]
         public long Expiration { get; set; }
 
-        public static String ComputeHash(String from, String to, String text, String context)
+        /// <summary>
+        /// Compute the hash key of a translation
+        /// </summary>
+        /// <param name="text">The text to translate</param>
+        /// <param name="to">The target language</param>
+        /// <param name="from">The source language</param>
+        /// <param name="context">The translation context</param>
+        /// <returns>The SHA512 of the UTF-8 bytes of the parts joined with '|' (null is empty) as lower case hex</returns>
+        public static String ComputeHash(String text, String to, String from, String context)
         {
             //  Same as the SHA512 (lower case hex) of the UTF-8 bytes of String.Join('|', from, to, text, context) (null is empty).
             //  The parts are encoded one by one (a '|' is never a part of a surrogate pair, so the bytes are the same) into a stack or pooled buffer,
@@ -64,13 +75,13 @@ namespace SysWeaver.MicroService
                 : (rented = ArrayPool<Byte>.Shared.Rent(enc.GetByteCount(from) + enc.GetByteCount(to) + enc.GetByteCount(text) + enc.GetByteCount(context) + 3));
             try
             {
-                var o = enc.GetBytes(from, data);
+                var o = enc.GetBytes(text, data);
                 data[o] = (Byte)'|';
                 ++o;
                 o += enc.GetBytes(to, data.Slice(o));
                 data[o] = (Byte)'|';
                 ++o;
-                o += enc.GetBytes(text, data.Slice(o));
+                o += enc.GetBytes(from, data.Slice(o));
                 data[o] = (Byte)'|';
                 ++o;
                 o += enc.GetBytes(context, data.Slice(o));
@@ -93,6 +104,11 @@ namespace SysWeaver.MicroService
         static readonly Encoding Enc = Encoding.UTF8;
         static readonly ICompType BlobComp = CompManager.GetFromHttp("br");
 
+        /// <summary>
+        /// Compress a translated text to be stored in <see cref="Translated"/>
+        /// </summary>
+        /// <param name="text">The text</param>
+        /// <returns>The UTF-8 encoded, brotli compressed text</returns>
         public static Byte[] ToBlob(String text)
         {
             var temp = GC.AllocateUninitializedArray<Byte>(text.Length * 5);
@@ -101,6 +117,11 @@ namespace SysWeaver.MicroService
             return v.ToArray();
         }
 
+        /// <summary>
+        /// Decompress a text compressed by <see cref="ToBlob"/>
+        /// </summary>
+        /// <param name="data">The compressed data</param>
+        /// <returns>The text</returns>
         public static String FromBlob(Byte[] data)
         {
             using var d = BlobComp.GetUnmanagedDecompressed(data);

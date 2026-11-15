@@ -28,6 +28,12 @@ namespace SysWeaver.EmailReader
         /// </summary>
         const int IdleRestart = 9 * 60 * 1000;
 
+        /// <summary>
+        /// Create the service and start reading emails in the background
+        /// </summary>
+        /// <param name="p">The parameters, <see cref="ImapEmailReaderParams.Server"/> and the credentials are required</param>
+        /// <param name="msg">Optional message host used for logging</param>
+        /// <exception cref="Exception">A parameter is missing or invalid</exception>
         public ImapEmailReaderService(ImapEmailReaderParams p = null, IMessageHost msg = null)
         {
             p = p ?? new ImapEmailReaderParams();
@@ -74,8 +80,12 @@ namespace SysWeaver.EmailReader
             _ = RunLoop(Cancel.Token);
         }
 
+        /// <inheritdoc />
         public override string ToString() => Tos;
 
+        /// <summary>
+        /// Stop reading emails and release the queues
+        /// </summary>
         public void Dispose()
         {
             Cancel.Cancel();
@@ -404,6 +414,7 @@ namespace SysWeaver.EmailReader
         readonly ExceptionTracker PollFails = new ExceptionTracker();
         readonly ExceptionTracker ProcessFails = new ExceptionTracker();
 
+        /// <inheritdoc />
         public IEnumerable<Stats> GetStats()
         {
             const String n = nameof(ImapEmailReaderService);
@@ -413,6 +424,7 @@ namespace SysWeaver.EmailReader
                 yield return x;
         }
 
+        /// <inheritdoc />
         public PerfMonitor PerfMon { get; init; } = new PerfMonitor(nameof(ImapEmailReaderService));
 
         #endregion//Stats

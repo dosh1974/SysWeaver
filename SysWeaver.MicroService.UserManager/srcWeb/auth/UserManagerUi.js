@@ -37,27 +37,11 @@
 
     // ------------------------------------------------------------------ helpers
 
-    /**
-     * The optional passkey plug-in when loaded and supported.
-     * @returns {*} PassKey or null.
-     */
-    function passKeys() {
-        const P = (typeof PassKey !== "undefined") ? Sw.PassKey : window.PassKey;
-        return (P && P.IsSupported && P.IsSupported()) ? P : null;
-    }
+    /** The optional passkey plug-in when loaded and supported, else null (shared with AuthUi.js). */
+    const passKeys = U.PassKeys;
 
-    /**
-     * Error text of an exception.
-     * @param {*} e The exception.
-     * @returns {string}
-     */
-    const msg = e => (e && e.message) ? e.message : String(e);
-
-    /**
-     * The reason of a button that is disabled while the form's request runs, or after it was done (the page moves on).
-     * @returns {string} The text.
-     */
-    const waitReason = () => _TF("Wait until the current step is done", "Reason of a disabled button of an account or sign in page while its request runs");
+    /** The reason of a button that is disabled while the form's request runs, or after it was done (shared with AuthUi.js). */
+    const waitReason = U.WaitReason;
 
     /**
      * Build an account page of the signed in user (U.Page with Account: inside the app shell a Design v2 form page with a page header
@@ -207,6 +191,35 @@
     }
 
     /**
+     * The problem of a "value" field of a form (e-mail / phone / user id): empty is a neutral hint (field.Empty), else the answer
+     * of the field's own validation (field.Check(value), an optional promise; null / "" / undefined: no problem). For liveValidation.
+     * @param {object} f The field (with Check and Empty set by the page).
+     * @returns {Promise<{Error:string|null, Field:object, Neutral:boolean}>} The problem (Error null / "": none).
+     */
+    async function fieldProblem(f) {
+        const v = A.Trim(f.Get());
+        if (!v)
+            return { Error: f.Empty, Field: f, Neutral: true };
+        const e = await f.Check(v);
+        return { Error: e === undefined ? "" : e, Field: f };
+    }
+
+    /**
+     * The ways to reach a person (sign up / invitation): the server's coms, with the text message coms (Sms, WhatsApp; older servers:
+     * Phone) all being one "Phone" way (a phone number), in server order, and only "Email" / "Phone" (others are not offered).
+     * @param {string[]} coms The coms the server names.
+     * @returns {string[]} "Email" and / or "Phone".
+     */
+    const contactWays = coms => [...new Set(coms.map(m => (m === "Sms" || m === "WhatsApp") ? "Phone" : m))].filter(m => m === "Email" || m === "Phone");
+
+    /**
+     * The failure text when the service refused without saying why.
+     * @param {string} failed What failed, ex: "Failed to send instructions."
+     * @returns {string} The text.
+     */
+    const notAccepted = failed => failed + " " + _TF("The service did not accept it.", "Reason added to a failure message on an account page when the service refused without saying why");
+
+    /**
      * Add a hidden user name input (helps password managers to pair a new / current password with the account).
      * @param {object} page The AuthPage.
      * @param {string} name The user name.
@@ -293,7 +306,7 @@
         }
         if (o.Update)
             await o.Update();
-        o.Status.Set(text || (o.Failed + " " + _TF("The service did not accept it.", "Reason added to a failure message on an account page when the service refused without saying why") + " " + todo), "error");
+        o.Status.Set(text || (notAccepted(o.Failed) + " " + todo), "error");
         if (o.Update && o.Update.Hold)
             o.Update.Hold();
         if (o.Focus)
@@ -336,7 +349,7 @@
             //  A failure is said once, in the status line with the reason (FRM-3: no toast besides it), with a button to try again
             status.Set(error
                 ? Sw.Net.Message(o.Failed, error)
-                : o.Failed + " " + _TF("The service did not accept it.", "Reason added to a failure message on an account page when the service refused without saying why"), "error");
+                : notAccepted(o.Failed), "error");
             busy = false;
             if (!button)
                 button = U.Button(U.Buttons(page), {
@@ -419,7 +432,7 @@
                     U.Hide(status, row, note);
                     return;
                 }
-                status.Set(o.Failed + " " + _TF("The service did not accept it.", "Reason added to a failure message on an account page when the service refused without saying why"), "error");
+                status.Set(notAccepted(o.Failed), "error");
             }
             catch (e) {
                 //  The link died since the page was opened: the page says so, with the cause (the button can't work any more)
@@ -544,7 +557,7 @@
                             failed = P.ErrorText(res) + (res.Message ? " " + res.Message : "");
                     }
                     catch (e) {
-                        failed = _TF("Failed to create passkey.", "Error message shown when a new passkey couldn't be created") + " " + msg(e);
+                        failed = _TF("Failed to create passkey.", "Error message shown when a new passkey couldn't be created") + " " + Sw.ErrorMessage(e);
                     }
                     ceremony.Fetch().catch(() => { });
                     await update();
@@ -731,16 +744,13 @@
             : new U.Field(page, Object.assign(fo, { Type: "email", AutoComplete: "email", InputMode: "email" }));
         const status = new U.Status(page);
         const button = U.Button(U.Buttons(page), { Text: o.ButtonText, Title: o.ButtonTitle, Icon: o.ButtonIcon, Submit: true, Disabled: fillFirst() }, page);
-        const check = sequenced(o.IsPhone ? A.PhoneError : A.EmailError);
+        value.Check = sequenced(o.IsPhone ? A.PhoneError : A.EmailError);
+        value.Empty = o.Placeholder;
         const update = liveValidation(status, button, async () => {
             const bad = currentPasswordProblem(cur, policy);
             if (bad)
                 return bad;
-            const v = A.Trim(value.Get());
-            if (!v)
-                return { Error: o.Placeholder, Field: value, Neutral: true };
-            const e = await check(v);
-            return { Error: e === undefined ? "" : e, Field: value };
+            return fieldProblem(value);
         }, [cur, value]);
         page.OnSubmit = () => submit({
             Status: status, Update: update, Focus: value,
@@ -1058,7 +1068,7 @@
     async function signUpMain() {
         await U.Page("IconAuthSignUp", async page => {
             // The server names the phone coms "Sms" and "WhatsApp" (older servers: "Phone"); all of them sign up with a phone number: one tab.
-            const methods = [...new Set(((await UM.SignUpMethods()) || []).map(m => (m === "Sms" || m === "WhatsApp") ? "Phone" : m))].filter(m => m === "Email" || m === "Phone");
+            const methods = contactWays((await UM.SignUpMethods()) || []);
             if (methods.length === 0) {
                 const m = _TF("Signing up is not available on this site.", "Message on the sign up page when the server has no sign up methods (no email or text message service that allows signing up)");
                 new U.Status(page).Set(m, "warning");
@@ -1103,14 +1113,7 @@
                 ? _TF("Send a code to your email address to create your account", "Tool tip of the sign up button when signing up with an email address")
                 : _TF("Send a code to your phone number to create your account", "Tool tip of the sign up button when signing up with a phone number (the code comes as a text message or by WhatsApp)"));
             let current = 0;
-            const update = liveValidation(status, button, async () => {
-                const f = fields[current];
-                const v = A.Trim(f.Get());
-                if (!v)
-                    return { Error: f.Empty, Field: f, Neutral: true };
-                const e = await f.Check(v);
-                return { Error: e === undefined ? "" : e, Field: f };
-            }, fields);
+            const update = liveValidation(status, button, () => fieldProblem(fields[current]), fields);
             /**
              * Show the field of a method.
              * @param {number} i Index.
@@ -1242,7 +1245,7 @@
         catch {
         }
         const methods = props && Array.isArray(props.Coms)
-            ? [...new Set(props.Coms.map(m => (m === "Sms" || m === "WhatsApp") ? "Phone" : m))].filter(m => m === "Email" || m === "Phone")
+            ? contactWays(props.Coms)
             : ["Email"];
         const byPhone = methods.includes("Phone"), byEmail = methods.includes("Email");
         const description = byEmail && byPhone
@@ -1415,14 +1418,7 @@
                 Kind: "ghost", Hidden: true,
                 OnClick: () => Sw.Page.Navigate("Users.html?tab=invitations", "_self"),
             });
-            const update = liveValidation(status, button, async () => {
-                const f = fields[current];
-                const v = A.Trim(f.Get());
-                if (!v)
-                    return { Error: f.Empty, Field: f, Neutral: true };
-                const e = await f.Check(v);
-                return e ? { Error: e, Field: f } : { Error: null };
-            }, fields);
+            const update = liveValidation(status, button, () => fieldProblem(fields[current]), fields);
             page.OnSubmit = () => submit({
                 Status: status, Update: update, Focus: fields[current],
                 Failed: _TF("Failed to send invitation.", "Error message displayed when an invitation to join the site failed to be sent"),
@@ -1446,11 +1442,11 @@
                     sent = true;
                     for (const f of [...fields, name])
                         f.Box?.ClearDraft?.();
-                    seg?.SetDisabled?.(true, _TF("The invitation was sent: use Invite another person for a new one", "Reason shown on the locked fields of the invite user page after the invitation was sent"));
+                    const why = _TF("The invitation was sent: use Invite another person for a new one", "Reason shown on the locked fields of the invite user page after the invitation was sent");
+                    seg?.SetDisabled?.(true, why);
                     markDirty();
                     status.Set(_TH("Invitation sent to {0}.", h, "Message displayed when an invitation to join the site have been sent.{0} is replaced with the email address"), "ok", { Html: true });
                     //  Done: the form is locked (the values say what was sent), the next steps replace Send / Cancel
-                    const why = _TF("The invitation was sent: use Invite another person for a new one", "Reason shown on the locked fields of the invite user page after the invitation was sent");
                     button.SetDisabled(true, why);
                     again.E.hidden = false;
                     if (pending)

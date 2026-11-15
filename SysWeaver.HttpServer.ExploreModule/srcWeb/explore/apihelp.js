@@ -194,7 +194,7 @@
             document.title = _TF("How to call APIs", "Title of the page that explains how to call the APIs of a service");
         }
         catch (e) {
-            Sw.Fail(e && e.message ? e.message : String(e), true);
+            Sw.Fail(Sw.ErrorMessage(e), true);
         }
         finally {
             remove();

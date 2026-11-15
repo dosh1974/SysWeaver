@@ -3,10 +3,13 @@ using SysWeaver.Data;
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// Describes how to make a chart from a table
+    /// </summary>
     public sealed class TableChartParams
     {
         /// <summary>
-        /// The Api that get's the table
+        /// The Api that gets the table
         /// </summary>
         public String TableApi;
 
@@ -31,7 +34,8 @@ namespace SysWeaver.MicroService
         public String Title;
 
         /// <summary>
-        /// If multiple keys are specified, separate them using this string
+        /// If multiple keys are specified, separate them using this string.
+        /// Defaults to " / ".
         /// </summary>
         public String KeySeparator = " / ";
     }

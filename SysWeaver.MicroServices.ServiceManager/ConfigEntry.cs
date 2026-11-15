@@ -2,6 +2,9 @@ using System;
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// A service entry in a configuration (a service type, an optional instance name and optional parameters)
+    /// </summary>
     public class ConfigEntry
     {
 
@@ -18,6 +21,10 @@ namespace SysWeaver.MicroService
         public String Name;
 
 
+        /// <summary>
+        /// Get the parameters object for the service
+        /// </summary>
+        /// <returns>The parameters, or null if the service has none</returns>
         public virtual Object GetParams() => null;
     }
 

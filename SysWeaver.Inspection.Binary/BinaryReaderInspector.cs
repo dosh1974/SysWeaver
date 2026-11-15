@@ -129,61 +129,73 @@ namespace SysWeaver.Inspection
 
         #region IInspector
 
+        /// <inheritdoc />
         public void LazyRef<T>(T value, SetProp<T> setValue) where T : class
         {
         }
 
+        /// <inheritdoc />
         public void Field(ref Boolean value)
         {
             value = Reader.ReadBoolean();
         }
 
+        /// <inheritdoc />
         public void Field(ref Byte value)
         {
             value = Reader.ReadByte();
         }
 
+        /// <inheritdoc />
         public void Field(ref Char value)
         {
             //  Chars are written as an UInt16 (any char, also a lone surrogate, independent of the encoding)
             value = (Char)Reader.ReadUInt16();
         }
 
+        /// <inheritdoc />
         public void Field(ref Decimal value)
         {
             value = Reader.ReadDecimal();
         }
 
+        /// <inheritdoc />
         public void Field(ref Double value)
         {
             value = Reader.ReadDouble();
         }
 
+        /// <inheritdoc />
         public void Field(ref Int16 value)
         {
             value = Reader.ReadInt16();
         }
 
+        /// <inheritdoc />
         public void Field(ref Int32 value)
         {
             value = Reader.ReadInt32();
         }
 
+        /// <inheritdoc />
         public void Field(ref Int64 value)
         {
             value = Reader.ReadInt64();
         }
 
+        /// <inheritdoc />
         public void Field(ref SByte value)
         {
             value = Reader.ReadSByte();
         }
 
+        /// <inheritdoc />
         public void Field(ref Single value)
         {
             value = Reader.ReadSingle();
         }
 
+        /// <inheritdoc />
         public void Field(ref String value)
         {
             int l = Reader.ReadInt32();
@@ -196,26 +208,31 @@ namespace SysWeaver.Inspection
             Strings.Add(value);
         }
 
+        /// <inheritdoc />
         public void Field(ref UInt16 value)
         {
             value = Reader.ReadUInt16();
         }
 
+        /// <inheritdoc />
         public void Field(ref UInt32 value)
         {
             value = Reader.ReadUInt32();
         }
 
+        /// <inheritdoc />
         public void Field(ref UInt64 value)
         {
             value = Reader.ReadUInt64();
         }
 
+        /// <inheritdoc />
         public void Field(ref TimeSpan value)
         {
             value = TimeSpan.FromTicks(Reader.ReadInt64());
         }
 
+        /// <inheritdoc />
         public void Field(ref DateTime value)
         {
             var ticks = Reader.ReadInt64();
@@ -223,18 +240,21 @@ namespace SysWeaver.Inspection
             value = new DateTime(ticks, (DateTimeKind)kind);
         }
 
+        /// <inheritdoc />
         public void Field(ref TimeOnly value)
         {
             var ticks = Reader.ReadInt64();
             value = new TimeOnly(ticks);
         }
 
+        /// <inheritdoc />
         public void Field(ref DateOnly value)
         {
             var ticks = Reader.ReadInt64();
             value = DateOnly.FromDateTime(new DateTime(ticks, DateTimeKind.Utc));
         }
 
+        /// <inheritdoc />
         public void Field(ref DateTimeOffset value)
         {
             var ticks = Reader.ReadInt64();
@@ -242,6 +262,7 @@ namespace SysWeaver.Inspection
             value = new DateTimeOffset(ticks, new TimeSpan(ticksOffset));
         }
 
+        /// <inheritdoc />
         public void Field(ref Guid value)
         {
             value = ReadGuid();
@@ -265,12 +286,14 @@ namespace SysWeaver.Inspection
             return new Guid(b.Slice(0, o));
         }
 
+        /// <inheritdoc />
         public void Field<T>(ref T value)
         {
             var handler = TypeHandlerCache<T>.GetHandler(ref value);
             handler.Field(this, ref value);
         }
 
+        /// <inheritdoc />
         public void Prop(Boolean value, SetProp<Boolean> onSet)
         {
             var v = Reader.ReadBoolean();
@@ -278,6 +301,7 @@ namespace SysWeaver.Inspection
                 onSet?.Invoke(v);
         }
 
+        /// <inheritdoc />
         public void Prop(Byte value, SetProp<Byte> onSet)
         {
             var v = Reader.ReadByte();
@@ -285,6 +309,7 @@ namespace SysWeaver.Inspection
                 onSet?.Invoke(v);
         }
 
+        /// <inheritdoc />
         public void Prop(Char value, SetProp<Char> onSet)
         {
             var v = (Char)Reader.ReadUInt16();
@@ -292,6 +317,7 @@ namespace SysWeaver.Inspection
                 onSet?.Invoke(v);
         }
 
+        /// <inheritdoc />
         public void Prop(Decimal value, SetProp<Decimal> onSet)
         {
             var v = Reader.ReadDecimal();
@@ -299,6 +325,7 @@ namespace SysWeaver.Inspection
                 onSet?.Invoke(v);
         }
 
+        /// <inheritdoc />
         public void Prop(Double value, SetProp<Double> onSet)
         {
             var v = Reader.ReadDouble();
@@ -306,6 +333,7 @@ namespace SysWeaver.Inspection
                 onSet?.Invoke(v);
         }
 
+        /// <inheritdoc />
         public void Prop(Int16 value, SetProp<Int16> onSet)
         {
             var v = Reader.ReadInt16();
@@ -313,6 +341,7 @@ namespace SysWeaver.Inspection
                 onSet?.Invoke(v);
         }
 
+        /// <inheritdoc />
         public void Prop(Int32 value, SetProp<Int32> onSet)
         {
             var v = Reader.ReadInt32();
@@ -320,6 +349,7 @@ namespace SysWeaver.Inspection
                 onSet?.Invoke(v);
         }
 
+        /// <inheritdoc />
         public void Prop(Int64 value, SetProp<Int64> onSet)
         {
             var v = Reader.ReadInt64();
@@ -327,6 +357,7 @@ namespace SysWeaver.Inspection
                 onSet?.Invoke(v);
         }
 
+        /// <inheritdoc />
         public void Prop(SByte value, SetProp<SByte> onSet)
         {
             var v = Reader.ReadSByte();
@@ -334,6 +365,7 @@ namespace SysWeaver.Inspection
                 onSet?.Invoke(v);
         }
 
+        /// <inheritdoc />
         public void Prop(Single value, SetProp<Single> onSet)
         {
             var v = Reader.ReadSingle();
@@ -341,6 +373,7 @@ namespace SysWeaver.Inspection
                 onSet?.Invoke(v);
         }
 
+        /// <inheritdoc />
         public void Prop(String value, SetProp<String> onSet)
         {
             String v = null;
@@ -358,6 +391,7 @@ namespace SysWeaver.Inspection
                 onSet?.Invoke(v);
         }
 
+        /// <inheritdoc />
         public void Prop(UInt16 value, SetProp<UInt16> onSet)
         {
             var v = Reader.ReadUInt16();
@@ -365,6 +399,7 @@ namespace SysWeaver.Inspection
                 onSet?.Invoke(v);
         }
 
+        /// <inheritdoc />
         public void Prop(UInt32 value, SetProp<UInt32> onSet)
         {
             var v = Reader.ReadUInt32();
@@ -372,6 +407,7 @@ namespace SysWeaver.Inspection
                 onSet?.Invoke(v);
         }
 
+        /// <inheritdoc />
         public void Prop(UInt64 value, SetProp<UInt64> onSet)
         {
             var v = Reader.ReadUInt64();
@@ -379,6 +415,7 @@ namespace SysWeaver.Inspection
                 onSet?.Invoke(v);
         }
 
+        /// <inheritdoc />
         public void Prop(TimeSpan value, SetProp<TimeSpan> onSet)
         {
             var v = TimeSpan.FromTicks(Reader.ReadInt64());
@@ -386,6 +423,7 @@ namespace SysWeaver.Inspection
                 onSet?.Invoke(v);
         }
 
+        /// <inheritdoc />
         public void Prop(DateTime value, SetProp<DateTime> onSet)
         {
             var ticks = Reader.ReadInt64();
@@ -396,6 +434,7 @@ namespace SysWeaver.Inspection
                 onSet?.Invoke(v);
         }
 
+        /// <inheritdoc />
         public void Prop(TimeOnly value, SetProp<TimeOnly> onSet)
         {
             var ticks = Reader.ReadInt64();
@@ -404,6 +443,7 @@ namespace SysWeaver.Inspection
                 onSet?.Invoke(v);
         }
 
+        /// <inheritdoc />
         public void Prop(DateOnly value, SetProp<DateOnly> onSet)
         {
             var ticks = Reader.ReadInt64();
@@ -413,6 +453,7 @@ namespace SysWeaver.Inspection
 
         }
 
+        /// <inheritdoc />
         public void Prop(DateTimeOffset value, SetProp<DateTimeOffset> onSet)
         {
             //  Same as the field (ticks and offset), != ignores the offset
@@ -422,6 +463,7 @@ namespace SysWeaver.Inspection
                 onSet?.Invoke(v);
         }
 
+        /// <inheritdoc />
         public void Prop(Guid value, SetProp<Guid> onSet)
         {
             var v = ReadGuid();
@@ -429,6 +471,7 @@ namespace SysWeaver.Inspection
                 onSet?.Invoke(v);
         }
 
+        /// <inheritdoc />
         public void Prop<T>(T value, SetProp<T> setValue)
         {
             var handler = TypeHandlerCache<T>.GetHandler(value);
@@ -513,6 +556,7 @@ namespace SysWeaver.Inspection
         }
 
 
+        /// <inheritdoc />
         public void UnmanagedMemory(ref IntPtr data, ref int length, ref Action disposeAction)
         {
             StaticTypeHandler.HandleUnmanagedMemory(this, ref data, ref length, ref disposeAction);
@@ -617,7 +661,46 @@ namespace SysWeaver.Inspection
                 s.StringBuf = buf;
             }
             ReadFully(buf, l);
+            //  Short strings that repeat are shared (see SpanStringCache), only where the result is the same as Encoding.GetString
+            if ((l > 0) && (l <= (SpanStringCache.MaxLength * 2)) && SpanStringCache.Enabled)
+            {
+                var mode = CacheMode;
+                if (mode == 0)
+                    CacheMode = mode = GetCacheMode(Encoding);
+                if (mode == 1)
+                {
+                    //  UTF-16 (little endian): the chars are the bytes, unless there is a surrogate (GetString replaces an invalid one)
+                    if ((l & 1) == 0)
+                    {
+                        var chars = System.Runtime.InteropServices.MemoryMarshal.Cast<Byte, Char>(new ReadOnlySpan<Byte>(buf, 0, l));
+                        if (!chars.ContainsAnyInRange('\uD800', '\uDFFF'))
+                            return SpanStringCache.Get(chars);
+                    }
+                }
+                else if (mode == 2)
+                {
+                    //  UTF-8: ASCII only
+                    var bytes = new ReadOnlySpan<Byte>(buf, 0, l);
+                    if ((l <= SpanStringCache.MaxLength) && Ascii.IsValid(bytes))
+                        return SpanStringCache.GetAscii(bytes);
+                }
+            }
             return Encoding.GetString(buf, 0, l);
+        }
+
+        /// <summary>
+        /// How strings can use the <see cref="SpanStringCache"/>: 0 = not known yet, 1 = UTF-16 little endian, 2 = UTF-8, 3 = not at all (another encoding)
+        /// </summary>
+        int CacheMode;
+
+        static int GetCacheMode(Encoding e)
+        {
+            var cp = e.CodePage;
+            if ((cp == 1200) && BitConverter.IsLittleEndian)
+                return 1;
+            if (cp == 65001)
+                return 2;
+            return 3;
         }
 
         /// <summary>
@@ -731,6 +814,9 @@ namespace SysWeaver.Inspection
             return value;
         }
 
+        /// <summary>
+        /// Called by the generated type handlers to read a field (see <see cref="IInspectorImplementation"/>)
+        /// </summary>
         public void Field_Object<T>(TypeHandler<T> context, ref T value)
         {
             int version = Reader.ReadInt32();
@@ -780,6 +866,9 @@ namespace SysWeaver.Inspection
             value = CreateObject(context, version);
         }
 
+        /// <summary>
+        /// Called by the generated type handlers to read a property (see <see cref="IInspectorImplementation"/>)
+        /// </summary>
         public void Prop_Object<T>(TypeHandler<T> context, ref T value, SetProp<T> onSet)
         {
             int version = Reader.ReadInt32();
@@ -833,16 +922,25 @@ namespace SysWeaver.Inspection
             onSet?.Invoke(value);
         }
 
+        /// <summary>
+        /// Called by the generated type handlers to read a field (see <see cref="IInspectorImplementation"/>)
+        /// </summary>
         public void Field_TypedObject<T, F>(TypeHandler<T> context, ref T value)
         {
             Field_Object(context, ref value);
         }
 
+        /// <summary>
+        /// Called by the generated type handlers to read a property (see <see cref="IInspectorImplementation"/>)
+        /// </summary>
         public void Prop_TypedObject<T, F>(TypeHandler<T> context, ref T value, SetProp<T> onSet)
         {
             Prop_Object(context, ref value, onSet);
         }
 
+        /// <summary>
+        /// Called by the generated type handlers to read a field (see <see cref="IInspectorImplementation"/>)
+        /// </summary>
         public void Field_Value<T>(TypeHandler<T> context, ref T value)
         {
             int version = Reader.ReadInt32();
@@ -855,6 +953,9 @@ namespace SysWeaver.Inspection
             TopIsSelf = topIsSelf;
         }
 
+        /// <summary>
+        /// Called by the generated type handlers to read a property (see <see cref="IInspectorImplementation"/>)
+        /// </summary>
         public void Prop_Value<T>(TypeHandler<T> context, ref T value, SetProp<T> onSet)
         {
             int version = Reader.ReadInt32();
@@ -868,6 +969,9 @@ namespace SysWeaver.Inspection
             onSet?.Invoke(value);
         }
 
+        /// <summary>
+        /// Called by the generated type handlers to read a field (see <see cref="IInspectorImplementation"/>)
+        /// </summary>
         public void Field_NullableValue<T>(TypeHandler<T> context, ref T value)
         {
             int version = Reader.ReadInt32();
@@ -892,6 +996,9 @@ namespace SysWeaver.Inspection
             TopIsSelf = topIsSelf;
         }
 
+        /// <summary>
+        /// Called by the generated type handlers to read a property (see <see cref="IInspectorImplementation"/>)
+        /// </summary>
         public void Prop_NullableValue<T>(TypeHandler<T> context, ref T value, SetProp<T> onSet)
         {
             int version = Reader.ReadInt32();
@@ -937,21 +1044,41 @@ namespace SysWeaver.Inspection
 
         #region Array
 
+        /// <summary>
+        /// Called by the generated type handlers to read an array (see <see cref="IInspectorImplementation"/>)
+        /// </summary>
         public void Array_Begin(int[] dimensions)
         {
             for (int i = 0; i < dimensions.Length; ++i)
                 dimensions[i] = Reader.ReadInt32();
         }
 
+        /// <summary>
+        /// Called by the generated type handlers to read the length of a one dimensional array (see <see cref="IInspectorImplementation.Array_Length(ref int)"/>)
+        /// </summary>
+        public void Array_Length(ref int length)
+        {
+            length = Reader.ReadInt32();
+        }
+
+        /// <summary>
+        /// Called by the generated type handlers to read an array (see <see cref="IInspectorImplementation"/>)
+        /// </summary>
         public void Array_ByteArray(int length, ref Byte[] value)
         {
             ReadFully(value, length);
         }
 
+        /// <summary>
+        /// Called by the generated type handlers to read an array (see <see cref="IInspectorImplementation"/>)
+        /// </summary>
         public void Array_LevelUp(int rank)
         {
         }
 
+        /// <summary>
+        /// Called by the generated type handlers to read an array (see <see cref="IInspectorImplementation"/>)
+        /// </summary>
         public void Array_LevelDown(int rank)
         {
         }

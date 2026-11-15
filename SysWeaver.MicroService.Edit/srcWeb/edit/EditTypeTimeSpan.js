@@ -233,7 +233,7 @@
                 const old = obj[mn];
                 if (old === v)
                     return;
-                await editor.SetMemberValue(member, v, old, _T("Set value: \"{0}\"", v, "Command text stored in a log when a property value was changed.{0} is replaced with the new value."), token);
+                await editor.SetMemberValue(member, v, old, E.Handler.SetText(v), token);
             }, s => {
                 s = ("" + s).trim();
                 if (!(clampNote && clampNote.Value === s))
@@ -258,7 +258,7 @@
                 return f;
             }, v => v === null || v === undefined ? "" : String(v), _TF("Duration, ex: 00:01:30, 90s, 1h 30m, 2d", "Placeholder of the text box of a duration value"), null, null, 40, def, readOnly);
             text.classList.add("sw-edit-duration");
-            text.setAttribute("aria-label", member.DisplayName || mn);
+            text.setAttribute("aria-label", E.Handler.Label(member));
             const sync = () => {
                 const v = obj[mn];
                 const ms = v === null || v === undefined ? NaN : EditTypeTimeSpan.Parse(v);
@@ -405,7 +405,7 @@
                 const old = obj[mn];
                 if (old === v)
                     return Promise.resolve();
-                return editor.SetMemberValue(member, v, old, _T("Set value: \"{0}\"", v, "Command text stored in a log when a property value was changed.{0} is replaced with the new value."), token);
+                return editor.SetMemberValue(member, v, old, E.Handler.SetText(v), token);
             };
             const text = E.CreateTextInput(() => obj[mn], (v, ev, token) => set(v, token), s => {
                 s = ("" + s).trim();
@@ -414,7 +414,7 @@
                 return EditTypeGuid.Norm(s) || obj[mn];
             }, v => v ?? "", "00000000-0000-0000-0000-000000000000", null, null, 38, def, readOnly);
             text.classList.add("sw-edit-guid");
-            text.setAttribute("aria-label", member.DisplayName || mn);
+            text.setAttribute("aria-label", E.Handler.Label(member));
             text.addEventListener("input", () => {
                 const bad = !!text.value.trim() && !EditTypeGuid.Norm(text.value);
                 text.classList.toggle("sw-invalid", bad);

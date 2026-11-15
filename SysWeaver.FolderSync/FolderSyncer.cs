@@ -20,8 +20,15 @@ using SysWeaver.Remote;
 namespace SysWeaver.FolderSync
 {
 
+    /// <summary>
+    /// Synchronizes a local folder with a folder on a server (pushes to a managed folder, or pulls a shared folder)
+    /// </summary>
     public sealed class FolderSyncer : IDisposable
     {
+        /// <summary>
+        /// Create a syncer that connects to a server
+        /// </summary>
+        /// <param name="p">The server, credentials and other settings</param>
         public FolderSyncer(FolderSyncerParams p)
         {
             var serverBase = p.Server.TrimEnd('/');
@@ -51,8 +58,16 @@ namespace SysWeaver.FolderSync
             Api = rrc.Create<IFolderSyncApi>();
         }
 
+        /// <summary>
+        /// The format of the time stamp that is added to the name of a backup folder
+        /// </summary>
         public const String TimeFmt = "yyyy-MM-dd_HH.mm.ss_ffff";
 
+        /// <summary>
+        /// Get the name to use for a backup of a folder
+        /// </summary>
+        /// <param name="folder">The folder to back up</param>
+        /// <returns>The folder name followed by "_" and the last write time (UTC, formatted using <see cref="TimeFmt"/>)</returns>
         public static String GetBakName(String folder)
         {
             var d = new DirectoryInfo(folder);
@@ -66,6 +81,13 @@ namespace SysWeaver.FolderSync
             );
 
 
+        /// <summary>
+        /// Compute a combined hash (the version) of the files of a folder.
+        /// The manifest file is ignored, the lists are compacted in place (the ignored entries are overwritten).
+        /// </summary>
+        /// <param name="fileNames">The file names (modified: ignored entries are removed by moving the later entries up, the list is not shortened)</param>
+        /// <param name="hashStrings">The hash string of each file (modified in the same way as the file names)</param>
+        /// <returns>The hash as a hex string, "Empty" if there are no files</returns>
         public static String ComputeCombinedHash(IList<String> fileNames, IList<String> hashStrings)
         {
             var count = hashStrings.Count;
@@ -128,6 +150,9 @@ namespace SysWeaver.FolderSync
         readonly String UploadChunkBase;
         readonly IFolderSyncApi Api;
 
+        /// <summary>
+        /// The remote api connection to the server
+        /// </summary>
         public IRemoteApi RemoteConnection => Api;
 
         /// <summary>
@@ -843,6 +868,7 @@ namespace SysWeaver.FolderSync
         }
 
 
+        /// <inheritdoc />
         public void Dispose()
         {
             Api.Dispose();

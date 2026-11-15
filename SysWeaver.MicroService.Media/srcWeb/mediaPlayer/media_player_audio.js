@@ -1,13 +1,14 @@
 ﻿
 /**
- * @file media_player_audio.js - HTML5 audio player (a near line-for-line copy of media_player_video.js without visuals).
+ * @file media_player_audio.js - HTML5 audio player (the media element player of media_player_tools.js without visuals, plus the
+ * analyser).
  *
  * Loading: included by MediaPlayer.Init (when window.MediaLoadAll is set) or lazily by MediaPlayer.Create
- * (MediaTypes.Audio); MediaPlayerTools.CanUnMute also requires it (uses MediaPlayerAudio.LoadAudio).
+ * (MediaTypes.Audio).
  * Globals defined: MediaPlayerParamsAudio, MediaPlayerAudio, MediaAudioAnalyser (the spectrum / waveform of the sound) and
  * MediaPlayerAudioTexture (the sound as a texture of MediaPlayerEffect, ShaderToy's audio input).
- * Dependencies: MediaPlayerTools (media_player_tools.js: InitBase, OnCacheComplete), and MediaPlayerTools.waitEvent2
- * and MediaPlayerTools.delay (no SysWeaver core needed).
+ * Dependencies: MediaPlayerElement and MediaPlayerTools (media_player_tools.js: the play window, volume and transport shared with
+ * MediaPlayerVideo, InitBase, OnCacheComplete, waitEvent2, delay; no SysWeaver core needed).
  */
 
 /**
@@ -36,153 +37,34 @@ class MediaPlayerParamsAudio {
 /**
  * Audio player using a hidden, zero-sized, initially muted <audio> element with a StartAt/EndAt play window.
  * Created by MediaPlayer.Create(MediaTypes.Audio, url, params). Lifecycle: constructor -> Cache -> Play/Pause/...
- * -> OnDispose (InitBase default, calls Stop). Shared state and default methods come from MediaPlayerTools.InitBase.
+ * -> OnDispose (InitBase default, calls Stop). The play window and transport are those of MediaPlayerElement
+ * (media_player_tools.js, shared with MediaPlayerVideo); this class adds the analyser (spectrum / waveform) and routes the
+ * volume through it when one runs. No ApplyClip (audio has no visual).
  * Instance fields: Params (MediaPlayerParamsAudio), Url/Source (the url), AtStart (positioned at the window start),
- * AtEnd (paused at the window end), LoopWatch (native-loop wrap detector, see Cache).
+ * AtEnd (paused at the window end), LoopWatch (native-loop wrap detector, see MediaPlayerElement.Cache), Analyser.
  */
-class MediaPlayerAudio {
+class MediaPlayerAudio extends MediaPlayerElement {
     /**
-     * Creates the player and its muted <audio> element (not loaded until Cache).
-     * Sets HaveVisual=false, HaveAudio=true, calls MediaPlayerTools.InitBase, sets element.loop = Looping,
-     * CanPlay=true, Url = Source = url, AtStart = true.
+     * Creates the player and its muted <audio> element (not loaded until Cache): HaveVisual = false, HaveAudio = true
+     * (see MediaPlayerElement for the rest).
      * @param {string} url - URL of the audio file.
      * @param {MediaPlayerParamsAudio|object} [params] - Partial params, merged over the defaults.
      */
     constructor(url, params) {
-        const t = this;
         const cp = new MediaPlayerParamsAudio();
         if (params)
             Object.assign(cp, params);
-        params = cp;
-        t.Params = params;
-        const e = document.createElement("audio");
-        e.muted = true;
-        t.HaveVisual = false;
-        t.HaveAudio = true;
-        MediaPlayerTools.InitBase(t, e, params);
-        e.loop = this.Looping;
-        t.CanPlay = true;
-        t.Url = url;
-        t.Source = url;
-        t.AtStart = true;
+        super(url, cp, "audio", false, true);
     }
 
     /**
-     * Loads the audio and installs the play-window logic. Must be awaited before using the player.
-     * Sets Width=Height=0 and a 0-size element, reads Duration, seeks to StartAt (when > 0), computes the
-     * effective endTime (EndAt, or the duration when EndAt <= StartAt; EndAt > duration counts as 0) and the
-     * loop-watch midpoint (endTime + StartAt) / 2, then installs:
-     * - ontimeupdate: updates Duration; before endTime it detects a native `loop` wrap back below the midpoint
-     *   (when LoopWatch is armed) and seeks back to StartAt + OnLoop, otherwise arms LoopWatch once past the
-     *   midpoint (only when StartAt > 0, looping and playing); at/after endTime it seeks to StartAt when looping,
-     *   else pauses at endTime, sets AtEnd and calls OnEnded.
-     * - onended: natural end while playing -> pause, AtEnd = true, OnEnded.
-     * No ApplyClip (audio has no visual).
-     * @param {boolean} [keepHidden] - When true the element keeps the MediaHidden class.
-     * @returns {Promise<boolean>} True when loaded, false when loading failed.
-     */
-    async Cache(keepHidden) {
-
-        const t = this;
-        const e = t.Element;
-        if (!await MediaPlayerAudio.LoadAudio(e, t.Url))
-            return false;
-        t.Width = 0;
-        t.Height = 0;
-        e.style.width = "0";
-        e.style.height = "0";
-        const duration = e.duration;
-        t.Duration = duration;
-        const p = t.Params;
-        const startAt = p.StartAt;
-        if (startAt > 0) {
-            e.currentTime = startAt;
-            t.LoopWatch = false;
-        }
-        let endAt = p.EndAt;
-        if (endAt > duration)
-            endAt = 0;
-        const endTime = endAt > startAt ? endAt : duration;
-        const loopWatch = (endTime + startAt) * 0.5;
-        e.ontimeupdate = async () => {
-            t.Duration = e.duration;
-            const ct = e.currentTime;
-            if (ct < endTime) {
-                if (t.LoopWatch) {
-                    if (ct < loopWatch) {
-                        e.currentTime = startAt;
-                        t.LoopWatch = false;
-                        if (t.OnLoop)
-                            await t.OnLoop();
-                    }
-                } else {
-                    t.LoopWatch = (startAt > 0) && t.Looping && (!t.Paused) && (ct > loopWatch);
-                }
-                return;
-            }
-            if (t.Looping) {
-                e.currentTime = startAt;
-                t.LoopWatch = false;
-            } else {
-                if (!t.Paused) {
-                    t.Paused = true;
-                    t.AtEnd = true;
-                    e.pause();
-                    e.currentTime = endTime;
-                    t.LoopWatch = false;
-                    await t.OnEnded();
-                }
-            }
-        };
-        e.onended = async ev => {
-            if (!t.Paused) {
-                t.Paused = true;
-                t.AtEnd = true;
-                e.pause();
-                t.LoopWatch = false;
-                await t.OnEnded();
-            }
-        };
-        return MediaPlayerTools.OnCacheComplete(t, keepHidden);
-    }
-
-    /**
-     * Loads a media URL into an <audio> (or <video>) element: appends a <source src=c> child, waits for
-     * "loadeddata" or "error" (MediaPlayerTools.waitEvent2), then polls every 100 ms until readyState >= 3 (HAVE_FUTURE_DATA).
-     * Also used by MediaPlayerTools.CanUnMute.
+     * Loads a media URL into an <audio> (or <video>) element (see MediaPlayerElement.Load).
      * @param {HTMLMediaElement} e - The media element to load into.
      * @param {string} c - The source URL.
      * @returns {Promise<boolean>} False when the element fired "error", else true.
      */
-    static async LoadAudio(e, c) {
-        const res = await MediaPlayerTools.waitEvent2(e, "loadeddata", "error", () => {
-            const source = document.createElement('source');
-            source.src = c;
-            //source.type = "audio/webm";
-            //  A failed <source> fires "error" on the source only (it does not bubble): without this a broken url waited forever
-            source.addEventListener("error", () => e.dispatchEvent(new Event("error")), { once: true });
-            e.appendChild(source);
-        });
-        if (res.type == "error")
-            return false;
-        while (e.readyState < 3) {
-            //  (the caller gave up waiting, ex: the sound probe of MediaPlayerTools.CanUnMute)
-            if (e.SwCancelLoad)
-                return false;
-            await MediaPlayerTools.delay(100);
-        }
-        return true;
-    }
-
-    /**
-     * Mutes the player (sets Muted and element.muted). No-op when already muted.
-     * @returns {Promise<void>}
-     */
-    async Mute() {
-        if (this.Muted)
-            return;
-        this.Muted = true;
-        this.ApplyVolume();
+    static LoadAudio(e, c) {
+        return MediaPlayerElement.Load(e, c);
     }
 
     /**
@@ -193,25 +75,8 @@ class MediaPlayerAudio {
     async UnMute() {
         if (!this.Muted)
             return;
-        this.Muted = false;
-        this.ApplyVolume();
+        await super.UnMute();
         this.Analyser?.TryStart();
-    }
-
-    /**
-     * Sets the player volume. Clamps to 0..1, stores it in Volume (no-op when unchanged) and applies it (ApplyVolume).
-     * @param {number} vol - Volume 0..1.
-     * @returns {Promise<void>}
-     */
-    async SetVolume(vol) {
-        if (vol < 0)
-            vol = 0;
-        if (vol > 1)
-            vol = 1;
-        if (vol == this.Volume)
-            return;
-        this.Volume = vol;
-        this.ApplyVolume();
     }
 
     /**
@@ -221,17 +86,14 @@ class MediaPlayerAudio {
      */
     ApplyVolume() {
         const t = this;
-        const e = t.Element;
-        const v = t.Volume * t.Params.Volume * 0.01;
         const a = t.Analyser;
-        if (a && a.Live) {
-            e.volume = 1;
-            e.muted = false;
-            a.SetGain(t.Muted ? 0 : v);
+        if (!a || !a.Live) {
+            super.ApplyVolume();
             return;
         }
-        e.volume = v;
-        e.muted = t.Muted;
+        t.Element.volume = 1;
+        t.Element.muted = false;
+        a.SetGain(t.Muted ? 0 : t.Volume * t.Params.Volume * 0.01);
     }
 
     /** @type {MediaAudioAnalyser|null} The analyser of the sound (GetAnalyser), null when none is used. */
@@ -245,175 +107,13 @@ class MediaPlayerAudio {
         return this.Analyser ??= new MediaAudioAnalyser(this);
     }
 
-
     /**
-     * Starts playback. No-op when already playing. When AtEnd, seeks to StartAt first. Sets element.loop = Looping
-     * and awaits element.play(); on success Paused=false, AtStart=false and Duration is refreshed. A rejected
-     * play() (e.g. autoplay policy) is swallowed and the player stays paused.
-     * @returns {Promise<void>}
+     * Called by Play before the element plays: a waiting analyser tries to start.
+     * @returns {void}
      */
-    async Play() {
-        const t = this;
-        if (!t.Paused)
-            return;
-        const e = t.Element;
-        const p = t.Params;
-        const startAt = p.StartAt;
-        if (t.AtEnd) {
-            t.AtEnd = false;
-            e.currentTime = startAt;
-            t.LoopWatch = false;
-        }
-        t.Analyser?.TryStart();
-        try {
-            e.loop = t.Looping;
-            await e.play();
-            t.Paused = false;
-            t.AtStart = false;
-            t.Duration = e.duration;
-        }
-        catch
-        {
-        }
+    BeforePlay() {
+        this.Analyser?.TryStart();
     }
-
-    /**
-     * Stops playback: pauses, seeks to StartAt, clears LoopWatch and sets Paused = AtStart = true.
-     * No-op when already paused at the start. The commented-out block is an older "replace the element" variant.
-     * @returns {Promise<true|undefined>} True when stopped, undefined when it was already stopped.
-     */
-    async Stop() {
-        const t = this;
-        const e = t.Element;
-        if (t.Paused) {
-            if (t.AtStart)
-                return;
-        }
-/*
-        const n = document.createElement("audio");
-        n.muted = e.muted;
-        n.volume = e.volume;
-        if (!await MediaPlayerAudio.LoadAudio(n, this.Url)) {
-            t.Paused = true;
-            const res = await MediaPlayerTools.waitEvent2(e, "loadeddata", "error", () => e.load());
-            if (res.type == "error")
-                return false;
-            t.Paused = true;
-            t.AtStart = true;
-            return;
-        }
-        const startAt = t.Params.StartAt;
-        if (startAt > 0)
-        {
-            n.currentTime = startAt;
-            t.LoopWatch = false;
-        }
-        n.className = e.className;
-        n.setAttribute("style", e.getAttribute("style"));
-        e.replaceWith(n);
-        t.Element = n;
-*/
-        e.pause();
-        e.currentTime = t.Params.StartAt;
-        t.LoopWatch = false;
-        t.Paused = true;
-        t.AtStart = true;
-        return true;
-    }
-
-    /**
-     * Pauses playback (keeps the position). No-op when already paused.
-     * @returns {Promise<void>}
-     */
-    async Pause() {
-        if (this.Paused)
-            return;
-        this.Paused = true;
-        this.Element.pause();
-    }
-
-    /**
-     * Seeks to a time: clamps it to [StartAt, endTime] (endTime = EndAt when > StartAt, else the duration),
-     * updates AtEnd/AtStart, sets element.currentTime and clears LoopWatch. Does not change the play state.
-     * @param {number} time - Position in seconds (absolute media time, not relative to StartAt).
-     * @returns {Promise<void>}
-     */
-    async Seek(time) {
-        const t = this;
-        const p = t.Params;
-        const e = t.Element;
-        const startAt = this.Params.StartAt;
-        const endAt = p.EndAt;
-        const endTime = endAt > startAt ? endAt : e.duration;
-        if (time < startAt)
-            time = startAt;
-        if (time > endTime)
-            time = endTime;
-        t.AtEnd = time >= endTime;
-        t.AtStart = time <= startAt;
-        e.currentTime = time;
-        t.LoopWatch = false;
-
-    }
-
-
-    /**
-     * Gets the current playback position.
-     * @returns {number} element.currentTime in seconds (absolute media time).
-     */
-    GetPos() {
-        return this.Element.currentTime;
-    }
-
-    /**
-     * The playback speed (1 = normal).
-     * @type {number}
-     */
-    Rate = 1;
-
-    /**
-     * The fastest speed SetRate takes (the browsers play media up to 16 times faster).
-     * @type {number}
-     */
-    MaxRate = 16;
-
-    /**
-     * Set the playback speed (element.playbackRate; the pitch of the sound is kept).
-     * @param {number} rate The speed, 1 = normal (clamped to 0.0625..MaxRate).
-     * @returns {Promise<void>}
-     */
-    async SetRate(rate) {
-        const r = Math.max(0.0625, Math.min(this.MaxRate, rate || 1));
-        this.Rate = r;
-        this.Element.playbackRate = r;
-    }
-
-
-    /**
-     * Enables looping (Looping = element.loop = true). No-op when already looping.
-     * @returns {Promise<void>}
-     */
-    async Loop() {
-        const t = this;
-        if (t.Looping)
-            return;
-        const e = t.Element;
-        t.Looping = true;
-        e.loop = true;
-    }
-
-    /**
-     * Disables looping (Looping = element.loop = false), so playback ends at the window end. No-op when not looping.
-     * @returns {Promise<void>}
-     */
-    async Once() {
-        const t = this;
-        if (!t.Looping)
-            return;
-        t.Looping = false;
-        t.Element.loop = false;
-    }
-
 }
 
 /**

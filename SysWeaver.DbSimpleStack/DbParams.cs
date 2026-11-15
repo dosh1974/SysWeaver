@@ -3,8 +3,16 @@ using System.Collections.Generic;
 
 namespace SysWeaver.Db
 {
+    /// <summary>
+    /// Base class for database connection parameters
+    /// </summary>
     public abstract class DbParams : CredentialParams
     {
+        /// <summary>
+        /// Create database parameters, the user defaults to "root"
+        /// </summary>
+        /// <param name="connectionString">The connection string template to use when connecting to a schema</param>
+        /// <param name="connectionStringNoScehma">The connection string template to use when connecting without a schema</param>
         protected DbParams(String connectionString, String connectionStringNoScehma)
         {
             ConnectionString = connectionString;
@@ -99,6 +107,10 @@ namespace SysWeaver.Db
         {
         }
 
+        /// <summary>
+        /// Builds a connection string with the user and password masked (safe for logging)
+        /// </summary>
+        /// <returns>A connection string without any credentials</returns>
         public override string ToString()
         {
             var args = new Dictionary<String, String>(StringComparer.OrdinalIgnoreCase);

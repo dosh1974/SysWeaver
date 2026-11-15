@@ -12,8 +12,16 @@ namespace SysWeaver.AI
     /// </summary>
     public sealed class AiToolFunction
     {
+        /// <inheritdoc />
         public override string ToString() => FunctionName;
 
+        /// <summary>
+        /// Create a function definition
+        /// </summary>
+        /// <param name="functionName">The name of the function</param>
+        /// <param name="functionDescription">The description of the function</param>
+        /// <param name="functionParameters">The JSON schema of the parameters, or null if none</param>
+        /// <param name="functionSchemaIsStrict">If the schema should be strictly followed, null for the API default</param>
         public AiToolFunction(String functionName, String functionDescription, BinaryData functionParameters, bool? functionSchemaIsStrict = null)
         {
             FunctionName = functionName;
@@ -54,28 +62,78 @@ namespace SysWeaver.AI
         readonly System.Collections.Concurrent.ConcurrentDictionary<Type, Object> ApiTools = new();
     }
 
+    /// <summary>
+    /// A tool (function) that an AI model can call, backed by an API end point
+    /// </summary>
     public sealed class AiTool
     {
+        /// <inheritdoc />
         public override string ToString() => Name;
+
+        /// <summary>
+        /// The API agnostic function definition sent to the AI model
+        /// </summary>
         public readonly AiToolFunction Tool;
 
+        /// <summary>
+        /// The name of the tool
+        /// </summary>
         public readonly String Name;
+
+        /// <summary>
+        /// The description of the tool
+        /// </summary>
         public readonly String Desc;
 
+        /// <summary>
+        /// The type of the argument, or null if the tool has no argument
+        /// </summary>
         public readonly Type Arg;
+
+        /// <summary>
+        /// The name of the argument
+        /// </summary>
         public readonly String ArgName;
+
+        /// <summary>
+        /// The description of the argument
+        /// </summary>
         public readonly String ArgDesc;
 
+        /// <summary>
+        /// The type of the return value, or null if none
+        /// </summary>
         public readonly Type Ret;
+
+        /// <summary>
+        /// The description of the return value
+        /// </summary>
         public readonly String RetDesc;
 
+        /// <summary>
+        /// The auth required to use the tool
+        /// </summary>
         public readonly IReadOnlyList<String> Auth;
 
+        /// <summary>
+        /// The icon of the tool
+        /// </summary>
         public readonly String Icon;
 
+        /// <summary>
+        /// The url of the REST API of the tool
+        /// </summary>
         public readonly String Api;
 
 
+        /// <summary>
+        /// Create a tool
+        /// </summary>
+        /// <param name="name">The name of the tool</param>
+        /// <param name="endPoint">The end point the tool calls</param>
+        /// <param name="tool">The function definition</param>
+        /// <param name="exposeApi">If true, the REST API url is exposed</param>
+        /// <returns>The tool</returns>
         public static AiTool Create(String name, IApiHttpServerEndPoint endPoint, AiToolFunction tool, bool exposeApi = false)
             => new AiTool(name, endPoint, tool, exposeApi);
 
@@ -273,6 +331,9 @@ namespace SysWeaver.AI
         /// </summary>
         public readonly Func<BinaryData, HttpServerRequest, Task<String>> Invoke;
 
+        /// <summary>
+        /// The tool as a chat command (runs the tool with the supplied json argument)
+        /// </summary>
         public readonly AiCommand AsCommand;
 
     }

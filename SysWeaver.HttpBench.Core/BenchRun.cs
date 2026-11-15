@@ -78,17 +78,48 @@ namespace SysWeaver.HttpBench
         /// </summary>
         public sealed class Worker
         {
+            /// <summary>
+            /// The index of the worker.
+            /// </summary>
             public int Index;
+
+            /// <summary>
+            /// The http client of the worker (created by <see cref="BenchRun.Start"/>).
+            /// </summary>
             public HttpClient Client;
+
+            /// <summary>
+            /// The wire byte counters of the worker.
+            /// </summary>
             public readonly WireCounters Wire = new WireCounters();
             /// <summary>
             /// The totals of this worker (only the worker writes them).
             /// </summary>
             public readonly BenchCounters Totals = new BenchCounters(false);
+
+            /// <summary>
+            /// The buffer used to read response bodies.
+            /// </summary>
             public readonly Byte[] Buffer = new Byte[64 * 1024];
+
+            /// <summary>
+            /// The kept single requests of the worker (a uniform random sample once full, see <see cref="SamplesSeen"/>).
+            /// </summary>
             public BenchSample[] Samples;
+
+            /// <summary>
+            /// The number of requests that were offered to <see cref="Samples"/>.
+            /// </summary>
             public long SamplesSeen;
+
+            /// <summary>
+            /// The random generator used to select the samples to keep.
+            /// </summary>
             public Random Rng;
+
+            /// <summary>
+            /// The time stamp (<see cref="Stopwatch.GetTimestamp"/>) when the worker started.
+            /// </summary>
             public long Started;
 
             /// <summary>
@@ -113,6 +144,12 @@ namespace SysWeaver.HttpBench
             internal CancellationTokenSource TimeoutCts;
         }
 
+        /// <summary>
+        /// Create a test (call <see cref="Start"/> to run it).
+        /// </summary>
+        /// <param name="id">The id of the test</param>
+        /// <param name="setup">The validated settings</param>
+        /// <param name="limits">The limits and timing of the host, null for the defaults</param>
         public BenchRun(int id, BenchSetup setup, BenchLimits limits = null)
         {
             limits = limits ?? new BenchLimits();
@@ -208,21 +245,67 @@ namespace SysWeaver.HttpBench
             EndTs = StartTs + (long)(DurationSeconds * (double)Stopwatch.Frequency);
         }
 
+        /// <summary>
+        /// The id of the test.
+        /// </summary>
         public readonly int Id;
+
+        /// <summary>
+        /// The (normalized) settings of the test.
+        /// </summary>
         public readonly BenchStartRequest Settings;
+
+        /// <summary>
+        /// The root url of the server.
+        /// </summary>
         public readonly Uri Target;
+
+        /// <summary>
+        /// The end points that are called, in order.
+        /// </summary>
         public readonly BenchEndPoint[] EndPoints;
+
+        /// <summary>
+        /// The number of workers.
+        /// </summary>
         public readonly int Concurrency;
+
+        /// <summary>
+        /// The duration of the test in seconds.
+        /// </summary>
         public readonly int DurationSeconds;
+
+        /// <summary>
+        /// The Accept-Encoding header value that is sent, null for none.
+        /// </summary>
         public readonly String AcceptEncoding;
+
+        /// <summary>
+        /// The Content-Encoding of the request bodies (the http code of the request compression), null for none.
+        /// </summary>
         public readonly String ContentEncoding;
         /// <summary>
         /// The utc time the workers started (set by <see cref="Start"/>).
         /// </summary>
         public DateTime Started { get; private set; }
+        /// <summary>
+        /// The utc time the test ended, null while it is running.
+        /// </summary>
         public DateTime? Ended { get; private set; }
+
+        /// <summary>
+        /// The state of the test.
+        /// </summary>
         public volatile BenchStates State = BenchStates.Running;
+
+        /// <summary>
+        /// A message that tells why the test failed or was stopped, null if there is none.
+        /// </summary>
         public String Message { get; private set; }
+
+        /// <summary>
+        /// The workers.
+        /// </summary>
         public readonly Worker[] Workers;
 
         readonly Prepared[] Prep;
@@ -270,6 +353,9 @@ namespace SysWeaver.HttpBench
         /// </summary>
         public Action<BenchRun> OnDone;
 
+        /// <summary>
+        /// True when the test is over (completed, stopped or failed).
+        /// </summary>
         public bool IsDone => State >= BenchStates.Completed;
 
         /// <summary>
@@ -292,6 +378,7 @@ namespace SysWeaver.HttpBench
         /// <summary>
         /// Stop the test now (requests in flight are cancelled and not counted).
         /// </summary>
+        /// <returns>True if the test was stopped, false if it was already done</returns>
         public bool Stop()
         {
             if (IsDone)
@@ -307,6 +394,9 @@ namespace SysWeaver.HttpBench
             return true;
         }
 
+        /// <summary>
+        /// Stop the test and wait (up to 10 seconds) for it to end.
+        /// </summary>
         public void Dispose()
         {
             Stop();

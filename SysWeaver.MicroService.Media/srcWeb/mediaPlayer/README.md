@@ -34,7 +34,7 @@ The scripts are served as `mediaPlayer/*.js`. The pages in `mediaView/` include 
 | Item | Description |
 |---|---|
 | [`media_player.js`](media_player.js) | `MediaTypes` constants and the `MediaPlayer` factory/loader |
-| [`media_player_tools.js`](media_player_tools.js) | `MediaPlayerTools`: shared helpers for clipping, sizing/alignment, blob caching, unmute detection, page-loaded and parent-window messages, errors |
+| [`media_player_tools.js`](media_player_tools.js) | `MediaPlayerTools`: shared helpers for clipping, sizing/alignment, blob caching, unmute detection, page-loaded and parent-window messages, errors; the base classes `MediaPlayerPicture` (image / text player timeline), `MediaPlayerElement` (video / audio players: the HTML5 media element, the StartAt / EndAt play window, loop handling, volume, rate and the transport) and `MediaPlayerTexture` (effect texture providers) |
 | [`media_effect_program.js`](media_effect_program.js) | `EffectProgram` / `EffectProgramData`: WebGL shader compilation, linking, and parsing of `//var:` parameter annotations |
 | [`media_player_effect.js`](media_player_effect.js) | `MediaPlayerEffect` (renders a GLSL effect, optionally over an image texture) and `MediaPlayerImageTexture` |
 | [`media_player_image.js`](media_player_image.js) | `MediaPlayerImage` and its parameters |
@@ -101,7 +101,7 @@ The scripts are served as `mediaPlayer/*.js`. The pages in `mediaView/` include 
 - Element: `<video muted>` / `<audio muted>`. A `<source src>` child is appended in the static `LoadVideo(e, url)` / `LoadAudio(e, url)`, which wait for `loadeddata`/`error` and then poll until `readyState >= 3`.
 - The `StartAt/EndAt` window is enforced in `ontimeupdate`. When `currentTime` reaches `endTime` the player either seeks back to `StartAt` (loop) or pauses at the end and fires `OnEnded`. A "LoopWatch" flag detects native `loop` wrapping back to 0 when `StartAt > 0` and re-seeks to `StartAt` (firing `OnLoop`). `onended` covers the natural end.
 - Speed: `SetRate(r)` sets `element.playbackRate` (`Rate`, `MaxRate` = 16). - Volume is applied as `Volume * Params.Volume * 0.01` to `element.volume`. Mute toggles `element.muted`. `Loop/Once` sets `element.loop`. `GetPos` is `element.currentTime`. With `Stream==2` the video element gets 0 size and opacity 0.
-- The two files are near line-for-line copies (Stop still contains a commented-out "replace element" path).
+- `MediaPlayerVideo` and `MediaPlayerAudio` both extend `MediaPlayerElement` (`media_player_tools.js`), which holds the shared element handling, play window, loop handling, volume, rate and transport (`Play`, `Pause`, `Stop`, `Seek`, ...); the two classes only add what differs (the element, the size and what happens before playing / after unmuting).
 - Audio only: `ApplyVolume()` applies `Muted` and the volume (to the element, or to the analyser's gain once one runs); `GetAnalyser()` returns the player's one `MediaAudioAnalyser`.
 - `MediaAudioAnalyser(player)`: Web Audio analysers on the element, like ShaderToy's audio input (fft 2048, smoothing 0.5, the first 512 bins / samples), for the mono mix, the left and the right channel (a mono sound is up-mixed: left = right). The context is made when it can run (after a click / key, on `AudioEnabled`, on `Play` / `UnMute`); until then the sound plays as before and the data is silence. Once running the element plays unmuted at full volume into the graph and mute / volume go to a gain node, so the analysis goes on while muted. `Read(out, scale)` fills 2 interleaved RGB rows: row 0 the spectrum (`minDecibels..maxDecibels` → 0..1), row 1 the waveform (0.5 = silence); r = mono, g = left, b = right. `Dispose()` closes the context.
 - `MediaPlayerAudioTexture(gl, sound)`: the texture provider of a sound (512 × 2, `RGB16F` with WebGL 2, `RGB` bytes with WebGL 1, linear, clamped, not flipped: v = 0.25 is the spectrum, v = 0.75 the waveform). `Update()` uploads the analyser data before every frame.
@@ -119,8 +119,8 @@ The scripts are served as `mediaPlayer/*.js`. The pages in `mediaView/` include 
 - `MediaPlayerParamsText extends TextStyle` and adds `CollageSeparator, CollageColumns=2, Crop, Duration=10, Effect, EffectParams, EffectSizeFromImage, Transparent, AdaptiveSize, DebugImage`.
 - `data` is the text itself, not a URL. When `CollageSeparator` is set it is split into several texts and rendered as a grid.
 - `Cache` optionally loads a web font (`FontUrl`/`FontUrlName` through `MediaPlayerTools.LoadFont`: the url is parsed, must be http(s) (or a blob of this origin) and only its normalized href goes into the `FontFace` source as an escaped CSS string, never the raw value). A font that fails no longer stops the player: `MediaPlayerTools.LoadFontOrFallback` appends "Verdana, sans-serif" to `Font`, keeps the error in `FontError` (also on `MediaPlayerTextTexture`) and dispatches `MediaFontFallback` on the window, and the text is rendered with the default font. It renders the text with `CanvasTools.CreateTextImageUrl` or `CreateTextGridUrl` (a WebP blob URL) into an `<img>`. Collage grid stats are written into `EffectParams.FxProps` (`TileCountX/Y, TileWidth/Height, PageWidth/Height, ImageWidth/Height, Border, UniqueCount`), which lets a collage shader receive the grid layout as `//var:` constants.
-- Its timeline methods are identical copies of `MediaPlayerImage`'s.
-- `MediaPlayerTextTexture(gl, params, text)`: the texture-provider version. It renders to a canvas and uploads it as a GL texture. Otherwise it is identical to `MediaPlayerImageTexture` (see below).
+- Like `MediaPlayerImage` it derives from `MediaPlayerPicture` (`media_player_tools.js`: the `<img>`, the shared end of `Cache` (`ShowImage`) and the timer based timeline). The font and the collage / single text rendering are `MediaPlayerText.Render(t, asUrl)`, shared with the texture.
+- `MediaPlayerTextTexture(gl, params, text)`: the texture-provider version. It renders to a canvas (`MediaPlayerText.Render`) and uploads it with `MediaPlayerTexture.Upload` (`media_player_tools.js`, the base class it shares with `MediaPlayerImageTexture`).
 
 #### `canvasTools.js` — `TextGradientStop`, `TextLinearGradient`, `TextStyle`, `CanvasTools`
 - `TextStyle` holds the defaults for font, letter spacing, fill/stroke color or gradient, stroke width/cap, fill/stroke shadow, margins, `StrokeFirst`, and `AttachTo` (debug: append the canvas).
@@ -229,10 +229,7 @@ The scripts are served as `mediaPlayer/*.js`. The pages in `mediaView/` include 
 
 - Global-class script style with load-order coupling (`TextStyle` before `MediaPlayerParamsText`; tools before players). Lazy loading lives in an `async` factory, with a sync variant that guards with `typeof X === "function"`.
 - "Interface" through mixin: `InitBase` installs default methods only when absent, so whether behavior comes from the class or the default depends on whether the class defines the method. Several class methods are sync (`Pause`/`Stop` of image/text) while the defaults are async.
-- Heavy duplication:
-  - `MediaPlayerImage` and `MediaPlayerText` share an identical timer-based timeline.
-  - `MediaPlayerVideo` and `MediaPlayerAudio` are near-identical.
-  - `MediaPlayerImageTexture` and `MediaPlayerTextTexture` share identical upload, mipmap, clip and apply code.
+- Duplication that is left (the picture players, the picture textures and the video / audio players are merged: `MediaPlayerPicture`, `MediaPlayerTexture` and `MediaPlayerElement` in `media_player_tools.js`):
   - `SetCustomX/Y/Z` are copies of each other.
   - `CreateTextGrid` and `CreateNumberImage` share measuring code.
   - The `*Blob`/`*Url` wrappers repeat each other.
@@ -417,7 +414,7 @@ HTML5 video player. Loaded by `MediaPlayer.Init` (`MediaLoadAll`) or lazily by `
 
 ### `media_player_audio.js`
 
-HTML5 audio player; a near line-for-line copy of `media_player_video.js` without visuals. Loaded by `MediaPlayer.Init` (`MediaLoadAll`), lazily by `MediaPlayer.Create`, and required by `MediaPlayerTools.CanUnMute`. Defines globals `MediaPlayerParamsAudio` and `MediaPlayerAudio`.
+HTML5 audio player; like `media_player_video.js` it extends `MediaPlayerElement`, without visuals. Loaded by `MediaPlayer.Init` (`MediaLoadAll`), lazily by `MediaPlayer.Create`, and required by `MediaPlayerTools.CanUnMute`. Defines globals `MediaPlayerParamsAudio` and `MediaPlayerAudio`.
 
 #### Globals
 | Name | Kind | Description |
@@ -442,7 +439,7 @@ HTML5 audio player; a near line-for-line copy of `media_player_video.js` without
 | `LoadAudio` | static async method | `LoadAudio(e, c)` → Promise<bool> | Appends `<source src=c>`, waits `loadeddata`/`error`, polls until `readyState ≥ 3`. |
 | `Mute` / `UnMute` | async method | `()` | As video (`UnMute` always applies volume, no `HaveAudio` check). |
 | `SetVolume` | async method | `SetVolume(vol)` | Clamp 0..1, store, apply `vol * Params.Volume * 0.01` when unmuted. |
-| `Play` / `Stop` / `Pause` / `Seek` / `GetPos` / `Loop` / `Once` | (async) methods | as video | Identical behavior to the `MediaPlayerVideo` members of the same name (`Stop` also keeps a commented-out element-replacement variant). |
+| `Play` / `Stop` / `Pause` / `Seek` / `GetPos` / `Loop` / `Once` | (async) methods | as video | Inherited from `MediaPlayerElement`, the same behavior as `MediaPlayerVideo`. |
 | `Params`, `Url`, `Source`, `AtStart`, `AtEnd`, `LoopWatch` | fields | | As video. |
 
 ### `media_player_youtube.js`
@@ -519,7 +516,7 @@ Inherits all `TextStyle` fields (see `canvasTools.js`) and adds:
 |---|---|---|---|
 | `constructor` | constructor | `(url, params)` | `url` is the text. Same as `MediaPlayerImage`'s constructor with `MediaPlayerParamsText` (no SVG check). |
 | `Cache` | async method | `Cache(keepHidden)` → Promise<bool> | Loads `FontUrl` with `MediaPlayerTools.LoadFontOrFallback(Params)` if set (a default font and `FontError` on a failure); renders the text with `CanvasTools.CreateTextGridUrl(texts, p, CollageColumns, FxProps)` or `CreateTextImageUrl(text, p)` (WebP blob URL), loads it into the `<img>`, reads `naturalWidth/Height`, `AspectRatio`, `ApplyClip()`, `OnCacheComplete`. |
-| `Play`, `Pause`, `Stop`, `GetPos`, `Once`, `Seek` | (async) methods | as image | Identical copies of the `MediaPlayerImage` timeline members. |
+| `Play`, `Pause`, `Stop`, `GetPos`, `Once`, `Seek` | (async) methods | as image | Inherited from `MediaPlayerPicture`, the same timeline as `MediaPlayerImage`. |
 | `setTimer` | inner (of `Play`) | async `()` | Same as in `MediaPlayerImage.Play`. |
 
 #### class `MediaPlayerTextTexture`

@@ -10,11 +10,19 @@ using SysWeaver.MicroService;
 namespace SysWeaver.ExchangeRate
 {
 
+    /// <summary>
+    /// Provides exchange rates, collected (and kept updated) from the available rate sources (<see cref="IRateSource"/>)
+    /// </summary>
     [RequiredDep<IRateSource>]
     [WebApiUrl("ExchangeRates")]
     [WebMenuPath(null, "Data/ExchangeRates", "Exchange rates", "Exchange rates and their sources", "IconRefund", 10)]
     public sealed partial class ExchangeRateService : IDisposable, IPerfMonitored, IHaveStats
     {
+        /// <summary>
+        /// Create the service, all rate sources of the manager are used
+        /// </summary>
+        /// <param name="manager">The service manager</param>
+        /// <param name="p">Parameters, null to use the defaults</param>
         public ExchangeRateService(ServiceManager manager, ExchangeRateParams p = null)
         {
             p = p ?? new ExchangeRateParams();
@@ -69,6 +77,7 @@ namespace SysWeaver.ExchangeRate
                 x.StartUpdating(maxSchedule);
         }
         
+        /// <inheritdoc />
         public void Dispose()
         {
             foreach (var x in Sources)
@@ -82,6 +91,7 @@ namespace SysWeaver.ExchangeRate
 
         const String SystemName = "ExchangeRate";
 
+        /// <inheritdoc />
         public PerfMonitor PerfMon { get; } = new PerfMonitor(SystemName);
 
         /// <summary>
@@ -122,16 +132,17 @@ namespace SysWeaver.ExchangeRate
         }
 
         /// <summary>
-        /// Get all rates
+        /// Get the current rates (from the source with the most recently updated rates, a source that updates in time is preferred)
         /// </summary>
-        /// <returns></returns>
+        /// <returns>The rates, null if no source has any rates yet</returns>
         public RateCache GetRates()
             => GetSourceRates(out var _);
 
         /// <summary>
         /// Get rates if they have been updated
         /// </summary>
-        /// <returns></returns>
+        /// <param name="newerThan">The time of the rates that the caller already has (UTC)</param>
+        /// <returns>The rates if they are newer than <paramref name="newerThan"/>, else null</returns>
         [WebApi]
         [WebApiAuth(Roles.Service)]
 
@@ -278,6 +289,7 @@ namespace SysWeaver.ExchangeRate
         static readonly int SFromColumn = TableDataTools.GetColumnIndex<AllRateRow>(nameof(RateRow.From));
 
 
+        /// <inheritdoc />
         public IEnumerable<Stats> GetStats()
         {
             foreach (var x in Sources)

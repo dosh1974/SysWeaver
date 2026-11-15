@@ -11,8 +11,15 @@ using SysWeaver.Net;
 namespace SysWeaver.HttpTransformer
 {
 
+    /// <summary>
+    /// A cached transformer that builds minified variants of svg files, see <see cref="SvgTransformerParams"/>.
+    /// </summary>
     public class SvgTransformer : CachedTransformer, ICachedTransformer
     {
+        /// <summary>
+        /// Create the transformer and register it for the "svg" file extension.
+        /// </summary>
+        /// <param name="p">Optional parameters, null to use the defaults.</param>
         public SvgTransformer(SvgTransformerParams p = null)
             : base(p ?? new SvgTransformerParams())
         {
@@ -31,10 +38,15 @@ namespace SysWeaver.HttpTransformer
         /// </summary>
         readonly String CacheExt;
 
+        /// <inheritdoc/>
         public string Info => "svg minifier";
 
+        /// <inheritdoc/>
+        /// <remarks><see cref="CachedTransformerBuildStrategies.AlwaysDirect"/> if <see cref="SvgTransformerParams.BuildDirect"/> is set, else <see cref="CachedTransformerBuildStrategies.AlwaysDefer"/>.</remarks>
         public CachedTransformerBuildStrategies BuildStrategy { get; init; }
 
+        /// <inheritdoc/>
+        /// <remarks>Returns null (the original is used) if the source is already compressed by a decoder, or if the minifier produced nothing.</remarks>
         public async Task<FileHttpRequestHandler[]> Build(CachedTransformer service, CachedTransformerFile info, ReadOnlyMemory<byte> data, CachedTransformerEntry entry)
         {
             if (info.State.Handler.Decoder != null)
@@ -86,6 +98,7 @@ namespace SysWeaver.HttpTransformer
 
         }
 
+        /// <inheritdoc/>
         public CachedTransformerEntry Validate(CachedTransformer service, CachedTransformerFile info)
         {
             var baseName = info.BaseName;

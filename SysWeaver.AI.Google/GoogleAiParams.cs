@@ -2,6 +2,9 @@ using System;
 
 namespace SysWeaver.AI
 {
+    /// <summary>
+    /// The service tier (processing priority) to request from the Gemini API
+    /// </summary>
     public enum GoogleServiceTier
     {
         /// <summary>
@@ -28,6 +31,9 @@ namespace SysWeaver.AI
     /// </summary>
     public sealed class GoogleAiParams : AiServiceParams
     {
+        /// <summary>
+        /// Create parameters with the default chat and image models set.
+        /// </summary>
         public GoogleAiParams()
         {
             DefaultChatModel = "gemini-3.8-flash";

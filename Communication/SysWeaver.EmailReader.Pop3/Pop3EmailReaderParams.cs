@@ -4,8 +4,12 @@ namespace SysWeaver.EmailReader
 {
     // User = the POP3 user name (often the email address), Password = the password (or an app password).
 
+    /// <summary>
+    /// Parameters for the <see cref="Pop3EmailReaderService"/>
+    /// </summary>
     public sealed class Pop3EmailReaderParams : CredentialParams
     {
+        /// <inheritdoc />
         public override string ToString() => String.Concat(Server, ':', Port, " (", Security, "), Auth: ", base.ToString());
 
         /// <summary>
@@ -81,7 +85,7 @@ namespace SysWeaver.EmailReader
         public Pop3AddressParams[] Addresses;
 
         /// <summary>
-        /// Maximum size of the email queues
+        /// Maximum size of the email queues (minimum 10)
         /// </summary>
         public int Size = 1000;
 
@@ -96,8 +100,12 @@ namespace SysWeaver.EmailReader
         public int MaxPoll = 100;
     }
 
+    /// <summary>
+    /// An address that a mailbox receives emails for, with the system that its emails belong to
+    /// </summary>
     public sealed class Pop3AddressParams
     {
+        /// <inheritdoc />
         public override string ToString() => String.Concat(Address, String.IsNullOrEmpty(System) ? "" : " System: " + System);
 
         /// <summary>
@@ -111,6 +119,9 @@ namespace SysWeaver.EmailReader
         public String System;
     }
 
+    /// <summary>
+    /// The connection security to use for the POP3 connection
+    /// </summary>
     public enum Pop3Security
     {
         /// <summary>

@@ -2,6 +2,9 @@
 
 namespace SysWeaver.AI
 {
+    /// <summary>
+    /// Parameters for editing an existing image with an OpenAI image model
+    /// </summary>
     public class OpenAiImageEditPrompt : OpenAiImagePrompt
     {
 

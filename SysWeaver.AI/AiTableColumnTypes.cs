@@ -1,5 +1,8 @@
 ﻿namespace SysWeaver.AI
 {
+    /// <summary>
+    /// The type of data in a table column
+    /// </summary>
     public enum AiTableColumnTypes
     {
         /// <summary>

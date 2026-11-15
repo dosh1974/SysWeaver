@@ -61,6 +61,7 @@ namespace SysWeaver.AI
         /// </summary>
         public IAnthropicClient Client => InternalClient.Value;
 
+        /// <inheritdoc />
         public override void Dispose()
         {
             base.Dispose();
@@ -103,6 +104,7 @@ namespace SysWeaver.AI
             return s;
         }
 
+        /// <inheritdoc />
         protected override IAiChatSession CreateAiChatSession(bool isPrivate, AiSessionParams p, String joinAuth, String clearAuth, bool defaultTools, IAiMemory memory)
             => CreateChatSession(isPrivate, AnthropicSessionParams.From(p), joinAuth, clearAuth, defaultTools, memory);
 
@@ -129,6 +131,7 @@ namespace SysWeaver.AI
         public AnthropicQuerySession CreateQuerySession(String model)
             => CreateQuerySession(new AnthropicSessionParams { Model = model });
 
+        /// <inheritdoc />
         protected override IAiQuerySession CreateAiQuerySession(AiSessionParams p)
             => CreateQuerySession(AnthropicSessionParams.From(p));
 

@@ -2,6 +2,9 @@
 
 namespace SysWeaver.AI
 {
+    /// <summary>
+    /// A request to encode text to tokens
+    /// </summary>
     public sealed class OpenAiTokenEncodeRequest
     {
         /// <summary>

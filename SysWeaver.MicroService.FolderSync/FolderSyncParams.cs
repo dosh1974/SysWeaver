@@ -1,5 +1,8 @@
 ﻿namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// Parameters for the <see cref="FolderSyncService"/>
+    /// </summary>
     public sealed class FolderSyncParams
     {
         /// <summary>

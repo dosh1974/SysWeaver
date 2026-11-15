@@ -923,6 +923,8 @@
         Trim,
         SetUser,
         NoteSignedIn,
+        /** Define a legacy global unless defined (shared by AuthUi.js and UserManager.js for their old global names). */
+        Legacy: legacy,
         MaybeSignedIn,
         PasswordHash,
         SaltPad,
@@ -972,7 +974,7 @@
     // ------------------------------------------------------------------ legacy globals (old Auth.js / AuthUi.js / UserManager.js names)
 
     /**
-     * Define a legacy global unless something already defined it.
+     * Define a legacy global unless something already defined it (also Sw.Auth.Legacy).
      * @param {string} name Global name.
      * @param {*} value Value.
      */

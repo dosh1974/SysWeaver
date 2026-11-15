@@ -2,6 +2,9 @@
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// Information about a file
+    /// </summary>
     public sealed class SmFileInfo
     {
 #if DEBUG
@@ -19,7 +22,7 @@ namespace SysWeaver.MicroService
         public long Size;
 
         /// <summary>
-        /// WHen the file was last modified
+        /// When the file was last modified
         /// </summary>
         public DateTime LastModified;
     }

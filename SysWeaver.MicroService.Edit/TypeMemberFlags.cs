@@ -2,6 +2,9 @@
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// Flags that describe how a member of a type is edited
+    /// </summary>
     [Flags]
     public enum TypeMemberFlags
     {

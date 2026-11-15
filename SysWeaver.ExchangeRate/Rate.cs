@@ -2,6 +2,9 @@
 
 namespace SysWeaver.ExchangeRate
 {
+    /// <summary>
+    /// The exchange rate of one currency, relative to the reference currency of the <see cref="Rates"/>
+    /// </summary>
     public sealed class Rate
     {
 #if DEBUG
@@ -15,7 +18,7 @@ namespace SysWeaver.ExchangeRate
         public string I;
 
         /// <summary>
-        /// The exchange rate multiplier (multiply to get from the currency code to the reference curreny)
+        /// The exchange rate: the amount of this currency that one unit of the reference currency is worth (multiply an amount of the reference currency with it to get an amount of this currency)
         /// </summary>
         public decimal R;
     }

@@ -3,6 +3,9 @@ using SysWeaver.Data;
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// Information about the memory (RAM) of the server
+    /// </summary>
     public sealed class SmMemoryInfo
     {
         /// <summary>
@@ -26,6 +29,9 @@ namespace SysWeaver.MicroService
 
 
 
+    /// <summary>
+    /// Information about a drive of the server
+    /// </summary>
     [TableDataPrimaryKey(nameof(Drive), nameof(Label))]
     [TableDataCard("drive@ServerManager/cards")]
     public sealed class SmDriveInfo

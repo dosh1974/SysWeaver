@@ -207,7 +207,7 @@
                     catch (e) {
                         if (my === seq) {
                             show("");
-                            Sw.Fail(_TF("Failed to get user salt.", "An error message that is displayed when the backend failed to provide a salt") + "\n" + (e.message || e));
+                            Sw.Fail(_TF("Failed to get user salt.", "An error message that is displayed when the backend failed to provide a salt") + "\n" + Sw.ErrorMessage(e));
                         }
                         return;
                     }
@@ -221,7 +221,7 @@
         }
         catch (e) {
             console.error(e);
-            Sw.Fail(e && e.message ? e.message : String(e));
+            Sw.Fail(Sw.ErrorMessage(e));
         }
         finally {
             remover();
@@ -247,7 +247,7 @@
                 onDenied(e);
                 return false;
             }
-            Sw.Fail(_TF("Not authorized to manage API keys!", "An error message that is displayed if the current session isn't authorized to manage API keys") + "\n" + (e.message || e), 20000);
+            Sw.Fail(_TF("Not authorized to manage API keys!", "An error message that is displayed if the current session isn't authorized to manage API keys") + "\n" + Sw.ErrorMessage(e), 20000);
         }
         return false;
     }

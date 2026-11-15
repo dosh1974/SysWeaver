@@ -3,6 +3,9 @@ using System;
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// Request for incoming emails
+    /// </summary>
     public sealed class GetIncomingEmailRequest
     {
         /// <summary>
@@ -12,7 +15,7 @@ namespace SysWeaver.MicroService
         public String LastId;
 
         /// <summary>
-        /// If non-empty, only emails sent to this system is returned
+        /// If non-empty, only emails sent to this system are returned
         /// </summary>
         public String System;
     }

@@ -345,7 +345,7 @@
                 const old = obj[mn];
                 if (old === v || (old instanceof Date && v instanceof Date && old.getTime() === v.getTime()))
                     return;
-                await editor.SetMemberValue(member, v, old, _T("Set value: \"{0}\"", t.ToString(v, member), "Command text stored in a log when a property value was changed.{0} is replaced with the new value."));
+                await editor.SetMemberValue(member, v, old, E.Handler.SetText(t.ToString(v, member)));
             };
             const wrap = Sw.el("div.sw-edit-datetime");
             const SF = Sw.Format;

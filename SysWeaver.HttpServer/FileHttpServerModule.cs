@@ -591,6 +591,10 @@ namespace SysWeaver.Net
         KeyValuePair<String, WebFolder>[] OrderedFolders;
 
 
+        /// <summary>
+        /// The number of web folders served by this module.
+        /// </summary>
+        /// <returns>A short text for debugging.</returns>
         public override string ToString() => String.Concat(
             nameof(WebFolders), ": ", WebFolders.Count);
 
@@ -812,7 +816,8 @@ namespace SysWeaver.Net
                     else
                     {
                         Memory<Byte> b;
-                        using (var s = fi.OpenRead())
+                        //  Not fi.OpenRead(): on .NET 11 it refreshes the FileInfo, and the etag of the response must use the state captured before the file was opened
+                        using (var s = new FileStream(fn, FileMode.Open, FileAccess.Read, FileShare.Read))
                             b = decoder.GetDecompressed(s);
                         text = Encoding.UTF8.GetString(b.Span);
                     }

@@ -14,6 +14,11 @@ namespace SysWeaver.WebBrowser
     public class WebViewBrowser : IBrowserService, IDisposable, IHaveStats
     {
 
+        /// <summary>
+        /// Create the browser service, the WebView2 environment is created when the first window is opened
+        /// </summary>
+        /// <param name="messageHost">Optional message host used for logging</param>
+        /// <param name="p">The parameters, null to use the defaults</param>
         public WebViewBrowser(IMessageHost messageHost = null, WebViewBrowserParams p = null)
         {
             p = p ?? new WebViewBrowserParams();
@@ -25,6 +30,9 @@ namespace SysWeaver.WebBrowser
         readonly IMessageHost M;
         readonly WebViewBrowserParams Params;
 
+        /// <summary>
+        /// Dispose all free windows, and the WebView2 environment if no windows are allocated (otherwise when the last window is released)
+        /// </summary>
         public void Dispose()
         {
             IsDisposing = true;
@@ -78,6 +86,10 @@ namespace SysWeaver.WebBrowser
         }
 
 
+        /// <summary>
+        /// Open a browser window, a free (previously released) window is reused if available
+        /// </summary>
+        /// <returns>The window, an <see cref="IWebViewBrowserWindow"/>, dispose it to release it back to the service</returns>
         public async Task<IBrowserWindow> OpenWindow()
         {
             var e = Env;
@@ -106,6 +118,7 @@ namespace SysWeaver.WebBrowser
 
         const String Name = "WebViewBrowserService";
 
+        /// <inheritdoc />
         public IEnumerable<Stats> GetStats()
         {
             yield return new Stats(Name, "Allocated", Interlocked.Read(ref AllocatedWindowCount), "The maximum number of allocated browser windows");

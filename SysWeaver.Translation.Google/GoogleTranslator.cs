@@ -20,6 +20,10 @@ namespace SysWeaver.Translation
     /// </summary>
     public sealed class GoogleTranslator : IPerfMonitored, IHaveStats, IInternalTranslator
     {
+        /// <summary>
+        /// Create a translator, starts updating the list of supported languages in the background
+        /// </summary>
+        /// <param name="p">Optional parameters, if null the defaults are used</param>
         public GoogleTranslator(GoogleTranslatorParams p = null)
         {
             p = p ?? new GoogleTranslatorParams();
@@ -65,7 +69,7 @@ namespace SysWeaver.Translation
         /// Multiple targets can be set by using a comma separation.</param>
         /// <param name="from">The two letter ISO-639-1 language code of the source language (the supplied text).
         /// "*" can be used to let the translator identify the source language.</param>
-        /// <param name="context"></param>
+        /// <param name="context">An optional context that describes in what situation the text is being used (not used by this translator)</param>
         /// <param name="effort">The effort to use when translating</param>
         /// <param name="retention">The duration to cache the translation</param>
         /// <param name="contentType">The type of text</param>
@@ -99,7 +103,7 @@ namespace SysWeaver.Translation
         /// Multiple targets can be set by using a comma separation.</param>
         /// <param name="from">The two letter ISO-639-1 language code of the source language (the supplied text).
         /// "*" can be used to let the translator identify the source language.</param>
-        /// <param name="context"></param>
+        /// <param name="context">An optional context that describes in what situation the text is being used (not used by this translator)</param>
         /// <param name="effort">The effort to use when translating</param>
         /// <param name="retention">The duration to cache the translation</param>
         /// <param name="contentType">The type of text</param>
@@ -132,7 +136,7 @@ namespace SysWeaver.Translation
         /// <param name="to">The two letter ISO-639-1 language code of the target language (with an optional two letter ISO-3166-a2 country code appended with a hyphen, ex: "zw-CH").</param>
         /// <param name="from">The two letter ISO-639-1 language code of the source language (the supplied text).
         /// "*" can be used to let the translator identify the source language.</param>
-        /// <param name="context"></param>
+        /// <param name="context">An optional context that describes in what situation the text is being used (not used by this translator)</param>
         /// <param name="effort">The effort to use when translating</param>
         /// <param name="retention">The duration to cache the translation</param>
         /// <param name="contentType">The type of text</param>
@@ -163,6 +167,11 @@ namespace SysWeaver.Translation
         }
 
 
+        /// <summary>
+        /// Returns a formatted from language if it's valid, else null
+        /// </summary>
+        /// <param name="from">The language code to check</param>
+        /// <returns>The language code in the format used by the translator, or null if the language isn't supported</returns>
         public String CanTranslateFrom(String from)
         {
             var sl = SourceLangs;
@@ -176,6 +185,11 @@ namespace SysWeaver.Translation
             return lang == null ? li.Iso639_1 : String.Join('-', li.Iso639_1, lang.Iso3166a2);
         }
 
+        /// <summary>
+        /// Returns a formatted to language if it's valid, else null
+        /// </summary>
+        /// <param name="to">The language code to check</param>
+        /// <returns>The language code in the format used by the translator, or null if the language isn't supported</returns>
         public String CanTranslateTo(String to)
         {
             var sl = TargetLangs;
@@ -372,16 +386,16 @@ namespace SysWeaver.Translation
         }
 
         /// <summary>
-        /// Perform a request by passing any caches, you probably shouldn't use this!
+        /// Perform a request by bypassing any caches, you probably shouldn't use this!
         /// </summary>
-        /// <param name="from"></param>
-        /// <param name="to"></param>
-        /// <param name="text"></param>
-        /// <param name="context"></param>
-        /// <param name="effort"></param>
-        /// <param name="retention"></param>
-        /// <param name="contentType">The type of text</param>
-        /// <returns></returns>
+        /// <param name="from">The source language code (as sent to the web page, "auto" to identify it)</param>
+        /// <param name="to">The target language code</param>
+        /// <param name="text">The text to translate</param>
+        /// <param name="context">An optional context that describes in what situation the text is being used (not used by this translator)</param>
+        /// <param name="effort">The effort to use when translating (not used)</param>
+        /// <param name="retention">The duration to cache the translation (not used)</param>
+        /// <param name="contentType">The type of text (not used)</param>
+        /// <returns>The translated text</returns>
         public Task<String> RequestOne(String from, String to, String text, String context, TranslationEffort effort, TranslationCacheRetention retention, TranslationContentTypes contentType)
         {
             var q = Uri.EscapeDataString(text);
@@ -488,6 +502,7 @@ namespace SysWeaver.Translation
                 "Cache.Long.",
             ];
 
+        /// <inheritdoc />
         public IEnumerable<Stats> GetStats()
         {
             yield return new Stats(StatsName, "CanUseTor", CanUseTor, "True if tor can be used");
@@ -622,9 +637,11 @@ namespace SysWeaver.Translation
 
         DateTime LastSuccess;
 
+        /// <inheritdoc />
         public PerfMonitor PerfMon { get; private set; } = new PerfMonitor(nameof(GoogleTranslator));
 
 
+        /// <inheritdoc />
         public void Dispose()
         {
             Interlocked.Exchange(ref UpdateSupportedLanguagesTask, null)?.Dispose();
@@ -660,16 +677,16 @@ namespace SysWeaver.Translation
         /// <summary>
         /// Returns a formatted from language if it's valid, else null
         /// </summary>
-        /// <param name="from"></param>
-        /// <returns></returns>
+        /// <param name="from">The language code to check</param>
+        /// <returns>The language code in the format used by the translator, or null if the language isn't supported</returns>
         public Task<String> CanFrom(String from)
             => Task.FromResult(CanTranslateFrom(from));
 
         /// <summary>
         /// Returns a formatted to language if it's valid, else null
         /// </summary>
-        /// <param name="to"></param>
-        /// <returns></returns>
+        /// <param name="to">The language code to check</param>
+        /// <returns>The language code in the format used by the translator, or null if the language isn't supported</returns>
         public Task<String> CanTo(String to)
             => Task.FromResult(CanTranslateTo(to));
 

@@ -27,6 +27,10 @@ namespace SysWeaver
     {
 
 #if DEBUG
+        /// <summary>
+        /// Debug builds only: the number of nodes and the number of strings.
+        /// </summary>
+        /// <returns>A short text for debugging.</returns>
         public override string ToString() => "Nodes: " + Nodes.Length + ", strings: " + Nodes.Count(x => x.Leaf != null);
 #endif//DEBUG
 

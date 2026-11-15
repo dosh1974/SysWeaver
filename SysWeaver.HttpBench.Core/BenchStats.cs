@@ -110,16 +110,59 @@ namespace SysWeaver.HttpBench
     /// </summary>
     public sealed class BenchCounters
     {
+        /// <summary>
+        /// The number of requests (including errors).
+        /// </summary>
         public long Count;
+
+        /// <summary>
+        /// The number of requests that failed.
+        /// </summary>
         public long Errors;
+
+        /// <summary>
+        /// The sum of the request times, in microseconds.
+        /// </summary>
         public long SumUs;
+
+        /// <summary>
+        /// The sum of the times to the first byte of the response, in microseconds.
+        /// </summary>
         public long SumTtfbUs;
+
+        /// <summary>
+        /// The shortest request time in microseconds (long.MaxValue if there are no requests).
+        /// </summary>
         public long MinUs = long.MaxValue;
+
+        /// <summary>
+        /// The longest request time in microseconds.
+        /// </summary>
         public long MaxUs;
+
+        /// <summary>
+        /// The number of bytes sent on the wire (headers and TLS included).
+        /// </summary>
         public long WireSent;
+
+        /// <summary>
+        /// The number of bytes received on the wire (headers and TLS included).
+        /// </summary>
         public long WireRecv;
+
+        /// <summary>
+        /// The number of body bytes sent (the api value).
+        /// </summary>
         public long BodySent;
+
+        /// <summary>
+        /// The number of response body bytes received.
+        /// </summary>
         public long BodyRecv;
+
+        /// <summary>
+        /// The number of requests that had to open a new connection.
+        /// </summary>
         public long Connections;
 
         /// <summary>
@@ -127,6 +170,10 @@ namespace SysWeaver.HttpBench
         /// </summary>
         public readonly long[] Hist;
 
+        /// <summary>
+        /// Create empty counters.
+        /// </summary>
+        /// <param name="histogram">True to keep a latency histogram</param>
         public BenchCounters(bool histogram)
         {
             if (histogram)
@@ -136,6 +183,14 @@ namespace SysWeaver.HttpBench
         /// <summary>
         /// Add a request (not thread safe: counters that only one thread updates, other threads may read them while they change).
         /// </summary>
+        /// <param name="us">The request time in microseconds</param>
+        /// <param name="ttfbUs">The time to the first byte of the response in microseconds</param>
+        /// <param name="error">True if the request failed</param>
+        /// <param name="wireSent">The bytes sent on the wire</param>
+        /// <param name="wireRecv">The bytes received on the wire</param>
+        /// <param name="bodySent">The body bytes sent</param>
+        /// <param name="bodyRecv">The response body bytes received</param>
+        /// <param name="newConnection">True if the request opened a new connection</param>
         public void AddLocal(long us, long ttfbUs, bool error, long wireSent, long wireRecv, long bodySent, long bodyRecv, bool newConnection)
         {
             ++Count;
@@ -244,15 +299,36 @@ namespace SysWeaver.HttpBench
                 LatencyHistogram.AddTo(Hist, c.Hist);
         }
 
+        /// <summary>
+        /// The average request time in ms.
+        /// </summary>
         public double AvgMs => Count > 0 ? SumUs / (Count * 1000.0) : 0;
+
+        /// <summary>
+        /// The average time to the first byte of the response in ms.
+        /// </summary>
         public double AvgTtfbMs => Count > 0 ? SumTtfbUs / (Count * 1000.0) : 0;
+
+        /// <summary>
+        /// The shortest request time in ms.
+        /// </summary>
         public double MinMs => Count > 0 ? MinUs / 1000.0 : 0;
+
+        /// <summary>
+        /// The longest request time in ms.
+        /// </summary>
         public double MaxMs => MaxUs / 1000.0;
+
+        /// <summary>
+        /// The percentage of the requests that failed.
+        /// </summary>
         public double ErrorPercent => Count > 0 ? Errors * 100.0 / Count : 0;
 
         /// <summary>
         /// A percentile in ms (needs the histogram).
         /// </summary>
+        /// <param name="p">The percentile</param>
+        /// <returns>The request time in ms</returns>
         public double PercentileMs(double p) => LatencyHistogram.Percentile(Hist, Count, p, MinUs, MaxUs) / 1000.0;
     }
 
@@ -261,18 +337,69 @@ namespace SysWeaver.HttpBench
     /// </summary>
     public struct BenchSample
     {
+        /// <summary>
+        /// The sequence number of the request, in completion order (set when the samples are listed).
+        /// </summary>
         public long Seq;
+
+        /// <summary>
+        /// The start time of the request in microseconds, since the start of the test.
+        /// </summary>
         public long StartUs;
+
+        /// <summary>
+        /// The index of the end point.
+        /// </summary>
         public int EndPoint;
+
+        /// <summary>
+        /// The index of the worker.
+        /// </summary>
         public int Worker;
+
+        /// <summary>
+        /// The http status (0 = no response).
+        /// </summary>
         public int Status;
+
+        /// <summary>
+        /// The request time in microseconds.
+        /// </summary>
         public int DurationUs;
+
+        /// <summary>
+        /// The time to the first byte of the response in microseconds.
+        /// </summary>
         public int TtfbUs;
+
+        /// <summary>
+        /// The bytes sent on the wire.
+        /// </summary>
         public int WireSent;
+
+        /// <summary>
+        /// The bytes received on the wire.
+        /// </summary>
         public int WireRecv;
+
+        /// <summary>
+        /// The body bytes sent.
+        /// </summary>
         public int BodySent;
+
+        /// <summary>
+        /// The response body bytes received.
+        /// </summary>
         public int BodyRecv;
+
+        /// <summary>
+        /// True if the request opened a new connection.
+        /// </summary>
         public bool NewConnection;
+
+        /// <summary>
+        /// The error message, null if the request succeeded.
+        /// </summary>
         public String Error;
     }
 
@@ -281,11 +408,34 @@ namespace SysWeaver.HttpBench
     /// </summary>
     public sealed class BenchError
     {
+        /// <summary>
+        /// The index of the end point.
+        /// </summary>
         public int EndPoint;
+
+        /// <summary>
+        /// The http status (0 = no response).
+        /// </summary>
         public int Status;
+
+        /// <summary>
+        /// The error message.
+        /// </summary>
         public String Message;
+
+        /// <summary>
+        /// The number of times the error occurred.
+        /// </summary>
         public long Count;
+
+        /// <summary>
+        /// The start time of the first request that had the error, in microseconds since the start of the test (long.MaxValue if none).
+        /// </summary>
         public long FirstUs = long.MaxValue;
+
+        /// <summary>
+        /// The start time of the last request that had the error, in microseconds since the start of the test.
+        /// </summary>
         public long LastUs;
     }
 
@@ -295,8 +445,19 @@ namespace SysWeaver.HttpBench
     /// </summary>
     public sealed class WireCounters
     {
+        /// <summary>
+        /// The bytes sent.
+        /// </summary>
         public long Sent;
+
+        /// <summary>
+        /// The bytes received.
+        /// </summary>
         public long Recv;
+
+        /// <summary>
+        /// The number of connections that were opened.
+        /// </summary>
         public long Connections;
     }
 

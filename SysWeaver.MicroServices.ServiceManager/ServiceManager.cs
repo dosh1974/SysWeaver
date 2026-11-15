@@ -29,16 +29,24 @@ namespace SysWeaver.MicroService
     public partial class ServiceManager : MessageHost, IDisposable, IPerfMonitored
     {
         /// <summary>
-        /// Actions to perform when the service manager have been created
+        /// Actions to perform when the service manager has been created
         /// </summary>
         public event Action OnCreated;
 
+        /// <summary>
+        /// Performance monitor of the service manager
+        /// </summary>
         public PerfMonitor PerfMon { get; } = new PerfMonitor(nameof(ServiceManager));
 
+        /// <inheritdoc />
         public override string ToString() => nameof(ServiceManager);
 
         Action<ServiceManager> HostRestart;
 
+        /// <summary>
+        /// Find the service manifest file, "[ExecutableBase].Services.[Platform].json" is used if it exists, else "[ExecutableBase].Services.json"
+        /// </summary>
+        /// <returns>The file name, or null if no manifest file exists</returns>
         public static String GetManifestFileName()
         {
             var b = EnvInfo.ExecutableBase;
@@ -69,6 +77,9 @@ namespace SysWeaver.MicroService
         }
 
 
+        /// <summary>
+        /// The last write time (UTC) of the manifest file that the services were registered from, default if no manifest file was used
+        /// </summary>
         public readonly DateTime ConfigLastWriteTimeUtc;
 
         /// <summary>
@@ -159,7 +170,13 @@ namespace SysWeaver.MicroService
             }
         }
 
-        public ServiceManager(bool registerFromManifestFile = true, Action<ServiceManager> runBeforeRegister = null, Action<ServiceManager> restartFn = null) : base()
+        /// <summary>
+        /// Create a service manager
+        /// </summary>
+        /// <param name="registerFromManifestFile">True to register the services found in the manifest file (see <see cref="GetManifestFileName"/>)</param>
+        /// <param name="runBeforeRegister">Optional action to run before the services are registered from the manifest file</param>
+        /// <param name="restartFn">Optional function that restarts the host process, used by <see cref="RestartProcess"/></param>
+        public ServiceManager(bool registerFromManifestFile = true,Action<ServiceManager> runBeforeRegister = null, Action<ServiceManager> restartFn = null) : base()
         {
             using var perfMon = PerfMon.Track("Constructor");
             try
@@ -220,6 +237,11 @@ namespace SysWeaver.MicroService
 
         readonly bool ShowProgress;
 
+        /// <summary>
+        /// Read a manifest file
+        /// </summary>
+        /// <param name="file">The file to read, null to use <see cref="ManifestFileName"/></param>
+        /// <returns>The entries in the file</returns>
         public ConfigEntry[] ReadManifest(String file = null)
         {
             using var text = FileReadOnlyMemory.Read(file ?? ManifestFileName);
@@ -266,6 +288,11 @@ namespace SysWeaver.MicroService
             IncludeFields = true,
         };
 
+        /// <summary>
+        /// Build the manifest (json) text for a set of entries
+        /// </summary>
+        /// <param name="configEntries">The entries</param>
+        /// <returns>The manifest json</returns>
         public String BuildManifest(ConfigEntry[] configEntries)
         {
             var l = configEntries.Length;
@@ -283,6 +310,9 @@ namespace SysWeaver.MicroService
         }
 
 
+        /// <summary>
+        /// The manifest file that the services were registered from (null if none was used)
+        /// </summary>
         public String ManifestFileName { get; init; }
 
         void UnhandledException(object sender, UnhandledExceptionEventArgs e)
@@ -296,6 +326,9 @@ namespace SysWeaver.MicroService
         ConcurrentDictionary<IHaveStats, Stats[]> SavedStats;
         ConcurrentDictionary<IPerfMonitored, IPerfEntry[]> SavedPerformance;
 
+        /// <summary>
+        /// Dispose all owned services and release the resources used by the service manager
+        /// </summary>
         public void Dispose()
         {
             SavedStats = new ConcurrentDictionary<IHaveStats, Stats[]>();
@@ -357,6 +390,9 @@ namespace SysWeaver.MicroService
         readonly ConcurrentStack<Object> DisposeOnExit = new ConcurrentStack<Object>();
 
 
+        /// <summary>
+        /// Tag used as prefix for service manager messages
+        /// </summary>
         public const String Tag = "[ServiceManager]";
 
 
@@ -1719,8 +1755,15 @@ namespace SysWeaver.MicroService
 
 
 
+        /// <summary>
+        /// True if the service manager is paused
+        /// </summary>
         public bool IsPaused { get; private set; }
 
+        /// <summary>
+        /// Pause all services that implement <see cref="IServicePausable"/> (in reverse registration order)
+        /// </summary>
+        /// <returns>True if the services were paused, false if already paused</returns>
         public bool Pause()
         {
             lock (this)
@@ -1740,6 +1783,10 @@ namespace SysWeaver.MicroService
             return true;
         }
 
+        /// <summary>
+        /// Resume all services that implement <see cref="IServicePausable"/> (in registration order)
+        /// </summary>
+        /// <returns>True if the services were resumed, false if not paused</returns>
         public bool Resume()
         {
             lock (this)
@@ -1812,6 +1859,11 @@ namespace SysWeaver.MicroService
         readonly ConcurrentDictionary<IPerfMonitored, int> HavePerfMonitor = new();
 
 
+        /// <summary>
+        /// Dump the saved service stats and performance data as html tables (if any was saved)
+        /// </summary>
+        /// <param name="baseName">Base file name, "_Stats.html" and "_Performance.html" is appended</param>
+        /// <returns>A task that completes when the files are written</returns>
         public async Task DumpStats(String baseName)
         {
             {
@@ -2119,6 +2171,9 @@ namespace SysWeaver.MicroService
         static readonly ConcurrentDictionary<Type, bool> CacheIsMicroService = new ConcurrentDictionary<Type, bool>();
 
 
+        /// <summary>
+        /// Types (interfaces) that mark a type as a service
+        /// </summary>
         public static readonly IReadOnlyList<Type> ServiceTypes = [
             typeof(IRemoteApi),
             typeof(ISerializerType),
@@ -2126,6 +2181,9 @@ namespace SysWeaver.MicroService
             typeof(Security.ICertificateProvider),
         ];
 
+        /// <summary>
+        /// Attributes that mark a type as a service
+        /// </summary>
         public static readonly IReadOnlyList<Type> ServiceAttributes = [
             typeof(IsMicroServiceAttribute),
             typeof(RequiredDepAttribute),
@@ -2592,6 +2650,9 @@ namespace SysWeaver.MicroService
             return ReadOnlyMemory<Byte>.Empty;
         }
 
+        /// <summary>
+        /// Optional function used to delete files (returns the exception if it failed, null on success)
+        /// </summary>
         public Func<String, Task<Exception>> FileDeleter;
 
         readonly ExceptionTracker FileExs = new ExceptionTracker();

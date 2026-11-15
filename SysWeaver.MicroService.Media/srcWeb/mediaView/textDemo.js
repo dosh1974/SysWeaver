@@ -189,7 +189,7 @@
             await Promise.all(Presets().map(pr => Add(list, pr[0], Object.assign(new TextStyle(), pr[1]), text, texts)));
         }
         catch (e) {
-            Sw.Fail(e && e.message ? e.message : ("" + e));
+            Sw.Fail(Sw.ErrorMessage(e));
         }
     }
 

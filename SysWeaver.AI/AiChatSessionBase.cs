@@ -20,7 +20,10 @@ namespace SysWeaver.AI
     public abstract class AiChatSessionBase : AiQuerySessionBase, IAiChatSession
     {
 
+        /// <inheritdoc />
         public event Action<IAiChatSession, String, HttpServerRequest> OnUserMessage;
+
+        /// <inheritdoc />
         public event Action<IAiChatSession, String, HttpServerRequest> OnAiResponseCompleted;
 
         internal void InvokeOnUserMessageBegin(String body, HttpServerRequest request)
@@ -29,7 +32,8 @@ namespace SysWeaver.AI
         internal void InvokeAiResponseCompleted(String body, HttpServerRequest request)
             => OnAiResponseCompleted?.Invoke(this, body, request);
 
-        public String ThinkMessage { get; set; } = "🤔 thinking..";
+        /// <inheritdoc />
+        public String ThinkMessage { get; set; } ="🤔 thinking..";
 
         /// <summary>
         /// Optional lock used to limit the number of concurrent requests to the API
@@ -77,13 +81,17 @@ namespace SysWeaver.AI
         }
 
 
+        /// <inheritdoc />
         public String ChatId { get; internal set;  }
+
+        /// <inheritdoc />
         public override string ToString() => ChatId;
 
         #region Menu
 
         internal readonly ConcurrentDictionary<String, AiCommand> Commands = new(StringComparer.Ordinal);
 
+        /// <inheritdoc />
         public void AddCommand(String name, Func<String, IAiChatSession, HttpServerRequest, Task<Chat.ChatMessage>> func, String args, String desc, params String[] auths)
         {
             Commands.TryAdd(name, new AiCommand(name, auths, func, args, desc));
@@ -157,6 +165,7 @@ namespace SysWeaver.AI
             });
         }
 
+        /// <inheritdoc />
         public bool TryGetToolCommand(string name, out AiCommand cmd)
         {
             cmd = null;
@@ -168,6 +177,7 @@ namespace SysWeaver.AI
 
         long AddOrder;
 
+        /// <inheritdoc />
         public bool AddToMenu(bool toMessageMenu, Chat.ChatMenuItem item, IAiChatSession.SetVarDel setFunc = null, Chat.ChatMenuItem parent = null)
         {
             if (!Values.TryAdd(item.Id, Tuple.Create(Interlocked.Increment(ref AddOrder), item, setFunc, parent, toMessageMenu)))
@@ -192,6 +202,7 @@ namespace SysWeaver.AI
 
         readonly ConcurrentDictionary<String, Tuple<long, Chat.ChatMenuItem, IAiChatSession.SetVarDel, Chat.ChatMenuItem, bool>> Values = new ConcurrentDictionary<string, Tuple<long, Chat.ChatMenuItem, IAiChatSession.SetVarDel, Chat.ChatMenuItem, bool>>(StringComparer.Ordinal);
 
+        /// <inheritdoc />
         public Task<bool> SetValue(Chat.IChatController c, String providerChatId, Chat.ChatScopes scope, HttpSession session, long messageId, String key, String value)
         {
             if (!Values.TryGetValue(key, out var v))
@@ -254,6 +265,7 @@ namespace SysWeaver.AI
         }
 
 
+        /// <inheritdoc />
         public Chat.ChatMenuItem[] GetMenu(HttpSession session, bool isMessage, IReadOnlySet<String> exclude = null)
         {
             exclude = exclude ?? AiTools.EmptyStringSet;
@@ -295,6 +307,7 @@ namespace SysWeaver.AI
 
         #region Appearance
 
+        /// <inheritdoc />
         public bool IsPrivate { get; }
 
 
@@ -313,6 +326,7 @@ namespace SysWeaver.AI
             }
         }
 
+        /// <inheritdoc />
         public String AgentSpeechName { get; set; } = "AI";
 
         String InternalAgentName;
@@ -375,12 +389,14 @@ namespace SysWeaver.AI
 
 
 
+        /// <inheritdoc />
         public String[] SpeechNames { get; set; } =
             [
                 "{0}",
                 "All|-",
             ];
 
+        /// <inheritdoc />
         public Chat.ChatVoice[] Voices { get; set; } = [
                 new Chat.ChatVoice
                 {
@@ -525,6 +541,7 @@ namespace SysWeaver.AI
 
         #region Chat
 
+        /// <inheritdoc />
         public AsyncLock ChatQueryLock { get; } = new AsyncLock();
 
         /// <summary>
@@ -591,17 +608,30 @@ namespace SysWeaver.AI
             return String.Concat(text, "\n\n\nThe supplied content can be accessed using the following URL's:\n * ", String.Join("\n * ", extraData.Select(x => StringTools.EscapeMD(x.Item2).ToQuoted())));
         }
 
+        /// <inheritdoc />
         public bool AutoRemoveToolCalls { get; set; }
 
+        /// <inheritdoc />
         public IReadOnlyList<String> JoinAuth { get; }
+
+        /// <inheritdoc />
         public IReadOnlyList<String> ClearAuth { get; }
+
+        /// <inheritdoc />
         public List<Chat.ChatMessage> Messages { get; } = new List<Chat.ChatMessage>();
+
+        /// <inheritdoc />
         public Dictionary<long, Chat.ChatMessage> MessageLookup { get; } = new Dictionary<long, Chat.ChatMessage>();
 
         long InternalMsgId;
 
+        /// <inheritdoc />
         public long MsgId => Interlocked.Read(ref InternalMsgId);
 
+        /// <summary>
+        /// Get the next (new) message id
+        /// </summary>
+        /// <returns>The new message id</returns>
         public long NextMsgId() => Interlocked.Increment(ref InternalMsgId);
 
         #endregion//Chat

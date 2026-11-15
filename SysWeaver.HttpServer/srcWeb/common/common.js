@@ -1354,6 +1354,14 @@ window.Sw.Sources["core/base.js"] = "common/common.js";
     Sw.Sleep = (ms, signal) => Sw.Util.Sleep(ms, signal);
 
     /**
+     * The plain text of a caught value: its message when it has one (an Error), else the value as a string. No server reason, no status
+     * (Sw.Net.Message composes the full failure sentence for people; this is only the raw text for a log, a detail line or a short toast).
+     * @param {*} e The caught value.
+     * @returns {string} The text.
+     */
+    Sw.ErrorMessage = e => e && e.message ? e.message : String(e);
+
+    /**
      * @namespace Sw.Util - UI-less helpers (async, bytes, hashing, json, frame loop).
      */
     Sw.Util = Object.assign(Sw.Util || {}, {
@@ -5531,23 +5539,25 @@ window.Sw.Sources["core/net.js"] = "common/common.js";
     }
 
     /**
-     * What a failed status means for the user, and what to do: statusParts as one sentence.
-     * @param {number} s The HTTP status.
-     * @returns {string} The sentence.
-     */
-    function statusSentence(s) {
-        const p = statusParts(s);
-        return p.Do ? p.Why + " " + p.Do : p.Why;
-    }
-
-    /**
-     * End a sentence: a full stop unless it ends with one (., !, ?, …, :).
+     * End a sentence: a full stop unless it ends with one (., !, ?, …, and the CJK marks). The one sentence helper of the ui too
+     * (Sw.Net.Sentence): the options only change what the callers of the ui (table rows, cell actions) always did on top.
      * @param {string} s The text.
-     * @returns {string} The sentence.
+     * @param {{Capital: boolean, StatusLine: boolean, Marks: RegExp}} [o] Capital: the first letter is a capital. StatusLine: drop a
+     *   leading status line of an Error message ("409 - Conflict\n<reason>"). Marks: the end marks that need no full stop (default . ! ? … and CJK).
+     * @returns {string} The sentence ("" for nothing).
      */
-    function sentence(s) {
+    function sentence(s, o) {
         s = String(s ?? "").trim();
-        return !s || /[.!?…。！？]$/.test(s) ? s : s + ".";
+        if (o && o.StatusLine) {
+            const nl = s.indexOf("\n");
+            if (nl > 0 && /^\d{3}\b/.test(s))
+                s = s.slice(nl + 1).trim();
+        }
+        if (!s)
+            return s;
+        if (o && o.Capital)
+            s = s.charAt(0).toLocaleUpperCase() + s.slice(1);
+        return ((o && o.Marks) || /[.!?…。！？]$/).test(s) ? s : s + ".";
     }
 
     /**
@@ -5937,6 +5947,8 @@ window.Sw.Sources["core/net.js"] = "common/common.js";
 
         /** Join "What: Why. Do." the one way (no ".: ", no repeated advice): Compose(what, why, todo) -> text. */
         Compose: compose,
+        /** End a text with a full stop: Sentence(text, { Capital, StatusLine, Marks }) -> text. */
+        Sentence: sentence,
 
         /**
          * The failure sentence of an action: FailText("End session (debug)", e) = "End session (debug): not done. The session has
@@ -6293,6 +6305,7 @@ window.Sw.Sources["core/net.js"] = "common/common.js";
         Sw.DevOptions.Register("Sw.Net.Message", MessageOptions);
         Sw.DevOptions.Register("Sw.Net.MessageParts", MessageOptions);
         Sw.DevOptions.Register("Sw.Net.FailText", MessageOptions);
+        Sw.DevOptions.Register("Sw.Net.Sentence", { Capital: "boolean", StatusLine: "boolean", Marks: "object" });
         Sw.DevOptions.NoOptions("Sw.Net.IsWrite", "opts is the request's options (Send / Get) or a Request: read, not checked");
     }
 })();
@@ -8896,15 +8909,7 @@ window.Sw.Sources["core/keyboard.js"] = "common/common.js";
             fullH = lh;
         const vv = window.visualViewport;
         const inset = (vv && (Math.abs(vv.scale - 1) < 0.01)) ? Math.max(0, Math.round(lh - vv.offsetTop - vv.height)) : 0;
-        let touch = !!L.Mobile;
-        if (!touch) {
-            try {
-                touch = window.matchMedia("(pointer: coarse)").matches;
-            }
-            catch {
-            }
-        }
-        const on = edit && touch && ((inset >= keyboardMin) || ((fullH - lh) >= keyboardMin));
+        const on = edit && L.IsTouchScreen() && ((inset >= keyboardMin) || ((fullH - lh) >= keyboardMin));
         const was = L.Keyboard;
         const wasInset = L.KeyboardInset;
         setKeyboard(on, on ? inset : 0);
@@ -8933,6 +8938,22 @@ window.Sw.Sources["core/keyboard.js"] = "common/common.js";
     Sw.Layout.KeyboardInset = 0;
     //  Also run by core/layout.js on a window resize, before the layout is updated (the orientation stays while it is open)
     Sw.Layout.KeyboardCheck = keyboardCheck;
+    /**
+     * Sw.Layout.IsTouchScreen(): a touch screen: Mobile mode, or a coarse primary pointer (a phone, a tablet, a touch laptop in tablet mode).
+     * Defined here (not in core/layout.js: the small sw/session.js bundle has no use for it); shell/shell.js and the keyboard check use it.
+     * @returns {boolean} True on a touch screen.
+     */
+    Sw.Layout.IsTouchScreen = () => {
+        if (Sw.Layout.Mobile)
+            return true;
+        //  matchMedia can be missing or throw (old or embedded browsers, a detached frame): not a touch screen then
+        try {
+            return window.matchMedia("(pointer: coarse)").matches;
+        }
+        catch {
+            return false;
+        }
+    };
     if (window.parent !== window)
         return;
     const vv = window.visualViewport;
@@ -14067,6 +14088,20 @@ window.Sw.Sources["core/draft.js"] = "common/common.js";
     }
 
     /**
+     * The user the app shell above this page already asked for (Sw.Access.CachedUser of the top window), no request.
+     * @returns {?Promise<?object>} The shell's user promise; null outside the shell, when it knows none, or on another origin.
+     */
+    function shellUser() {
+        try {
+            const ta = window.top !== window ? window.top.Sw && window.top.Sw.Access : null;
+            return ta && typeof ta.CachedUser === "function" ? ta.CachedUser() : null;
+        }
+        catch {
+            return null;
+        }
+    }
+
+    /**
      * Remember the user part for this tab (see userCacheKey).
      * @param {string|null} v The user part, null to forget it.
      */
@@ -14088,13 +14123,7 @@ window.Sw.Sources["core/draft.js"] = "common/common.js";
     function user() {
         if (!userP) {
             //  (inside the app shell the shell's user is reused: Sw.Access.CachedUser of the top window, no request of its own)
-            let shared = null;
-            try {
-                const ta = window.top !== window ? window.top.Sw && window.top.Sw.Access : null;
-                shared = ta && typeof ta.CachedUser === "function" ? ta.CachedUser() : null;
-            }
-            catch {
-            }
+            const shared = shellUser();
             //  (else the user this tab already knows, written by the app shell and forgotten on every sign in / out push: no request
             //  either; the original pages asked nothing)
             const known = shared ? null : knownUser();
@@ -14124,15 +14153,7 @@ window.Sw.Sources["core/draft.js"] = "common/common.js";
      * @returns {boolean} True when user() sends no request.
      */
     function userFree() {
-        if (userP || knownUser())
-            return true;
-        try {
-            const ta = window.top !== window ? window.top.Sw && window.top.Sw.Access : null;
-            return !!(ta && typeof ta.CachedUser === "function" && ta.CachedUser());
-        }
-        catch {
-            return false;
-        }
+        return !!(userP || knownUser() || shellUser());
     }
 
     /**
@@ -14881,8 +14902,7 @@ window.Sw.Sources["core/draft.js"] = "common/common.js";
                     if (userP)
                         part = await userP;
                     else {
-                        const ta = window.top !== window ? window.top.Sw && window.top.Sw.Access : null;
-                        const shared = ta && typeof ta.CachedUser === "function" ? ta.CachedUser() : null;
+                        const shared = shellUser();
                         part = shared ? userPart(await shared) : knownUser();
                     }
                 }
@@ -15678,19 +15698,29 @@ window.Sw.Sources["core/access.js"] = "common/common.js";
     }
 
     /**
-     * The signed in user if this page or the app shell above it already asked (no request), else null.
-     * @returns {?Promise<?object>} The user promise, or null when not known.
+     * The user the app shell above this page already asked for (Sw.Access.CachedUser of the top window), no request.
+     * @returns {?Promise<?object>} The shell's user promise; null outside the shell, when it knows none, or on another origin.
      */
-    function knownUser() {
+    function shellUser() {
         try {
-            const own = Sw.Access.CachedUser();
-            if (own)
-                return own;
             const ta = window.top !== window ? window.top.Sw && window.top.Sw.Access : null;
             return ta && ta !== Sw.Access && typeof ta.CachedUser === "function" ? ta.CachedUser() : null;
         }
         catch {
             //  Another origin above
+            return null;
+        }
+    }
+
+    /**
+     * The signed in user if this page or the app shell above it already asked (no request), else null.
+     * @returns {?Promise<?object>} The user promise, or null when not known.
+     */
+    function knownUser() {
+        try {
+            return Sw.Access.CachedUser() || shellUser();
+        }
+        catch {
             return null;
         }
     }
@@ -15846,17 +15876,11 @@ window.Sw.Sources["core/access.js"] = "common/common.js";
             //  A page in the app shell (same origin) uses the user the shell just asked for (SeedUser), so a framed page sends no GetUser
             //  of its own (the original pages made none)
             if (!reload && (!userP || now >= userExp)) {
-                try {
-                    const ta = window.top !== window ? window.top.Sw && window.top.Sw.Access : null;
-                    const p = ta && ta !== Sw.Access && typeof ta.CachedUser === "function" ? ta.CachedUser() : null;
-                    if (p) {
-                        userP = p;
-                        userExp = now + userLifeMs;
-                        return userP;
-                    }
-                }
-                catch {
-                    //  (another origin above: ask the server)
+                const p = shellUser();
+                if (p) {
+                    userP = p;
+                    userExp = now + userLifeMs;
+                    return userP;
                 }
             }
             if (reload || !userP || now >= userExp) {
@@ -17315,6 +17339,7 @@ window.Sw.Sources["ui/base.js"] = "common/common.js";
         kill: '<circle cx="12" cy="12" r="9"/><path d="m9 9 6 6M15 9l-6 6"/>',
         braces: '<path d="M8 3H7a2 2 0 0 0-2 2v4a2 2 0 0 1-2 2 2 2 0 0 1 2 2v4a2 2 0 0 0 2 2h1M16 3h1a2 2 0 0 1 2 2v4a2 2 0 0 0 2 2 2 2 0 0 0-2 2v4a2 2 0 0 1-2 2h-1"/>',
         folder: '<path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2h8.5A1.5 1.5 0 0 1 21 8.5v10a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5Z"/>',
+        inbox: '<path d="M3 13h5l1.5 3h5L16 13h5"/><path d="M5.5 5h13L21 13v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-6Z"/>',
         format: '<path d="M4 6h16M4 10h10M4 14h16M4 18h10"/>',
         density: '<path d="M4 5h16M4 9.5h16M4 14h16M4 18.5h16"/><path d="M2 3v18M22 3v18" stroke-opacity=".45"/>',
         circle: '<circle cx="12" cy="12" r="9"/>',
@@ -18377,6 +18402,23 @@ window.Sw.Sources["ui/base.js"] = "common/common.js";
     }
 
     /**
+     * Register a whole set of schemas ({ Card: {...}, "Form field": {...} } registers "Sw.Card", "Sw.Form field") and give back the
+     * checker of the set: what the layout, page and controls files each used to write by hand.
+     * @param {Object<string, object>} schemas The schemas by api name (without "Sw.").
+     * @returns {function(string, object):object} check(name, o): the developer check of o against schemas[name] (DevMode; a non-object
+     *   is not checked); returns o.
+     */
+    function OptionSet(schemas) {
+        for (const k of Object.keys(schemas))
+            RegisterOptions("Sw." + k, schemas[k]);
+        return (name, o) => {
+            if (o && typeof o === "object")
+                DevOptions("Sw." + name, o, schemas[name]);
+            return o;
+        };
+    }
+
+    /**
      * Check an options object against the schema registered for the api (DevMode; a non-object is the api's short form: not checked).
      * @param {string} where The api ("Sw.OnClick"). @param {*} o The options.
      */
@@ -19108,6 +19150,8 @@ window.Sw.Sources["ui/base.js"] = "common/common.js";
         CheckOptions: DevOptions,
         /** Register a ui api's options schema by name (Sw.DevOptions.Register of the core too): RegisterOptions(where, schema). */
         RegisterOptions,
+        /** Register a set of schemas ("Sw." + name) and get their checker: OptionSet(schemas) -> check(name, o). */
+        OptionSet,
         /**
          * Show the outcome of work in exactly one place (FBK-2, FBK-5): nothing when the work showed something itself (o.Said) or when
          * the caller shows it in place; else a failure toast (Work.Error), "<name>: not done." for a false result that said nothing (and a
@@ -21652,6 +21696,25 @@ window.Sw.Sources["ui/controls.js"] = "common/common.js";
         });
     }
 
+    /**
+     * The error line under an input control (div.sw-text-error, a polite live region the control fills with its validation message).
+     * @param {string} id The element id (the input's aria-describedby points at it).
+     * @returns {HTMLElement} The line.
+     */
+    function errorLine(id) {
+        return el("div.sw-text-error", { id, attrs: { "aria-live": "polite" } });
+    }
+
+    /**
+     * The Disabled option of every control (INP-12): true, or a string that is the reason shown and announced when the control is used.
+     * @param {object} t The control (has SetDisabled(disabled, reason)).
+     * @param {object} o The options.
+     */
+    function applyDisabled(t, o) {
+        if (o.Disabled)
+            t.SetDisabled(true, typeof o.Disabled === "string" ? o.Disabled : undefined);
+    }
+
     // ------------------------------------------------------------------ the options of each control (Sw.DevOptions, DevMode only)
 
     /** The type name of a text option (a constant: the schema below is no list of labels). */
@@ -21734,9 +21797,7 @@ window.Sw.Sources["ui/controls.js"] = "common/common.js";
         },
     };
     //  The one registry of option schemas (Sw.DevOptions.Register through Sw.Work.RegisterOptions): every control is known to it
-    if (Sw.Work && typeof Sw.Work.RegisterOptions === "function")
-        for (const k of Object.keys(Schema))
-            Sw.Work.RegisterOptions("Sw." + k, Schema[k]);
+    Sw.Work.OptionSet(Schema);
     if (Sw.DevOptions && typeof Sw.DevOptions.NoOptions === "function")
         Sw.DevOptions.NoOptions("Sw.ListPicker", "opts is the list of items; po goes to Sw.Popup.Show (checked there)");
 
@@ -22522,8 +22583,7 @@ window.Sw.Sources["ui/controls.js"] = "common/common.js";
             t.SetTitle(o.Title);
             if (o.Pressable)
                 t.SetPressed(!!o.Pressed);
-            if (o.Disabled)
-                t.SetDisabled(true, typeof o.Disabled === "string" ? o.Disabled : undefined);
+            applyDisabled(t, o);
             if (o.Working)
                 t.SetWorking(true);
             if (o.Menu) {
@@ -22902,17 +22962,6 @@ window.Sw.Sources["ui/controls.js"] = "common/common.js";
         }
     }
 
-    /**
-     * Log an error and show it as a fail toast (when overlays are loaded). A refused request (Sw.Access.IsDenied, 403) is no
-     * failure: a toast names the role needed and the button is disabled with that reason (Sw.Access.ActionDenied).
-     * @param {*} x The error.
-     * @param {Button} [b] The button whose action failed.
-     */
-    function reportError(x, b) {
-        //  (the one failure display of Sw.Work: a refused request names the role, a lost connection is calm, never "Failed to fetch")
-        Sw.Work.Error(x, { Name: b && b.Name ? b.Name() : "", Button: b });
-    }
-
     /** @type {Button|null} The button whose OnClick runs now (synchronously; Sw.Clipboard.Copy confirms on it). */
     Button.Current = null;
 
@@ -23058,8 +23107,7 @@ window.Sw.Sources["ui/controls.js"] = "common/common.js";
             t.Value = undefined;
             t.Set(o.Value !== undefined ? o.Value : (t.Items[0] ? t.Items[0].Value : null), true);
             //  Disabled: true | "reason" (INP-12), the same option as every Sw control
-            if (o.Disabled)
-                t.SetDisabled(true, typeof o.Disabled === "string" ? o.Disabled : undefined);
+            applyDisabled(t, o);
             ctlInit(t, "Sw.Segmented", Schema.Segmented, true);
         }
 
@@ -23140,8 +23188,7 @@ window.Sw.Sources["ui/controls.js"] = "common/common.js";
             t.E = el("div.sw-toggle", { tabIndex: 0, title: o.Title || null, attrs: { role: "switch" } }, el("span.sw-toggle-track"), t.LabelE);
             t.SetLabel(o.Label);
             t.Set(!!o.Value, true);
-            if (o.Disabled)
-                t.SetDisabled(true, typeof o.Disabled === "string" ? o.Disabled : undefined);
+            applyDisabled(t, o);
             if (o.Required)
                 t.E.setAttribute("aria-required", "true");
             const flip = e => {
@@ -23276,8 +23323,7 @@ window.Sw.Sources["ui/controls.js"] = "common/common.js";
             t.UpdateRangeAria();
             t.Set(o.Value ?? t.Min, true);
             t.Bind();
-            if (o.Disabled)
-                t.SetDisabled(true, typeof o.Disabled === "string" ? o.Disabled : undefined);
+            applyDisabled(t, o);
             if (t.Mark)
                 requestAnimationFrame(() => t.PlaceMark());
             ctlInit(t, "Sw.Slider", Schema.Slider, true);
@@ -23658,7 +23704,7 @@ window.Sw.Sources["ui/controls.js"] = "common/common.js";
         const cell = t.ErrorE && t.ErrorE.parentElement && t.ErrorE.parentElement.classList.contains("sw-reserve-stack") ? t.ErrorE.parentElement : t.ErrorE;
         const h0 = text && cell && cell.isConnected && t.ErrorE.classList.contains("sw-reserve") ? cell.getBoundingClientRect().height : 0;
         if (!t.ErrorE && text) {
-            t.ErrorE = el("div.sw-text-error", { id: uid("sw-err"), attrs: { "aria-live": "polite" } });
+            t.ErrorE = errorLine(uid("sw-err"));
             const host = t.E.classList.contains("sw-field") || t.E.classList.contains("sw-text") ? t.E : t.E.closest(".sw-field");
             if (host)
                 host.append(t.ErrorE);
@@ -23755,8 +23801,7 @@ window.Sw.Sources["ui/controls.js"] = "common/common.js";
             t.Disabled = false;
             /* SwWeb:allow ux-inp-12 (the legacy E.disabled = true setter carries no reason; the developer warning names the control) */
             Sw.Disabled.Shadow(t.Input, d => t.SetDisabled(d));
-            if (o.Disabled)
-                t.SetDisabled(true, typeof o.Disabled === "string" ? o.Disabled : undefined);
+            applyDisabled(t, o);
             /** @type {boolean} The box may be empty (Value null): Value null or Required. */
             t.Nullable = o.Value === null || !!o.Required;
             t.Value = o.Value === undefined && o.Required ? null : (o.Value ?? (t.Nullable ? null : 0));
@@ -23835,7 +23880,7 @@ window.Sw.Sources["ui/controls.js"] = "common/common.js";
             if (o.Required || o.Validate) {
                 if (t.E === t.Input)
                     t.E = el("div.sw-field.sw-field-number", null, t.Input);
-                t.ErrorE = el("div.sw-text-error", { id: uid("sw-num-err"), attrs: { "aria-live": "polite" } });
+                t.ErrorE = errorLine(uid("sw-num-err"));
                 t.ErrorE.hidden = true;
                 //  its line is there before the first message (LAY-9: typing never moves the fields below)
                 t.E.append(reserveError(t, o, requiredText(o)));
@@ -24088,7 +24133,7 @@ window.Sw.Sources["ui/controls.js"] = "common/common.js";
                 });
                 t.Field.append(rb.E);
             }
-            t.ErrorE = el("div.sw-text-error", { id: id + "-err", attrs: { "aria-live": "polite" } });
+            t.ErrorE = errorLine(id + "-err");
             t.ErrorE.hidden = true;
             //  a box that validates (Required, Validate) has its message line before the first message (LAY-9)
             const errorPart = o.Required || o.Validate ? reserveError(t, o, requiredText(o)) : t.ErrorE;
@@ -24455,8 +24500,7 @@ window.Sw.Sources["ui/controls.js"] = "common/common.js";
             t.Disabled = false;
             /* SwWeb:allow ux-inp-12 (the legacy E.disabled = true setter carries no reason; the developer warning names the control) */
             Sw.Disabled.Shadow(t.Button, d => t.SetDisabled(d));
-            if (o.Disabled)
-                t.SetDisabled(true, typeof o.Disabled === "string" ? o.Disabled : undefined);
+            applyDisabled(t, o);
             t.Render();
             t.Button.addEventListener("click", e => {
                 //  A modifier click only focuses (INP-2)
@@ -24487,7 +24531,7 @@ window.Sw.Sources["ui/controls.js"] = "common/common.js";
                 t.Button.setAttribute("aria-required", "true");
                 if (t.E === t.Button)
                     t.E = el("div.sw-field.sw-field-select", null, t.Button);
-                t.ErrorE = el("div.sw-text-error", { id: uid("sw-sel-err"), attrs: { "aria-live": "polite" } });
+                t.ErrorE = errorLine(uid("sw-sel-err"));
                 t.ErrorE.hidden = true;
                 //  its line is there before the first message (LAY-9)
                 t.E.append(reserveError(t, o, typeof o.Required === "string" ? o.Required : _TF("Choose a value", "Message under an empty drop down that must be filled in")));
@@ -24920,8 +24964,7 @@ window.Sw.Sources["ui/controls.js"] = "common/common.js";
             t.Disabled = false;
             /* SwWeb:allow ux-inp-12 (the legacy E.disabled = true setter carries no reason; the developer warning names the control) */
             Sw.Disabled.Shadow(t.E, d => t.SetDisabled(d));
-            if (o.Disabled)
-                t.SetDisabled(true, typeof o.Disabled === "string" ? o.Disabled : undefined);
+            applyDisabled(t, o);
             t.Set(o.Value || (o.Hex ? "#ffffff" : [1, 1, 1]), true);
             t.E.addEventListener("click", e => {
                 //  A modifier click only focuses (INP-2); a disabled picker is stopped by its guard (INP-12)
@@ -25166,8 +25209,7 @@ window.Sw.Sources["ui/controls.js"] = "common/common.js";
                     }
                 });
             }
-            if (o.Disabled)
-                t.SetDisabled(true, typeof o.Disabled === "string" ? o.Disabled : undefined);
+            applyDisabled(t, o);
             ctlInit(t, "Sw.Chip", Schema.Chip, true);
         }
 
@@ -25670,7 +25712,7 @@ window.Sw.Sources["ui/controls.js"] = "common/common.js";
         //  (the options as the page gave them: aliases are normalized after the check)
         const given = t.OGiven || t.O;
         t.OGiven = null;
-        if (Sw.Work && typeof Sw.Work.CheckOptions === "function" && given)
+        if (given)
             Sw.Work.CheckOptions(where, given, schema);
     }
 
@@ -28114,6 +28156,15 @@ window.Sw.Sources["ui/overlay.js"] = "common/common.js";
         }
     }
 
+    /**
+     * Drop the inline vertical placement of a dialog box (a kept bottom edge, a drag position): the css or the geometry places it again.
+     * @param {HTMLElement} box The dialog.
+     */
+    function clearBoxEdges(box) {
+        for (const p of ["top", "bottom", "margin-bottom"])
+            box.style.removeProperty(p);
+    }
+
     /** Elements of a dialog head that are not a drag handle. */
     const NoDrag = "button, a, input, select, textarea, [role=button], [contenteditable], .sw-dialog-tools";
 
@@ -28165,7 +28216,7 @@ window.Sw.Sources["ui/overlay.js"] = "common/common.js";
         const apply = () => {
             //  a moved / maximized dialog is placed by its geometry (a kept bottom edge of the centered one no longer applies)
             if ((g.Placed || g.Max) && !box.style.height)
-                ["top", "bottom", "margin-bottom"].forEach(p => box.style.removeProperty(p));
+                clearBoxEdges(box);
             box.classList.toggle("sw-max", g.Max);
             box.classList.toggle("sw-placed", g.Placed && !g.Max);
             box.classList.toggle("sw-sized", g.Sized && !g.Max);
@@ -28298,7 +28349,7 @@ window.Sw.Sources["ui/overlay.js"] = "common/common.js";
                     dragging = true;
                     //  grab what is on screen (an inline top / bottom of a centered or held box gives way to the drag's position)
                     const rr = box.getBoundingClientRect();
-                    ["top", "bottom", "margin-bottom"].forEach(p => box.style.removeProperty(p));
+                    clearBoxEdges(box);
                     g.Placed = true;
                     grab = { X: sx - rr.left, Y: sy - rr.top };
                     box.classList.add("sw-dragging");
@@ -28667,19 +28718,13 @@ window.Sw.Sources["ui/overlay.js"] = "common/common.js";
     }
 
     /**
-     * aria-disabled with a reason (Sw.Disabled from ui/base.js when present, else the attribute).
+     * aria-disabled with a reason (Sw.Disabled.Set of ui/base.js).
      * @param {HTMLElement} e The element.
      * @param {boolean} on Disabled.
      * @param {string} [reason] The reason.
      */
     function setDisabled(e, on, reason) {
-        if (Sw.Disabled && typeof Sw.Disabled.Set === "function") {
-            Sw.Disabled.Set(e, on, reason);
-            return;
-        }
-        e.toggleAttribute("aria-disabled", on);
-        if (on)
-            e.setAttribute("aria-disabled", "true");
+        Sw.Disabled.Set(e, on, reason);
     }
 
     /**
@@ -28687,9 +28732,7 @@ window.Sw.Sources["ui/overlay.js"] = "common/common.js";
      * @returns {boolean} True when it is disabled (aria-disabled or disabled).
      */
     function isDisabled(e) {
-        if (Sw.Disabled && typeof Sw.Disabled.Is === "function")
-            return !!Sw.Disabled.Is(e);
-        return e.disabled === true || e.getAttribute("aria-disabled") === "true";
+        return !!Sw.Disabled.Is(e);
     }
 
     /** @type {string} The pointer type of the last press ("touch", "mouse", "pen"). */
@@ -29386,7 +29429,7 @@ window.Sw.Sources["ui/overlay.js"] = "common/common.js";
                 box.style.removeProperty("height");
                 //  a box that grew at its top keeps its bottom edge (the footer stays where it was all along; the top comes back down)
                 if (!st.BottomKept)
-                    ["top", "bottom", "margin-bottom"].forEach(p => box.style.removeProperty(p));
+                    clearBoxEdges(box);
                 else if (box.classList.contains("sw-placed"))
                     box.style.removeProperty("top");
             };
@@ -29394,7 +29437,7 @@ window.Sw.Sources["ui/overlay.js"] = "common/common.js";
             const onHoldResize = () => {
                 if (!st.Held && st.BottomKept) {
                     st.BottomKept = false;
-                    ["top", "bottom", "margin-bottom"].forEach(p => box.style.removeProperty(p));
+                    clearBoxEdges(box);
                 }
                 if (st.Held) {
                     st.BottomKept = false;
@@ -31866,7 +31909,7 @@ window.Sw.Sources["ui/overlay.js"] = "common/common.js";
                 lastBox = null;
                 if (!st.Held && st.BottomKept) {
                     st.BottomKept = false;
-                    ["top", "bottom", "margin-bottom"].forEach(p => box.style.removeProperty(p));
+                    clearBoxEdges(box);
                 }
                 requestAnimationFrame(() => {
                     footWrap();
@@ -34048,18 +34091,8 @@ window.Sw.Sources["ui/layout.js"] = "common/common.js";
         },
         EmptyState: { Icon: "any", Title: Str, Text: Str, Actions: "any", Error: "boolean", Class: Str },
     };
-    if (Sw.Work && typeof Sw.Work.RegisterOptions === "function")
-        for (const k of Object.keys(LayoutSchema))
-            Sw.Work.RegisterOptions("Sw." + k, LayoutSchema[k]);
-
-    /**
-     * Check the options of a layout part (DevMode; nothing in production).
-     * @param {string} name The part ("Tabs"). @param {object} o The options.
-     */
-    function checkOpts(name, o) {
-        if (o && typeof o === "object" && Sw.Work && typeof Sw.Work.CheckOptions === "function")
-            Sw.Work.CheckOptions("Sw." + name, o, LayoutSchema[name]);
-    }
+    /** Check the options of a layout part (DevMode; nothing in production): checkOpts("Tabs", o). */
+    const checkOpts = Sw.Work.OptionSet(LayoutSchema);
 
     // ------------------------------------------------------------------ tabs
 
@@ -36005,8 +36038,7 @@ window.Sw.Sources["ui/cells.js"] = "common/common.js";
      */
     function CreateLink(url, text, target, title, isImage, o) {
         o = o || {};
-        if (Sw.Work && typeof Sw.Work.CheckOptions === "function")
-            Sw.Work.CheckOptions("Sw.Cells.CreateLink", o);
+        Sw.Work.CheckOptions("Sw.Cells.CreateLink", o);
         //  Target keywords are case-insensitive ("_TOP" is "_top"): compare the normalized target only
         target = Sw.Page && Sw.Page.Target ? Sw.Page.Target(target, "_self") : (target || "_self");
         const own = target === "_self";
@@ -37272,11 +37304,7 @@ window.Sw.Sources["ui/cells.js"] = "common/common.js";
      * @returns {string} The sentence ("" for none).
      */
     function sentence(s) {
-        s = String(s ?? "").trim();
-        if (!s)
-            return "";
-        s = s.charAt(0).toLocaleUpperCase() + s.slice(1);
-        return /[.!?…。！？]$/.test(s) ? s : s + ".";
+        return Sw.Net.Sentence(s, { Capital: true });
     }
 
     /**
@@ -37746,7 +37774,7 @@ window.Sw.Sources["ui/cells.js"] = "common/common.js";
      * @returns {Promise<boolean|object>} True if confirmed (with Prepare: the prepared object, truthy), false otherwise.
      */
     async function ConfirmDanger(o) {
-        if (o && !o.SwPrepared && Sw.Work && typeof Sw.Work.CheckOptions === "function")
+        if (o && !o.SwPrepared)
             Sw.Work.CheckOptions("Sw.Cells.ConfirmDanger", o, DangerSchema);
         if (o && typeof o.Prepare === "function") {
             const prep = await prepareDanger(o);
@@ -37975,8 +38003,7 @@ window.Sw.Sources["ui/cells.js"] = "common/common.js";
      */
     async function DangerRun(o) {
         o = o || {};
-        if (Sw.Work && typeof Sw.Work.CheckOptions === "function")
-            Sw.Work.CheckOptions("Sw.Danger.Run", o, DangerRunSchema);
+        Sw.Work.CheckOptions("Sw.Danger.Run", o, DangerRunSchema);
         if (typeof o.Run !== "function")
             throw new Error("Sw.Danger.Run: Run (the work) is required");
         if (!o.Action)
@@ -38354,20 +38381,6 @@ window.Sw.Sources["ui/page.js"] = "common/common.js";
     const Sw = window.Sw = window.Sw || {};
     const el = Sw.el;
 
-    //  Line icons used by the dashboards (24 grid, stroked with currentColor; registered only when the icon set lacks them)
-    const ExtraIcons = {
-        cpu: '<rect x="6" y="6" width="12" height="12" rx="1.5"/><rect x="9.5" y="9.5" width="5" height="5"/><path d="M9 2.5v3M15 2.5v3M9 18.5v3M15 18.5v3M2.5 9h3M2.5 15h3M18.5 9h3M18.5 15h3"/>',
-        memory: '<rect x="3" y="7" width="18" height="10" rx="1.5"/><path d="M7.5 7v10M12 7v10M16.5 7v10M6 17v3M18 17v3"/>',
-        drive: '<rect x="2.5" y="13" width="19" height="7" rx="2"/><path d="M5.5 13 8 5h8l2.5 8"/><path d="M6.5 16.5h.01M10 16.5h.01" stroke-width="2.5"/>',
-        folder: '<path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2h8.5A1.5 1.5 0 0 1 21 8.5v10a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5Z"/>',
-        grid: '<rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/>',
-        inbox: '<path d="M3 13h5l1.5 3h5L16 13h5"/><path d="M5.5 5h13L21 13v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-6Z"/>',
-    };
-    if (Sw.Icons && Sw.Icons.Has)
-        for (const k in ExtraIcons)
-            if (!Sw.Icons.Has(k))
-                Sw.Icons.Add(k, ExtraIcons[k]);
-
     /**
      * Make an icon element: an inline svg icon name, a SysWeaver icon class or url (Sw.Icon handles both), or an element as is.
      * @param {string|Element} [icon] The icon.
@@ -38446,9 +38459,8 @@ window.Sw.Sources["ui/page.js"] = "common/common.js";
         Steps: { Steps: "array", Label: S, FinishText: S, OnFinish: "function", OnCancel: "function", NextText: S, BackText: S, Class: S, Start: "number" },
         "Steps step": { Title: S, Sub: S, Content: Any, Form: Any, Validate: "function", OnShow: "function" },
     };
-    if (Sw.Work && typeof Sw.Work.RegisterOptions === "function")
-        for (const k of Object.keys(PageSchema))
-            Sw.Work.RegisterOptions("Sw." + k, PageSchema[k]);
+    /** Check the options of a page part (DevMode; nothing in production): checkOpts("Card", o) -> o. */
+    const checkOpts = Sw.Work.OptionSet(PageSchema);
     if (Sw.DevOptions && typeof Sw.DevOptions.NoOptions === "function")
         Sw.DevOptions.NoOptions("Sw.FillTable", "o are Sw.Table.Create options (checked there)");
     //  Schemas of ui apis whose files check nothing yet (registered here, the last ui part, so the registry knows them; their files can
@@ -38458,18 +38470,6 @@ window.Sw.Sources["ui/page.js"] = "common/common.js";
         Sw.Work.RegisterOptions("Sw.FullScreen.OnCorner", { Corner: { Type: S, Check: v => /^(top|bottom)-(left|right)$/.test(v) ? "" : '"' + v + '" is no corner (top-right, top-left, bottom-right, bottom-left).' }, Size: "number", Area: Any });
         Sw.Work.RegisterOptions("Sw.PropertyEditor", { Defs: "array", Values: "object", OnInput: "function", OnChange: "function", Realtime: "boolean", ResetButtons: "boolean", Hints: "boolean", Label: S });
         Sw.Work.RegisterOptions("Sw.SearchSelection", { Id: S, GetId: "function", MaxRecent: "number", Render: "function", Find: "function" });
-    }
-
-    /**
-     * Check the options of a page part (DevMode; nothing in production).
-     * @param {string} name The part ("Card", "Form field").
-     * @param {object} o The options.
-     * @returns {object} o.
-     */
-    function checkOpts(name, o) {
-        if (o && typeof o === "object" && Sw.Work && typeof Sw.Work.CheckOptions === "function")
-            Sw.Work.CheckOptions("Sw." + name, o, PageSchema[name]);
-        return o;
     }
 
     /**
@@ -39247,12 +39247,7 @@ window.Sw.Sources["ui/page.js"] = "common/common.js";
             //  (disabled with its reason, INP-12: the reason is the tool tip and what an attempt says; setting "disabled" first gave
             //  "Not available right now")
             const why = _TF("File uploads are not available on this service", "Tool tip of an upload button when the file upload service is missing");
-            if (Sw.Disabled && typeof Sw.Disabled.Set === "function")
-                Sw.Disabled.Set(e, true, why);
-            else {
-                e.disabled = true;
-                e.title = why;
-            }
+            Sw.Disabled.Set(e, true, why);
             return false;
         }
         window.fileUploaderSetup(e, repo, null, (ev, res, files) => ReportUpload(res, files, onUploaded), null, true);

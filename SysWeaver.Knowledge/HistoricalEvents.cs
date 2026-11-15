@@ -6,6 +6,9 @@ using System.Text;
 namespace SysWeaver.Knowledge
 {
 
+    /// <summary>
+    /// Info about a historical event
+    /// </summary>
     public sealed class HistoricalEvent : Info, IGoogleInfo
     {
         internal HistoricalEvent(string name, string desc, DateOnly born, DateOnly died, long pop, Info[] parent) : base(name, desc, HistoricalEvents.Group, parent, false)
@@ -15,12 +18,12 @@ namespace SysWeaver.Knowledge
             Pop = pop;
         }
         /// <summary>
-        /// When the person was born (or Min if unknown)
+        /// When the event started (or Min if unknown)
         /// </summary>
         public readonly DateOnly Born;
 
         /// <summary>
-        /// When the person died (or Min if still alive, or unknown)
+        /// When the event ended (or Min if unknown)
         /// </summary>
         public readonly DateOnly Died;
 
@@ -30,14 +33,32 @@ namespace SysWeaver.Knowledge
         public long Pop { get; private set; }
     }
 
+    /// <summary>
+    /// Knowledge about historical events
+    /// </summary>
     public static class HistoricalEvents
     {
+        /// <summary>
+        /// The group (category) name of all historical event info
+        /// </summary>
         public const String Group = "Historical events";
 
+        /// <summary>
+        /// Try to get info about a historical event
+        /// </summary>
+        /// <param name="name">The name of the event, any case</param>
+        /// <param name="info">The info if found</param>
+        /// <returns>True if info was found</returns>
         public static bool TryGet(String name, out HistoricalEvent info) => Tags.TryGetValueLower(name, out info);
 
+        /// <summary>
+        /// All keyword/info pairs (the keys are lower case)
+        /// </summary>
         public static IEnumerable<KeyValuePair<String, HistoricalEvent>> All => Tags;
 
+        /// <summary>
+        /// The number of keywords
+        /// </summary>
         public static int Count => Tags.Count;
 
         #region Setup

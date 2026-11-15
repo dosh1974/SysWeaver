@@ -46,6 +46,7 @@ namespace SysWeaver.AI
             return false;
         }
 
+        /// <inheritdoc />
         protected override async Task<AiModels> FetchModels()
         {
             List<AiLlmModel> llms = new();

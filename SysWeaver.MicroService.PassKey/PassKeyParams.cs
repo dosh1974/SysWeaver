@@ -1,10 +1,14 @@
 ﻿namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// Parameters for the <see cref="PassKeyService"/>
+    /// </summary>
     public sealed class PassKeyParams
     {
         /// <summary>
         /// The life time in seconds of a challenge (a user must validate within this period).
-        /// Sent to the browser as the timeout and enforced by the server.
+        /// Sent to the browser as the timeout and enforced by the server (values below 10 are treated as 10).
+        /// Defaults to 180 (3 minutes).
         /// </summary>
         public int ChallengeLifeTime = 3 * 60;
 
@@ -48,6 +52,7 @@
         /// <summary>
         /// Additional origins (scheme, host and optionally port, ex: "https://login.example.org") that are accepted besides the origin of the request.
         /// Required when the server is reached through a proxy that changes the host or scheme (ex: a TLS terminating reverse proxy).
+        /// Defaults to null (only the origin of the request is accepted).
         /// </summary>
         public string[] Prefixes;
 

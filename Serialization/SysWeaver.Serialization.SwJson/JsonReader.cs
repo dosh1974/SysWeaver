@@ -33,6 +33,19 @@ namespace SysWeaver.Serialization.SwJson
     public unsafe static class JsonReader
     {
         /// <summary>
+        /// True (the default) to share the instances of short ASCII strings that are read (string values and dictionary keys of at most 32 chars),
+        /// so a value that repeats is only allocated once (a string is cached the second time it's seen).
+        /// The cache is bounded (4096 strings) and lock free, a cached string stays reachable until its slot is reused by another string.
+        /// Set to false to never keep a read string alive after the result is gone (ex: json with secrets).
+        /// </summary>
+        /// <remarks>The same setting as <see cref="SpanStringCache.Enabled"/> (also used by the binary reader).</remarks>
+        public static bool CacheStrings
+        {
+            get => SpanStringCache.Enabled;
+            set => SpanStringCache.Enabled = value;
+        }
+
+        /// <summary>
         /// Create an object from UTF8 encoded json.
         /// </summary>
         /// <typeparam name="T">The type of the object to create (the declared type, a <c>"$type"</c> member in the json can create a derived type)</typeparam>

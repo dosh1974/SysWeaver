@@ -8,6 +8,9 @@ using SysWeaver.Compression;
 namespace SysWeaver
 {
     
+    /// <summary>
+    /// Properties (chunk sizes, hash function, compression and storage folders) for content dependent chunking
+    /// </summary>
     public sealed class CdcProps
     {
         /// <summary>
@@ -71,9 +74,13 @@ namespace SysWeaver
    
         static readonly Byte[] Temp = GC.AllocateUninitializedArray<Byte>(1024);
 
+        /// <inheritdoc />
         public override string ToString() => Key;
 
 
+        /// <summary>
+        /// The file extension (without a dot) used for compressed chunk files, the first extension of <see cref="Comp"/> (or "comp")
+        /// </summary>
         public String CompFileExt => Comp.FileExtensions.FirstOrDefault() ?? "comp";
 
         /// <summary>

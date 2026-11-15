@@ -12,11 +12,21 @@ using SysWeaver.Net;
 namespace SysWeaver.ReverseProxy
 {
 
+    /// <summary>
+    /// The server of a reverse proxy: forwards http requests to the connected clients (<see cref="ReverseProxyClient"/>) and returns their responses
+    /// </summary>
     [WebApiUrl("../ReverseProxy")]
     public sealed partial class ReverseProxyServer : IHttpServerRawModule, IHaveStats
     {
+        /// <inheritdoc />
         public override string ToString() => BaseUrl;
 
+        /// <summary>
+        /// Create the server
+        /// </summary>
+        /// <param name="p">Parameters, null to use the defaults</param>
+        /// <param name="msg">Optional message host, used to log how requests are routed</param>
+        /// <exception cref="Exception">If neither a valid base url nor domains are supplied</exception>
         public ReverseProxyServer(ReverseProxyServerParams p, IMessageHost msg = null)
         {
             p = p ?? new ReverseProxyServerParams();
@@ -56,7 +66,9 @@ namespace SysWeaver.ReverseProxy
         readonly int BaseUrlLen;
 
         readonly ConcurrentDictionary<String, Client> Clients = new (StringComparer.Ordinal);
+        /// <inheritdoc />
         public String[] OnlyForPrefixes { get; init; }
+        /// <inheritdoc />
         public Task<bool> Handle(HttpServerRequest r)
         {
             var localUrl = r.LocalUrl;
@@ -260,6 +272,12 @@ namespace SysWeaver.ReverseProxy
 
         #endregion//Cookies
 
+        /// <summary>
+        /// Called by a client: delivers the response to the previous request (if any) and waits for the next request for the client (long poll)
+        /// </summary>
+        /// <param name="response">The response to a request (if <see cref="ReverseProxyBase.RequestId"/> is set), also identifies the client</param>
+        /// <param name="r">The request context</param>
+        /// <returns>The next request that the client should handle</returns>
         [WebApi]
         [WebApiAuth(Roles.Service)]
         public async Task<ReverseProxyRequest> GetReverseProxyRequest(ReverseProxyResponse response, HttpServerRequest r)
@@ -380,6 +398,7 @@ namespace SysWeaver.ReverseProxy
             return TableDataTools.GetTyped(r, 2000, Clients.Select(x => new ReverseProxyClientDetail(x, b)));
         }
 
+        /// <inheritdoc />
         public IEnumerable<Stats> GetStats()
         {
             const String sys = nameof(ReverseProxyServer);

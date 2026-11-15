@@ -4,6 +4,9 @@ using SysWeaver.AI;
 namespace SysWeaver.MicroService
 {
 
+    /// <summary>
+    /// A value for each of the four corners (ex: the border radius)
+    /// </summary>
     public class ChartJsCorner
     {
         /// <summary>
@@ -32,6 +35,9 @@ namespace SysWeaver.MicroService
     }
 
 
+    /// <summary>
+    /// Style options shared by data sets and elements of a chart
+    /// </summary>
     public class ChartJsBaseOptions
     {
         /// <summary>
@@ -57,7 +63,7 @@ namespace SysWeaver.MicroService
         public double? borderWidth;
 
         /// <summary>
-        /// The radius to use for rounded corners
+        /// The radius to use for rounded corners (bar charts), by default the top corners have a radius of 2
         /// </summary>
         [AiOptional]
         public ChartJsCorner borderRadius = new ChartJsCorner
@@ -67,7 +73,7 @@ namespace SysWeaver.MicroService
         };
 
         /// <summary>
-        /// If true the border isn't drawn at the bottom (start)
+        /// If true the border isn't drawn at the bottom (start of the bar), default false (bar charts)
         /// </summary>
         [AiOptional]
         public bool? borderSkipped = false;
@@ -76,12 +82,14 @@ namespace SysWeaver.MicroService
 
 
         /// <summary>
-        /// Percent (0-1) of the available width each bar should be within the category width. 1.0 will take the whole category width and put the bars right next to each other. 
+        /// For bar charts only.
+        /// Percent (0-1) of the available width each bar should be within the category width. 1.0 will take the whole category width and put the bars right next to each other.
         /// </summary>
         [AiOptional]
         public double? barPercentage;
 
         /// <summary>
+        /// For bar charts only.
         /// Percent (0-1) of the available width each category should be within the sample width.
         /// </summary>
         [AiOptional]
@@ -147,13 +155,13 @@ namespace SysWeaver.MicroService
         public String pointStyle;
 
         /// <summary>
-        /// Point rotation (in degrees), defaul: 0
+        /// Point rotation (in degrees), default: 0
         /// </summary>
         [AiOptional]
         public double? rotation;
 
         /// <summary>
-        /// Extra radius added to point radius for hit detection, default: 1
+        /// Extra radius added to point radius for hit detection, default: 1 (not available to AI generated charts)
         /// </summary>
         [AiIgnore]
         public double? hitRadius;
@@ -176,6 +184,9 @@ namespace SysWeaver.MicroService
     }
 
 
+    /// <summary>
+    /// Options for filling the area under a line
+    /// </summary>
     public sealed class ChartJsLineFillOptions
     {
         /// <summary>

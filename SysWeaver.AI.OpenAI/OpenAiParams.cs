@@ -3,13 +3,31 @@ using System;
 namespace SysWeaver.AI
 {
 
+    /// <summary>
+    /// The service tier (processing type) to request from the OpenAI API
+    /// </summary>
     public enum OpenAiServiceTier
     {
+        /// <summary>
+        /// Let the API pick the tier (as configured for the project)
+        /// </summary>
         Auto,
+        /// <summary>
+        /// Standard processing
+        /// </summary>
         Default,
+        /// <summary>
+        /// Lower cost, higher latency
+        /// </summary>
         Flex,
+        /// <summary>
+        /// Scale tier (reserved capacity)
+        /// </summary>
         Scale,
 
+        /// <summary>
+        /// Faster processing (higher cost)
+        /// </summary>
         Fast,
     }
 
@@ -21,6 +39,9 @@ namespace SysWeaver.AI
     /// </summary>
     public sealed class OpenAiParams : AiServiceParams
     {
+        /// <summary>
+        /// Create parameters with the default chat and image models set.
+        /// </summary>
         public OpenAiParams()
         {
             DefaultChatModel = "gpt-4.1";

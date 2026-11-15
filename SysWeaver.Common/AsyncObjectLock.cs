@@ -107,6 +107,10 @@ namespace SysWeaver
     public readonly struct AsyncObjectLockHandle<T> : IDisposable
     {
 #if DEBUG
+        /// <summary>
+        /// Debug builds only: describes the locked value.
+        /// </summary>
+        /// <returns>A short text for debugging.</returns>
         public override string ToString() => "Lock for " + V;
 #endif//DEBUG
 

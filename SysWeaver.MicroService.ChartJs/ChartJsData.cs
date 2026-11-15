@@ -2,10 +2,13 @@
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// The data of a chart
+    /// </summary>
     public sealed class ChartJsData
     {
         /// <summary>
-        /// The labels, on per value on the x-axis, must contain unique values, sorted in left to right
+        /// The labels, one per value on the x-axis, must contain unique values, sorted from left to right
         /// </summary>
         public String[] labels;
         /// <summary>

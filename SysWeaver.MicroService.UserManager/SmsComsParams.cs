@@ -3,11 +3,14 @@
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// Parameters for the text message communication method of the user manager (<see cref="SmsComs"/>)
+    /// </summary>
     public sealed class SmsComsParams : ComsParams
     {
 
         /// <summary>
-        /// An optional instance name of the ITextMessageSender and ITextMessageReceiverService to use.
+        /// An optional instance name of the ITextMessageSender to use.
         /// If null, the first instance will be used.
         /// Default: "useradmin".
         /// </summary>

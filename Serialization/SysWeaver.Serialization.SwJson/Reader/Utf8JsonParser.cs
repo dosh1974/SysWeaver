@@ -154,6 +154,16 @@ namespace SysWeaver.Serialization.SwJson.Reader
         {
             fixed (Byte* p = d)
             {
+                //  ASCII without NUL (the common case): one vectorized check, short keys are shared (keys repeat)
+                var l = d.Length;
+                if (d.IndexOfAnyExceptInRange((Byte)1, (Byte)127) < 0)
+                {
+                    if (l == 0)
+                        return String.Empty;
+                    if ((l <= SpanStringCache.MaxLength) && SpanStringCache.Enabled)
+                        return SpanStringCache.GetAscii(p, l);
+                    return Utf8Parser.UTF8.GetString(p, l);
+                }
                 var dd = p;
                 var e = p + d.Length;
                 return Utf8Parser.ReadUtf8String(ref s.Temp, ref dd, e, (Char)0);

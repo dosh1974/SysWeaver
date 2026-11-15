@@ -105,7 +105,7 @@
                 //  Read only (Design v2, PORTING.md B14): "Yes" / "No" as plain text, not a switch that looks live
                 const ro = E.ReadOnlyText(() => obj[mn], v => v ? _TF("Yes", "Read only display of a true boolean value") : _TF("No", "Read only display of a false boolean value"), false);
                 ro.classList.add("sw-edit-robool");
-                ro.setAttribute("aria-label", member.DisplayName || mn);
+                ro.setAttribute("aria-label", E.Handler.Label(member));
                 cell.classList.add("EditBoolean");
                 const rosync = () => {
                     ro.UpdateValue();
@@ -126,7 +126,7 @@
                     const old = obj[mn];
                     if (old === v)
                         return;
-                    await editor.SetMemberValue(member, v, old, _T("Set value: \"{0}\"", v, "Command text stored in a log when a property value was changed.{0} is replaced with the new value."));
+                    await editor.SetMemberValue(member, v, old, E.Handler.SetText(v));
                 },
             });
             tog.E.removeAttribute("title");

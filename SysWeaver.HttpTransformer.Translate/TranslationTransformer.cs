@@ -11,6 +11,9 @@ using SysWeaver.Translation;
 namespace SysWeaver.HttpTransformer
 {
 
+    /// <summary>
+    /// Parameters for <see cref="TranslationTransformer"/> (no settings of its own, see <see cref="CachedTransformerParams"/>).
+    /// </summary>
     public sealed class TranslationTransformerParams : CachedTransformerParams
     {
 
@@ -132,11 +135,18 @@ namespace SysWeaver.HttpTransformer
     }
 
 
+    /// <summary>
+    /// A cached transformer that builds translated variants of files with translatable text (ex: html or js, see <see cref="LanguageTemplate"/>), one for each requested language.
+    /// </summary>
     public sealed class TranslationTransformer : CachedTransformer
     {
 
 
 
+        /// <summary>
+        /// Create the transformer and register it for all file extensions that have a language template builder.
+        /// </summary>
+        /// <param name="p">Optional parameters, null to use the defaults.</param>
         public TranslationTransformer(TranslationTransformerParams p = null)
             : base(p ?? new TranslationTransformerParams())
         {

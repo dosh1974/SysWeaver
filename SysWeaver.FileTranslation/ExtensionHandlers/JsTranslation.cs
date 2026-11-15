@@ -8,10 +8,20 @@ using System.Web;
 
 namespace SysWeaver.MicroService.ExtensionHandlers
 {
+    /// <summary>
+    /// Creates language templates from javascript files
+    /// </summary>
     public sealed class JsTranslation
     {
 
 
+        /// <summary>
+        /// Create a language template from javascript text
+        /// </summary>
+        /// <param name="text">The javascript</param>
+        /// <param name="willTranslate">Not used</param>
+        /// <param name="allowBrowserTranslation">Not used</param>
+        /// <returns>The template (the translatable texts are replaced with variables)</returns>
         public static LanguageTemplate CreateTemplate(String text, bool willTranslate, bool allowBrowserTranslation)
         {
             var vars = TranslationTools.GetVars();
@@ -21,6 +31,12 @@ namespace SysWeaver.MicroService.ExtensionHandlers
 
 
 
+        /// <summary>
+        /// Replace the translatable texts of a javascript text with variables
+        /// </summary>
+        /// <param name="vars">The variables, the translatable texts are added to it</param>
+        /// <param name="text">The javascript, replaced with the processed text if anything was changed</param>
+        /// <returns>True if the text was changed</returns>
         public static bool Process(Dictionary<String, LanguageTemplateVar> vars, ref String text)
         {
             bool ch = false;
@@ -117,6 +133,12 @@ namespace SysWeaver.MicroService.ExtensionHandlers
             return true;
         }
 
+        /// <summary>
+        /// Unescape the escape sequences of a javascript string literal
+        /// </summary>
+        /// <param name="_source">The text of the literal (without the quotes)</param>
+        /// <param name="_index">The index to start at</param>
+        /// <returns>The unescaped text</returns>
         public static String UnescapeJavascriptString(String _source, int _index = 0)
             => Unescape(_source, _index, _source.Length);
 

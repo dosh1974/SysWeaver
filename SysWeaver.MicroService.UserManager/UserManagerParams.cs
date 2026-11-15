@@ -6,9 +6,15 @@ using SysWeaver.Db;
 namespace SysWeaver.MicroService
 {
 
+    /// <summary>
+    /// Parameters for the <see cref="UserManagerService"/>
+    /// </summary>
     public class UserManagerParams : MySqlDbParams
     {
 
+        /// <summary>
+        /// Create the parameters, the database schema defaults to "UserManager"
+        /// </summary>
         public UserManagerParams()
         {
             Schema = "UserManager";
@@ -16,6 +22,7 @@ namespace SysWeaver.MicroService
 
         /// <summary>
         /// The requirements for passwords.
+        /// If null, the default <see cref="Auth.PasswordPolicy"/> is used.
         /// </summary>
         public PasswordPolicy PasswordPolicy;
 
@@ -26,7 +33,8 @@ namespace SysWeaver.MicroService
         public string LocalizedMessages;
 
         /// <summary>
-        /// If true, user's can't login using this
+        /// If true, users can't sign in using this user manager.
+        /// Defaults to false.
         /// </summary>
         public bool DisableLogin;
 
@@ -41,7 +49,8 @@ namespace SysWeaver.MicroService
         public bool CanSetNickName = true;
 
         /// <summary>
-        /// [3, 16] Number of digits to use in short codes
+        /// [3, 16] Number of digits to use in short codes (values outside the range are clamped).
+        /// Defaults to 6.
         /// </summary>
         public int ShortCodeDigits = 6;
 
@@ -57,7 +66,8 @@ namespace SysWeaver.MicroService
         ];
 
         /// <summary>
-        /// If true (and the server accepts basic auth, then users are allowed to login using basic auth)
+        /// If true (and the server accepts basic auth), then users are allowed to login using basic auth.
+        /// Defaults to false.
         /// </summary>
         public bool AllowBasicAuth;
 

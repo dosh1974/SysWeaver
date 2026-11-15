@@ -3,6 +3,9 @@ using SysWeaver.AI;
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// Options for the grid lines of an axis
+    /// </summary>
     public sealed class ChartJsGridOptions
     {
         /// <summary>

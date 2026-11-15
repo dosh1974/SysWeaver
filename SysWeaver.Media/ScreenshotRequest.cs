@@ -2,8 +2,12 @@
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// A request to take a screenshot of a web page
+    /// </summary>
     public class ScreenshotRequest : GetDataRequestBase
     {
+        /// <inheritdoc/>
         public override string ToString() => String.Concat(Width, 'x', Height, " from ", Url);
         /// <summary>
         /// If true, a js object is registered so that the page can control dimensions and when to take the screenshot

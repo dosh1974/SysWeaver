@@ -1072,23 +1072,25 @@
     }
 
     /**
-     * What a failed status means for the user, and what to do: statusParts as one sentence.
-     * @param {number} s The HTTP status.
-     * @returns {string} The sentence.
-     */
-    function statusSentence(s) {
-        const p = statusParts(s);
-        return p.Do ? p.Why + " " + p.Do : p.Why;
-    }
-
-    /**
-     * End a sentence: a full stop unless it ends with one (., !, ?, …, :).
+     * End a sentence: a full stop unless it ends with one (., !, ?, …, and the CJK marks). The one sentence helper of the ui too
+     * (Sw.Net.Sentence): the options only change what the callers of the ui (table rows, cell actions) always did on top.
      * @param {string} s The text.
-     * @returns {string} The sentence.
+     * @param {{Capital: boolean, StatusLine: boolean, Marks: RegExp}} [o] Capital: the first letter is a capital. StatusLine: drop a
+     *   leading status line of an Error message ("409 - Conflict\n<reason>"). Marks: the end marks that need no full stop (default . ! ? … and CJK).
+     * @returns {string} The sentence ("" for nothing).
      */
-    function sentence(s) {
+    function sentence(s, o) {
         s = String(s ?? "").trim();
-        return !s || /[.!?…。！？]$/.test(s) ? s : s + ".";
+        if (o && o.StatusLine) {
+            const nl = s.indexOf("\n");
+            if (nl > 0 && /^\d{3}\b/.test(s))
+                s = s.slice(nl + 1).trim();
+        }
+        if (!s)
+            return s;
+        if (o && o.Capital)
+            s = s.charAt(0).toLocaleUpperCase() + s.slice(1);
+        return ((o && o.Marks) || /[.!?…。！？]$/).test(s) ? s : s + ".";
     }
 
     /**
@@ -1478,6 +1480,8 @@
 
         /** Join "What: Why. Do." the one way (no ".: ", no repeated advice): Compose(what, why, todo) -> text. */
         Compose: compose,
+        /** End a text with a full stop: Sentence(text, { Capital, StatusLine, Marks }) -> text. */
+        Sentence: sentence,
 
         /**
          * The failure sentence of an action: FailText("End session (debug)", e) = "End session (debug): not done. The session has
@@ -1834,6 +1838,7 @@
         Sw.DevOptions.Register("Sw.Net.Message", MessageOptions);
         Sw.DevOptions.Register("Sw.Net.MessageParts", MessageOptions);
         Sw.DevOptions.Register("Sw.Net.FailText", MessageOptions);
+        Sw.DevOptions.Register("Sw.Net.Sentence", { Capital: "boolean", StatusLine: "boolean", Marks: "object" });
         Sw.DevOptions.NoOptions("Sw.Net.IsWrite", "opts is the request's options (Send / Get) or a Request: read, not checked");
     }
 })();

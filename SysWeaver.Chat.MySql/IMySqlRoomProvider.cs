@@ -3,6 +3,9 @@ using System.Threading.Tasks;
 
 namespace SysWeaver.Chat
 {
+    /// <summary>
+    /// Provides rooms for <see cref="MySqlChat"/> that aren't defined in its parameters (looked up by chat id).
+    /// </summary>
     public interface IMySqlRoomProvider
     {
         /// <summary>

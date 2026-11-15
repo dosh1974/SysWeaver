@@ -29,15 +29,22 @@ namespace SysWeaver.Db
 {
 
 
+    /// <summary>
+    /// MySql (and compatible) database provider, with support for upserts, partitioning and table validation
+    /// </summary>
     public class MySqlDbSimpleStack : DbSimpleStack
     {
         static readonly ConcurrentDictionary<Tuple<ModelDefinition, String>, String[]> Upserts = new ConcurrentDictionary<Tuple<ModelDefinition, string>, string[]>();
 
-        /// <summary>
-        /// Name of the database provider
-        /// </summary>
+        /// <inheritdoc />
         public override String Name => "MySql";
 
+        /// <summary>
+        /// Get the (cached) parts of an upsert statement for a model, honoring the update aggregation of each field
+        /// </summary>
+        /// <param name="def">The model definition</param>
+        /// <param name="tableName">Optional table name, null to use the model name</param>
+        /// <returns>Two strings: the start of the insert statement (up to and including VALUES), and the ON DUPLICATE KEY UPDATE suffix</returns>
         public static String[] GetUpsert(ModelDefinition def, string tableName)
         {
             var dp = MySqlConnectorDialectProvider.Instance;
@@ -175,7 +182,7 @@ namespace SysWeaver.Db
         /// <summary>
         /// Copy a database table between databases (or tables)
         /// </summary>
-        /// <typeparam name="T"></typeparam>
+        /// <typeparam name="T">The row type</typeparam>
         /// <param name="source">Source database</param>
         /// <param name="dest">Dest database</param>
         /// <param name="sourceTableName">Optional name of the source table</param>
@@ -301,7 +308,7 @@ namespace SysWeaver.Db
         /// <param name="con">The connection to use</param>
         /// <param name="data">The data</param>
         /// <param name="tableName">Optional table name</param>
-        /// <returns></returns>
+        /// <returns>A task that completes when the row is written</returns>
         public static async Task Upsert<T>(OrmConnection con, T data, String tableName = null)
         {
             var def = ModelDefinition<T>.Definition;
@@ -376,16 +383,15 @@ namespace SysWeaver.Db
         }
 
         /// <summary>
-        /// Prepare a buld upsert, do all code side tasks.
-        /// Retrurn a function that perform the actual upsert.
+        /// Prepare a bulk upsert, do all code side tasks.
+        /// Return a function that performs the actual upsert.
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="data"></param>
-        /// <param name="tableName"></param>
-        /// <param name="maxBatchSize"></param>
-        /// <param name="useInsert"></param>
-        /// <returns>A fuinction that when called will uppsert the data</returns>
-        /// <exception cref="Exception"></exception>
+        /// <typeparam name="T">The type</typeparam>
+        /// <param name="data">The data</param>
+        /// <param name="tableName">Optional table name</param>
+        /// <param name="maxBatchSize">Number of rows per query</param>
+        /// <param name="useInsert">Do a bulk insert instead of upsert</param>
+        /// <returns>A function that when called with a connection will upsert the data</returns>
         public static Func<OrmConnection, Task> PrepareBulkUpsert<T>(IReadOnlyList<T> data, String tableName = null, int maxBatchSize = 2048, bool useInsert = false)
         {
             var def = ModelDefinition<T>.Definition;
@@ -498,7 +504,7 @@ namespace SysWeaver.Db
         /// <param name="tableName">Optional table name</param>
         /// <param name="maxBatchSize">Number of rows per query</param>
         /// <param name="useInsert">Do a bulk insert instead of upsert</param>
-        /// <returns></returns>
+        /// <returns>A task that completes when all rows are written</returns>
         public static async Task BulkUpsert<T>(OrmConnection con, IReadOnlyList<T> data, String tableName = null, int maxBatchSize = 4096, bool useInsert = false)
         {
             var def = ModelDefinition<T>.Definition;
@@ -557,15 +563,28 @@ namespace SysWeaver.Db
 
 
 
+        /// <summary>
+        /// Create a MySql database provider
+        /// </summary>
+        /// <param name="p">The parameters, if null a default instance is created</param>
+        /// <param name="msg">Optional message host</param>
         public MySqlDbSimpleStack(MySqlDbParams p, IMessageHost msg = null) : base(p, MySqlConnectorDialectProvider.Instance, typeof(MySqlDbParams), msg)
         {
             P = p;
             DP = base.DP as MySqlConnectorDialectProvider;
         }
 
+        /// <summary>
+        /// The connection parameters
+        /// </summary>
         public new readonly MySqlDbParams P;
+
+        /// <summary>
+        /// The MySql dialect provider
+        /// </summary>
         public new readonly MySqlConnectorDialectProvider DP;
 
+        /// <inheritdoc />
         public override async Task CreateSchemaIfNotExist(String schema)
         {
             //  Create db if it doesn't exist
@@ -739,6 +758,7 @@ namespace SysWeaver.Db
             }
         }
 
+        /// <inheritdoc />
         public override async Task InitTable<T>(OrmConnection con)
         {
             if (P.ReadOnly)
@@ -787,6 +807,7 @@ namespace SysWeaver.Db
             await ValidateTable<T>(con).ConfigureAwait(false);
         }
 
+        /// <inheritdoc />
         public override async Task Init()
         {
             await base.Init().ConfigureAwait(false);
@@ -816,8 +837,8 @@ namespace SysWeaver.Db
         /// <summary>
         /// Check if a MySql instance supports partitioning
         /// </summary>
-        /// <param name="con"></param>
-        /// <returns></returns>
+        /// <param name="con">An open connection to use for queries</param>
+        /// <returns>True if the server major version is 8 or higher</returns>
         public static async Task<bool> CanPartition(OrmConnection con)
         {
             String version = "0.0.0.0";
@@ -830,6 +851,7 @@ namespace SysWeaver.Db
         }
 
 
+        /// <inheritdoc />
         public override async Task<bool> Partition(OrmConnection con, Type t, String[] partitionFolders, String tableName = null)
         {
             var pc = partitionFolders?.Length ?? 0;
@@ -922,23 +944,65 @@ namespace SysWeaver.Db
         }
 
 
+        /// <summary>
+        /// Table page compression types
+        /// </summary>
         public enum PageCompressions
         {
+            /// <summary>
+            /// No page compression
+            /// </summary>
             None = 0,
+            /// <summary>
+            /// Zlib page compression
+            /// </summary>
             Zlib,
+            /// <summary>
+            /// Lz4 page compression
+            /// </summary>
             Lz4,
         }
 
+        /// <summary>
+        /// Table row formats
+        /// </summary>
         public enum RowFormats
         {
+            /// <summary>
+            /// The server default row format
+            /// </summary>
             Default,
+            /// <summary>
+            /// Compact row format
+            /// </summary>
             Compact,
+            /// <summary>
+            /// Dynamic row format
+            /// </summary>
             Dynamic,
+            /// <summary>
+            /// Compressed row format
+            /// </summary>
             Compressed,
         }
+
+        /// <summary>
+        /// Optimize a table (not written to the binary log)
+        /// </summary>
+        /// <param name="con">An open connection to use for queries</param>
+        /// <param name="tableName">The name of the table</param>
+        /// <returns>A task that completes when the optimization is done</returns>
         public Task OptimizeTable(OrmConnection con, String tableName)
             => con.ExecuteAsync("OPTIMIZE NO_WRITE_TO_BINLOG TABLE " + DP.GetQuotedTableName(tableName));
 
+        /// <summary>
+        /// Set the page compression of a table (does nothing if the db is read only or the table already uses it)
+        /// </summary>
+        /// <param name="con">An open connection to use for queries</param>
+        /// <param name="tableName">The name of the table</param>
+        /// <param name="compression">The compression to use</param>
+        /// <returns>A task that completes when done</returns>
+        /// <exception cref="ArgumentException">If compression is not a valid value</exception>
         public async Task SetPageCompression(OrmConnection con, String tableName, PageCompressions compression)
         {
             if (P.ReadOnly)
@@ -965,6 +1029,14 @@ namespace SysWeaver.Db
             throw new ArgumentException("Invalid compression value", nameof(compression));
         }
 
+        /// <summary>
+        /// Set the row format of a table (does nothing if the db is read only or the table already uses it)
+        /// </summary>
+        /// <param name="con">An open connection to use for queries</param>
+        /// <param name="tableName">The name of the table</param>
+        /// <param name="format">The row format to use</param>
+        /// <returns>A task that completes when done</returns>
+        /// <exception cref="ArgumentException">If format is not a valid value</exception>
         public async Task SetRowFormat(OrmConnection con, String tableName, RowFormats format)
         {
             if (P.ReadOnly)
@@ -992,6 +1064,7 @@ namespace SysWeaver.Db
         }
 
 
+        /// <inheritdoc />
         public override async Task<bool> RemoveIndices(OrmConnection con, Type t, String tableName)
         {
             var dp = DP;
@@ -1014,6 +1087,7 @@ namespace SysWeaver.Db
             return true;
         }
 
+        /// <inheritdoc />
         public override async Task<bool> ValidateTable(OrmConnection con, Type t, String tableName)
         {
             if (P.ReadOnly)
@@ -1425,9 +1499,24 @@ namespace SysWeaver.Db
     /// </summary>
     public sealed class MySqlOptimizeTableRow
     {
+        /// <summary>
+        /// The table name
+        /// </summary>
         public String Table { get; set; }
+
+        /// <summary>
+        /// The operation that was performed
+        /// </summary>
         public String Op { get; set; }
+
+        /// <summary>
+        /// The message type (status, error, info, note or warning)
+        /// </summary>
         public String Msg_type { get; set; }
+
+        /// <summary>
+        /// The message text
+        /// </summary>
         public String Msg_text { get; set; }
     }
 

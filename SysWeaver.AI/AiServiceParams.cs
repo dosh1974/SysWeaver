@@ -8,12 +8,33 @@ namespace SysWeaver.AI
     /// </summary>
     public enum AiReasoning
     {
+        /// <summary>
+        /// No reasoning (if the model supports disabling it)
+        /// </summary>
         None,
+        /// <summary>
+        /// The least reasoning the model supports
+        /// </summary>
         Minimal,
+        /// <summary>
+        /// Low reasoning effort
+        /// </summary>
         Low,
+        /// <summary>
+        /// Medium reasoning effort
+        /// </summary>
         Medium,
+        /// <summary>
+        /// High reasoning effort
+        /// </summary>
         High,
+        /// <summary>
+        /// Extra high reasoning effort
+        /// </summary>
         ExtraHigh,
+        /// <summary>
+        /// The most reasoning the model supports
+        /// </summary>
         Max,
     }
 

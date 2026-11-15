@@ -4,6 +4,9 @@ using SysWeaver.AI;
 namespace SysWeaver.Map
 {
 
+    /// <summary>
+    /// Parameters for generating a customized map, see <see cref="MapGen.Generate(MapGenParams)"/>.
+    /// </summary>
     public sealed class MapGenParams : MapSelect
     {
 
@@ -40,7 +43,7 @@ namespace SysWeaver.Map
         public double? CropToRegions;
 
         /// <summary>
-        /// If non-null, a background rectangle with this CSS color is added, ex: ex: "#f00", "#00f802", "red", "rgba(0, 255, 0, 0.5)"
+        /// If non-null, a background rectangle with this CSS color is added, ex: "#f00", "#00f802", "red", "rgba(0, 255, 0, 0.5)"
         /// </summary>
         [AiOptional]
         public String BackgroundColor;

@@ -6,8 +6,12 @@ namespace SysWeaver.TextMessage
     // User / Password (or CredFile) = the Account SID and Auth Token ("AC...:token"),
     // or an API key SID and secret ("SK...:secret", then AccountSid and AuthToken must be specified).
 
+    /// <summary>
+    /// Parameters for the <see cref="TwilioTextMessageService"/>
+    /// </summary>
     public sealed class TwilioTextMessageParams : CredentialParams
     {
+        /// <inheritdoc />
         public override string ToString() => String.Concat(Senders?.Length ?? 0, " sender(s), webhook: ", WebhookUrl.ToQuoted(), ", Auth: ", base.ToString());
 
         /// <summary>
@@ -85,8 +89,12 @@ namespace SysWeaver.TextMessage
         public int MaxPoll = 100;
     }
 
+    /// <summary>
+    /// A sender (phone number, WhatsApp sender, alphanumeric id or messaging service) that the <see cref="TwilioTextMessageService"/> can send from
+    /// </summary>
     public sealed class TwilioSenderParams
     {
+        /// <inheritdoc />
         public override string ToString() => String.Concat(From ?? MessagingServiceSid, " (", Channel, ')', String.IsNullOrEmpty(System) ? "" : " System: " + System);
 
         /// <summary>
@@ -117,8 +125,12 @@ namespace SysWeaver.TextMessage
         public String[] Countries;
     }
 
+    /// <summary>
+    /// A WhatsApp content template (for messages outside of the customer service window)
+    /// </summary>
     public sealed class TwilioTemplateParams
     {
+        /// <inheritdoc />
         public override string ToString() => String.Concat(ContentSid, AlwaysUse ? " always" : "");
 
         /// <summary>

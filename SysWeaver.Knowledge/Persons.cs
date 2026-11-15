@@ -5,11 +5,20 @@ using System.Collections.Generic;
 namespace SysWeaver.Knowledge
 {
 
+    /// <summary>
+    /// Info that has a popularity measure
+    /// </summary>
     public interface IGoogleInfo
     {
+        /// <summary>
+        /// Popularity (measured as number of hits when searching)
+        /// </summary>
         public long Pop { get; }
     }
 
+    /// <summary>
+    /// Info about a person
+    /// </summary>
     public sealed class Person : Info, IGoogleInfo
     {
         internal Person(string name, string desc, DateOnly born, DateOnly died, long pop, Info[] parent) : base(name, desc, Persons.Group, parent, true)
@@ -35,14 +44,32 @@ namespace SysWeaver.Knowledge
 
     }
 
+    /// <summary>
+    /// Knowledge about persons
+    /// </summary>
     public static class Persons
     {
+        /// <summary>
+        /// The group (category) name of all person info
+        /// </summary>
         public const String Group = "Persons";
 
+        /// <summary>
+        /// Try to get info about a person
+        /// </summary>
+        /// <param name="name">The name of the person, any case</param>
+        /// <param name="info">The info if found</param>
+        /// <returns>True if info was found</returns>
         public static bool TryGet(String name, out Person info) => Tags.TryGetValueLower(name, out info);
 
+        /// <summary>
+        /// All keyword/info pairs (the keys are lower case)
+        /// </summary>
         public static IEnumerable<KeyValuePair<String, Person>> All => Tags;
 
+        /// <summary>
+        /// The number of keywords
+        /// </summary>
         public static int Count => Tags.Count;
 
         #region Setup

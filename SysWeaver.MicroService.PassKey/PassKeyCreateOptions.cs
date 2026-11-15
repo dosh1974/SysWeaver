@@ -23,6 +23,9 @@ namespace SysWeaver.MicroService
         /// </summary>
         public PassKeyErrors error { get; set; }
 
+        /// <summary>
+        /// The publicKey member to pass to navigator.credentials.create, null if the challenge could not be created (see <see cref="error"/>)
+        /// </summary>
         public PassKeyCreateCredential publicKey { get; set; }
 
         internal static PassKeyCreateOptions Fail(PassKeyErrors error) => new PassKeyCreateOptions
@@ -41,17 +44,45 @@ namespace SysWeaver.MicroService
         /// </summary>
         public String challengeId { get; set; }
 
+        /// <summary>
+        /// The authenticator attachment of the credential ("platform" or "cross-platform"), if reported by the browser
+        /// </summary>
         public string authenticatorAttachment { get; set; }
+
+        /// <summary>
+        /// The credential id (base64url encoded)
+        /// </summary>
         public string id { get; set; }
+
+        /// <summary>
+        /// The raw credential id
+        /// </summary>
         public Byte[] rawId { get; set; }
+
+        /// <summary>
+        /// The authenticator attestation response
+        /// </summary>
         public PassKeyCreateAuthenticatorResponse response { get; set; }
 
+        /// <summary>
+        /// The credential type, "public-key"
+        /// </summary>
         public String type { get; set; }
     }
 
+    /// <summary>
+    /// The authenticator attestation response of navigator.credentials.create
+    /// </summary>
     public sealed class PassKeyCreateAuthenticatorResponse
     {
+        /// <summary>
+        /// The attestation object (contains the new public key)
+        /// </summary>
         public Byte[] attestationObject { get; set; }
+
+        /// <summary>
+        /// The client data (json)
+        /// </summary>
         public Byte[] clientDataJSON { get; set; }
 
         /// <summary>
@@ -60,12 +91,24 @@ namespace SysWeaver.MicroService
         public String[] transports { get; set; }
     }
 
+    /// <summary>
+    /// The relying party (this site)
+    /// </summary>
     public sealed class PassKeyRp
     {
+        /// <summary>
+        /// The relying party id (a domain)
+        /// </summary>
         public string id { get; set; }
 
+        /// <summary>
+        /// The name of the relying party, shown to the user
+        /// </summary>
         public string name { get; set; }
 
+        /// <summary>
+        /// Create an empty instance (for deserialization)
+        /// </summary>
         public PassKeyRp()
         {
         }
@@ -77,15 +120,30 @@ namespace SysWeaver.MicroService
         }
     }
 
+    /// <summary>
+    /// The user a passkey is created for
+    /// </summary>
     public sealed class PassKeyUser
     {
+        /// <summary>
+        /// The account name of the user
+        /// </summary>
         public string name { get; set; }
 
+        /// <summary>
+        /// The user handle (an opaque id)
+        /// </summary>
         public byte[] id { get; set; }
 
+        /// <summary>
+        /// The name shown to the user
+        /// </summary>
         public string displayName { get; set; }
 
 
+        /// <summary>
+        /// Create an empty instance (for deserialization)
+        /// </summary>
         public PassKeyUser()
         {
         }
@@ -98,13 +156,25 @@ namespace SysWeaver.MicroService
         }
     }
 
+    /// <summary>
+    /// An accepted public key credential type and signature algorithm
+    /// </summary>
     public sealed class PassKeyCredParam
     {
 
+        /// <summary>
+        /// The COSE algorithm identifier (ex: -7 for ES256)
+        /// </summary>
         public int alg { get; set; }
 
+        /// <summary>
+        /// The credential type, "public-key"
+        /// </summary>
         public String type { get; set; }
 
+        /// <summary>
+        /// Create an empty instance (for deserialization)
+        /// </summary>
         public PassKeyCredParam()
         {
         }
@@ -115,16 +185,34 @@ namespace SysWeaver.MicroService
         }
     }
 
+    /// <summary>
+    /// Requirements for the authenticator used when creating a passkey
+    /// </summary>
     public sealed class PassKeyAuthenticatorSelection
     {
+        /// <summary>
+        /// Restrict to "platform" or "cross-platform" authenticators, null for any
+        /// </summary>
         public String authenticatorAttachment { get; set; }
 
+        /// <summary>
+        /// True if a discoverable credential is required (legacy flag, true when <see cref="residentKey"/> is "required")
+        /// </summary>
         public bool requireResidentKey { get; set; }
 
+        /// <summary>
+        /// The discoverable credential (resident key) requirement ("required", "preferred" or "discouraged")
+        /// </summary>
         public String residentKey { get; set; }
 
+        /// <summary>
+        /// The user verification requirement ("required", "preferred" or "discouraged")
+        /// </summary>
         public String userVerification { get; set; }
 
+        /// <summary>
+        /// Create an empty instance (for deserialization)
+        /// </summary>
         public PassKeyAuthenticatorSelection()
         {
         }
@@ -139,16 +227,31 @@ namespace SysWeaver.MicroService
 
     }
 
+    /// <summary>
+    /// Describes a credential (used in allow and exclude lists)
+    /// </summary>
     public sealed class PassKeyPublicKeyCredentialDescriptor
     {
 
+        /// <summary>
+        /// The raw credential id
+        /// </summary>
         public byte[] id { get; set; }
 
+        /// <summary>
+        /// The transports the credential can be reached by (ex: "usb", "internal", "hybrid"), can be null
+        /// </summary>
         public String[] transports { get; set; }
 
+        /// <summary>
+        /// The credential type, "public-key"
+        /// </summary>
         public String type { get; set; }
 
 
+        /// <summary>
+        /// Create an empty instance (for deserialization)
+        /// </summary>
         public PassKeyPublicKeyCredentialDescriptor()
         {
         }
@@ -161,14 +264,29 @@ namespace SysWeaver.MicroService
         }
     }
 
+    /// <summary>
+    /// WebAuthn client extension inputs
+    /// </summary>
     public sealed class PassKeyAuthenticationExtensionsClientInputs
     {
+        /// <summary>
+        /// The appid extension (legacy FIDO U2F application id), can be null
+        /// </summary>
         public string appid { get; set; }
 
+        /// <summary>
+        /// The exts extension (request the list of supported extensions), can be null
+        /// </summary>
         public bool? exts { get; set; }
 
+        /// <summary>
+        /// The credProps extension (request properties of the created credential), can be null
+        /// </summary>
         public bool? credProps { get; set; }
 
+        /// <summary>
+        /// Create an empty instance (for deserialization)
+        /// </summary>
         public PassKeyAuthenticationExtensionsClientInputs()
         {
         }
@@ -181,30 +299,66 @@ namespace SysWeaver.MicroService
         }
     }
 
+    /// <summary>
+    /// The publicKey options to pass to navigator.credentials.create
+    /// </summary>
     public sealed class PassKeyCreateCredential
     {
 
+        /// <summary>
+        /// The time in milliseconds that the browser should wait for the user
+        /// </summary>
         public ulong timeout { get; set; }
 
+        /// <summary>
+        /// The attestation conveyance preference ("none", "indirect", "direct" or "enterprise")
+        /// </summary>
         public String attestation { get; set; }
 
+        /// <summary>
+        /// Requirements for the authenticator, can be null
+        /// </summary>
         public PassKeyAuthenticatorSelection authenticatorSelection { get; set; }
 
+        /// <summary>
+        /// The random challenge
+        /// </summary>
         public byte[] challenge { get; set; }
 
+        /// <summary>
+        /// Credentials that already exist for the user, the authenticator will not create a new passkey if it holds one of these
+        /// </summary>
         public PassKeyPublicKeyCredentialDescriptor[] excludeCredentials { get; set; }
 
+        /// <summary>
+        /// Client extension inputs, can be null
+        /// </summary>
         public PassKeyAuthenticationExtensionsClientInputs extensions { get; set; }
 
+        /// <summary>
+        /// The accepted credential types and signature algorithms, in order of preference
+        /// </summary>
         public PassKeyCredParam[] pubKeyCredParams { get; set; }
 
+        /// <summary>
+        /// The relying party (this site)
+        /// </summary>
         public PassKeyRp rp { get; set; }
 
+        /// <summary>
+        /// The user the passkey is created for
+        /// </summary>
         public PassKeyUser user { get; set; }
 
+        /// <summary>
+        /// Hints to the browser about which kind of authenticator to use, can be null
+        /// </summary>
         public String[] hints { get; set; }
 
 
+        /// <summary>
+        /// Create an empty instance (for deserialization)
+        /// </summary>
         public PassKeyCreateCredential()
         {
         }

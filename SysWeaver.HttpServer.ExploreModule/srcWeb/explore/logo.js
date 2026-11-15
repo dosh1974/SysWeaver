@@ -256,7 +256,7 @@
             if (Sw.Access && Sw.Access.IsDenied(e))
                 Sw.Page.ShowNotAllowed({ Error: e });
             else
-                Sw.Fail(e && e.message ? e.message : String(e), true);
+                Sw.Fail(Sw.ErrorMessage(e), true);
         }
         finally {
             remove();

@@ -62,8 +62,13 @@ namespace SysWeaver.MicroService
         public String InReplyTo;
 
 
+        /// <inheritdoc />
         public override string ToString() => String.Concat('#', Id, ' ', From, ": ", Subject);
 
+        /// <summary>
+        /// Copy all fields from another email
+        /// </summary>
+        /// <param name="from">The email to copy from</param>
         public void CopyFrom(IncomingEmail from)
         {
             Id = from.Id;
@@ -78,6 +83,10 @@ namespace SysWeaver.MicroService
             InReplyTo = from.InReplyTo;
         }
 
+        /// <summary>
+        /// Create a copy of this email
+        /// </summary>
+        /// <returns>The copy</returns>
         public IncomingEmail Clone()
         {
             var t = new IncomingEmail();

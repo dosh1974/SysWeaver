@@ -2,6 +2,9 @@
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// The axes (scales) of a chart
+    /// </summary>
     public sealed class ChartJsScalesOptions
     {
         /// <summary>

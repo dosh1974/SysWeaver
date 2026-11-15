@@ -8,8 +8,17 @@ using SysWeaver.Net;
 
 namespace SysWeaver.HttpTransformer
 {
+    /// <summary>
+    /// A cached transformer that pre-compresses compressible content (the file types that the web server compresses, see <see cref="MimeTypeMap"/>)
+    /// using the best level of each configured method, the compressed variants are stored on disc.
+    /// </summary>
     public sealed class LosslessCompressionTransformer : CachedTransformer, ICachedTransformer
     {
+        /// <summary>
+        /// Create the transformer and register it for all compressible file extensions.
+        /// </summary>
+        /// <param name="p">Optional parameters, null to use the defaults.</param>
+        /// <exception cref="Exception">Thrown if a method isn't found and <see cref="LosslessCompressionTransformerParams.ThrowOnMissing"/> is set.</exception>
         public LosslessCompressionTransformer(LosslessCompressionTransformerParams p = null)
             : base(p ?? new LosslessCompressionTransformerParams())
         {
@@ -45,10 +54,15 @@ namespace SysWeaver.HttpTransformer
         readonly ICompType[] Methods;
         readonly String[] MethodsExtensions;
 
+        /// <inheritdoc/>
+        /// <remarks>The names of the compression methods that were found.</remarks>
         public string Info { get; init; }
 
+        /// <inheritdoc/>
+        /// <remarks><see cref="CachedTransformerBuildStrategies.AlwaysDirect"/> if <see cref="LosslessCompressionTransformerParams.BuildDirect"/> is set, else <see cref="CachedTransformerBuildStrategies.AlwaysDefer"/>.</remarks>
         public CachedTransformerBuildStrategies BuildStrategy { get; init; }
 
+        /// <inheritdoc/>
         public CachedTransformerEntry Validate(CachedTransformer service, CachedTransformerFile info)
         {
             var methods = Methods;
@@ -80,6 +94,7 @@ namespace SysWeaver.HttpTransformer
             };
         }
 
+        /// <inheritdoc/>
         public async Task<FileHttpRequestHandler[]> Build(CachedTransformer service, CachedTransformerFile info, ReadOnlyMemory<byte> inputData, CachedTransformerEntry entry)
         {
             var methods = Methods;

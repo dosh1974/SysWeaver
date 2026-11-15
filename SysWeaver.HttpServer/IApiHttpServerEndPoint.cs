@@ -77,6 +77,10 @@ namespace SysWeaver.Net
         }
 
 #if DEBUG
+        /// <summary>
+        /// Debug builds only: the uri, followed by the audit group (if any).
+        /// </summary>
+        /// <returns>A short text for debugging.</returns>
         public override string ToString() => AuditGroup == null ? Uri : String.Concat(Uri, " in ", AuditGroup);
 #endif//DEBUG
 

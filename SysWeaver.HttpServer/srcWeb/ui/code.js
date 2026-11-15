@@ -395,8 +395,7 @@
         constructor(o) {
             const t = this;
             o = o || {};
-            if (Sw.Work && typeof Sw.Work.CheckOptions === "function")
-                Sw.Work.CheckOptions("Sw.CodeEditor", o);
+            Sw.Work.CheckOptions("Sw.CodeEditor", o);
             t.O = o;
             t.Lang = Languages[o.Language] || Glsl;
             t.TabSize = o.TabSize || 4;
@@ -1755,11 +1754,10 @@
 
     Sw.CodeEditor = CodeEditor;
     //  (the one registry of option schemas: a typo in an option is a developer warning)
-    if (Sw.Work && typeof Sw.Work.RegisterOptions === "function")
-        Sw.Work.RegisterOptions("Sw.CodeEditor", {
-            Value: "string", Language: { Type: "string", Check: v => Languages[v] ? "" : '"' + v + '" is no language (' + Object.keys(Languages).join(", ") + ")." }, ReadOnly: "boolean", TabSize: "number",
-            AutoComplete: "boolean", Completions: "function", OnChange: "function", OnCursor: "function", Placeholder: "string", OnComplete: "function", Hover: "function", OnAltClick: "function", OnDot: "function", ContextMenu: "function",
-        });
+    Sw.Work.RegisterOptions("Sw.CodeEditor", {
+        Value: "string", Language: { Type: "string", Check: v => Languages[v] ? "" : '"' + v + '" is no language (' + Object.keys(Languages).join(", ") + ")." }, ReadOnly: "boolean", TabSize: "number",
+        AutoComplete: "boolean", Completions: "function", OnChange: "function", OnCursor: "function", Placeholder: "string", OnComplete: "function", Hover: "function", OnAltClick: "function", OnDot: "function", ContextMenu: "function",
+    });
     Sw.CodeLanguages = Languages;
     Sw.GlslDocs = GlslDocs;
 })();

@@ -16,6 +16,10 @@ namespace SysWeaver
     public sealed class LanguageTemplateVar
     {
 #if DEBUG
+        /// <summary>
+        /// Debug builds only: the variable name, the original text and the context (if any).
+        /// </summary>
+        /// <returns>A short text for debugging.</returns>
         public override string ToString() =>
             Context == null
             ?

@@ -14,9 +14,17 @@ namespace SysWeaver.AI
 {
 
 
+    /// <summary>
+    /// A translator that uses an AI service (LLM) to translate text, the model used depends on the requested effort.
+    /// </summary>
     public sealed class LlmTranslator : IInternalTranslator, IPerfMonitored, IHaveStats
     {
 
+        /// <summary>
+        /// Create a translator
+        /// </summary>
+        /// <param name="manager">The service manager used to find the AI service</param>
+        /// <param name="p">Translator parameters, null to use the defaults</param>
         public LlmTranslator(ServiceManager manager, LlmTranslatorParams p = null)
         {
             p = p ?? new LlmTranslatorParams();
@@ -62,6 +70,7 @@ namespace SysWeaver.AI
 
 
 
+        /// <inheritdoc />
         public PerfMonitor PerfMon { get; } = new PerfMonitor(nameof(LlmTranslator));
 
         /// <summary>
@@ -135,7 +144,13 @@ namespace SysWeaver.AI
         }
 
 
+        /// <summary>
+        /// The approximate number of input tokens used so far, indexed by effort (low, medium, high)
+        /// </summary>
         public long[] InputTokens => [Interlocked.Read(ref CountInputTokens[0]), Interlocked.Read(ref CountInputTokens[1]), Interlocked.Read(ref CountInputTokens[2])];
+        /// <summary>
+        /// The approximate number of output tokens used so far, indexed by effort (low, medium, high)
+        /// </summary>
         public long[] OutputTokens => [Interlocked.Read(ref CountOutputTokens[0]), Interlocked.Read(ref CountOutputTokens[1]), Interlocked.Read(ref CountOutputTokens[2])];
 
         long[] CountInputTokens = new long[3];
@@ -145,12 +160,15 @@ namespace SysWeaver.AI
         readonly Func<String, long, long, Task>[] CountTokensTasks = new Func<string, long, long, Task>[3];
 
 
+        /// <inheritdoc />
         public Task<string[]> Translate(TranslateRequest request)
             => Translate(request.Text, request.To, request.From, request.Context, request.Effort, request.Retention, request.ContentType);
 
+        /// <inheritdoc />
         public Task<string[]> TranslateMultiple(TranslateMultipleRequest request)
             => TranslateMultiple(request.Texts, request.To, request.From, request.Context, request.Effort, request.Retention, request.ContentType);
 
+        /// <inheritdoc />
         public async ValueTask<string> TranslateOne(TranslateRequest request)
             => await TranslateOne(request.Text, request.To, request.From, request.Context, request.Effort, request.Retention, request.ContentType).ConfigureAwait(false);
 
@@ -305,12 +323,14 @@ namespace SysWeaver.AI
             }
         }
 
+        /// <inheritdoc />
         public async Task<IReadOnlyList<String>> GetSupportedSourceLanguages()
         {
             var lang = await InternalLanguagesAsync().ConfigureAwait(false);
             return lang?.ValidList;
         }
 
+        /// <inheritdoc />
         public Task<IReadOnlyList<String>> GetSupportedTargetLanguages()
             => GetSupportedSourceLanguages();
 
@@ -330,6 +350,7 @@ namespace SysWeaver.AI
             return true;
         }
 
+        /// <inheritdoc />
         public async Task<string> CanFrom(string from)
         {
             var lang = await InternalLanguagesAsync().ConfigureAwait(false);
@@ -340,9 +361,11 @@ namespace SysWeaver.AI
             return from;
         }
 
+        /// <inheritdoc />
         public Task<string> CanTo(string to)
             => CanFrom(to);
 
+        /// <inheritdoc />
         public IEnumerable<Stats> GetStats()
         {
             yield return new Stats(nameof(LlmTranslator), "Low effort input tokens", Interlocked.Read(ref CountInputTokens[0]), "The approximate number of input tokens used for the low effort model");
@@ -354,12 +377,14 @@ namespace SysWeaver.AI
         }
 
 
+        /// <inheritdoc />
         public void Dispose()
         {
         }
 
         #region IInternalTranslator
 
+        /// <inheritdoc />
         public Task<string[]> Translate(string text, string to, string from, string context, TranslationEffort effort, TranslationCacheRetention retention, TranslationContentTypes contentType)
         {
             var dest = to.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
@@ -376,6 +401,7 @@ namespace SysWeaver.AI
 
         readonly int RetryCount;
 
+        /// <inheritdoc />
         public Task<string[]> TranslateMultiple(string[] texts, string to, string from, string context, TranslationEffort effort, TranslationCacheRetention retention, TranslationContentTypes contentType)
         {
             var dest = to.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
@@ -386,6 +412,7 @@ namespace SysWeaver.AI
             return ArrayExt.CreateAsync(textCount * dest.Length, i => TranslateOne(texts[i % textCount], dest[i / textCount], from, context, effort, retention, contentType));
         }
 
+        /// <inheritdoc />
         public async Task<string> TranslateOne(string text, string to, string from, string context, TranslationEffort effort, TranslationCacheRetention retention, TranslationContentTypes contentType)
         {
             if (text.FastStartsWith(TranslationTools.NoTranslatePrefix))
@@ -406,18 +433,22 @@ namespace SysWeaver.AI
             }
         }
 
+        /// <inheritdoc />
         public Task<string> RequestOne(string from, string to, string text, string context, TranslationEffort effort, TranslationCacheRetention retention, TranslationContentTypes contentType)
             => TranslateOne(text, to, from, context, effort, retention, contentType);
 
+        /// <inheritdoc />
         public IReadOnlyList<string> SupportedSourceLanguages()
         {
             var lang = InternalLanguages();
             return lang?.ValidList;
         }
 
+        /// <inheritdoc />
         public IReadOnlyList<string> SupportedTargetLanguages()
             => SupportedSourceLanguages();
 
+        /// <inheritdoc />
         public string CanTranslateFrom(string from)
         {
             var lang = InternalLanguages();
@@ -428,6 +459,7 @@ namespace SysWeaver.AI
             return from;
         }
 
+        /// <inheritdoc />
         public string CanTranslateTo(string to)
             => CanTranslateFrom(to);
 

@@ -24,5 +24,5 @@ The files are served under `ai/`, the same url root as the shared icons of [SysW
 ## Relationships
 
 - **Part of:** [SysWeaver.AI.Anthropic](../README.md)
-- **Uses:** [SvgOpt](../../_tools/svg_opt/README.md) and [Compress](../../_tools/compress/README.md) at build time
+- **Uses:** [SvgOpt](https://github.com/dosh1974/SysWeaver.Tools/blob/main/SvgOpt/README.md) and [Compress](https://github.com/dosh1974/SysWeaver.Tools/blob/main/Compress/README.md) at build time
 - **Related:** [SysWeaver.AI/srcWeb](../../SysWeaver.AI/srcWeb/README.md) (shared AI icons under the same url root)

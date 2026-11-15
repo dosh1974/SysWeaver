@@ -17,12 +17,15 @@ namespace SysWeaver.Map
     public static class MapGen
     {
 
+        /// <summary>
+        /// The number of maps currently held in the cache
+        /// </summary>
         public static int CacheSize => MapCache.CacheSize;
 
         /// <summary>
         /// Generate a customized map
         /// </summary>
-        /// <param name="p">Paramters to use for generating the map</param>
+        /// <param name="p">Parameters to use for generating the map</param>
         /// <returns>The SVG representing the map</returns>
         public static String Generate(MapGenParams p)
         {

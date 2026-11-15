@@ -15,8 +15,16 @@ namespace SysWeaver.Email
 {
 
 
+    /// <summary>
+    /// Email sender service that sends emails using Amazon Simple Email Service (SES v2)
+    /// </summary>
     public sealed class AmazonSesEmailService : IEmailSender, IHaveStats, IPerfMonitored
     {
+        /// <summary>
+        /// Create the service
+        /// </summary>
+        /// <param name="p">The parameters, <see cref="AmazonSesEmailParams.From"/> is required</param>
+        /// <exception cref="Exception">The From address is empty</exception>
         public AmazonSesEmailService(AmazonSesEmailParams p = null)
         {
             p = p ?? new AmazonSesEmailParams();
@@ -38,7 +46,12 @@ namespace SysWeaver.Email
                 : new AmazonSimpleEmailServiceV2Client(config);
             RetryCount = Math.Max(1, p.RetryCount) - 1;
         }
+        /// <inheritdoc />
         public override string ToString() => Tos;
+
+        /// <summary>
+        /// The (trimmed) from address that emails are sent from
+        /// </summary>
         public readonly String Sender;
         readonly String FromAddress;
         readonly String ConfigurationSet;
@@ -79,6 +92,12 @@ namespace SysWeaver.Email
             return true;
         }
 
+        /// <summary>
+        /// Send an email (as a simple UTF-8 message), failed attempts that can be retried are retried up to the configured number of attempts
+        /// </summary>
+        /// <param name="msg">The message to send</param>
+        /// <returns>A task that completes when SES has accepted the message</returns>
+        /// <exception cref="Exception">The message could not be sent (the last error is thrown), or an address is invalid</exception>
         public async Task SendEmail(OutgoingEmailMessage msg)
         {
             using var _ = PerfMon.Track(nameof(SendEmail));
@@ -129,11 +148,13 @@ namespace SysWeaver.Email
             }
         }
 
+        /// <inheritdoc />
         public void Dispose()
         {
             Client.Dispose();
         }
 
+        /// <inheritdoc />
         public IEnumerable<Stats> GetStats()
         {
             foreach (var x in SendFails.GetStats(nameof(AmazonSesEmailService), "Send."))
@@ -144,6 +165,7 @@ namespace SysWeaver.Email
 
         readonly AmazonSimpleEmailServiceV2Client Client;
 
+        /// <inheritdoc />
         public PerfMonitor PerfMon { get; init; } = new PerfMonitor(nameof(AmazonSesEmailService));
 
     }

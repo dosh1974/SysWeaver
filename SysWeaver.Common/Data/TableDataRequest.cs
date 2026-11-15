@@ -37,6 +37,10 @@ namespace SysWeaver.Data
     public class TableDataOrderRequest : TableDataSortAndFilterRequest
     {
 #if DEBUG
+        /// <summary>
+        /// Debug builds only: the maximum number of rows and the first row, as "count @ row".
+        /// </summary>
+        /// <returns>A short text for debugging.</returns>
         public override string ToString() => String.Concat( MaxRowCount, " @ ", Row);
 #endif//DEBUG
 

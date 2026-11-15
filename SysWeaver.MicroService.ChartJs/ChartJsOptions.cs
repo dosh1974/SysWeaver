@@ -6,6 +6,9 @@ namespace SysWeaver.MicroService
 
 
    
+    /// <summary>
+    /// The options of a chart
+    /// </summary>
     public sealed class ChartJsOptions : ChartJsBaseOptions
     {
         /// <summary>
@@ -54,6 +57,9 @@ namespace SysWeaver.MicroService
 
     }
 
+    /// <summary>
+    /// Default options for the element types of a chart
+    /// </summary>
     public sealed class ChartJsElementsOption
     {
         /// <summary>

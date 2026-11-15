@@ -54,6 +54,9 @@ namespace SysWeaver.Net
     }
 
 
+    /// <summary>
+    /// A service that generates default avatar icons for users that has no image, see <see cref="IDefaultUserImageHandler"/>.
+    /// </summary>
     public interface IAvatarService : IDefaultUserImageHandler
     {
         /// <summary>

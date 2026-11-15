@@ -67,8 +67,13 @@ namespace SysWeaver.MicroService
         public String ResponseToken;
 
 
+        /// <inheritdoc />
         public override string ToString() => String.Concat('#', Id, ' ', PhoneNumber, ": ", Text);
 
+        /// <summary>
+        /// Copy all fields from another message
+        /// </summary>
+        /// <param name="from">The message to copy from</param>
         public void CopyFrom(IncomingTextMessage from)
         {
             Id = from.Id;
@@ -84,6 +89,10 @@ namespace SysWeaver.MicroService
             ResponseToken = from.ResponseToken;
         }
 
+        /// <summary>
+        /// Create a copy of this message
+        /// </summary>
+        /// <returns>The copy</returns>
         public IncomingTextMessage Clone()
         {
             var t = new IncomingTextMessage();

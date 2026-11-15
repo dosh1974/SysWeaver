@@ -5,10 +5,13 @@ using SysWeaver.Auth;
 namespace SysWeaver.MicroService.Db
 {
 
+    /// <summary>
+    /// Base class for the (key, value) data that is stored per user
+    /// </summary>
     public class DbUserDataBase
     {
         /// <summary>
-        /// The user that owns this data and the data key name
+        /// The guid of the user that owns this data
         /// </summary>
         [Ascii]
         [StringLength(AuhorizationLimits.MaxGuidLength)]
@@ -17,7 +20,7 @@ namespace SysWeaver.MicroService.Db
         public String UserGuid { get; set; }
 
         /// <summary>
-        /// The user that owns this data and the data key name
+        /// The name of the data key
         /// </summary>
         [Ascii]
         [StringLength(UserManagerTools.MaxDataKeyLength)]
@@ -28,6 +31,9 @@ namespace SysWeaver.MicroService.Db
     }
 
 
+    /// <summary>
+    /// Binary user data (serialized and compressed)
+    /// </summary>
     [Alias("UserDataT")]
     [PartitionByKey(nameof(UserGuid))]
     public sealed class DbUserData : DbUserDataBase
@@ -40,10 +46,16 @@ namespace SysWeaver.MicroService.Db
     }
 
 
+    /// <summary>
+    /// String user data (searchable)
+    /// </summary>
     [Alias("UserDataString")]
     [PartitionByKey(nameof(UserGuid))]
     public sealed class DbUserDataString : DbUserDataBase
     {
+        /// <summary>
+        /// The string data (at most <see cref="UserManagerTools.MaxDataStringLength"/> characters)
+        /// </summary>
         [StringLength(UserManagerTools.MaxDataStringLength)]
         [Index]
         public String Data { get; set; }

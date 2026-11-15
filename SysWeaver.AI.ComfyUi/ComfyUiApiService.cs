@@ -19,6 +19,7 @@ namespace SysWeaver.AI
     [WebApiUrl("comfyui")]
     public sealed class ComfyUiApiService : IRunTimeWebApiAuth
     {
+        /// <inheritdoc/>
         public override string ToString() => "Provides web API's for the media creation of the ComfyUI service";
 
         /// <summary>

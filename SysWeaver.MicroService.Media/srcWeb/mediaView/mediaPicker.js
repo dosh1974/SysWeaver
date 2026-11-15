@@ -29,14 +29,8 @@
     const StoreKey = "SysWeaver.MediaPicker.Tab";
     const ViewKey = "SysWeaver.MediaPicker.View.";
 
-    function el(tag, cls, text) {
-        const e = document.createElement(tag);
-        if (cls)
-            e.className = cls;
-        if (text)
-            e.textContent = text;
-        return e;
-    }
+    //  el(tag, cls, text): a plain element with class(es) and text (Sw.el from sw/ui.js)
+    const el = (tag, cls, text) => Sw.el(tag, { class: cls, text });
 
     /**
      * The url of the media viewer (MediaView.html of this folder) for an item (the item url made absolute).
@@ -162,8 +156,10 @@
             if (item.Badge)
                 pic.append(el("span", "sw-mpick-badge", item.Badge));
             t.append(pic, el("span", "sw-mpick-tname", item.Name));
-            t.addEventListener("click", () => select(item, t));
-            t.addEventListener("dblclick", () => {
+            t.addEventListener("click", ev => { if (!Sw.BadClick(ev, true)) select(item, t); });
+            t.addEventListener("dblclick", ev => {
+                if (Sw.BadClick(ev, true))
+                    return;
                 select(item, t);
                 if (useButton)
                     useButton.Click();
@@ -251,7 +247,7 @@
                 }
                 catch (e) {
                     if (my === seq)
-                        state.textContent = _T("The files could not be loaded: {0}", e && e.message ? e.message : e, "Media picker: loading the files failed, {0} is the reason");
+                        state.textContent = _T("The files could not be loaded: {0}", Sw.ErrorMessage(e), "Media picker: loading the files failed, {0} is the reason");
                 }
                 finally {
                     if (my === seq)
@@ -290,7 +286,9 @@
                     Sw.Fail(e);
                 }
             }
-            drop.addEventListener("click", async () => {
+            drop.addEventListener("click", async ev => {
+                if (Sw.BadClick(ev))
+                    return;
                 await Sw.Net.IncludeJs(scriptUrl, "../common/fileUploader.js");
                 up(await Sw.Upload.Pick({ Accept: o.Upload.Accept }));
             });

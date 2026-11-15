@@ -76,6 +76,9 @@ namespace SysWeaver
         /// </summary>
         static long CountAllocNodes;
 
+        /// <summary>
+        /// Finalizer, updates the allocated node counter (see <see cref="AllocatedNodes"/>).
+        /// </summary>
         ~FrozenStringTree()
         {
             Interlocked.Add(ref CountAllocNodes, -NodeCount);

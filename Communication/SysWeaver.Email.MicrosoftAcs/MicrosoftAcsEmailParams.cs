@@ -3,9 +3,13 @@ using System;
 
 namespace SysWeaver.Email
 {
+    /// <summary>
+    /// Parameters for the <see cref="MicrosoftAcsEmailService"/>
+    /// </summary>
     public sealed class MicrosoftAcsEmailParams : ApiKeyParams
     {
 
+        /// <inheritdoc />
         public override string ToString() => String.Concat(String.IsNullOrEmpty(Endpoint) ? "" : Endpoint + ", ", "From: ", From.ToQuoted(), ", Auth: ", base.ToString());
 
         // ApiKey = either the full ACS connection string ("endpoint=https://...;accesskey=..."),
@@ -34,7 +38,7 @@ namespace SysWeaver.Email
         public bool WaitForCompletion { get; set; }
 
         /// <summary>
-        /// Number of times to retry sending an email (before returning a failure).
+        /// Maximum number of attempts to send an email (including the first, minimum 1) before returning a failure.
         /// Requests rejected by ACS (invalid address, unknown sender etc) are not retried.
         /// Default: 3.
         /// </summary>

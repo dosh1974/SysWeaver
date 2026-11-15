@@ -2,6 +2,9 @@
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// Request to manually set a cached translation
+    /// </summary>
     public sealed class SetTranslationRequest
     {
         /// <summary>
@@ -10,7 +13,7 @@ namespace SysWeaver.MicroService
         public String Key;
 
         /// <summary>
-        /// The original translation
+        /// The current translation (must match the stored one, to detect that it was changed by someone else)
         /// </summary>
         public String OriginalTranslation;
 

@@ -3,6 +3,9 @@ using SysWeaver.Translation;
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// Details about a cached translation
+    /// </summary>
     public sealed class Translation
     {
 
@@ -59,12 +62,12 @@ namespace SysWeaver.MicroService
         public TranslationContentTypes ContentType;
 
         /// <summary>
-        /// The user that manually changed this
+        /// The user that requested the translation (or manually changed it)
         /// </summary>
         public String UserName;
 
         /// <summary>
-        /// The name of the serive / user that requested this translation
+        /// The name of the service that requested this translation
         /// </summary>
         public String ServiceName;
 

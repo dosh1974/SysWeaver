@@ -124,57 +124,85 @@ namespace SysWeaver
 
 
 
+        /// <summary>Implicit (exact) conversion from <see cref="byte"/>.</summary>
+        /// <param name="value">The value to convert.</param>
         public static implicit operator BigRat(byte value)
         {
             return (uint)value;
         }
+        /// <summary>Implicit (exact) conversion from <see cref="sbyte"/>.</summary>
+        /// <param name="value">The value to convert.</param>
         public static implicit operator BigRat(sbyte value)
         {
             return (int)value;
         }
+        /// <summary>Implicit (exact) conversion from <see cref="char"/> (the UTF-16 code unit value).</summary>
+        /// <param name="value">The value to convert.</param>
         public static implicit operator BigRat(char value)
         {
             return (uint)value;
         }
+        /// <summary>Implicit (exact) conversion from <see cref="ushort"/>.</summary>
+        /// <param name="value">The value to convert.</param>
         public static implicit operator BigRat(ushort value)
         {
             return (uint)value;
         }
+        /// <summary>Implicit (exact) conversion from <see cref="short"/>.</summary>
+        /// <param name="value">The value to convert.</param>
         public static implicit operator BigRat(short value)
         {
             return (int)value;
         }
+        /// <summary>Implicit (exact) conversion from <see cref="int"/>.</summary>
+        /// <param name="value">The value to convert.</param>
         public static implicit operator BigRat(int value)
         {
             return new BigRat(value != 0 ? new uint[4] {
         unchecked((uint)value & 0x80000000) | 1, uabs(value), 1, 1 } : null);
         }
+        /// <summary>Implicit (exact) conversion from <see cref="uint"/>.</summary>
+        /// <param name="value">The value to convert.</param>
         public static implicit operator BigRat(uint value)
         {
             return new BigRat(value != 0 ? new uint[4] { 1, value, 1, 1 } : null);
         }
+        /// <summary>Implicit (exact) conversion from <see cref="long"/>.</summary>
+        /// <param name="value">The value to convert.</param>
         public static implicit operator BigRat(long value)
         {
             var t = value >> 63; var p = (BigRat)unchecked((ulong)((value ^ t) - t));
             if (p.p != null) p.p[0] |= unchecked((uint)(value >> 32)) & 0x80000000; return p;
         }
+        /// <summary>Implicit (exact) conversion from <see cref="ulong"/>.</summary>
+        /// <param name="value">The value to convert.</param>
         public static implicit operator BigRat(ulong value)
         {
             return (value >> 32) == 0 ? (uint)value :
               new BigRat(new uint[] { 2, (uint)value, (uint)(value >> 32), 1, 1 });
         }
+        /// <summary>Implicit (exact) conversion from <see cref="nint"/>.</summary>
+        /// <param name="value">The value to convert.</param>
         public static implicit operator BigRat(nint value)
         {
             return (long)value;
         }
+        /// <summary>Implicit (exact) conversion from <see cref="nuint"/>.</summary>
+        /// <param name="value">The value to convert.</param>
         public static implicit operator BigRat(nuint value)
         {
             return (ulong)value;
         }
+        /// <summary>Implicit conversion from <see cref="Half"/> (exact, the binary value, like the <see cref="double"/> conversion).</summary>
+        /// <param name="value">The value to convert.</param>
+        /// <exception cref="OverflowException"><paramref name="value"/> is NaN or infinity.</exception>
         public static implicit operator BigRat(Half value)
         {
             return (double)value;
         }
+        /// <summary>Implicit conversion from <see cref="float"/> (exact, the binary value, like the <see cref="double"/> conversion).</summary>
+        /// <param name="value">The value to convert.</param>
+        /// <exception cref="OverflowException"><paramref name="value"/> is NaN or infinity.</exception>
         public static implicit operator BigRat(float value)
         {
             return (double)value;
@@ -189,6 +217,8 @@ namespace SysWeaver
         {
             return new BigRat(value);
         }
+        /// <summary>Implicit (exact) conversion from <see cref="decimal"/> (the decimal value, ex: 0.1m becomes 1/10).</summary>
+        /// <param name="value">The value to convert.</param>
         public static implicit operator BigRat(decimal value)
         {
             var b = (uint*)&value; uint f = b[0], e = (f >> 16) & 0xff; //0..28 
@@ -210,6 +240,8 @@ namespace SysWeaver
             }
             return new BigRat(p, 2 + (f = p[0] & 0x3fffffff) + p[f + 1]);
         }
+        /// <summary>Implicit (exact) conversion from <see cref="BigInteger"/>.</summary>
+        /// <param name="value">The value to convert.</param>
         public static implicit operator BigRat(BigInteger value)
         {
             var si = value.Sign; if (si == 0) return default;
@@ -224,54 +256,80 @@ namespace SysWeaver
             }
         }
 
+        /// <summary>Explicit conversion to <see cref="byte"/> (truncates towards zero, goes through <see cref="double"/>, the result is undefined if the value doesn't fit).</summary>
+        /// <param name="value">The value to convert.</param>
         public static explicit operator byte(BigRat value)
         {
             return (byte)(double)value;
         }
+        /// <summary>Explicit conversion to <see cref="sbyte"/> (truncates towards zero, goes through <see cref="double"/>, the result is undefined if the value doesn't fit).</summary>
+        /// <param name="value">The value to convert.</param>
         public static explicit operator sbyte(BigRat value)
         {
             return (sbyte)(double)value;
         }
+        /// <summary>Explicit conversion to <see cref="char"/> (truncates towards zero, goes through <see cref="double"/>, the result is undefined if the value doesn't fit).</summary>
+        /// <param name="value">The value to convert.</param>
         public static explicit operator char(BigRat value)
         {
             return (char)(double)value;
         }
+        /// <summary>Explicit conversion to <see cref="short"/> (truncates towards zero, goes through <see cref="double"/>, the result is undefined if the value doesn't fit).</summary>
+        /// <param name="value">The value to convert.</param>
         public static explicit operator short(BigRat value)
         {
             return (short)(double)value;
         }
+        /// <summary>Explicit conversion to <see cref="ushort"/> (truncates towards zero, goes through <see cref="double"/>, the result is undefined if the value doesn't fit).</summary>
+        /// <param name="value">The value to convert.</param>
         public static explicit operator ushort(BigRat value)
         {
             return (ushort)(double)value;
         }
+        /// <summary>Explicit conversion to <see cref="int"/> (truncates towards zero, goes through <see cref="double"/>, the result is undefined if the value doesn't fit).</summary>
+        /// <param name="value">The value to convert.</param>
         public static explicit operator int(BigRat value)
         {
             return (int)(double)value; //todo opt.
         }
+        /// <summary>Explicit conversion to <see cref="uint"/> (truncates towards zero, goes through <see cref="double"/>, the result is undefined if the value doesn't fit).</summary>
+        /// <param name="value">The value to convert.</param>
         public static explicit operator uint(BigRat value)
         {
             return (uint)(double)value;
         }
+        /// <summary>Explicit conversion to <see cref="long"/> (truncates towards zero, the result is undefined if the value doesn't fit).</summary>
+        /// <param name="value">The value to convert.</param>
         public static explicit operator long(BigRat value)
         {
             long t; toi(value, (uint*)&t, 2); return t;
         }
+        /// <summary>Explicit conversion to <see cref="ulong"/> (truncates towards zero, the result is undefined if the value doesn't fit).</summary>
+        /// <param name="value">The value to convert.</param>
         public static explicit operator ulong(BigRat value)
         {
             ulong t; toi(value, (uint*)&t, 2 | 0x10000); return t;
         }
+        /// <summary>Explicit conversion to <see cref="nint"/> (via <see cref="long"/>, truncates towards zero).</summary>
+        /// <param name="value">The value to convert.</param>
         public static explicit operator nint(BigRat value)
         {
             return (nint)(long)value;
         }
+        /// <summary>Explicit conversion to <see cref="nuint"/> (via <see cref="ulong"/>, truncates towards zero).</summary>
+        /// <param name="value">The value to convert.</param>
         public static explicit operator nuint(BigRat value)
         {
             return (nuint)(ulong)value;
         }
+        /// <summary>Explicit conversion to <see cref="Half"/> (via <see cref="double"/>, approximate).</summary>
+        /// <param name="value">The value to convert.</param>
         public static explicit operator Half(BigRat value)
         {
             return (Half)(double)value;
         }
+        /// <summary>Explicit conversion to <see cref="float"/> (via <see cref="double"/>, approximate).</summary>
+        /// <param name="value">The value to convert.</param>
         public static explicit operator float(BigRat value)
         {
             return (float)(double)value;
@@ -299,10 +357,14 @@ namespace SysWeaver
               ((uint*)&r)[1] |= a[0] & 0x80000000; return r;
             }
         }
+        /// <summary>Explicit conversion to <see cref="decimal"/> (approximate if the value has no exact decimal representation).</summary>
+        /// <param name="value">The value to convert.</param>
         public static explicit operator decimal(BigRat value)
         {
             return tom(value, false);
         }
+        /// <summary>Explicit conversion to <see cref="BigInteger"/> (truncates towards zero).</summary>
+        /// <param name="value">The value to convert.</param>
         public static explicit operator BigInteger(BigRat value)
         {
             if (value.p == null) return default;
@@ -313,61 +375,101 @@ namespace SysWeaver
             var r = new BigInteger(a, true, false); if (value < 0) r = -r; return r;
         }
 
+        /// <summary>Checked explicit conversion to <see cref="byte"/> (truncates towards zero).</summary>
+        /// <param name="value">The value to convert.</param>
+        /// <exception cref="OverflowException">The value doesn't fit.</exception>
         public static explicit operator checked byte(BigRat value)
         {
             return checked((byte)(double)value);
         }
+        /// <summary>Checked explicit conversion to <see cref="sbyte"/> (truncates towards zero).</summary>
+        /// <param name="value">The value to convert.</param>
+        /// <exception cref="OverflowException">The value doesn't fit.</exception>
         public static explicit operator checked sbyte(BigRat value)
         {
             return checked((sbyte)(double)value);
         }
+        /// <summary>Checked explicit conversion to <see cref="char"/> (truncates towards zero).</summary>
+        /// <param name="value">The value to convert.</param>
+        /// <exception cref="OverflowException">The value doesn't fit.</exception>
         public static explicit operator checked char(BigRat value)
         {
             return checked((char)(double)value);
         }
+        /// <summary>Checked explicit conversion to <see cref="short"/> (truncates towards zero).</summary>
+        /// <param name="value">The value to convert.</param>
+        /// <exception cref="OverflowException">The value doesn't fit.</exception>
         public static explicit operator checked short(BigRat value)
         {
             return checked((short)(double)value);
         }
+        /// <summary>Checked explicit conversion to <see cref="ushort"/> (truncates towards zero).</summary>
+        /// <param name="value">The value to convert.</param>
+        /// <exception cref="OverflowException">The value doesn't fit.</exception>
         public static explicit operator checked ushort(BigRat value)
         {
             return checked((ushort)(double)value);
         }
+        /// <summary>Checked explicit conversion to <see cref="int"/> (truncates towards zero).</summary>
+        /// <param name="value">The value to convert.</param>
+        /// <exception cref="OverflowException">The value doesn't fit.</exception>
         public static explicit operator checked int(BigRat value)
         {
             return checked((int)(double)value);
         }
+        /// <summary>Checked explicit conversion to <see cref="uint"/> (truncates towards zero).</summary>
+        /// <param name="value">The value to convert.</param>
+        /// <exception cref="OverflowException">The value doesn't fit.</exception>
         public static explicit operator checked uint(BigRat value)
         {
             return checked((uint)(double)value);
         }
+        /// <summary>Checked explicit conversion to <see cref="long"/> (truncates towards zero).</summary>
+        /// <param name="value">The value to convert.</param>
+        /// <exception cref="OverflowException">The value doesn't fit.</exception>
         public static explicit operator checked long(BigRat value)
         {
             long t; toi(value, (uint*)&t, 2 | 0x80000); return t;
         }
+        /// <summary>Checked explicit conversion to <see cref="ulong"/> (truncates towards zero).</summary>
+        /// <param name="value">The value to convert.</param>
+        /// <exception cref="OverflowException">The value doesn't fit.</exception>
         public static explicit operator checked ulong(BigRat value)
         {
             ulong t; toi(value, (uint*)&t, 2 | 0x10000 | 0x80000); return t;
         }
+        /// <summary>Checked explicit conversion to <see cref="nint"/> (truncates towards zero).</summary>
+        /// <param name="value">The value to convert.</param>
+        /// <exception cref="OverflowException">The value doesn't fit.</exception>
         public static explicit operator checked nint(BigRat value)
         {
             nint t; toi(value, (uint*)&t, ((uint)sizeof(nint) >> 2) | 0x80000); return t;
         }
+        /// <summary>Checked explicit conversion to <see cref="nuint"/> (truncates towards zero).</summary>
+        /// <param name="value">The value to convert.</param>
+        /// <exception cref="OverflowException">The value doesn't fit.</exception>
         public static explicit operator checked nuint(BigRat value)
         {
             nuint t; toi(value, (uint*)&t, ((uint)sizeof(nuint) >> 2) | 0x10000 | 0x80000); return t;
         }
 
+        /// <summary>Unary plus (returns the value unchanged).</summary>
+        /// <param name="a">The value.</param>
         public static BigRat operator +(BigRat a)
         {
             return a;
         }
+        /// <summary>Negate a value (exact).</summary>
+        /// <param name="a">The value.</param>
         public static BigRat operator -(BigRat a)
         {
             if (a.p == null) return default;
             fixed (uint* p = a.p) a = new BigRat(p, unchecked((uint)a.p.Length));
             a.p![0] ^= 0x80000000; return a;
         }
+        /// <summary>Add two values (exact, the result is not reduced).</summary>
+        /// <param name="a">The left value.</param>
+        /// <param name="b">The right value.</param>
         public static BigRat operator +(BigRat a, BigRat b)
         {
             if (a.p == null) return b;
@@ -375,6 +477,9 @@ namespace SysWeaver
             var n = (a.p.Length + b.p.Length) * 3; Span<uint> s = n <= maxstack ? stackalloc uint[n] : heap(n);
             fixed (uint* u = a.p, v = b.p, w = s) return add(u, v, w, 0);
         }
+        /// <summary>Subtract two values (exact, the result is not reduced).</summary>
+        /// <param name="a">The left value.</param>
+        /// <param name="b">The right value.</param>
         public static BigRat operator -(BigRat a, BigRat b)
         {
             if (a.p == null) return -b;
@@ -382,12 +487,19 @@ namespace SysWeaver
             var n = (a.p.Length + b.p.Length) * 3; Span<uint> s = n <= maxstack ? stackalloc uint[n] : heap(n);
             fixed (uint* u = a.p, v = b.p, w = s) return add(u, v, w, 0x80000000);
         }
+        /// <summary>Multiply two values (exact, the result is not reduced).</summary>
+        /// <param name="a">The left value.</param>
+        /// <param name="b">The right value.</param>
         public static BigRat operator *(BigRat a, BigRat b)
         {
             if (a.p == null || b.p == null) return default;
             var n = a.p.Length + b.p.Length; Span<uint> s = n <= maxstack ? stackalloc uint[n] : heap(n);
             fixed (uint* u = a.p, v = b.p, w = s) return mul(u, v, w);
         }
+        /// <summary>Divide two values (exact, the result is not reduced).</summary>
+        /// <param name="a">The dividend.</param>
+        /// <param name="b">The divisor.</param>
+        /// <exception cref="DivideByZeroException"><paramref name="b"/> is zero.</exception>
         public static BigRat operator /(BigRat a, BigRat b)
         {
             if (b.p == null) throw new DivideByZeroException();
@@ -395,10 +507,17 @@ namespace SysWeaver
             var n = a.p.Length + b.p.Length; Span<uint> s = n <= maxstack ? stackalloc uint[n] : heap(n);
             fixed (uint* u = a.p, v = b.p, w = s) return div(u, v, w);
         }
+        /// <summary>The remainder of a division (<c>a - Truncate(a / b) * b</c>, the sign follows <paramref name="a"/>).</summary>
+        /// <param name="a">The dividend.</param>
+        /// <param name="b">The divisor.</param>
+        /// <exception cref="DivideByZeroException"><paramref name="b"/> is zero.</exception>
         public static BigRat operator %(BigRat a, BigRat b)
         {
             return a - Truncate(a / b) * b;
         }
+        /// <summary>Add an integer to a value (exact, the result is not reduced).</summary>
+        /// <param name="a">The left value.</param>
+        /// <param name="b">The right value.</param>
         public static BigRat operator +(BigRat a, int b)
         {
             if (a.p == null) return b;
@@ -406,16 +525,26 @@ namespace SysWeaver
             var n = 4 + (a.p.Length + 4) * 3; Span<uint> s = n <= maxstack ? stackalloc uint[n] : heap(n);
             fixed (uint* u = a.p, v = s) { copy(v, b); return add(u, v, v + 4, 0); }
         }
+        /// <summary>Subtract an integer from a value (exact, the result is not reduced).</summary>
+        /// <param name="a">The left value.</param>
+        /// <param name="b">The right value.</param>
         public static BigRat operator -(BigRat a, int b)
         {
             return b != int.MinValue ? a + -b : a - (BigRat)b;
         }
+        /// <summary>Multiply a value by an integer (exact, the result is not reduced).</summary>
+        /// <param name="a">The left value.</param>
+        /// <param name="b">The right value.</param>
         public static BigRat operator *(BigRat a, int b)
         {
             if (a.p == null || b == 0) return default;
             var n = a.p.Length + 8; Span<uint> s = n <= maxstack ? stackalloc uint[n] : heap(n);
             fixed (uint* u = a.p, v = s) { copy(v, b); return mul(u, v, v + 4); }
         }
+        /// <summary>Divide a value by an integer (exact, the result is not reduced).</summary>
+        /// <param name="a">The dividend.</param>
+        /// <param name="b">The divisor.</param>
+        /// <exception cref="DivideByZeroException"><paramref name="b"/> is zero.</exception>
         public static BigRat operator /(BigRat a, int b)
         {
             if (b == 0) throw new DivideByZeroException();
@@ -423,10 +552,17 @@ namespace SysWeaver
             var n = a.p.Length + 8; Span<uint> s = n <= maxstack ? stackalloc uint[n] : heap(n);
             fixed (uint* u = a.p, v = s) { copy(v, b); return div(u, v, v + 4); }
         }
+        /// <summary>The remainder of dividing a value by an integer (<c>a - Truncate(a / b) * b</c>, the sign follows <paramref name="a"/>).</summary>
+        /// <param name="a">The dividend.</param>
+        /// <param name="b">The divisor.</param>
+        /// <exception cref="DivideByZeroException"><paramref name="b"/> is zero.</exception>
         public static BigRat operator %(BigRat a, int b)
         {
             return a - Truncate(a / b) * b;
         }
+        /// <summary>Add a value to an integer (exact, the result is not reduced).</summary>
+        /// <param name="a">The left value.</param>
+        /// <param name="b">The right value.</param>
         public static BigRat operator +(int a, BigRat b)
         {
             if (a == 0) return b;
@@ -434,6 +570,9 @@ namespace SysWeaver
             var n = 4 + (4 + b.p.Length) * 3; Span<uint> s = n <= maxstack ? stackalloc uint[n] : heap(n);
             fixed (uint* u = s, v = b.p) { copy(u, a); return add(u, v, u + 4, 0); }
         }
+        /// <summary>Subtract a value from an integer (exact, the result is not reduced).</summary>
+        /// <param name="a">The left value.</param>
+        /// <param name="b">The right value.</param>
         public static BigRat operator -(int a, BigRat b)
         {
             if (a == 0) return -b;
@@ -441,12 +580,19 @@ namespace SysWeaver
             var n = 4 + (4 + b.p.Length) * 3; Span<uint> s = n <= maxstack ? stackalloc uint[n] : heap(n);
             fixed (uint* u = s, v = b.p) { copy(u, a); return add(u, v, u + 4, 0x80000000); }
         }
+        /// <summary>Multiply an integer by a value (exact, the result is not reduced).</summary>
+        /// <param name="a">The left value.</param>
+        /// <param name="b">The right value.</param>
         public static BigRat operator *(int a, BigRat b)
         {
             if (a == 0 || b.p == null) return default;
             var n = 8 + b.p.Length; Span<uint> s = n <= maxstack ? stackalloc uint[n] : heap(n);
             fixed (uint* u = s, v = b.p) { copy(u, a); return mul(u, v, u + 4); }
         }
+        /// <summary>Divide an integer by a value (exact, the result is not reduced).</summary>
+        /// <param name="a">The dividend.</param>
+        /// <param name="b">The divisor.</param>
+        /// <exception cref="DivideByZeroException"><paramref name="b"/> is zero.</exception>
         public static BigRat operator /(int a, BigRat b)
         {
             if (b.p == null) throw new DivideByZeroException();
@@ -462,88 +608,151 @@ namespace SysWeaver
                 copy(u, a); return div(u, v, u + 4);
             }
         }
+        /// <summary>Increment a value by one.</summary>
+        /// <param name="a">The value.</param>
         public static BigRat operator ++(BigRat a)
         {
             return a + 1;
         }
+        /// <summary>Decrement a value by one.</summary>
+        /// <param name="a">The value.</param>
         public static BigRat operator --(BigRat a)
         {
             return a - 1;
         }
 
+        /// <summary>Check if two values are equal (by value, 1/2 equals 2/4).</summary>
+        /// <param name="a">The left value.</param>
+        /// <param name="b">The right value.</param>
         public static bool operator ==(BigRat a, BigRat b)
         {
             return a.CompareTo(b) == 0;
         }
+        /// <summary>Check if two values are different (by value).</summary>
+        /// <param name="a">The left value.</param>
+        /// <param name="b">The right value.</param>
         public static bool operator !=(BigRat a, BigRat b)
         {
             return a.CompareTo(b) != 0;
         }
+        /// <summary>Check if the left value is less than or equal to the right value.</summary>
+        /// <param name="a">The left value.</param>
+        /// <param name="b">The right value.</param>
         public static bool operator <=(BigRat a, BigRat b)
         {
             return a.CompareTo(b) <= 0;
         }
+        /// <summary>Check if the left value is greater than or equal to the right value.</summary>
+        /// <param name="a">The left value.</param>
+        /// <param name="b">The right value.</param>
         public static bool operator >=(BigRat a, BigRat b)
         {
             return a.CompareTo(b) >= 0;
         }
+        /// <summary>Check if the left value is less than the right value.</summary>
+        /// <param name="a">The left value.</param>
+        /// <param name="b">The right value.</param>
         public static bool operator <(BigRat a, BigRat b)
         {
             return a.CompareTo(b) < 0;
         }
+        /// <summary>Check if the left value is greater than the right value.</summary>
+        /// <param name="a">The left value.</param>
+        /// <param name="b">The right value.</param>
         public static bool operator >(BigRat a, BigRat b)
         {
             return a.CompareTo(b) > 0;
         }
+        /// <summary>Check if a value equals an integer.</summary>
+        /// <param name="a">The left value.</param>
+        /// <param name="b">The right value.</param>
         public static bool operator ==(BigRat a, int b)
         {
             return a.CompareTo(b) == 0;
         }
+        /// <summary>Check if a value differs from an integer.</summary>
+        /// <param name="a">The left value.</param>
+        /// <param name="b">The right value.</param>
         public static bool operator !=(BigRat a, int b)
         {
             return a.CompareTo(b) != 0;
         }
+        /// <summary>Check if a value is less than or equal to an integer.</summary>
+        /// <param name="a">The left value.</param>
+        /// <param name="b">The right value.</param>
         public static bool operator <=(BigRat a, int b)
         {
             return a.CompareTo(b) <= 0;
         }
+        /// <summary>Check if a value is greater than or equal to an integer.</summary>
+        /// <param name="a">The left value.</param>
+        /// <param name="b">The right value.</param>
         public static bool operator >=(BigRat a, int b)
         {
             return a.CompareTo(b) >= 0;
         }
+        /// <summary>Check if a value is less than an integer.</summary>
+        /// <param name="a">The left value.</param>
+        /// <param name="b">The right value.</param>
         public static bool operator <(BigRat a, int b)
         {
             return a.CompareTo(b) < 0;
         }
+        /// <summary>Check if a value is greater than an integer.</summary>
+        /// <param name="a">The left value.</param>
+        /// <param name="b">The right value.</param>
         public static bool operator >(BigRat a, int b)
         {
             return a.CompareTo(b) > 0;
         }
+        /// <summary>Check if an integer equals a value.</summary>
+        /// <param name="a">The left value.</param>
+        /// <param name="b">The right value.</param>
         public static bool operator ==(int a, BigRat b)
         {
             return b.CompareTo(a) == 0;
         }
+        /// <summary>Check if an integer differs from a value.</summary>
+        /// <param name="a">The left value.</param>
+        /// <param name="b">The right value.</param>
         public static bool operator !=(int a, BigRat b)
         {
             return b.CompareTo(a) != 0;
         }
+        /// <summary>Check if an integer is less than or equal to a value.</summary>
+        /// <param name="a">The left value.</param>
+        /// <param name="b">The right value.</param>
         public static bool operator <=(int a, BigRat b)
         {
             return b.CompareTo(a) >= 0;
         }
+        /// <summary>Check if an integer is greater than or equal to a value.</summary>
+        /// <param name="a">The left value.</param>
+        /// <param name="b">The right value.</param>
         public static bool operator >=(int a, BigRat b)
         {
             return b.CompareTo(a) <= 0;
         }
+        /// <summary>Check if an integer is less than a value.</summary>
+        /// <param name="a">The left value.</param>
+        /// <param name="b">The right value.</param>
         public static bool operator <(int a, BigRat b)
         {
             return b.CompareTo(a) > 0;
         }
+        /// <summary>Check if an integer is greater than a value.</summary>
+        /// <param name="a">The left value.</param>
+        /// <param name="b">The right value.</param>
         public static bool operator >(int a, BigRat b)
         {
             return b.CompareTo(a) < 0;
         }
 
+        /// <summary>
+        /// Get the sign of a value.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>-1 if negative, 0 if zero, 1 if positive.</returns>
         public static int Sign(BigRat value)
         {
             return value.p == null ? 0 : (value.p[0] & 0x80000000) != 0 ? -1 : +1;
@@ -596,38 +805,93 @@ namespace SysWeaver
                 }
             }
         }
+        /// <summary>
+        /// Get the absolute value.
+        /// </summary>
+        /// <param name="a">The value.</param>
+        /// <returns>The value without its sign.</returns>
         public static BigRat Abs(BigRat a)
         {
             return Sign(a) >= 0 ? a : -a;
         }
+        /// <summary>
+        /// Get the smaller of two values.
+        /// </summary>
+        /// <param name="x">The first value.</param>
+        /// <param name="y">The second value.</param>
+        /// <returns>The smaller value (<paramref name="x"/> if they are equal).</returns>
         public static BigRat Min(BigRat x, BigRat y)
         {
             return x.CompareTo(y) <= 0 ? x : y;
         }
+        /// <summary>
+        /// Get the larger of two values.
+        /// </summary>
+        /// <param name="x">The first value.</param>
+        /// <param name="y">The second value.</param>
+        /// <returns>The larger value (<paramref name="x"/> if they are equal).</returns>
         public static BigRat Max(BigRat x, BigRat y)
         {
             return x.CompareTo(y) >= 0 ? x : y;
         }
+        /// <summary>
+        /// Get the value with the larger absolute value.
+        /// </summary>
+        /// <param name="x">The first value.</param>
+        /// <param name="y">The second value.</param>
+        /// <returns>The value with the larger magnitude (<paramref name="x"/> if they are equal).</returns>
         public static BigRat MaxMagnitude(BigRat x, BigRat y)
         {
             return Abs(x).CompareTo(Abs(y)) >= 0 ? x : y; //todo: acmp
         }
+        /// <summary>
+        /// Get the value with the smaller absolute value.
+        /// </summary>
+        /// <param name="x">The first value.</param>
+        /// <param name="y">The second value.</param>
+        /// <returns>The value with the smaller magnitude (<paramref name="x"/> if they are equal).</returns>
         public static BigRat MinMagnitude(BigRat x, BigRat y)
         {
             return Abs(x).CompareTo(Abs(y)) <= 0 ? x : y; //todo: acmp
         }
+        /// <summary>
+        /// Same as <see cref="MaxMagnitude(BigRat, BigRat)"/> (there are no NaN values).
+        /// </summary>
+        /// <param name="x">The first value.</param>
+        /// <param name="y">The second value.</param>
+        /// <returns>The value with the larger magnitude.</returns>
         public static BigRat MaxMagnitudeNumber(BigRat x, BigRat y)
         {
             return MaxMagnitude(x, y); // IEEE 754:2019 does not propagate NaN inputs back 
         }
+        /// <summary>
+        /// Same as <see cref="MinMagnitude(BigRat, BigRat)"/> (there are no NaN values).
+        /// </summary>
+        /// <param name="x">The first value.</param>
+        /// <param name="y">The second value.</param>
+        /// <returns>The value with the smaller magnitude.</returns>
         public static BigRat MinMagnitudeNumber(BigRat x, BigRat y)
         {
             return MinMagnitude(x, y); // IEEE 754:2019 does not propagate NaN inputs back 
         }
+        /// <summary>
+        /// Get a value with the magnitude of <paramref name="value"/> and the sign of <paramref name="sign"/>.
+        /// </summary>
+        /// <param name="value">The value that provides the magnitude.</param>
+        /// <param name="sign">The value that provides the sign (zero counts as positive).</param>
+        /// <returns>The value with the sign of <paramref name="sign"/> (zero is returned as is).</returns>
         public static BigRat CopySign(BigRat value, BigRat sign)
         {
             int a, b; return (a = Sign(value)) != 0 && (b = Sign(sign) < 0 ? -1 : +1) != 0 && a != b ? -value : value;
         }
+        /// <summary>
+        /// Limit a value to a range.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <param name="min">The lower limit.</param>
+        /// <param name="max">The upper limit.</param>
+        /// <returns><paramref name="min"/> if the value is below it, <paramref name="max"/> if above it, else the value.</returns>
+        /// <exception cref="ArgumentException"><paramref name="min"/> is greater than <paramref name="max"/>.</exception>
         public static BigRat Clamp(BigRat value, BigRat min, BigRat max)
         {
             if (min > max) throw new ArgumentException("min must be less than or equal to max", nameof(min));
@@ -681,10 +945,23 @@ namespace SysWeaver
             // if (value.p == null) return value; if(digits == 0) return Truncate(value);
             var e = Pow10(digits); value = Round(value * e) / e; return value;
         }
+        /// <summary>
+        /// Round to an integer using the given midpoint rounding mode.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <param name="mode">How midpoints are rounded.</param>
+        /// <returns>The rounded value.</returns>
         public static BigRat Round(BigRat value, MidpointRounding mode)
         {
             return Round(value, 0, mode);
         }
+        /// <summary>
+        /// Round to a number of decimal digits using the given midpoint rounding mode.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <param name="digits">The number of decimal digits after the decimal point, may be negative.</param>
+        /// <param name="mode">How midpoints are rounded.</param>
+        /// <returns>The rounded value.</returns>
         public static BigRat Round(BigRat value, int digits, MidpointRounding mode)
         {
             var p = Pow10(digits); value *= p;
@@ -807,6 +1084,10 @@ namespace SysWeaver
                 return new BigRat(u, 3 + v[0]);
             }
         }
+        /// <summary>Compute the square root (approximation, rounded to 32 digits).</summary>
+        /// <param name="x">The value, must not be negative.</param>
+        /// <returns>The square root of <paramref name="x"/>.</returns>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="x"/> is negative.</exception>
         public static BigRat Sqrt(BigRat x)
         {
             return Sqrt(x, 032);
@@ -823,6 +1104,9 @@ namespace SysWeaver
             if (x <= 0) { if (x == 0) return default; throw new ArgumentOutOfRangeException(nameof(x), "The value must not be negative"); }
             x = sqrt(x, base2(abs(digits))); return digits >= 0 ? Round(x, digits) : x;
         }
+        /// <summary>Compute the cube root (approximation, rounded to 32 digits), negative values give a negative result.</summary>
+        /// <param name="x">The value.</param>
+        /// <returns>The cube root of <paramref name="x"/>.</returns>
         public static BigRat Cbrt(BigRat x)
         {
             return Cbrt(x, 032);
@@ -837,6 +1121,11 @@ namespace SysWeaver
         {
             return RootN(x, 3, digits);
         }
+        /// <summary>Compute the n:th root (approximation, rounded to 32 digits).</summary>
+        /// <param name="x">The value, may only be negative if <paramref name="n"/> is odd (the result is then negative).</param>
+        /// <param name="n">The root, must not be zero (a negative value computes 1 / root).</param>
+        /// <returns>The n:th root of <paramref name="x"/>.</returns>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="n"/> is zero, or <paramref name="x"/> is negative and <paramref name="n"/> is even.</exception>
         public static BigRat RootN(BigRat x, int n)
         {
             return RootN(x, n, 032);
@@ -858,14 +1147,26 @@ namespace SysWeaver
                 return -Pow(-x, new BigRat(1, n), digits);
             return Pow(x, new BigRat(1, n), digits);
         }
+        /// <summary>Compute sqrt(x * x + y * y) (approximation, rounded to 32 digits).</summary>
+        /// <param name="x">The first value.</param>
+        /// <param name="y">The second value.</param>
+        /// <returns>The length of the hypotenuse.</returns>
         public static BigRat Hypot(BigRat x, BigRat y)
         {
             return Hypot(x, y, 032);
         }
+        /// <summary>Compute sqrt(x * x + y * y) (approximation).</summary>
+        /// <param name="x">The first value.</param>
+        /// <param name="y">The second value.</param>
+        /// <param name="digits">The number of decimal digits to round the result to, see <see cref="BigRat"/>.</param>
+        /// <returns>The length of the hypotenuse.</returns>
         public static BigRat Hypot(BigRat x, BigRat y, int digits)
         {
             return Sqrt(x * x + y * y, digits);
         }
+        /// <summary>Compute e^x (approximation, 32 digits, see <see cref="Exp(BigRat, int)"/>).</summary>
+        /// <param name="x">The exponent.</param>
+        /// <returns>e raised to the power of <paramref name="x"/>.</returns>
         public static BigRat Exp(BigRat x)
         {
             return Exp(x, 032);
@@ -882,22 +1183,40 @@ namespace SysWeaver
             x = exp(x, base2(abs(digits)));
             return digits >= 0 ? Round(x, digits - ILog10(x)) : x;
         }
+        /// <summary>Compute 10^x (approximation, rounded to 32 digits).</summary>
+        /// <param name="x">The exponent.</param>
+        /// <returns>10 raised to the power of <paramref name="x"/>.</returns>
         public static BigRat Exp10(BigRat x)
         {
             return Exp10(x, 032);
         }
+        /// <summary>Compute 10^x (approximation, computed using <see cref="Pow(BigRat, BigRat, int)"/>).</summary>
+        /// <param name="x">The exponent.</param>
+        /// <param name="digits">The number of decimal digits to round the result to, see <see cref="BigRat"/>.</param>
+        /// <returns>10 raised to the power of <paramref name="x"/>.</returns>
         public static BigRat Exp10(BigRat x, int digits)
         {
             return Pow(10, x, digits); //todo: test
         }
+        /// <summary>Compute 2^x (approximation, rounded to 32 digits).</summary>
+        /// <param name="x">The exponent.</param>
+        /// <returns>2 raised to the power of <paramref name="x"/>.</returns>
         public static BigRat Exp2(BigRat x)
         {
             return Exp2(x, 032);
         }
+        /// <summary>Compute 2^x (approximation, computed using <see cref="Pow(BigRat, BigRat, int)"/>).</summary>
+        /// <param name="x">The exponent.</param>
+        /// <param name="digits">The number of decimal digits to round the result to, see <see cref="BigRat"/>.</param>
+        /// <returns>2 raised to the power of <paramref name="x"/>.</returns>
         public static BigRat Exp2(BigRat x, int digits)
         {
             return Pow(2, x, digits); //todo: test
         }
+        /// <summary>Compute the natural logarithm (approximation, rounded to 32 digits).</summary>
+        /// <param name="x">The value, must be positive.</param>
+        /// <returns>The natural logarithm of <paramref name="x"/>.</returns>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="x"/> is zero or negative.</exception>
         public static BigRat Log(BigRat x)
         {
             return Log(x, 032);
@@ -915,6 +1234,11 @@ namespace SysWeaver
             if (x <= 0) throw new ArgumentOutOfRangeException(nameof(x), "The value must be positive");
             x = log(x, base2(abs(digits))); return digits >= 0 ? Round(x, digits) : x;
         }
+        /// <summary>Compute the logarithm in a base (approximation, rounded to 32 digits).</summary>
+        /// <param name="x">The value, must be positive (except for the special cases of the base).</param>
+        /// <param name="newBase">The base, must not be negative or one.</param>
+        /// <returns>The logarithm of <paramref name="x"/> in the base <paramref name="newBase"/>.</returns>
+        /// <exception cref="ArgumentOutOfRangeException">The base or <paramref name="x"/> is out of range, see <see cref="Log(BigRat, BigRat, int)"/>.</exception>
         public static BigRat Log(BigRat x, BigRat newBase)
         {
             return Log(x, newBase, 032);
@@ -935,84 +1259,147 @@ namespace SysWeaver
             var p = base2(abs(digits)); x = log(x, p) / log(newBase, p);
             return digits >= 0 ? Round(x, digits) : x;
         }
+        /// <summary>Compute the base 2 logarithm (approximation, rounded to 32 digits).</summary>
+        /// <param name="x">The value, must be positive.</param>
+        /// <returns>The base 2 logarithm of <paramref name="x"/>.</returns>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="x"/> is zero or negative.</exception>
         public static BigRat Log2(BigRat x)
         {
             return Log2(x, 032);
         }
+        /// <summary>Compute the base 2 logarithm (approximation).</summary>
+        /// <param name="x">The value, must be positive.</param>
+        /// <param name="digits">The number of decimal digits to round the result to, see <see cref="BigRat"/>.</param>
+        /// <returns>The base 2 logarithm of <paramref name="x"/>.</returns>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="x"/> is zero or negative.</exception>
         public static BigRat Log2(BigRat x, int digits)
         {
             if (x <= 0) throw new ArgumentOutOfRangeException(nameof(x), "The value must be positive");
             x = log2(x, base2(abs(digits)));
             return digits >= 0 ? Round(x, digits) : x;
         }
+        /// <summary>Compute the base 10 logarithm (approximation, rounded to 32 digits).</summary>
+        /// <param name="x">The value, must be positive.</param>
+        /// <returns>The base 10 logarithm of <paramref name="x"/>.</returns>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="x"/> is zero or negative.</exception>
         public static BigRat Log10(BigRat x)
         {
             return Log10(x, 032);
         }
+        /// <summary>Compute the base 10 logarithm (approximation).</summary>
+        /// <param name="x">The value, must be positive.</param>
+        /// <param name="digits">The number of decimal digits to round the result to, see <see cref="BigRat"/>.</param>
+        /// <returns>The base 10 logarithm of <paramref name="x"/>.</returns>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="x"/> is zero or negative.</exception>
         public static BigRat Log10(BigRat x, int digits)
         {
             if (x <= 0) throw new ArgumentOutOfRangeException(nameof(x), "The value must be positive");
             var b = base2(abs(digits)); x = log2(x, b) / log2(10, b); //todo: test 
             return digits >= 0 ? Round(x, digits) : x;
         }
+        /// <summary>Get the constant pi (approximation, rounded to 32 digits).</summary>
+        /// <returns>The value of pi.</returns>
         public static BigRat Pi()
         {
             return Pi(032);
         }
+        /// <summary>Get the constant pi (approximation).</summary>
+        /// <param name="digits">The number of decimal digits to round the result to, see <see cref="BigRat"/>.</param>
+        /// <returns>The value of pi.</returns>
         public static BigRat Pi(int digits)
         {
             var x = pi(base2(abs(digits)));
             return digits >= 0 ? Round(x, digits) : x;
         }
+        /// <summary>Get the constant tau (2 * pi, approximation, rounded to 32 digits).</summary>
+        /// <returns>The value of tau.</returns>
         public static BigRat Tau()
         {
             return Tau(032);
         }
+        /// <summary>Get the constant tau (2 * pi, approximation).</summary>
+        /// <param name="digits">The number of decimal digits to round the result to, see <see cref="BigRat"/>.</param>
+        /// <returns>The value of tau.</returns>
         public static BigRat Tau(int digits)
         {
             var x = pi(base2(abs(digits))) * 2;
             return digits >= 0 ? Round(x, digits) : x;
         }
+        /// <summary>Get Euler's number e (approximation, rounded to 32 digits).</summary>
+        /// <returns>The value of e.</returns>
         public static BigRat E()
         {
             return E(32);
         }
+        /// <summary>Get Euler's number e (approximation).</summary>
+        /// <param name="digits">The number of decimal digits to round the result to, see <see cref="BigRat"/>.</param>
+        /// <returns>The value of e.</returns>
         public static BigRat E(int digits)
         {
             var x = exp(1, base2(abs(digits)));
             return digits >= 0 ? Round(x, digits) : x;
         }
+        /// <summary>Compute the sine (approximation, rounded to 32 digits).</summary>
+        /// <param name="x">The angle in radians.</param>
+        /// <returns>The sine of <paramref name="x"/>.</returns>
         public static BigRat Sin(BigRat x)
         {
             return Sin(x, 032);
         }
+        /// <summary>Compute the sine (approximation).</summary>
+        /// <param name="x">The angle in radians.</param>
+        /// <param name="digits">The number of decimal digits to round the result to, see <see cref="BigRat"/>.</param>
+        /// <returns>The sine of <paramref name="x"/>.</returns>
         public static BigRat Sin(BigRat x, int digits)
         {
             x = sin(x, base2(abs(digits)), false);
             return digits >= 0 ? Round(x, digits) : x;
         }
+        /// <summary>Compute the cosine (approximation, rounded to 32 digits).</summary>
+        /// <param name="x">The angle in radians.</param>
+        /// <returns>The cosine of <paramref name="x"/>.</returns>
         public static BigRat Cos(BigRat x)
         {
             return Cos(x, 032);
         }
+        /// <summary>Compute the cosine (approximation).</summary>
+        /// <param name="x">The angle in radians.</param>
+        /// <param name="digits">The number of decimal digits to round the result to, see <see cref="BigRat"/>.</param>
+        /// <returns>The cosine of <paramref name="x"/>.</returns>
         public static BigRat Cos(BigRat x, int digits)
         {
             x = sin(x, base2(abs(digits)), true);
             return digits >= 0 ? Round(x, digits) : x;
         }
+        /// <summary>Compute the tangent (approximation, rounded to 32 digits).</summary>
+        /// <param name="x">The angle in radians.</param>
+        /// <returns>The tangent of <paramref name="x"/>.</returns>
         public static BigRat Tan(BigRat x)
         {
             return Tan(x, 032);
         }
+        /// <summary>Compute the tangent (approximation, sin / cos).</summary>
+        /// <param name="x">The angle in radians.</param>
+        /// <param name="digits">The number of decimal digits to round the result to, see <see cref="BigRat"/>.</param>
+        /// <returns>The tangent of <paramref name="x"/>.</returns>
         public static BigRat Tan(BigRat x, int digits)
         {
             var d = -abs(digits); x = Sin(x, d) / Cos(x, d); //todo: test alg 
             return digits >= 0 ? Round(x, digits) : x;
         }
+        /// <summary>Compute the arc sine (approximation, rounded to 32 digits).</summary>
+        /// <param name="x">The value, in the range [-1, 1].</param>
+        /// <returns>The angle in radians.</returns>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="x"/> is outside [-1, 1].</exception>
         public static BigRat Asin(BigRat x)
         {
             return Asin(x, 032);
         }
+        /// <summary>Compute the arc sine (approximation).</summary>
+        /// <param name="x">The value, in the range [-1, 1].</param>
+        /// <param name="digits">The number of decimal digits to round the result to, see <see cref="BigRat"/>.</param>
+        /// <returns>The angle in radians.</returns>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="x"/> is outside [-1, 1].</exception>
         public static BigRat Asin(BigRat x, int digits)
         {
             var t = base2(abs(digits)); var a = 1 - x * x;
@@ -1021,10 +1408,19 @@ namespace SysWeaver
             else throw new ArgumentOutOfRangeException(nameof(x), "The value must be in the [-1, 1] range");
             return digits >= 0 ? Round(x, digits) : x;
         }
+        /// <summary>Compute the arc cosine (approximation, rounded to 32 digits).</summary>
+        /// <param name="x">The value, in the range [-1, 1].</param>
+        /// <returns>The angle in radians.</returns>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="x"/> is outside [-1, 1].</exception>
         public static BigRat Acos(BigRat x)
         {
             return Acos(x, 032);
         }
+        /// <summary>Compute the arc cosine (approximation).</summary>
+        /// <param name="x">The value, in the range [-1, 1].</param>
+        /// <param name="digits">The number of decimal digits to round the result to, see <see cref="BigRat"/>.</param>
+        /// <returns>The angle in radians.</returns>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="x"/> is outside [-1, 1].</exception>
         public static BigRat Acos(BigRat x, int digits)
         {
             var t = base2(abs(digits)); var a = 1 - x; var b = 1 + x;
@@ -1032,19 +1428,37 @@ namespace SysWeaver
             if (b > 0) x = 2 * atan(sqrt(a / b, t), t); else x = pi(t);
             return digits >= 0 ? Round(x, digits) : x;
         }
+        /// <summary>Compute the arc tangent (approximation, rounded to 32 digits).</summary>
+        /// <param name="x">The value.</param>
+        /// <returns>The angle in radians.</returns>
         public static BigRat Atan(BigRat x)
         {
             return Atan(x, 032);
         }
+        /// <summary>Compute the arc tangent (approximation).</summary>
+        /// <param name="x">The value.</param>
+        /// <param name="digits">The number of decimal digits to round the result to, see <see cref="BigRat"/>.</param>
+        /// <returns>The angle in radians.</returns>
         public static BigRat Atan(BigRat x, int digits)
         {
             x = atan(x, base2(abs(digits)));
             return digits >= 0 ? Round(x, digits) : x;
         }
+        /// <summary>Compute the angle of the point (x, y) (approximation, rounded to 32 digits).</summary>
+        /// <param name="y">The y coordinate.</param>
+        /// <param name="x">The x coordinate.</param>
+        /// <returns>The angle in radians, in the range (-pi, pi].</returns>
+        /// <exception cref="ArgumentException">Both <paramref name="x"/> and <paramref name="y"/> are zero.</exception>
         public static BigRat Atan2(BigRat y, BigRat x)
         {
             return Atan2(y, x, 032);
         }
+        /// <summary>Compute the angle of the point (x, y) (approximation).</summary>
+        /// <param name="y">The y coordinate.</param>
+        /// <param name="x">The x coordinate.</param>
+        /// <param name="digits">The number of decimal digits to round the result to, see <see cref="BigRat"/>.</param>
+        /// <returns>The angle in radians, in the range (-pi, pi].</returns>
+        /// <exception cref="ArgumentException">Both <paramref name="x"/> and <paramref name="y"/> are zero.</exception>
         public static BigRat Atan2(BigRat y, BigRat x, int digits)
         {
             x = atan2(y, x, base2(abs(digits)));
@@ -1057,154 +1471,274 @@ namespace SysWeaver
                 else throw new ArgumentException("Atan2 is undefined when both x and y are zero"); //x == y == 0
             }
         }
+        /// <summary>Compute the inverse hyperbolic cosine (approximation, rounded to 32 digits).</summary>
+        /// <param name="x">The value, must be at least 1.</param>
+        /// <returns>The inverse hyperbolic cosine of <paramref name="x"/>.</returns>
         public static BigRat Acosh(BigRat x)
         {
             return Acosh(x, 032);
         }
+        /// <summary>Compute the inverse hyperbolic cosine (approximation, ln(x + sqrt(x * x - 1))).</summary>
+        /// <param name="x">The value, must be at least 1.</param>
+        /// <param name="digits">The number of decimal digits to round the result to, see <see cref="BigRat"/>.</param>
+        /// <returns>The inverse hyperbolic cosine of <paramref name="x"/>.</returns>
         public static BigRat Acosh(BigRat x, int digits)
         {
             var d = -abs(digits); x = Log(x + Sqrt(x * x - 1, d), d); //todo: test
             return digits >= 0 ? Round(x, digits) : x;
         }
+        /// <summary>Compute the inverse hyperbolic sine (approximation, rounded to 32 digits).</summary>
+        /// <param name="x">The value.</param>
+        /// <returns>The inverse hyperbolic sine of <paramref name="x"/>.</returns>
         public static BigRat Asinh(BigRat x)
         {
             return Asinh(x, 032);
         }
+        /// <summary>Compute the inverse hyperbolic sine (approximation, ln(x + sqrt(x * x + 1))).</summary>
+        /// <param name="x">The value.</param>
+        /// <param name="digits">The number of decimal digits to round the result to, see <see cref="BigRat"/>.</param>
+        /// <returns>The inverse hyperbolic sine of <paramref name="x"/>.</returns>
         public static BigRat Asinh(BigRat x, int digits)
         {
             var d = -abs(digits); x = Log(x + Sqrt(x * x + 1, d), d); //todo: test
             return digits >= 0 ? Round(x, digits) : x;
         }
+        /// <summary>Compute the inverse hyperbolic tangent (approximation, rounded to 32 digits).</summary>
+        /// <param name="x">The value, must be in the range (-1, 1).</param>
+        /// <returns>The inverse hyperbolic tangent of <paramref name="x"/>.</returns>
         public static BigRat Atanh(BigRat x)
         {
             return Atanh(x, 032);
         }
+        /// <summary>Compute the inverse hyperbolic tangent (approximation, ln((1 + x) / (1 - x)) / 2).</summary>
+        /// <param name="x">The value, must be in the range (-1, 1).</param>
+        /// <param name="digits">The number of decimal digits to round the result to, see <see cref="BigRat"/>.</param>
+        /// <returns>The inverse hyperbolic tangent of <paramref name="x"/>.</returns>
         public static BigRat Atanh(BigRat x, int digits)
         {
             var d = -abs(digits); x = Log((1 + x) / (1 - x), d) / 2; //todo: test
             return digits >= 0 ? Round(x, digits) : x;
         }
+        /// <summary>Compute the hyperbolic cosine (approximation, rounded to 32 digits).</summary>
+        /// <param name="x">The value.</param>
+        /// <returns>The hyperbolic cosine of <paramref name="x"/>.</returns>
         public static BigRat Cosh(BigRat x)
         {
             return Cosh(x, 032);
         }
+        /// <summary>Compute the hyperbolic cosine (approximation, (e^x + e^-x) / 2).</summary>
+        /// <param name="x">The value.</param>
+        /// <param name="digits">The number of decimal digits to round the result to, see <see cref="BigRat"/>.</param>
+        /// <returns>The hyperbolic cosine of <paramref name="x"/>.</returns>
         public static BigRat Cosh(BigRat x, int digits)
         {
             var d = -abs(digits); x = (Exp(x, d) + Exp(-x, d)) / 2; //todo: test
             return digits >= 0 ? Round(x, digits) : x;
         }
+        /// <summary>Compute the hyperbolic sine (approximation, (e^x - e^-x) / 2).</summary>
+        /// <param name="x">The value.</param>
+        /// <param name="digits">The number of decimal digits to round the result to, see <see cref="BigRat"/>.</param>
+        /// <returns>The hyperbolic sine of <paramref name="x"/>.</returns>
         public static BigRat Sinh(BigRat x, int digits)
         {
             var d = -abs(digits); x = (Exp(x, d) - Exp(-x, d)) / 2; //todo: test
             return digits >= 0 ? Round(x, digits) : x;
         }
+        /// <summary>Compute the hyperbolic sine (approximation, rounded to 32 digits).</summary>
+        /// <param name="x">The value.</param>
+        /// <returns>The hyperbolic sine of <paramref name="x"/>.</returns>
         public static BigRat Sinh(BigRat x)
         {
             return Sinh(x, 032);
         }
+        /// <summary>Compute the hyperbolic tangent (approximation, rounded to 32 digits).</summary>
+        /// <param name="x">The value.</param>
+        /// <returns>The hyperbolic tangent of <paramref name="x"/>.</returns>
         public static BigRat Tanh(BigRat x)
         {
             return Tanh(x, 032);
         }
+        /// <summary>Compute the hyperbolic tangent (approximation).</summary>
+        /// <param name="x">The value.</param>
+        /// <param name="digits">The number of decimal digits to round the result to, see <see cref="BigRat"/>.</param>
+        /// <returns>The hyperbolic tangent of <paramref name="x"/>.</returns>
         public static BigRat Tanh(BigRat x, int digits)
         {
             var d = -abs(digits); x = 1 - 2 / (Exp(x * 2, d) + 1); //todo: test
             return digits >= 0 ? Round(x, digits) : x;
         }
+        /// <summary>Compute the arc cosine divided by pi (approximation, rounded to 32 digits).</summary>
+        /// <param name="x">The value, in the range [-1, 1].</param>
+        /// <returns>The angle in half turns (radians / pi).</returns>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="x"/> is outside [-1, 1].</exception>
         public static BigRat AcosPi(BigRat x)
         {
             return AcosPi(x, 032);
         }
+        /// <summary>Compute the arc cosine divided by pi (approximation).</summary>
+        /// <param name="x">The value, in the range [-1, 1].</param>
+        /// <param name="digits">The number of decimal digits to round the result to, see <see cref="BigRat"/>.</param>
+        /// <returns>The angle in half turns (radians / pi).</returns>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="x"/> is outside [-1, 1].</exception>
         public static BigRat AcosPi(BigRat x, int digits)
         {
             var d = -abs(digits); x = Acos(x, d) / Pi(d); //todo: test
             return digits >= 0 ? Round(x, digits) : x;
         }
+        /// <summary>Compute the arc sine divided by pi (approximation, rounded to 32 digits).</summary>
+        /// <param name="x">The value, in the range [-1, 1].</param>
+        /// <returns>The angle in half turns (radians / pi).</returns>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="x"/> is outside [-1, 1].</exception>
         public static BigRat AsinPi(BigRat x)
         {
             return AsinPi(x, 032);
         }
+        /// <summary>Compute the arc sine divided by pi (approximation).</summary>
+        /// <param name="x">The value, in the range [-1, 1].</param>
+        /// <param name="digits">The number of decimal digits to round the result to, see <see cref="BigRat"/>.</param>
+        /// <returns>The angle in half turns (radians / pi).</returns>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="x"/> is outside [-1, 1].</exception>
         public static BigRat AsinPi(BigRat x, int digits)
         {
             var d = -abs(digits); x = Asin(x, d) / Pi(d); //todo: test
             return digits >= 0 ? Round(x, digits) : x;
         }
+        /// <summary>Compute the arc tangent divided by pi (approximation, rounded to 32 digits).</summary>
+        /// <param name="x">The value.</param>
+        /// <returns>The angle in half turns (radians / pi).</returns>
         public static BigRat AtanPi(BigRat x)
         {
             return AtanPi(x, 032);
         }
+        /// <summary>Compute the arc tangent divided by pi (approximation).</summary>
+        /// <param name="x">The value.</param>
+        /// <param name="digits">The number of decimal digits to round the result to, see <see cref="BigRat"/>.</param>
+        /// <returns>The angle in half turns (radians / pi).</returns>
         public static BigRat AtanPi(BigRat x, int digits)
         {
             var d = -abs(digits); x = Atan(x, d) / Pi(d); //todo: test
             return digits >= 0 ? Round(x, digits) : x;
         }
+        /// <summary>Compute the cosine of x * pi (approximation, rounded to 32 digits).</summary>
+        /// <param name="x">The angle in half turns (radians / pi).</param>
+        /// <returns>The cosine of <paramref name="x"/> * pi.</returns>
         public static BigRat CosPi(BigRat x)
         {
             return CosPi(x, 032);
         }
+        /// <summary>Compute the cosine of x * pi (approximation).</summary>
+        /// <param name="x">The angle in half turns (radians / pi).</param>
+        /// <param name="digits">The number of decimal digits to round the result to, see <see cref="BigRat"/>.</param>
+        /// <returns>The cosine of <paramref name="x"/> * pi.</returns>
         public static BigRat CosPi(BigRat x, int digits)
         {
             var d = -abs(digits); x = Cos(x * Pi(d), d); //todo: test
             return digits >= 0 ? Round(x, digits) : x;
         }
+        /// <summary>Compute the sine of x * pi (approximation, rounded to 32 digits).</summary>
+        /// <param name="x">The angle in half turns (radians / pi).</param>
+        /// <returns>The sine of <paramref name="x"/> * pi.</returns>
         public static BigRat SinPi(BigRat x)
         {
             return SinPi(x, 032);
         }
+        /// <summary>Compute the sine of x * pi (approximation).</summary>
+        /// <param name="x">The angle in half turns (radians / pi).</param>
+        /// <param name="digits">The number of decimal digits to round the result to, see <see cref="BigRat"/>.</param>
+        /// <returns>The sine of <paramref name="x"/> * pi.</returns>
         public static BigRat SinPi(BigRat x, int digits)
         {
             var d = -abs(digits); x = Sin(x * Pi(d), d); //todo: test
             return digits >= 0 ? Round(x, digits) : x;
         }
+        /// <summary>Compute the tangent of x * pi (approximation, rounded to 32 digits).</summary>
+        /// <param name="x">The angle in half turns (radians / pi).</param>
+        /// <returns>The tangent of <paramref name="x"/> * pi.</returns>
         public static BigRat TanPi(BigRat x)
         {
             return TanPi(x, 032);
         }
+        /// <summary>Compute the tangent of x * pi (approximation).</summary>
+        /// <param name="x">The angle in half turns (radians / pi).</param>
+        /// <param name="digits">The number of decimal digits to round the result to, see <see cref="BigRat"/>.</param>
+        /// <returns>The tangent of <paramref name="x"/> * pi.</returns>
         public static BigRat TanPi(BigRat x, int digits)
         {
             var d = -abs(digits); x = Tan(x * Pi(d), d); //todo: test
             return digits >= 0 ? Round(x, digits) : x;
         }
+        /// <summary>Compute the sine and cosine (approximation, rounded to 32 digits).</summary>
+        /// <param name="x">The angle in radians.</param>
+        /// <returns>The sine and the cosine of <paramref name="x"/>.</returns>
         public static (BigRat Sin, BigRat Cos) SinCos(BigRat x)
         {
             return SinCos(x, 032);
         }
+        /// <summary>Compute the sine and cosine (approximation).</summary>
+        /// <param name="x">The angle in radians.</param>
+        /// <param name="digits">The number of decimal digits to round the results to, see <see cref="BigRat"/>.</param>
+        /// <returns>The sine and the cosine of <paramref name="x"/>.</returns>
         public static (BigRat Sin, BigRat Cos) SinCos(BigRat x, int digits)
         {
             return (Sin(x, digits), Cos(x, digits));
         }
+        /// <summary>Compute the sine and cosine of x * pi (approximation, rounded to 32 digits).</summary>
+        /// <param name="x">The angle in half turns (radians / pi).</param>
+        /// <returns>The sine and the cosine of <paramref name="x"/> * pi.</returns>
         public static (BigRat SinPi, BigRat CosPi) SinCosPi(BigRat x)
         {
             return SinCosPi(x, 032);
         }
+        /// <summary>Compute the sine and cosine of x * pi (approximation).</summary>
+        /// <param name="x">The angle in half turns (radians / pi).</param>
+        /// <param name="digits">The number of decimal digits to round the results to, see <see cref="BigRat"/>.</param>
+        /// <returns>The sine and the cosine of <paramref name="x"/> * pi.</returns>
         public static (BigRat SinPi, BigRat CosPi) SinCosPi(BigRat x, int digits)
         {
             return (SinPi(x, digits), CosPi(x, digits));
         }
 
+        /// <summary>Check if a value is zero.</summary>
+        /// <param name="value">The value.</param>
+        /// <returns>True if the value is zero.</returns>
         public static bool IsZero(BigRat value)
         {
             return value.p == null;
         }
+        /// <summary>Check if a value is negative.</summary>
+        /// <param name="value">The value.</param>
+        /// <returns>True if the value is less than zero.</returns>
         public static bool IsNegative(BigRat value)
         {
             return value.p != null && (value.p[0] & 0x80000000) != 0;
         }
+        /// <summary>Check if a value is positive or zero (matches the generic math definition, zero is positive).</summary>
+        /// <param name="value">The value.</param>
+        /// <returns>True if the value is not negative.</returns>
         public static bool IsPositive(BigRat value)
         {
             return value.p == null || (value.p[0] & 0x80000000) == 0;
         }
+        /// <summary>Check if a value is an integer (ex: 4/2 is, 1/2 is not).</summary>
+        /// <param name="value">The value.</param>
+        /// <returns>True if the value has no fractional part.</returns>
         public static bool IsInteger(BigRat value)
         {
             // return Truncate(value) == value;
             return value.p == null || mod(value, 4).p != null;
         }
+        /// <summary>Check if a value is an even integer (zero is even).</summary>
+        /// <param name="value">The value.</param>
+        /// <returns>True if the value is an integer and even.</returns>
         public static bool IsEvenInteger(BigRat value)
         {
             //return value.p == null || IsInteger(value) && (Normalize(value).p![1] & 1) == 0;
             if (value.p == null) return true;
             var a = mod(value, 5); return a.p != null ? (a.p[1] & 1) == 0 : false;
         }
+        /// <summary>Check if a value is an odd integer.</summary>
+        /// <param name="value">The value.</param>
+        /// <returns>True if the value is an integer and odd.</returns>
         public static bool IsOddInteger(BigRat value)
         {
             //return value.p != null && IsInteger(value) && (Normalize(value).p![1] & 1) == 1;
@@ -1282,25 +1816,41 @@ namespace SysWeaver
                 return unchecked((int)h);
             }
         }
+        /// <summary>Check if an object is a <see cref="BigRat"/> with the same value.</summary>
+        /// <param name="value">The object to compare with.</param>
+        /// <returns>True if <paramref name="value"/> is a <see cref="BigRat"/> equal to this value.</returns>
         public override bool Equals(object value)
         {
             return value is BigRat a ? Equals(a) : false;
         }
+        /// <summary>Check if another value is equal to this value (by value, 1/2 equals 2/4).</summary>
+        /// <param name="value">The value to compare with.</param>
+        /// <returns>True if the values are equal.</returns>
         public bool Equals(BigRat value)
         {
             if (((ReadOnlySpan<uint>)this.p).SequenceEqual(((ReadOnlySpan<uint>)value.p))) return true; //todo: perf test
             return CompareTo(value) == 0;
         }
+        /// <summary>Compare this value to another value.</summary>
+        /// <param name="value">The value to compare with.</param>
+        /// <returns>A negative value if this is less, zero if equal, a positive value if this is greater.</returns>
         public int CompareTo(BigRat value)
         {
             fixed (uint* u = this.p, v = value.p) return cmp(u, v);
         }
+        /// <summary>Compare this value to an integer.</summary>
+        /// <param name="value">The value to compare with.</param>
+        /// <returns>A negative value if this is less, zero if equal, a positive value if this is greater.</returns>
         public int CompareTo(int value)
         {
             if (value == 0) return Sign(this);
             var v = stackalloc uint[4]; copy(v, value);
             fixed (uint* u = this.p) return cmp(u, v);
         }
+        /// <summary>Compare this value to an object.</summary>
+        /// <param name="value">The object to compare with, null is considered smaller than any value.</param>
+        /// <returns>A negative value if this is less, zero if equal, a positive value if this is greater.</returns>
+        /// <exception cref="ArgumentException"><paramref name="value"/> is not a <see cref="BigRat"/>.</exception>
         public int CompareTo(object value)
         {
             if (value == null) return 1;
@@ -1374,6 +1924,11 @@ namespace SysWeaver
             charsWritten = n; return true; err:
             new Span<char>(&t, 2).TryCopyTo(s); charsWritten = 0; return false;
         }
+        /// <summary>Format the value, see <see cref="TryFormat"/> for the supported formats.</summary>
+        /// <param name="format">The format (null or empty uses the default "Q" format, an empty string also uses the invariant culture).</param>
+        /// <param name="provider">The format provider for the decimal and group separators, null for the current culture.</param>
+        /// <returns>The value as text.</returns>
+        /// <exception cref="FormatException">The format is not supported.</exception>
         public string ToString(string format, IFormatProvider provider)
         {
             if (format != default && format.Length == 0) provider = NumberFormatInfo.InvariantInfo; // "" : dbg
@@ -1389,10 +1944,17 @@ namespace SysWeaver
             }
             finally { free(pa); }
         }
+        /// <summary>Format the value using the current culture, see <see cref="TryFormat"/> for the supported formats.</summary>
+        /// <param name="format">The format (null uses the default "Q" format).</param>
+        /// <returns>The value as text.</returns>
+        /// <exception cref="FormatException">The format is not supported.</exception>
         public string ToString(string format)
         {
             return ToString(format, default(IFormatProvider));
         }
+        /// <summary>Format the value using the default "Q" format, see <see cref="TryFormat"/>.</summary>
+        /// <param name="provider">The format provider for the decimal and group separators, null for the current culture.</param>
+        /// <returns>The value as text.</returns>
         public string ToString(IFormatProvider provider)
         {
             return ToString(default(string), provider);
@@ -1528,22 +2090,46 @@ namespace SysWeaver
                 return BigInteger.Parse(d, NumberStyles.None, CultureInfo.InvariantCulture);
             }
         }
+        /// <summary>Try to parse a number using <see cref="NumberStyles.Float"/> and the current culture, see <see cref="TryParse(ReadOnlySpan{char}, NumberStyles, IFormatProvider, out BigRat)"/>.</summary>
+        /// <param name="s">The text.</param>
+        /// <param name="result">The parsed value (zero on failure).</param>
+        /// <returns>True if the text was parsed.</returns>
         public static bool TryParse([NotNullWhen(true)] string s, out BigRat result)
         {
             return TryParse(s.AsSpan(), NumberStyles.Float, null, out result);
         }
+        /// <summary>Try to parse a number using <see cref="NumberStyles.Float"/> and the current culture, see <see cref="TryParse(ReadOnlySpan{char}, NumberStyles, IFormatProvider, out BigRat)"/>.</summary>
+        /// <param name="s">The text.</param>
+        /// <param name="result">The parsed value (zero on failure).</param>
+        /// <returns>True if the text was parsed.</returns>
         public static bool TryParse(ReadOnlySpan<char> s, out BigRat result)
         {
             return TryParse(s, NumberStyles.Float, null, out result);
         }
+        /// <summary>Try to parse a number, see <see cref="TryParse(ReadOnlySpan{char}, NumberStyles, IFormatProvider, out BigRat)"/>.</summary>
+        /// <param name="s">The text.</param>
+        /// <param name="style">The allowed styles.</param>
+        /// <param name="provider">The format provider, null for the current culture.</param>
+        /// <param name="result">The parsed value (zero on failure).</param>
+        /// <returns>True if the text was parsed.</returns>
         public static bool TryParse([NotNullWhen(true)] string s, NumberStyles style, IFormatProvider provider, out BigRat result)
         {
             return TryParse(s.AsSpan(), style, provider, out result);
         }
+        /// <summary>Try to parse a number using <see cref="NumberStyles.Float"/>, see <see cref="TryParse(ReadOnlySpan{char}, NumberStyles, IFormatProvider, out BigRat)"/>.</summary>
+        /// <param name="s">The text.</param>
+        /// <param name="provider">The format provider, null for the current culture.</param>
+        /// <param name="result">The parsed value (zero on failure).</param>
+        /// <returns>True if the text was parsed.</returns>
         public static bool TryParse(ReadOnlySpan<char> s, IFormatProvider provider, out BigRat result)
         {
             return TryParse(s, NumberStyles.Float, provider, out result);
         }
+        /// <summary>Try to parse a number using <see cref="NumberStyles.Float"/>, see <see cref="TryParse(ReadOnlySpan{char}, NumberStyles, IFormatProvider, out BigRat)"/>.</summary>
+        /// <param name="s">The text.</param>
+        /// <param name="provider">The format provider, null for the current culture.</param>
+        /// <param name="result">The parsed value (zero on failure).</param>
+        /// <returns>True if the text was parsed.</returns>
         public static bool TryParse([NotNullWhen(true)] string s, IFormatProvider provider, out BigRat result)
         {
             return TryParse(s.AsSpan(), NumberStyles.Float, provider, out result);
@@ -1563,22 +2149,49 @@ namespace SysWeaver
             if ((style & NumberStyles.AllowHexSpecifier) != 0) throw new ArgumentException("Hex numbers are not supported", nameof(style));
             if (!TryParse(s, style, provider, out var result)) throw new FormatException("The input is not a valid rational number"); return result;
         }
+        /// <summary>Parse a number using <see cref="NumberStyles.Float"/> and <see cref="NumberStyles.AllowThousands"/> and the current culture, see <see cref="Parse(ReadOnlySpan{char}, NumberStyles, IFormatProvider)"/>.</summary>
+        /// <param name="s">The text.</param>
+        /// <returns>The parsed value.</returns>
+        /// <exception cref="FormatException">The text is not a valid number.</exception>
         public static BigRat Parse(string s)
         {
             return Parse(s.AsSpan(), NumberStyles.Float | NumberStyles.AllowThousands, null);
         }
+        /// <summary>Parse a number using the current culture, see <see cref="Parse(ReadOnlySpan{char}, NumberStyles, IFormatProvider)"/>.</summary>
+        /// <param name="s">The text.</param>
+        /// <param name="style">The allowed styles (hex is not supported).</param>
+        /// <returns>The parsed value.</returns>
+        /// <exception cref="ArgumentException"><paramref name="style"/> includes <see cref="NumberStyles.AllowHexSpecifier"/>.</exception>
+        /// <exception cref="FormatException">The text is not a valid number.</exception>
         public static BigRat Parse(string s, NumberStyles style)
         {
             return Parse(s.AsSpan(), style, null);
         }
+        /// <summary>Parse a number using <see cref="NumberStyles.Float"/>, see <see cref="Parse(ReadOnlySpan{char}, NumberStyles, IFormatProvider)"/>.</summary>
+        /// <param name="s">The text.</param>
+        /// <param name="provider">The format provider, null for the current culture.</param>
+        /// <returns>The parsed value.</returns>
+        /// <exception cref="FormatException">The text is not a valid number.</exception>
         public static BigRat Parse(ReadOnlySpan<char> s, IFormatProvider provider)
         {
             return Parse(s, NumberStyles.Float, provider);
         }
+        /// <summary>Parse a number, see <see cref="Parse(ReadOnlySpan{char}, NumberStyles, IFormatProvider)"/>.</summary>
+        /// <param name="s">The text.</param>
+        /// <param name="style">The allowed styles (hex is not supported).</param>
+        /// <param name="provider">The format provider, null for the current culture.</param>
+        /// <returns>The parsed value.</returns>
+        /// <exception cref="ArgumentException"><paramref name="style"/> includes <see cref="NumberStyles.AllowHexSpecifier"/>.</exception>
+        /// <exception cref="FormatException">The text is not a valid number.</exception>
         public static BigRat Parse(string s, NumberStyles style, IFormatProvider provider)
         {
             return Parse(s.AsSpan(), style, provider);
         }
+        /// <summary>Parse a number using <see cref="NumberStyles.Float"/>, see <see cref="Parse(ReadOnlySpan{char}, NumberStyles, IFormatProvider)"/>.</summary>
+        /// <param name="s">The text.</param>
+        /// <param name="provider">The format provider, null for the current culture.</param>
+        /// <returns>The parsed value.</returns>
+        /// <exception cref="FormatException">The text is not a valid number.</exception>
         public static BigRat Parse(string s, IFormatProvider provider)
         {
             return Parse(s.AsSpan(), NumberStyles.Float, provider);
@@ -2240,77 +2853,130 @@ namespace SysWeaver
         }
 
 #if NET7_0_OR_GREATER
+        /// <summary>Implicit (exact) conversion from <see cref="Int128"/>.</summary>
+        /// <param name="value">The value to convert.</param>
         public static implicit operator BigRat(Int128 value)
         {
             var p = (uint*)&value; var s = (p[3] & 0x80000000) != 0; if (s) value = -value;
             var a = (BigRat)(*(UInt128*)p); if (s) a.p![0] |= 0x80000000; return a;
         }
+        /// <summary>Implicit (exact) conversion from <see cref="UInt128"/>.</summary>
+        /// <param name="value">The value to convert.</param>
         public static implicit operator BigRat(UInt128 value)
         {
             var p = (ulong*)&value; return p[1] == 0 ? p[0] : p[0] + p[1] * Pow2(64); //todo: opt
         }
+        /// <summary>Explicit conversion to <see cref="Int128"/> (truncates towards zero, the result is undefined if the value doesn't fit).</summary>
+        /// <param name="value">The value to convert.</param>
         public static explicit operator Int128(BigRat value)
         {
             Int128 t; toi(value, (uint*)&t, 4); return t;
         }
+        /// <summary>Explicit conversion to <see cref="UInt128"/> (truncates towards zero, the result is undefined if the value doesn't fit).</summary>
+        /// <param name="value">The value to convert.</param>
         public static explicit operator UInt128(BigRat value)
         {
             UInt128 t; toi(value, (uint*)&t, 4 | 0x10000); return t;
         }
+        /// <summary>Checked explicit conversion to <see cref="Int128"/> (truncates towards zero).</summary>
+        /// <param name="value">The value to convert.</param>
+        /// <exception cref="OverflowException">The value doesn't fit.</exception>
         public static explicit operator checked Int128(BigRat value)
         {
             Int128 t; toi(value, (uint*)&t, 4 | 0x80000); return t;
         }
+        /// <summary>Checked explicit conversion to <see cref="UInt128"/> (truncates towards zero).</summary>
+        /// <param name="value">The value to convert.</param>
+        /// <exception cref="OverflowException">The value doesn't fit.</exception>
         public static explicit operator checked UInt128(BigRat value)
         {
             UInt128 t; toi(value, (uint*)&t, 4 | 0x10000 | 0x80000); return t;
         }
 
+        /// <summary>Check if a value is NaN (never, there is no NaN).</summary>
+        /// <param name="value">The value.</param>
+        /// <returns>Always false.</returns>
         public static bool IsNaN(BigRat value)
         {
             return false;
         }
+        /// <summary>Check if a value is normal (finite and not zero).</summary>
+        /// <param name="value">The value.</param>
+        /// <returns>True if the value is not zero.</returns>
         public static bool IsNormal(BigRat value)
         {
             return value.p != null;
         }
+        /// <summary>Check if a value is finite (always, there is no infinity).</summary>
+        /// <param name="value">The value.</param>
+        /// <returns>Always true.</returns>
         public static bool IsFinite(BigRat value)
         {
             return true;
         }
+        /// <summary>Check if a value is infinite (never, there is no infinity).</summary>
+        /// <param name="value">The value.</param>
+        /// <returns>Always false.</returns>
         public static bool IsInfinity(BigRat value)
         {
             return false;
         }
+        /// <summary>Check if a value is negative infinity (never, there is no infinity).</summary>
+        /// <param name="value">The value.</param>
+        /// <returns>Always false.</returns>
         public static bool IsNegativeInfinity(BigRat value)
         {
             return false;
         }
+        /// <summary>Check if a value is positive infinity (never, there is no infinity).</summary>
+        /// <param name="value">The value.</param>
+        /// <returns>Always false.</returns>
         public static bool IsPositiveInfinity(BigRat value)
         {
             return false;
         }
+        /// <summary>Check if a value is a real number (always).</summary>
+        /// <param name="value">The value.</param>
+        /// <returns>Always true.</returns>
         public static bool IsRealNumber(BigRat value)
         {
             return true;
         }
+        /// <summary>Check if a value is subnormal (never, there are no subnormal values).</summary>
+        /// <param name="value">The value.</param>
+        /// <returns>Always false.</returns>
         public static bool IsSubnormal(BigRat value)
         {
             return false;
         }
 
+        /// <summary>Create a value from another number type (throws if it can't be represented).</summary>
+        /// <typeparam name="TOther">The type of the value.</typeparam>
+        /// <param name="value">The value to convert.</param>
+        /// <returns>The converted value.</returns>
+        /// <exception cref="NotSupportedException">The type can't be converted.</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static BigRat CreateChecked<TOther>(TOther value) where TOther : INumberBase<TOther>
         {
             if (TryConvertFrom(value, out var a) || TOther.TryConvertToChecked(value, out a)) return a;
             throw new NotSupportedException();
         }
+        /// <summary>Create a value from another number type (saturating if it can't be represented).</summary>
+        /// <typeparam name="TOther">The type of the value.</typeparam>
+        /// <param name="value">The value to convert.</param>
+        /// <returns>The converted value.</returns>
+        /// <exception cref="NotSupportedException">The type can't be converted.</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static BigRat CreateSaturating<TOther>(TOther value) where TOther : INumberBase<TOther>
         {
             if (TryConvertFrom(value, out var a) || TOther.TryConvertToSaturating(value, out a)) return a;
             throw new NotSupportedException();
         }
+        /// <summary>Create a value from another number type (truncating if it can't be represented).</summary>
+        /// <typeparam name="TOther">The type of the value.</typeparam>
+        /// <param name="value">The value to convert.</param>
+        /// <returns>The converted value.</returns>
+        /// <exception cref="NotSupportedException">The type can't be converted.</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static BigRat CreateTruncating<TOther>(TOther value) where TOther : INumberBase<TOther>
         {

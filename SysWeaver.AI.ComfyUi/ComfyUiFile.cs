@@ -12,6 +12,7 @@ namespace SysWeaver.AI
     /// </summary>
     public sealed class ComfyUiFile
     {
+        /// <inheritdoc/>
         public override string ToString() => Name ?? Url ?? (Data == null ? "null" : (Data.Length + " bytes"));
 
         /// <summary>

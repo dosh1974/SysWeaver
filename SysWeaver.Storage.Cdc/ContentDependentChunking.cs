@@ -14,16 +14,32 @@ namespace SysWeaver
 {
 
 
+    /// <summary>
+    /// Content dependent chunking: splits files into content defined chunks that are stored (compressed) by their hash, and the files into lists of chunks (compacted files).
+    /// </summary>
     public static class ContentDependentChunking
     {
+        /// <summary>
+        /// The signature (magic bytes) at the start of a compacted file
+        /// </summary>
         public static readonly ReadOnlyMemory<Byte> FileHeader = new Byte[] { (Byte)'S', (Byte)'W', (Byte)'C', (Byte)'0' };
 
 
-        public static readonly ReadOnlyMemory<Byte> MissingChunk = new Byte[] 
+        /// <summary>
+        /// The bytes written as the content of a chunk that is missing when recovering a file
+        /// </summary>
+        public static readonly ReadOnlyMemory<Byte> MissingChunk = new Byte[]
         { (Byte)' ', (Byte)'M', (Byte)'I', (Byte)'S', (Byte)'S', (Byte)'I', (Byte)'N', (Byte)'G', (Byte)' ', (Byte)'C', (Byte)'H', (Byte)'U', (Byte)'N', (Byte)'K', (Byte)' ' };
 
 
+        /// <summary>
+        /// The file extension (without a dot) of compacted files
+        /// </summary>
         public const String FileExt = "swcompact";
+
+        /// <summary>
+        /// The file extension (with a leading dot) of compacted files
+        /// </summary>
         public const String DotFileExt = "." + FileExt;
 
 
@@ -41,6 +57,13 @@ namespace SysWeaver
             }
         }
 
+        /// <summary>
+        /// Read a variable length encoded unsigned integer (7 bits per byte, least significant first, high bit set if more bytes follow)
+        /// </summary>
+        /// <param name="s">The stream to read from</param>
+        /// <param name="res">The value read</param>
+        /// <returns>True if a value was read, false if the stream was at its end</returns>
+        /// <exception cref="Exception">The stream ended in the middle of a value</exception>
         public static bool TryReadVar(Stream s, out ulong res)
         {
             res = 0;
@@ -990,7 +1013,7 @@ namespace SysWeaver
         /// Get stats about the chunked data storage folders
         /// </summary>
         /// <param name="getUncompressedStats">If true, all chunks are decompressed to get their raw size, this is slow</param>
-        /// <param name="oldIfUnusedSince">If a chunk haven't been used since this UTC time, it's considered old</param>
+        /// <param name="oldIfUnusedSince">If a chunk haven't been used since this UTC time, it's considered old (null = 400 days ago, at noon)</param>
         /// <param name="props">The props used</param>
         /// <returns>Array of folder statistics</returns>
         public static Task<CdcFolderStats[]> GetFolderStats(bool getUncompressedStats = false, DateTime? oldIfUnusedSince = null, CdcProps props = null)
@@ -1003,11 +1026,11 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Prune (delete) old chunks. WARNING! Chunks will be permanently removed!
+        /// Prune (delete) old chunks and any other files in the chunk folders. WARNING! Files will be permanently removed!
         /// </summary>
         /// <param name="props">The props used</param>
-        /// <param name="oldIfUnusedSince">If a chunk haven't been used since this UTC time, it's considered old and will be REMOVED permanently!</param>
-        /// <returns>Array of folder statistics</returns>
+        /// <param name="oldIfUnusedSince">If a chunk haven't been used since this UTC time, it's considered old and will be REMOVED permanently! (null = 400 days ago, at noon)</param>
+        /// <returns>Array of prune statistics (one per chunk folder)</returns>
         public static Task<CdcPruneStats[]> Prune(DateTime? oldIfUnusedSince = null, CdcProps props = null)
         {
             props = props ?? CdcProps.Default;
@@ -1022,7 +1045,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="hashStr">The hexadecimal value of the hash for the chunk</param>
         /// <param name="props">The props used</param>
-        /// <returns></returns>
+        /// <returns>The full path of the (compressed) chunk file, the file might not exist</returns>
         public static String GetFilename(String hashStr, CdcProps props = null)
         {
             props = props ?? CdcProps.Default;
@@ -1326,6 +1349,13 @@ namespace SysWeaver
         }
 
 
+        /// <summary>
+        /// Write several lists of chunks to a chunk list stream
+        /// </summary>
+        /// <param name="destStream">The destination stream</param>
+        /// <param name="chunkEnum">Arrays of chunk hashes, written in order</param>
+        /// <param name="props">The properties, if null the default properties will be used (recommended)</param>
+        /// <returns>True if all the chunks was found and written to the stream, else false</returns>
         public static async Task<bool> TryWriteChunkList(Stream destStream, IEnumerable<ReadOnlyMemory<byte>> chunkEnum, CdcProps props = null)
         {
             props = props ?? CdcProps.Default;

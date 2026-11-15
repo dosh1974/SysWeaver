@@ -19,6 +19,10 @@ using SysWeaver.IsoData;
 namespace SysWeaver.MicroService
 {
 
+    /// <summary>
+    /// Manages users (stored in a MySql database) and authenticates them with passwords, passkeys or action tokens sent by e-mail or text message.
+    /// Also handles sign up, invitations, password resets and the user administration.
+    /// </summary>
     [WebApiUrl("auth")]
     [WebMenuEmbedded("User", "User/LostPassword", "Forgot password", "auth/ForgotPassword.html", "Click to recover your password", "IconRecover", 20, null, true)]
 
@@ -195,6 +199,11 @@ namespace SysWeaver.MicroService
 
         readonly bool SendAllComs;
 
+        /// <summary>
+        /// Create the service
+        /// </summary>
+        /// <param name="manager">The service manager (used to find the communication methods, e-mail sender and other services)</param>
+        /// <param name="p">Parameters, null to use the defaults</param>
         public UserManagerService(ServiceManager manager, UserManagerParams p)
         {
             p = p ?? new();
@@ -447,6 +456,7 @@ namespace SysWeaver.MicroService
             return true;
         }
 
+        /// <inheritdoc />
         public void Dispose()
         {
             SystemString.Dispose();
@@ -475,6 +485,12 @@ namespace SysWeaver.MicroService
                 await db.InitTable<DbUserDataString>(c).ConfigureAwait(false);
             }
         }
+        /// <summary>
+        /// Get the variables used by the message templates
+        /// </summary>
+        /// <param name="context">The request (used for the root and the origin), null to use the external root</param>
+        /// <param name="add">Additional variables, as name, value pairs (an odd last name is ignored), null for none</param>
+        /// <returns>A new dictionary with the variables</returns>
         public Dictionary<String, String> GetMessageParams(HttpServerRequest context, params String[] add)
             //  A null array is the same as no additional parameters
             => GetMessageParams(context, (ReadOnlySpan<String>)add);
@@ -787,14 +803,35 @@ namespace SysWeaver.MicroService
         #region Helpers
 
 
+        /// <summary>
+        /// Get the guid (the unique id used by sessions and authorizations) of a user
+        /// </summary>
+        /// <param name="userId">The id of the user</param>
+        /// <param name="guidPrefix">The guid prefix of the service (<see cref="GuidPrefix"/>)</param>
+        /// <returns>The guid, "prefix:id"</returns>
         public static String MakeGuid(long userId, String guidPrefix)
             => String.Concat(guidPrefix, ':', HashTools.GetCompactString(userId));
 
+        /// <summary>
+        /// Get the guid (the unique id used by sessions and authorizations) of a user
+        /// </summary>
+        /// <param name="userId">The id of the user</param>
+        /// <returns>The guid, "prefix:id"</returns>
         public String MakeGuid(long userId)
             => String.Concat(GuidPrefix, ':', HashTools.GetCompactString(userId));
 
         static readonly Tuple<long, Byte[]> InvalidCredentialId = new Tuple<long, Byte[]>(0, null);
 
+        /// <summary>
+        /// Consume an action token and get the authorization of the user that it belongs to
+        /// </summary>
+        /// <typeparam name="T">The type of the data stored with the action</typeparam>
+        /// <param name="token">The action token (or short code)</param>
+        /// <param name="type">The action type, one of the <see cref="Db.DbAction"/> types</param>
+        /// <param name="getIdFromData">Gets the user id from the data stored with the action</param>
+        /// <param name="context">The request context</param>
+        /// <returns>The authorization of the user</returns>
+        /// <exception cref="TokenExpiredException">If the token can't be used, or has no user</exception>
         public async Task<Authorization> GetUser<T>(String token, String type, Func<T, long> getIdFromData, HttpServerRequest context)
         {
             var actionData = await GetAction<T>(token, type, context).ConfigureAwait(false);
@@ -820,6 +857,9 @@ namespace SysWeaver.MicroService
 
 
 
+        /// <summary>
+        /// The number of users
+        /// </summary>
         public sealed class UserStats
         {
             /// <summary>
@@ -842,6 +882,13 @@ namespace SysWeaver.MicroService
             /// </summary>
             public readonly String ErrorMessage;
 
+            /// <summary>
+            /// Create the statistics
+            /// </summary>
+            /// <param name="time">Time when the data was collected</param>
+            /// <param name="current">Current number of users</param>
+            /// <param name="total">Total number of users ever registered</param>
+            /// <param name="errorMessage">Null if everything is fine</param>
             public UserStats(DateTime time, long current, long total, String errorMessage)
             {
                 Time = time;
@@ -856,6 +903,10 @@ namespace SysWeaver.MicroService
         volatile UserStats Stats;
         readonly AsyncLock GetStatsLock = new AsyncLock();
 
+        /// <summary>
+        /// Get the number of users (cached for 30 seconds)
+        /// </summary>
+        /// <returns>The statistics</returns>
         public async Task<UserStats> GetUserStats()
         {
             var now = DateTime.UtcNow;
@@ -904,7 +955,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Return true if there are any users in the db
         /// </summary>
-        /// <returns></returns>
+        /// <returns>True if at least one user account exists</returns>
         public async Task<bool> HaveAnyUser()
         {
             using var c = await Db.GetAsync().ConfigureAwait(false);
@@ -914,8 +965,8 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Return true if the user have a password
         /// </summary>
-        /// <param name="uid"></param>
-        /// <returns></returns>
+        /// <param name="uid">The user id (0 is no user)</param>
+        /// <returns>True if the user has a password</returns>
         public async Task<bool> HaveAnyPassword(long uid)
         {
             if (uid == 0)
@@ -927,10 +978,10 @@ namespace SysWeaver.MicroService
 
 
         /// <summary>
-        /// Return true if the user have a mail
+        /// Return true if the user have an e-mail address
         /// </summary>
-        /// <param name="uid"></param>
-        /// <returns></returns>
+        /// <param name="uid">The user id (0 is no user)</param>
+        /// <returns>True if the user has at least one e-mail address</returns>
         public async Task<bool> HaveAnyEmail(long uid)
         {
             if (uid == 0)
@@ -940,10 +991,10 @@ namespace SysWeaver.MicroService
         }
 
         /// <summary>
-        /// Return true if the user have a mail
+        /// Return true if the user have a phone number
         /// </summary>
-        /// <param name="uid"></param>
-        /// <returns></returns>
+        /// <param name="uid">The user id (0 is no user)</param>
+        /// <returns>True if the user has at least one phone number</returns>
         public async Task<bool> HaveAnyPhone(long uid)
         {
             if (uid == 0)
@@ -959,6 +1010,13 @@ namespace SysWeaver.MicroService
             return nickName;
         }
 
+        /// <summary>
+        /// Create a user using a create user action token
+        /// </summary>
+        /// <param name="r">The request</param>
+        /// <param name="context">The request context</param>
+        /// <param name="login">True to sign in the new user</param>
+        /// <returns>The new user</returns>
         public Task<Authorization> CreateUser(AddUserRequest r, HttpServerRequest context, bool login)
             => CreateUser(r, context, login, null);
 
@@ -1077,6 +1135,16 @@ namespace SysWeaver.MicroService
             return auth;
         }
 
+        /// <summary>
+        /// Try to add a new user, the user name is the target (and the nick name is the part before the "@" of an e-mail address)
+        /// </summary>
+        /// <param name="type">The type of the target</param>
+        /// <param name="target">The e-mail address or phone number of the new user (must be validated by the caller)</param>
+        /// <param name="domain">Optional application specific domain of the user</param>
+        /// <param name="tokens">Optional security tokens to give the user</param>
+        /// <param name="language">Optional preferred language of the user</param>
+        /// <returns>True and the id of the new user, or false and the id of the existing user that already has the e-mail address or phone number</returns>
+        /// <exception cref="Exception">If the type isn't supported</exception>
         public async Task<Tuple<bool, long>> TryAddUser(UserManagerIdTypes type, String target, String domain = null, IReadOnlyCollection<String> tokens = null, String language = null)
         {
             String email = null;
@@ -1155,24 +1223,24 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Get information about the currently logged in user
         /// </summary>
-        /// <param name="request"></param>
-        /// <returns></returns>
+        /// <param name="request">The request (its session is used)</param>
+        /// <returns>The user of the session, or null if nobody is signed in or the user isn't managed by this service</returns>
         public DbUser GetCurrentUser(HttpServerRequest request)
             => (request.Session?.Auth?.AuthContext as DbUser);
 
         /// <summary>
         /// Get information about the currently logged in user
         /// </summary>
-        /// <param name="session"></param>
-        /// <returns></returns>
+        /// <param name="session">The session</param>
+        /// <returns>The user of the session, or null if nobody is signed in or the user isn't managed by this service</returns>
         public DbUser GetCurrentUser(HttpSession session)
             => (session?.Auth?.AuthContext as DbUser);
 
         /// <summary>
         /// Get detailed user information
         /// </summary>
-        /// <param name="request"></param>
-        /// <returns></returns>
+        /// <param name="request">The request (its session is used)</param>
+        /// <returns>Detailed information about the signed in user, or null if nobody is signed in or the user isn't managed by this service</returns>
         public async Task<UserInfo> GetCurrentUserInfo(HttpServerRequest request)
         {
             var user = request.Session?.Auth?.AuthContext as DbUser;
@@ -1182,6 +1250,11 @@ namespace SysWeaver.MicroService
             return await InternalTryGetUserInfo(c, user.Id, user).ConfigureAwait(false);
         }
 
+        /// <summary>
+        /// Find a user by user name, e-mail address or phone number
+        /// </summary>
+        /// <param name="identifier">The user name, e-mail address or phone number</param>
+        /// <returns>The id of the user, 0 if no user was found</returns>
         public async Task<long> TryGetUser(String identifier)
         {
             using (var c = await Db.GetAsync().ConfigureAwait(false))
@@ -1215,6 +1288,11 @@ namespace SysWeaver.MicroService
             };
         }
 
+        /// <summary>
+        /// Get information about a user, found by user name, e-mail address or phone number
+        /// </summary>
+        /// <param name="identifier">The user name, e-mail address or phone number</param>
+        /// <returns>The user, null if no user was found</returns>
         public async Task<UserInfo> TryGetUserInfo(String identifier)
         {
             using (var c = await Db.GetAsync().ConfigureAwait(false))
@@ -1226,12 +1304,24 @@ namespace SysWeaver.MicroService
             }
         }
 
+        /// <summary>
+        /// Get information about a user
+        /// </summary>
+        /// <param name="userId">The id of the user</param>
+        /// <returns>The user, null if it doesn't exist</returns>
         public async Task<UserInfo> TryGetUserInfo(long userId)
         {
             using (var c = await Db.GetAsync().ConfigureAwait(false))
                 return await InternalTryGetUserInfo(c, userId).ConfigureAwait(false);
         }
 
+        /// <summary>
+        /// Get the data of a user
+        /// </summary>
+        /// <param name="userId">The id of the user</param>
+        /// <param name="getTokens">True to also get the security tokens of the user</param>
+        /// <param name="user">The user record if the caller already has it, null to look it up</param>
+        /// <returns>The user data, null if the user doesn't exist</returns>
         public async Task<UserData> TryGetUser(long userId, bool getTokens = false, DbUser user = null)
         {
             using (var c = await Db.GetAsync().ConfigureAwait(false))
@@ -1325,6 +1415,13 @@ namespace SysWeaver.MicroService
             return res;
         }
 
+        /// <summary>
+        /// Change the user name of a user
+        /// </summary>
+        /// <param name="userId">The id of the user</param>
+        /// <param name="newName">The new name (trimmed)</param>
+        /// <returns>True and the previous name if it was changed, false and the current name if it was the same, false and null if the user doesn't exist</returns>
+        /// <exception cref="Exception">If the name is empty or too long</exception>
         public async Task<Tuple<bool, String>> SetUserName(long userId, String newName)
         {
             newName = newName?.Trim();
@@ -1376,6 +1473,12 @@ namespace SysWeaver.MicroService
 
         // TODO: Send mail and validate
 
+        /// <summary>
+        /// Set the e-mail address of a user directly (no validation and no message is sent), links that depend on the old address stop working
+        /// </summary>
+        /// <param name="userId">The id of the user</param>
+        /// <param name="newEmail">The new e-mail address</param>
+        /// <returns>True and the previous address (null if none) if it was changed, false and the current address if it was the same, false and null if the user doesn't exist</returns>
         public async Task<Tuple<bool, String>> ChangeEmail(long userId, String newEmail)
         {
             Tuple<bool, String> res;
@@ -2135,7 +2238,7 @@ namespace SysWeaver.MicroService
         /// <param name="key">The key that identifies this data</param>
         /// <param name="userGuid">The user guid</param>
         /// <param name="data">The data to associate to the user (may be null)</param>
-        /// <returns></returns>
+        /// <returns>A task that completes when the data is stored</returns>
         /// <exception cref="Exception"></exception>
         public async Task SetUserData<T>(String key, String userGuid, T data) where T : class
         {
@@ -2185,7 +2288,7 @@ namespace SysWeaver.MicroService
         /// <param name="key">The key that identifies this data</param>
         /// <param name="userGuid">The user guid</param>
         /// <param name="data">The data to associate to the user (may be null)</param>
-        /// <returns></returns>
+        /// <returns>A task that completes when the data is stored</returns>
         /// <exception cref="Exception"></exception>
         public async Task SetUserDataString(String key, String userGuid, String data)
         {

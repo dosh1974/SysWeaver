@@ -1,5 +1,8 @@
 ﻿namespace SysWeaver.WebBrowser
 {
+    /// <summary>
+    /// Parameters for the <see cref="WebViewBrowser"/>
+    /// </summary>
     public sealed class WebViewBrowserParams
     {
 

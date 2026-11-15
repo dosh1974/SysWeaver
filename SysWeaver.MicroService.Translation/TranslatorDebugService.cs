@@ -9,6 +9,9 @@ namespace SysWeaver.MicroService
 {
 
 
+    /// <summary>
+    /// Debug tables of the languages supported by the <see cref="ITranslator"/>
+    /// </summary>
     [WebMenuPath(null, "Data/Translator", "Translation", "Languages and translations of the translation service", "IconTableTranslateTo", 30)]
     [WebApiUrl("translator/debug")]
     [RequiredDep(typeof(ITranslator))]
@@ -18,8 +21,14 @@ namespace SysWeaver.MicroService
         const int RequestCache = 30;
         const int RefreshRate = 60000;
 
+        /// <inheritdoc />
         public override string ToString() => "Provides debug tables and API's for an ITranslator";
 
+        /// <summary>
+        /// Create the service
+        /// </summary>
+        /// <param name="manager">The service manager (must contain an <see cref="ITranslator"/>)</param>
+        /// <param name="p">Parameters, null uses defaults</param>
         public TranslatorDebugService(ServiceManager manager, TranslatorDebugParams p = null)
         {
             p = p ?? new TranslatorDebugParams();
@@ -31,6 +40,7 @@ namespace SysWeaver.MicroService
         }
 
         readonly ITranslator T;
+        /// <inheritdoc />
         public IReadOnlyDictionary<string, string> MethodAuths { get; init; }
 
         /// <summary>

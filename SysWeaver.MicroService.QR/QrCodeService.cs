@@ -15,10 +15,12 @@ namespace SysWeaver.MicroService
 
 
     /// <summary>
+    /// Service that creates QR codes, as configurable web end points and as an api for other services
     /// </summary>
     [IsMicroService]
     public sealed class QrCodeService : IHttpServerModule, IPerfMonitored, IQrCodeService
     {
+        /// <inheritdoc />
         public override string ToString()
         {
             var rs = AllEndpoints;
@@ -26,6 +28,11 @@ namespace SysWeaver.MicroService
             return String.Concat(r, r == 1 ? " end point: " : " end points: ", String.Join(", ", rs.Select(x => x.Key.ToQuoted())));
         }
 
+        /// <summary>
+        /// Create the service
+        /// </summary>
+        /// <param name="p">Parameters, null uses defaults</param>
+        /// <exception cref="Exception">If an end point url is duplicated or doesn't end with .png or .svg</exception>
         public QrCodeService(QrCodeParams p = null)
         {
             p = p ?? new QrCodeParams();
@@ -80,6 +87,7 @@ namespace SysWeaver.MicroService
 
         }
 
+        /// <inheritdoc />
         public String[] OnlyForPrefixes { get; init; }
 
         internal readonly IReadOnlyList<string> ResponseAuth;
@@ -89,8 +97,10 @@ namespace SysWeaver.MicroService
         readonly IReadOnlyDictionary<String, QrEndPoint> AllEndpoints;
         readonly IReadOnlyDictionary<String, List<IHttpServerEndPoint>> FolderEndPoints;
 
+        /// <inheritdoc />
         public PerfMonitor PerfMon { get; } = new PerfMonitor(nameof(QrCodeService));
 
+        /// <inheritdoc />
         public IEnumerable<IHttpServerEndPoint> EnumEndPoints(string root = null)
         {
             if (root == null)
@@ -100,6 +110,11 @@ namespace SysWeaver.MicroService
             return eps;
         }
 
+        /// <summary>
+        /// Get the handler for a request
+        /// </summary>
+        /// <param name="context">The incoming request</param>
+        /// <returns>The end point handler, or null if the url isn't a configured QR end point</returns>
         public IHttpRequestHandler Handler(HttpServerRequest context)
         {
             if (!AllEndpoints.TryGetValue(context.LocalUrl, out var ep))
@@ -111,7 +126,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Return a QR code as svg data from the given payload data
         /// </summary>
-        /// <param name="data">The payload data</param>
+        /// <param name="data">The payload data (if null or empty, a default url is encoded)</param>
         /// <returns>Svg data with the encoded payload data</returns>
         [WebApi("CreateQrCode.svg")]
         [WebApiAuth(Roles.Debug)]

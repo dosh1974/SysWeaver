@@ -13,6 +13,10 @@ namespace SysWeaver.MicroService
     public sealed class LoginService
     {
 
+        /// <summary>
+        /// Create the service
+        /// </summary>
+        /// <param name="manager">The service manager, must contain an <see cref="AuthManagerService"/></param>
         public LoginService(ServiceManager manager)
         {
             Manager = manager;
@@ -20,6 +24,7 @@ namespace SysWeaver.MicroService
         }
 
 
+        /// <inheritdoc />
         public override string ToString() => "Provides an API for logging in securely";
         readonly ServiceManager Manager;
         readonly AuthManagerService Am;
@@ -133,12 +138,12 @@ namespace SysWeaver.MicroService
         }
 
         /// <summary>
-        /// Called whenever a login is executed
+        /// Called whenever a login is executed (synchronous handlers)
         /// </summary>
         public event Action<HttpServerRequest> OnLogin;
 
         /// <summary>
-        /// Called whenever a login is executed
+        /// Called whenever a login is executed (asynchronous handlers)
         /// </summary>
         public event Func<HttpServerRequest, Task> OnLoginAsync;
 

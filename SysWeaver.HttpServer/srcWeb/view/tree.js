@@ -212,6 +212,9 @@
                 if (!li || !t.E.contains(li))
                     return;
                 t.Focus(li, false);
+                //  A modifier click only focuses (INP-2; the default action stays so text can still be selected with shift)
+                if (Sw.BadClick(e, true))
+                    return;
                 //  (a click that ends a text selection does not fold)
                 const sel = window.getSelection();
                 if (sel && !sel.isCollapsed && String(sel).trim())
@@ -610,7 +613,7 @@
                         ? _TF("This is not valid JSON", "Title of the error state of the tree viewer when the json file can't be read")
                         : _TF("This is not valid XML", "Title of the error state of the tree viewer when the xml file can't be read"),
                     Text: _TF("The file can't be shown as a tree. Text shows the file as it is.", "Text of the error state of the tree viewer when the file can't be read"),
-                    Details: e && e.message ? e.message : String(e),
+                    Details: Sw.ErrorMessage(e),
                     Actions: [new Sw.Button({ Icon: "code", Text: _TF("Text", "Text on a button of a file viewer (markdown, html, json, xml, csv) that opens the file's text in the text editor"), OnClick: () => Sw.Page.Edit(ctx.Url, "_blank") })],
                 }).E);
                 ctx.Host.classList.add("tv-card-state");

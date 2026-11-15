@@ -3103,7 +3103,7 @@
                 }
             }
             catch (e) {
-                console.warn("Chart: value history failed: " + (e && e.message ? e.message : e));
+                console.warn("Chart: value history failed: " + Sw.ErrorMessage(e));
             }
         }
 
@@ -3133,7 +3133,7 @@
                     setTimeout(() => this.Poll(), 3000);
                     return;
                 }
-                Sw.Fail(_T("Failed to fetch data: {0}", e && e.message ? e.message : e));
+                Sw.Fail(_T("Failed to fetch data: {0}", Sw.ErrorMessage(e)));
                 this.FirstLoaded();
                 await Sw.Util.Delay(3000);
             }
@@ -3146,7 +3146,7 @@
          * @param {*} e The refused request.
          */
         ShowDenied(e) {
-            console.warn("Chart " + this.Url + ": not allowed (" + ((e && e.message) || e) + ")");
+            console.warn("Chart " + this.Url + ": not allowed (" + Sw.ErrorMessage(e) + ")");
             const page = this.E.parentElement === document.body;
             if (page)
                 document.body.style.overflow = "";
@@ -3611,7 +3611,7 @@
                 await Sw.Util.Delay(250);
             }
             catch (e) {
-                Sw.Fail(_T("Failed to export: {0}", e && e.message ? e.message : e));
+                Sw.Fail(_T("Failed to export: {0}", Sw.ErrorMessage(e)));
             }
             finally {
                 close();
@@ -3656,7 +3656,7 @@
             }
             catch (e) {
                 if (!ctrl.signal.aborted)
-                    Sw.Fail(_T("Failed to export: {0}", e && e.message ? e.message : e));
+                    Sw.Fail(_T("Failed to export: {0}", Sw.ErrorMessage(e)));
             }
             finally {
                 close();

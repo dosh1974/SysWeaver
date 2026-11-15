@@ -8,6 +8,9 @@ using SysWeaver.Net;
 
 namespace SysWeaver.AI
 {
+    /// <summary>
+    /// An <see cref="IAiMemory"/> that stores the memories of each user in the application key value store
+    /// </summary>
     public sealed partial class KeyValueStorageAiMemory : IAiMemory
     {
 
@@ -44,12 +47,14 @@ namespace SysWeaver.AI
             return mem;
         }
 
+        /// <inheritdoc />
         public async Task<AiMemoryEntry[]> GetMemoryEntries(HttpSession session)
         {
             var mem = await GetMem(session).ConfigureAwait(false);
             return mem.M.Values.Select(x => x.H).ToArray();
         }
 
+        /// <inheritdoc />
         public async Task<bool> AddMemory(HttpSession session, string key, string desc, string value)
         {
             if (String.IsNullOrEmpty(key))
@@ -75,6 +80,7 @@ namespace SysWeaver.AI
             return true;
         }
 
+        /// <inheritdoc />
         public async Task<string> GetMemory(HttpSession session, string key)
         {
             var mem = await GetMem(session).ConfigureAwait(false);
@@ -88,6 +94,7 @@ namespace SysWeaver.AI
 
 
 
+        /// <inheritdoc />
         public async Task<bool> RemoveMemory(HttpSession session, string key)
         {
             var mem = await GetMem(session).ConfigureAwait(false);
@@ -98,6 +105,7 @@ namespace SysWeaver.AI
             return true;
         }
 
+        /// <inheritdoc />
         public async Task<bool> SetMemory(HttpSession session, string key, string value)
         {
             if (String.IsNullOrEmpty(value))
@@ -131,12 +139,23 @@ namespace SysWeaver.AI
             return TableDataTools.Get(r, mem.M.Values.Select(x => new MemDebug(x)), "AI memory");
         }
 
+        /// <summary>
+        /// A row of the AI memory table
+        /// </summary>
         [TableDataPrimaryKey(nameof(Key))]
         public sealed class MemDebug
         {
+            /// <summary>
+            /// Create an empty row (for deserialization)
+            /// </summary>
             public MemDebug()
             {
             }
+
+            /// <summary>
+            /// Create a row from a memory entry
+            /// </summary>
+            /// <param name="e">The memory entry</param>
             public MemDebug(MemEntry e)
             {
                 var h = e.H;

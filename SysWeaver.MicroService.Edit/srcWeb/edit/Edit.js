@@ -98,7 +98,7 @@
             return [await navigator.clipboard.readText(), null];
         }
         catch (e) {
-            return [null, e && e.message ? e.message : String(e)];
+            return [null, Sw.ErrorMessage(e)];
         }
     }
 
@@ -3605,6 +3605,24 @@
         }
 
         /**
+         * The command text stored in the undo log when a member value was set (Sw.Edit.SetMemberValue).
+         * @param {*} shown - The new value as it should be shown in the log (ex: a formatted text, "***" for a password).
+         * @returns {string} The text.
+         */
+        static SetText(shown) {
+            return _T("Set value: \"{0}\"", shown, "Command text stored in a log when a property value was changed.{0} is replaced with the new value.");
+        }
+
+        /**
+         * The name of a member's control for people and assistive technology (aria-label): its display name, else its name.
+         * @param {object} member - The member.
+         * @returns {string} The name.
+         */
+        static Label(member) {
+            return member.DisplayName || member.Name;
+        }
+
+        /**
          * Test if a member editor is read only (options, member flag, or a forced read only handler).
          * @param {object} member - The member.
          * @param {object} options - Options.
@@ -3902,7 +3920,7 @@
                 const old = obj[mn];
                 if (old === v)
                     return;
-                await editor.SetMemberValue(member, v, old, _T("Set value: \"{0}\"", v, "Command text stored in a log when a property value was changed.{0} is replaced with the new value."), token);
+                await editor.SetMemberValue(member, v, old, Handler.SetText(v), token);
             };
             const text = Edit.CreateTextInput(() => obj[mn], (v, ev, token) => commit(v, token), parse, fmt, member.Summary, null,
                 (ch, pos, val) => {
@@ -3915,7 +3933,7 @@
             text.inputMode = this.IsInteger ? "numeric" : "decimal";
             text.classList.add("sw-edit-number");
             text.style.setProperty("--sw-edit-chars", Math.min(lenMax + 2, 24));
-            text.setAttribute("aria-label", member.DisplayName || mn);
+            text.setAttribute("aria-label", Handler.Label(member));
             Edit.FitNumberBox(text);
             cell.append(text);
             //  The unit (member Unit, a plain text: "px", "%", "×") in a slot of one width on every number row of the editor

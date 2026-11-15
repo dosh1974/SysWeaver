@@ -50,6 +50,9 @@ namespace SysWeaver.HttpBench
 
         readonly HttpClient Client;
 
+        /// <summary>
+        /// Dispose the http client of the probe.
+        /// </summary>
         public void Dispose() => Client.Dispose();
 
         /// <summary>

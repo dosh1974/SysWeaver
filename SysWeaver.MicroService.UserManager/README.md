@@ -20,7 +20,7 @@ flowchart LR
   UI["account pages<br/>auth/*.html"] --> UMS["UserManagerService<br/>also an authorizer"]
   Sign["SignUpService"] --> UMS
   UMS --> DB[("MySQL")]
-  UMS --> Coms["EmailComs / PhoneComs"]
+  UMS --> Coms["EmailComs / WhatsAppComs / SmsComs"]
   Coms --> Mail["IEmailSender"]
   Coms --> Sms["ITextMessageSender"]
   AM["AuthManager"] --> UMS
@@ -61,7 +61,7 @@ Every account change follows the same pattern: the user requests an action, the 
 
 - [`UserManagerService`](UserManagerService.cs) — the authorizer and account API (split over several `UserManagerService_*.cs` files)
 - [`SignUpService`](SignUpService.cs) — the public sign-up API and menu entry
-- [`EmailComs`](EmailComs.cs) / [`PhoneComs`](PhoneComs.cs) — communication methods sending templated messages through an e-mail or text message sender
+- [`EmailComs`](EmailComs.cs) / [`WhatsAppComs`](WhatsAppComs.cs) / [`SmsComs`](SmsComs.cs) — communication methods sending templated messages through an e-mail sender or a text message sender (WhatsApp and SMS both use an `ITextMessageSender`); `UserManagerParams.ComsOrder` (default `"Email, WhatsApp, Sms"`) sets the order they are tried in, an empty value sends to every channel the user has
 
 ## Using it
 
@@ -73,7 +73,7 @@ Every account change follows the same pattern: the user requests an action, the 
 ]
 ```
 
-Register an `IEmailSender` (and, for phone numbers, `PhoneComs` with an `ITextMessageSender`) together with the auth services. Without any communication method registered, an `EmailComs` with default parameters is created.
+Register an `IEmailSender` (and, for phone numbers, `SmsComs` and / or `WhatsAppComs` with an `ITextMessageSender`) together with the auth services. Without any communication method registered, an `EmailComs` with default parameters is created.
 
 ## Limitations and considerations
 

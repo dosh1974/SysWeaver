@@ -2,6 +2,9 @@
 
 namespace SysWeaver.FolderSync
 {
+    /// <summary>
+    /// The files of a local folder (sent when checking for updates of a shared folder)
+    /// </summary>
     public sealed class LocalFolderInfo
     {
         /// <summary>

@@ -155,6 +155,10 @@ namespace SysWeaver.Db
 
 
 
+    /// <summary>
+    /// Compiled readers that copy the current row of a data reader into an object
+    /// </summary>
+    /// <typeparam name="T">The object (row) type</typeparam>
     public static class DbCacheRead<T>
     {
         static DbCacheRead()
@@ -237,11 +241,21 @@ namespace SysWeaver.Db
             WriteToObjectWithOffset = fnOffset.Compile();
         }
 
+        /// <summary>
+        /// Writes the current row of the reader (first column is the first field) to the object
+        /// </summary>
         public static readonly Action<DbDataReader, T> WriteToObject;
+
+        /// <summary>
+        /// Writes the current row of the reader to the object, the second argument is the index of the first column that contains the object
+        /// </summary>
         public static readonly Action<DbDataReader, int, T> WriteToObjectWithOffset;
     }
 
 
+    /// <summary>
+    /// Extension methods for running custom commands and reading rows from a SimpleStack connection
+    /// </summary>
     public static class DbExtensions
     {
 
@@ -301,7 +315,7 @@ namespace SysWeaver.Db
         /// <summary>
         /// Execute a custom command with parameters
         /// </summary>
-        /// <param name="con"></param>
+        /// <param name="con">The connection</param>
         /// <param name="command">The command to execute, first parameter can be inserted using @p0, second as @p1 and so on</param>
         /// <param name="args">The parameters, first is named @p0, then @p1 and so on</param>
         /// <returns>A reader</returns>
@@ -311,7 +325,7 @@ namespace SysWeaver.Db
         /// <summary>
         /// Execute a custom command with parameters
         /// </summary>
-        /// <param name="con"></param>
+        /// <param name="con">The connection</param>
         /// <param name="command">The command to execute, first parameter can be inserted using @p0, second as @p1 and so on</param>
         /// <param name="args">The parameters, first is named @p0, then @p1 and so on</param>
         /// <returns>A reader</returns>
@@ -338,7 +352,7 @@ namespace SysWeaver.Db
         /// <summary>
         /// Execute a custom command with parameters
         /// </summary>
-        /// <param name="con"></param>
+        /// <param name="con">The connection</param>
         /// <param name="command">The command to execute, first parameter can be inserted using @p0, second as @p1 and so on</param>
         /// <param name="args">The parameters, first is named @p0, then @p1 and so on</param>
         public static Task CommandAsync(this OrmConnection con, String command, params object[] args)
@@ -347,7 +361,7 @@ namespace SysWeaver.Db
         /// <summary>
         /// Execute a custom command with parameters
         /// </summary>
-        /// <param name="con"></param>
+        /// <param name="con">The connection</param>
         /// <param name="command">The command to execute, first parameter can be inserted using @p0, second as @p1 and so on</param>
         /// <param name="args">The parameters, first is named @p0, then @p1 and so on</param>
         public static Task CommandAsync(this OrmConnection con, String command, params ReadOnlySpan<object> args)
@@ -363,20 +377,20 @@ namespace SysWeaver.Db
         /// <summary>
         /// Execute a custom command with parameters
         /// </summary>
-        /// <param name="con"></param>
+        /// <param name="con">The connection</param>
         /// <param name="command">The command to execute, first parameter can be inserted using @p0, second as @p1 and so on</param>
         /// <param name="args">The parameters, first is named @p0, then @p1 and so on</param>
-        /// <returns>A scale value</returns>
+        /// <returns>The scalar value (first column of the first row)</returns>
         public static Task<Object> ScaleCommandAsync(this OrmConnection con, String command, params object[] args)
             => ExecuteScalarAsync(CreateCommand(con, command, args));
 
         /// <summary>
         /// Execute a custom command with parameters
         /// </summary>
-        /// <param name="con"></param>
+        /// <param name="con">The connection</param>
         /// <param name="command">The command to execute, first parameter can be inserted using @p0, second as @p1 and so on</param>
         /// <param name="args">The parameters, first is named @p0, then @p1 and so on</param>
-        /// <returns>A scale value</returns>
+        /// <returns>The scalar value (first column of the first row)</returns>
         public static Task<Object> ScaleCommandAsync(this OrmConnection con, String command, params ReadOnlySpan<object> args)
             => ExecuteScalarAsync(CreateCommand(con, command, args));
 
@@ -486,9 +500,9 @@ namespace SysWeaver.Db
         /// <summary>
         /// Create an object from the reader, user must ensure that the read data is of the correct type
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="reader"></param>
-        /// <returns></returns>
+        /// <typeparam name="T">The object (row) type</typeparam>
+        /// <param name="reader">The reader</param>
+        /// <returns>A new object with the data of the current row</returns>
         public static T CreateObject<T>(this DbDataReader reader) where T : new()
         {
             var o = new T();
@@ -499,9 +513,9 @@ namespace SysWeaver.Db
         /// <summary>
         /// Copy the data from the reader to an object, user must ensure that the read data is of the correct type
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="reader"></param>
-        /// <param name="t"></param>
+        /// <typeparam name="T">The object (row) type</typeparam>
+        /// <param name="reader">The reader</param>
+        /// <param name="t">The object to write to</param>
         public static void CopyToObject<T>(this DbDataReader reader, T t) => DbCacheRead<T>.WriteToObject(reader, t);
 
 
@@ -509,19 +523,19 @@ namespace SysWeaver.Db
         /// Copy the data from the reader to an object, user must ensure that the read data is of the correct type.
         /// The first column containing object data can be specified, useful if returning computed properties etc.
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="reader"></param>
-        /// <param name="t"></param>
-        /// <param name="offset">The index of the first colun that contains the object</param>
+        /// <typeparam name="T">The object (row) type</typeparam>
+        /// <param name="reader">The reader</param>
+        /// <param name="t">The object to write to</param>
+        /// <param name="offset">The index of the first column that contains the object</param>
         public static void CopyToObject<T>(this DbDataReader reader, T t, int offset) => DbCacheRead<T>.WriteToObjectWithOffset(reader, offset, t);
 
 
         /// <summary>
         /// Enumerate over all objects in a reader, user must ensure that the read data is of the correct type
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="reader"></param>
-        /// <returns></returns>
+        /// <typeparam name="T">The object (row) type</typeparam>
+        /// <param name="reader">The reader</param>
+        /// <returns>An enumeration of one new object per remaining row</returns>
         public static IEnumerable<T> AllObjects<T>(this DbDataReader reader) where T : new()
         {
             while (reader.Read())
@@ -531,12 +545,12 @@ namespace SysWeaver.Db
         /// <summary>
         /// Iterate over the results of a query, user must ensure that the read data is of the correct type
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="con"></param>
+        /// <typeparam name="T">The object (row) type</typeparam>
+        /// <param name="con">The connection</param>
         /// <param name="onResult">The function to run for every read object, return false to stop enumeration</param>
         /// <param name="command">The command to execute, first parameter can be inserted using @p0, second as @p1 and so on</param>
         /// <param name="args">The parameters, first is named @p0, then @p1 and so on</param>
-        /// <returns></returns>
+        /// <returns>A task that completes when all rows are read, or onResult returned false</returns>
         public static Task OnResultAsync<T>(this OrmConnection con, Func<T, bool> onResult, String command, params object[] args) where T : new()
         {
             DbCommand cmd;
@@ -554,12 +568,12 @@ namespace SysWeaver.Db
         /// <summary>
         /// Iterate over the results of a query, user must ensure that the read data is of the correct type
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="con"></param>
+        /// <typeparam name="T">The object (row) type</typeparam>
+        /// <param name="con">The connection</param>
         /// <param name="onResult">The function to run for every read object, return false to stop enumeration</param>
         /// <param name="command">The command to execute, first parameter can be inserted using @p0, second as @p1 and so on</param>
         /// <param name="args">The parameters, first is named @p0, then @p1 and so on</param>
-        /// <returns></returns>
+        /// <returns>A task that completes when all rows are read, or onResult returned false</returns>
         public static Task OnResultAsync<T>(this OrmConnection con, Func<T, bool> onResult, String command, params ReadOnlySpan<object> args) where T : new()
         {
             //  Not async (a span can't be captured): the exceptions of the command creation are returned in the task, like the async array overload did
@@ -604,12 +618,12 @@ namespace SysWeaver.Db
         /// <summary>
         /// Iterate over the results of a query, user must ensure that the read data is of the correct type
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="con"></param>
+        /// <typeparam name="T">The object (row) type</typeparam>
+        /// <param name="con">The connection</param>
         /// <param name="onResult">The task to perform on every read object, return false to stop enumeration</param>
         /// <param name="command">The command to execute, first parameter can be inserted using @p0, second as @p1 and so on</param>
         /// <param name="args">The parameters, first is named @p0, then @p1 and so on</param>
-        /// <returns></returns>
+        /// <returns>A task that completes when all rows are read, or onResult returned false</returns>
         public static Task OnResultAsync<T>(this OrmConnection con, Func<T, Task<bool>> onResult, String command, params object[] args) where T : new()
         {
             DbCommand cmd;
@@ -627,12 +641,12 @@ namespace SysWeaver.Db
         /// <summary>
         /// Iterate over the results of a query, user must ensure that the read data is of the correct type
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="con"></param>
+        /// <typeparam name="T">The object (row) type</typeparam>
+        /// <param name="con">The connection</param>
         /// <param name="onResult">The task to perform on every read object, return false to stop enumeration</param>
         /// <param name="command">The command to execute, first parameter can be inserted using @p0, second as @p1 and so on</param>
         /// <param name="args">The parameters, first is named @p0, then @p1 and so on</param>
-        /// <returns></returns>
+        /// <returns>A task that completes when all rows are read, or onResult returned false</returns>
         public static Task OnResultAsync<T>(this OrmConnection con, Func<T, Task<bool>> onResult, String command, params ReadOnlySpan<object> args) where T : new()
         {
             //  Not async (a span can't be captured): the exceptions of the command creation are returned in the task, like the async array overload did
@@ -659,11 +673,11 @@ namespace SysWeaver.Db
         /// <summary>
         /// Get the whole result of a query as a list, user must ensure that the read data is of the correct type
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="con"></param>
+        /// <typeparam name="T">The object (row) type</typeparam>
+        /// <param name="con">The connection</param>
         /// <param name="command">The command to execute, first parameter can be inserted using @p0, second as @p1 and so on</param>
         /// <param name="args">The parameters, first is named @p0, then @p1 and so on</param>
-        /// <returns></returns>
+        /// <returns>A list of all rows (empty if there are none)</returns>
         public static Task<List<T>> GetResultAsync<T>(this OrmConnection con, String command, params object[] args) where T : new()
         {
             DbCommand cmd;
@@ -681,11 +695,11 @@ namespace SysWeaver.Db
         /// <summary>
         /// Get the whole result of a query as a list, user must ensure that the read data is of the correct type
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="con"></param>
+        /// <typeparam name="T">The object (row) type</typeparam>
+        /// <param name="con">The connection</param>
         /// <param name="command">The command to execute, first parameter can be inserted using @p0, second as @p1 and so on</param>
         /// <param name="args">The parameters, first is named @p0, then @p1 and so on</param>
-        /// <returns></returns>
+        /// <returns>A list of all rows (empty if there are none)</returns>
         public static Task<List<T>> GetResultAsync<T>(this OrmConnection con, String command, params ReadOnlySpan<object> args) where T : new()
         {
             //  Not async (a span can't be captured): the exceptions of the command creation are returned in the task, like the async array overload did
@@ -716,21 +730,22 @@ namespace SysWeaver.Db
         /// <summary>
         /// Create a sql select statement, that can be filtered etc and then executed
         /// </summary>
-        /// <param name="con"></param>
+        /// <typeparam name="T">The row type</typeparam>
+        /// <param name="con">The connection</param>
         /// <returns>A sql select statement</returns>
         public static TypedSelectStatement<T> From<T>(this OrmConnection con) => new TypedSelectStatement<T>(con.DialectProvider);
         */
 
 
         /// <summary>
-        /// Add some data if ity doesn't exist
+        /// Add some data if it doesn't exist (rows that fail to insert, for example duplicates, are ignored)
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="con"></param>
-        /// <param name="defaultValues"></param>
-        /// <param name="tableName"></param>
-        /// <param name="cancellationToken"></param>
-        /// <returns></returns>
+        /// <typeparam name="T">The object (row) type</typeparam>
+        /// <param name="con">The connection</param>
+        /// <param name="defaultValues">The rows to insert</param>
+        /// <param name="tableName">Optionally override table name</param>
+        /// <param name="cancellationToken">Optional cancellation token</param>
+        /// <returns>A task that completes when all rows have been tried</returns>
         public static async Task InsertIgnore<T>(this OrmConnection con, T[] defaultValues, String tableName = null, CancellationToken cancellationToken = new CancellationToken())
         {
             var dp = con.DialectProvider;
@@ -758,10 +773,10 @@ namespace SysWeaver.Db
         /// <summary>
         /// Run some sql and get all returned rows as an object
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="con"></param>
-        /// <param name="sql"></param>
-        /// <returns></returns>
+        /// <typeparam name="T">The object (row) type</typeparam>
+        /// <param name="con">The connection</param>
+        /// <param name="sql">The sql to run</param>
+        /// <returns>The rows (empty if there are none)</returns>
         public static async Task<IReadOnlyList<T>> GetRowsAsync<T>(this OrmConnection con, String sql) where T : new()
         {
             List<T> res = null;

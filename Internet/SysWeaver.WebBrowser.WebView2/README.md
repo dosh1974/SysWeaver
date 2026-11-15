@@ -40,7 +40,7 @@ Implements `IBrowserService` from [SysWeaver.WebBrowser](../../SysWeaver.WebBrow
 
 ## Limitations and considerations
 
-- Windows x64 only (`net10.0-windows`, the `WebView2.Runtime.X64` package); the runtime is loaded from the `WebView2` folder next to the executable
+- Windows x64 only (`net11.0-windows`, the `WebView2.Runtime.X64` package); the runtime is loaded from the `WebView2` folder next to the executable
 - The user data folder is `WebView2User` in the all-users application data folder (`Folders.AllAppFolders`)
 - The browser language is fixed to English ("en")
 

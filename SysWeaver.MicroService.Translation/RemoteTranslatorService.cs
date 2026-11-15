@@ -20,6 +20,11 @@ namespace SysWeaver.MicroService
     [WebApiUrl("translator")]
     public sealed class RemoteTranslatorService : IHaveStats, IPerfMonitored, IInternalTranslator
     {
+        /// <summary>
+        /// Create the service, connects to the remote translator api at <see cref="RemoteTranslatorParams.BaseUrl"/>
+        /// </summary>
+        /// <param name="manager">The service manager, the remote translator is registered in it (if not null)</param>
+        /// <param name="p">Parameters, null uses defaults</param>
         public RemoteTranslatorService(ServiceManager manager, RemoteTranslatorParams p = null)
         {
             p = p ?? new RemoteTranslatorParams();
@@ -58,6 +63,7 @@ namespace SysWeaver.MicroService
 
         readonly ServiceManager Man;
 
+        /// <inheritdoc />
         public override string ToString() => T?.ToString() ?? "Remote translator";
 
         void Rapi_OnCallBegin(long id, string url, HttpEndPointTypes type, int timeout, string requestPayloadSerializer, ReadOnlyMemory<byte> requestPayload, int requestPayloadSize)
@@ -78,6 +84,9 @@ namespace SysWeaver.MicroService
 
         PeriodicTask PruneTask;
 
+        /// <summary>
+        /// Stops pruning, unregisters and disposes the remote translator
+        /// </summary>
         public void Dispose()
         {
             TranslatorExtensionHandlers.Unregister();
@@ -103,6 +112,14 @@ namespace SysWeaver.MicroService
         static String GetTo(string to)
             => to.Trim();
 
+        /// <summary>
+        /// Compute the cache key of a translation
+        /// </summary>
+        /// <param name="from">The source language</param>
+        /// <param name="to">The target language</param>
+        /// <param name="text">The text to translate</param>
+        /// <param name="context">The translation context</param>
+        /// <returns>The SHA512 of the UTF-8 bytes of the parts joined with '|' (null is empty) as lower case hex</returns>
         public static String ComputeHash(String from, String to, String text, String context)
         {
             //  Same as the SHA512 (lower case hex) of the UTF-8 bytes of String.Join('|', from, to, text, context) (null is empty).
@@ -184,6 +201,17 @@ namespace SysWeaver.MicroService
         public Task<string[]> Translate(TranslateRequest request)
             => Translate(request.Text, request.To, request.From, request.Context, request.Effort, request.Retention, request.ContentType);
 
+        /// <summary>
+        /// Translate some text to one or more languages
+        /// </summary>
+        /// <param name="text">The text to translate</param>
+        /// <param name="to">The target languages, separated by comma</param>
+        /// <param name="from">The source language, null or empty to detect it</param>
+        /// <param name="context">The translation context</param>
+        /// <param name="effort">The translation effort</param>
+        /// <param name="retention">How long the translation should be cached</param>
+        /// <param name="contentType">The type of content</param>
+        /// <returns>Translations in the same order as specified in <paramref name="to"/></returns>
         public async Task<string[]> Translate(string text, string to, string from, String context, TranslationEffort effort, TranslationCacheRetention retention, TranslationContentTypes contentType)
         {
             if (!text.AnyLetter())
@@ -217,6 +245,17 @@ namespace SysWeaver.MicroService
         public Task<string[]> TranslateMultiple(TranslateMultipleRequest request)
             => TranslateMultiple(request.Texts, request.To, request.From, request.Context, request.Effort, request.Retention, request.ContentType);
 
+        /// <summary>
+        /// Translate multiple texts to one or more languages
+        /// </summary>
+        /// <param name="texts">The texts to translate</param>
+        /// <param name="to">The target languages, separated by comma</param>
+        /// <param name="from">The source language, null or empty to detect it</param>
+        /// <param name="context">The translation context</param>
+        /// <param name="effort">The translation effort</param>
+        /// <param name="retention">How long the translations should be cached</param>
+        /// <param name="contentType">The type of content</param>
+        /// <returns>The translations of each text (in order), each with a translation per target language</returns>
         public async Task<string[]> TranslateMultiple(string[] texts, string to, string from, String context, TranslationEffort effort, TranslationCacheRetention retention, TranslationContentTypes contentType)
         {
             var c = texts.Length;
@@ -262,6 +301,17 @@ namespace SysWeaver.MicroService
         public async ValueTask<string> TranslateOne(TranslateRequest request)
             => await TranslateOne(request.Text, request.To, request.From, request.Context, request.Effort, request.Retention, request.ContentType).ConfigureAwait(false);
 
+        /// <summary>
+        /// Translate some text to a new language
+        /// </summary>
+        /// <param name="text">The text to translate</param>
+        /// <param name="to">The target language</param>
+        /// <param name="from">The source language, null or empty to detect it</param>
+        /// <param name="context">The translation context</param>
+        /// <param name="effort">The translation effort</param>
+        /// <param name="retention">How long the translation should be cached</param>
+        /// <param name="contentType">The type of content</param>
+        /// <returns>The translated text</returns>
         public async Task<string> TranslateOne(string text, string to, string from, String context, TranslationEffort effort, TranslationCacheRetention retention, TranslationContentTypes contentType)
         {
             if (!text.AnyLetter())
@@ -357,8 +407,8 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Returns a formatted from language if it's valid, else null
         /// </summary>
-        /// <param name="from"></param>
-        /// <returns></returns>
+        /// <param name="from">The language to check</param>
+        /// <returns>The formatted language, or null if it isn't supported</returns>
         public async Task<String> CanFrom(String from)
         {
             var c = await GetSource().ConfigureAwait(false);
@@ -368,8 +418,8 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Returns a formatted to language if it's valid, else null
         /// </summary>
-        /// <param name="to"></param>
-        /// <returns></returns>
+        /// <param name="to">The language to check</param>
+        /// <returns>The formatted language, or null if it isn't supported</returns>
         public async Task<String> CanTo(String to)
         {
             var c = await GetTarget().ConfigureAwait(false);
@@ -417,6 +467,7 @@ namespace SysWeaver.MicroService
 
         static readonly String StatName = nameof(RemoteTranslatorService);
 
+        /// <inheritdoc />
         public PerfMonitor PerfMon { get; private set; } = new PerfMonitor(StatName);
 
         static readonly String[] CacheNames = [
@@ -425,6 +476,7 @@ namespace SysWeaver.MicroService
                 "Cache.Long.",
             ];
 
+        /// <inheritdoc />
         public IEnumerable<Stats> GetStats()
         {
             var count = Interlocked.Read(ref TranslationCount);
@@ -439,9 +491,11 @@ namespace SysWeaver.MicroService
 
         #region IInternalTranslator    
 
+        /// <inheritdoc />
         public Task<string> RequestOne(string from, string to, string text, string context, TranslationEffort effort, TranslationCacheRetention retention, TranslationContentTypes contentType)
             => InternalTranslate(from, to, text, context, effort, retention, contentType);
 
+        /// <inheritdoc />
         public IReadOnlyList<string> SupportedSourceLanguages()
         {
             var c = SourceCache;
@@ -455,6 +509,7 @@ namespace SysWeaver.MicroService
             return c.ValidList;
         }
 
+        /// <inheritdoc />
         public IReadOnlyList<string> SupportedTargetLanguages()
         {
             var c = TargetCache;
@@ -468,6 +523,7 @@ namespace SysWeaver.MicroService
             return c.ValidList;
         }
 
+        /// <inheritdoc />
         public string CanTranslateFrom(string from)
         {
             var c = SourceCache;
@@ -481,6 +537,7 @@ namespace SysWeaver.MicroService
             return c.ValidSet.TryGetValue(from, out var result) ? result : null;
         }
 
+        /// <inheritdoc />
         public string CanTranslateTo(string to)
         {
             var c = TargetCache;
@@ -499,7 +556,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Clears the internal memory cache so all translations have to be reloaded from the remote server
         /// </summary>
-        /// <returns></returns>
+        /// <returns>Always true</returns>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
         [WebApiAudit("Translation")]

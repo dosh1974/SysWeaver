@@ -7,8 +7,19 @@ namespace SysWeaver.HttpBench
     /// </summary>
     public sealed class BenchChoice
     {
+        /// <summary>
+        /// The value that is sent in the settings ("" = none).
+        /// </summary>
         public String Value;
+
+        /// <summary>
+        /// The display text.
+        /// </summary>
         public String Text;
+
+        /// <summary>
+        /// A description (tool tip).
+        /// </summary>
         public String Title;
     }
 
@@ -32,8 +43,19 @@ namespace SysWeaver.HttpBench
         /// </summary>
         public BenchChoice[] ResponseCompressions;
 
+        /// <summary>
+        /// The shortest test, in seconds.
+        /// </summary>
         public int MinDurationSeconds;
+
+        /// <summary>
+        /// The longest test, in seconds.
+        /// </summary>
         public int MaxDurationSeconds;
+
+        /// <summary>
+        /// The most workers (concurrent requests) of a test.
+        /// </summary>
         public int MaxConcurrency;
 
         /// <summary>

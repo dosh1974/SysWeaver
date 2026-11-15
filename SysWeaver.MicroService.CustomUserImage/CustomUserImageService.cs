@@ -12,8 +12,16 @@ using SysWeaver.Net;
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// Lets users upload their own user image, it is stored in the configured sizes and served as the user image (through <see cref="IUserImageHandler"/>)
+    /// </summary>
     public sealed class CustomUserImageService : IFileRepo, IUserImageHandler, IDisposable
     {
+        /// <summary>
+        /// Create the service
+        /// </summary>
+        /// <param name="manager">The service manager</param>
+        /// <param name="p">Parameters, null to use the defaults</param>
         public CustomUserImageService(ServiceManager manager, CustomUserImageParams p)
         {
             Manager = manager;
@@ -79,6 +87,7 @@ namespace SysWeaver.MicroService
                 AuthManager = a;
         }
 
+        /// <inheritdoc />
         public void Dispose()
         {
             Manager.OnServiceAdded -= Manager_OnServiceAdded;
@@ -97,11 +106,14 @@ namespace SysWeaver.MicroService
         readonly bool AllowTransparent;
         readonly MagickColor Background;
 
+        /// <inheritdoc />
         public string Key { get; init; }
 
+        /// <inheritdoc />
         public IReadOnlyList<FileHttpServerModuleFolder> ExposeFolders { get; init; }
 
 
+        /// <inheritdoc />
         public string UploadAuth { get; } = "";
 
         static readonly IReadOnlySet<String> SupportedImageFiles = ReadOnlyData.Set(StringComparer.Ordinal,
@@ -114,6 +126,7 @@ namespace SysWeaver.MicroService
             ".avif"
         );
 
+        /// <inheritdoc />
         public async Task<FileUploadResult[]> CanFileBeUploaded(FileUploadInfo[] info, HttpServerRequest r)
         {
             var len = info.Length;
@@ -175,6 +188,7 @@ namespace SysWeaver.MicroService
             return null;
         }
 
+        /// <inheritdoc />
         public async Task<FileUploadResult> Upload(Stream s, FileUploadInfo file, HttpServerRequest r, ICompDecoder decoder)
         {
             //  Never trust that CanFileBeUploaded was called (or that the client obeyed it)
@@ -360,7 +374,8 @@ namespace SysWeaver.MicroService
         /// Remove a custom user image
         /// </summary>
         /// <param name="r"></param>
-        /// <returns>True if successful</returns>
+        /// <returns>True when the image was removed (never false: failures throw)</returns>
+        /// <exception cref="HttpResponseException">409 with the reason: the image is being changed by another request right now, try again</exception>
         [WebApi]
         [WebApiAuth]
         public async Task<bool> RemoveUserImage(HttpServerRequest r)
@@ -369,7 +384,7 @@ namespace SysWeaver.MicroService
             var uid = session.Auth.Guid;
             var name = uid.ToHex();
             if (!SystemLock.TryGet("SysWeaver.CustomUserImages." + name, out var ldisp))
-                return false;
+                throw HttpResponseException.Refused("Can't remove your image: it is being changed by another request right now, try again in a moment");
             using var x = ldisp;
             var folders = DataFolders;
             var fl = folders.Count;
@@ -387,8 +402,10 @@ namespace SysWeaver.MicroService
 
         #region IUserImageHandler
 
+        /// <inheritdoc />
         public int[] Sizes { get; init; }
 
+        /// <inheritdoc />
         public async Task<bool> Delete(string userGuid)
         {
             var name = userGuid.ToHex();
@@ -411,6 +428,7 @@ namespace SysWeaver.MicroService
 
         static readonly Task<IHttpRequestHandler> NoImage = Task.FromResult<IHttpRequestHandler>(null);
 
+        /// <inheritdoc />
         public Task<IHttpRequestHandler> Get(string userGuid, int size)
         {
             if (!SizeOptions.TryGetValue(size, out var opt))

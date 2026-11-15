@@ -13,6 +13,12 @@ namespace SysWeaver.MicroService
     {
         const String Prefix = "[Network] ";
 
+        /// <summary>
+        /// Wait for the computer to get a LAN ip (and optionally an internet connection)
+        /// </summary>
+        /// <param name="manager">The service manager</param>
+        /// <param name="p">The parameters, null to use the defaults</param>
+        /// <exception cref="Exception">If no LAN ip (or internet connection, if waited for) is found and the parameters say to fail</exception>
         public NetworkService(ServiceManager manager, NetworkServiceParams p = null)
         {
             p = p ?? new NetworkServiceParams();

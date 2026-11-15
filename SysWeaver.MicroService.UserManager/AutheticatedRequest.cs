@@ -2,10 +2,13 @@
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// A request that is authenticated by proving that the caller knows the current password (without sending it)
+    /// </summary>
     public class AutheticatedRequest
     {
         /// <summary>
-        /// Process: 
+        /// The hash of the current password. Process:
         ///     temp = Convert.ToBase64(SHA256.HashData(Encoding.UTF8.GetBytes(String.Join('|', password, userSalt))))
         ///     Hash = Convert.ToBase64(SHA256.HashData(Encoding.UTF8.GetBytes(String.Join('|', temp, OneTimePad))))
         /// </summary>

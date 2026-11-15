@@ -9,15 +9,37 @@ using SysWeaver.Data;
 
 namespace SysWeaver.Excel
 {
+    /// <summary>
+    /// Maps table data column formats (<see cref="TableDataFormats"/>) to Excel cell formatters
+    /// </summary>
     public static class ExcelTableDataFormat
     {
 
+        /// <summary>
+        /// Formats a value into an Excel cell
+        /// </summary>
+        /// <param name="cell">The cell to write the value (and style) to</param>
+        /// <param name="value">The value for the cell</param>
+        /// <param name="nextValue">The value of the next column in the same row (used by formats that take their data from a neighbour column)</param>
         public delegate void FormatCellDelegate(ExcelCell cell, Object value, Object nextValue);
 
+        /// <summary>
+        /// Get a cell formatter for a column
+        /// </summary>
+        /// <param name="type">The column data type</param>
+        /// <param name="attr">The raw column format (null for default), see <see cref="GetCellFormatter(Type, String)"/></param>
+        /// <returns>The formatter, or null if the format isn't supported (the column is then skipped by the exporter)</returns>
         public static FormatCellDelegate GetCellFormatter(Type type, TableDataRawFormatAttribute attr)
             => GetCellFormatter(type, attr?.Value);
 
 
+        /// <summary>
+        /// Get a cell formatter for a column
+        /// </summary>
+        /// <param name="type">The column data type</param>
+        /// <param name="options">The column format, ';' separated, the first part is the name of a <see cref="TableDataFormats"/> value, null for the default format</param>
+        /// <returns>The formatter, or null if the format isn't supported (the column is then skipped by the exporter)</returns>
+        /// <exception cref="ArgumentException">The first part of <paramref name="options"/> isn't a <see cref="TableDataFormats"/> value</exception>
         public static FormatCellDelegate GetCellFormatter(Type type, String options = null)
         {
             TableDataFormats fmt = default;
@@ -30,6 +52,9 @@ namespace SysWeaver.Excel
             return null;
         }
         
+        /// <summary>
+        /// A formatter that just assigns the value to the cell
+        /// </summary>
         public static readonly FormatCellDelegate DefaultFormatter = (cell, value, next) => cell.Value = value;
 
         /// <summary>
@@ -53,6 +78,12 @@ namespace SysWeaver.Excel
         }
 
 
+        /// <summary>
+        /// Format a string using <see cref="String.Format(String, Object[])"/>, but first replace the escaped "{^" and "{_" with "{"
+        /// </summary>
+        /// <param name="fmt">The format string</param>
+        /// <param name="ps">The format arguments</param>
+        /// <returns>The formatted string</returns>
         public static String Format(String fmt, params Object[] ps)
         {
             fmt = fmt.Replace("{^", "{");
@@ -60,6 +91,11 @@ namespace SysWeaver.Excel
             return String.Format(fmt, ps);
         }
 
+        /// <summary>
+        /// Escape text so that it is shown literally in an Excel number format (a backslash is placed in front of every character)
+        /// </summary>
+        /// <param name="text">The text to escape</param>
+        /// <returns>The escaped text, or <paramref name="text"/> if it is null or empty</returns>
         public static String EscapeNumberFormat(String text)
         {
             if (String.IsNullOrEmpty(text))
@@ -379,7 +415,10 @@ namespace SysWeaver.Excel
 
         const int SecondsPerDay = 86400;
 
-        static double ToDays(Decimal v) => (Double)(v * SecondsPerDay);
+        /// <summary>
+        /// A numeric duration is in seconds (the same as the web table's Duration format), Excel durations are in days
+        /// </summary>
+        static double ToDays(Decimal v) => (Double)(v / SecondsPerDay);
 
         static readonly Dictionary<Type, Func<Object, double>> TypeToDays = new Dictionary<Type, Func<object, double>>()
         {
@@ -398,6 +437,11 @@ namespace SysWeaver.Excel
         };
 
 
+        /// <summary>
+        /// Replace the conditional duration number format (used while formatting) of a cell with a plain "[hh]:mm:ss.0000" format, other formats are left as is.
+        /// Used when exporting to PDF.
+        /// </summary>
+        /// <param name="cell">The cell to normalize</param>
         public static void NormalizeDuration(ExcelCell cell)
         {
             if (cell.Style.NumberFormat != FmtDuration)

@@ -3,6 +3,9 @@ using SimpleStack.Orm.Attributes;
 
 namespace SysWeaver.MicroService.Db
 {
+    /// <summary>
+    /// A passkey (FIDO2 credential) of a user
+    /// </summary>
     [Alias("AuthPasskeys")]
     [PartitionByKey(nameof(CredentialId))]
     public sealed class DbAuthPassKey : DbAuthMethod

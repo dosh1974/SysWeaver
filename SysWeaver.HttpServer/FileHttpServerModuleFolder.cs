@@ -8,6 +8,10 @@ namespace SysWeaver.Net
     /// </summary>
     public sealed class FileHttpServerModuleFolder : FileHttpServerModuleWebFolder
     {
+        /// <summary>
+        /// The disc folder followed by the web folder settings.
+        /// </summary>
+        /// <returns>A short text for debugging.</returns>
         public override string ToString() => String.Concat(
             nameof(DiscFolder), ": ", DiscFolder.ToQuoted(), ", ", base.ToString());
 

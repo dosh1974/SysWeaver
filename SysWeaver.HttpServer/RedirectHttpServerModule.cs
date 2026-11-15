@@ -575,6 +575,10 @@ namespace SysWeaver.Net
             return HttpServerTools.AlreadyHandled;
         }
 
+        /// <summary>
+        /// The external info path followed by the names of the external infos.
+        /// </summary>
+        /// <returns>A short text for debugging.</returns>
         public override string ToString() =>
             String.Concat(TableDataConsts.ExternalInfoPath, '[', String.Join(", ", ExternalInfos.Select(x => x.Key)), ']');
 

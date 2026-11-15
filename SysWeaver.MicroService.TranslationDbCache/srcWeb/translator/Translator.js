@@ -150,15 +150,12 @@ function translatorEditMain() {
                 ta.readOnly = true;
                 try {
                     const newText = ta.value;
-                    const res = await Sw.Net.Send("../Api/translator/SetTranslation", {
+                    //  A translation that no longer exists throws with the reason (the button shows it as a fail toast)
+                    await Sw.Net.Send("../Api/translator/SetTranslation", {
                         Key: id,
                         OriginalTranslation: data.Translated,
                         NewTranslation: newText,
                     });
-                    if (!res) {
-                        Sw.Fail(_TF("Couldn't set translation (key no longer exist?)", "Error message displayed when an API request failed"));
-                        return;
-                    }
                     Sw.Info(_TF("Translation saved!", "Message displayed when a new translation was successfully saved"));
                     data.Translated = newText;
                 }

@@ -3,6 +3,9 @@ using System.Collections.Generic;
 
 namespace SysWeaver.Map
 {
+    /// <summary>
+    /// Helper functions for map selections and regions.
+    /// </summary>
     public static class MapTools
     {
 

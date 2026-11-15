@@ -1,5 +1,8 @@
 ﻿namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// The type of a dashboard item
+    /// </summary>
     public enum WebDashTypes
     {
         /// <summary>

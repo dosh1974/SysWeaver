@@ -5,7 +5,10 @@
  * pages (hosted by mediaView/effectPage.js) and the *EffectsLib.html galleries together with media_effect_program.js
  * and media_player_effect.js. Needs no SysWeaver core (uses it when present: Sw.Page.SignalLoaded, Sw.Util.HashString).
  *
- * Globals defined: MediaPlayerTools (static-only class), also published as `Sw.Media.Tools`.
+ * Globals defined: MediaPlayerTools (static-only class), also published as `Sw.Media.Tools`; and the two base classes the
+ * players derive from: MediaPlayerPicture (the <img> player with the timer based timeline: MediaPlayerImage,
+ * MediaPlayerText) and MediaPlayerTexture (the GL texture provider of an effect: MediaPlayerImageTexture,
+ * MediaPlayerTextTexture).
  *
  * Responsibilities: default player members (InitBase), dark mode detection and change events (observing
  * window.top), crop/clip computation (Crop margins -> CSS clip-path inset), sizing/alignment of a player
@@ -495,30 +498,23 @@ class MediaPlayerTools {
     /**
      * Detect if the browser allows unmuted audio playback (autoplay policy). Tests once (cached in the
      * static fields HaveTested / Result): loads a tiny embedded silent MP3 into a new `<audio>` with
-     * MediaPlayerAudio.LoadAudio, then tries to play it unmuted at volume 0.01. On success dispatches an
+     * MediaPlayerElement.Load, then tries to play it unmuted at volume 0.01. On success dispatches an
      * "AudioEnabled" CustomEvent on document.body. On failure installs one-shot keydown/mousedown/click
      * listeners on document.body that set Result = true and dispatch "AudioEnabled" on the first user gesture.
-     * media_player_audio.js is loaded first when needed (MediaPlayer.Include).
      * The probe gets at most 3 s to load and 3 s to start (no answer in time counts as blocked).
      * @returns {Promise<boolean>} True if unmuted playback works now; false if blocked, the audio failed to
-     * load, the browser gave no answer in time, or MediaPlayerAudio can't be loaded
+     * load or the browser gave no answer in time
      */
     static async CanUnMute() {
         if (MediaPlayerTools.HaveTested)
             return MediaPlayerTools.Result;
-        //  The test needs the audio player: load it (a video / YouTube / effect page loads only its own player, so the test
-        //  always failed there and the "click once to get audio" overlay showed even when the browser allows sound)
-        if ((typeof MediaPlayerAudio !== "function") && (typeof MediaPlayer === "function"))
-            await MediaPlayer.Include("media_player_audio.js");
-        if (typeof MediaPlayerAudio !== "function")
-            return false;
         const e = document.createElement("audio");
         let res = false;
         //  The probe gets at most 3 s to load and 3 s to start: a browser can keep it waiting (a background tab, a frame where it
         //  defers media), and everything that waits for the players (MediaPlayer.Ready) waited with it, ex: a slide show stayed
         //  empty until the page was loaded again. No answer in time = the sound needs a click, as when the browser refuses.
         const timeUp = () => MediaPlayerTools.delay(3000).then(() => "timeout");
-        const loaded = await Promise.race([MediaPlayerAudio.LoadAudio(e, "data:audio/mpeg;base64,/+MYxAAAAANIAUAAAASEEB/jwOFM/0MM/90b/+RhST//w4NFwOjf///PZu////9lns5GFDv//l9GlUIEEIAAAgIg8Ir/JGq3/+MYxDsLIj5QMYcoAP0dv9HIjUcH//yYSg+CIbkGP//8w0bLVjUP///3Z0x5QCAv/yLjwtGKTEFNRTMuOTeqqqqqqqqqqqqq/+MYxEkNmdJkUYc4AKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq"), timeUp()]);
+        const loaded = await Promise.race([MediaPlayerElement.Load(e, "data:audio/mpeg;base64,/+MYxAAAAANIAUAAAASEEB/jwOFM/0MM/90b/+RhST//w4NFwOjf///PZu////9lns5GFDv//l9GlUIEEIAAAgIg8Ir/JGq3/+MYxDsLIj5QMYcoAP0dv9HIjUcH//yYSg+CIbkGP//8w0bLVjUP///3Z0x5QCAv/yLjwtGKTEFNRTMuOTeqqqqqqqqqqqqq/+MYxEkNmdJkUYc4AKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq"), timeUp()]);
         if (loaded === "timeout")
             e.SwCancelLoad = true;
         //  (no answer: the click listeners below, like a refused play)
@@ -865,6 +861,677 @@ class MediaPlayerTools {
     }
 
 
+}
+
+/**
+ * Base class of the players that show a picture in an <img> and time it with a virtual timeline (MediaPlayerImage,
+ * MediaPlayerText): the element, the shared Cache tail (ShowImage) and the timer based Play / Pause / Stop / GetPos /
+ * Once / Seek. Instance fields: Params, Url / Source, CurrentPosition (paused / last position in seconds), StartedAt
+ * (performance.now() based start of the current run), TimeFn (active timeout id or null), AspectRatio (width / height,
+ * adaptive only). Other state comes from MediaPlayerTools.InitBase. A derived class implements Cache.
+ */
+class MediaPlayerPicture {
+
+    /**
+     * Creates the player and its <img> element (not loaded until Cache). Sets HaveVisual, CanPlay, calls
+     * MediaPlayerTools.InitBase, Url = Source = url, CurrentPosition = 0, Duration = Params.Duration.
+     * @param {string} url - What is shown (the image url, or the text of a text player).
+     * @param {object} params - The params, already merged over the defaults of the derived class (AdaptiveSize: the
+     * element gets object-fit: contain; Duration).
+     */
+    constructor(url, params) {
+        const t = this;
+        t.Params = params;
+        const e = document.createElement("img");
+        if (params.AdaptiveSize)
+            e.style.objectFit = "contain";
+        t.HaveVisual = true;
+        t.CanPlay = true;
+        MediaPlayerTools.InitBase(t, e, params);
+        t.Url = url;
+        t.Source = url;
+        t.CurrentPosition = 0;
+        t.Duration = params.Duration;
+    }
+
+    /**
+     * The end of Cache: sets src and waits for "load" / "error" (MediaPlayerTools.waitEvent2), reads naturalWidth / Height
+     * into Width / Height (they keep their previous values until the image has loaded), sets AspectRatio when AdaptiveSize,
+     * calls ApplyClip() and MediaPlayerTools.OnCacheComplete.
+     * @param {string} src - The image url (a blob url for a text).
+     * @param {boolean} [keepHidden] - When true the element keeps the MediaHidden class.
+     * @param {function(HTMLImageElement):void} [onLoad] - Called when the image has loaded, before the size is read.
+     * @returns {Promise<boolean>} True when loaded, false on a load error.
+     */
+    async ShowImage(src, keepHidden, onLoad) {
+        const t = this;
+        const e = t.Element;
+        const res = await MediaPlayerTools.waitEvent2(e, "load", "error", () => {
+            e.src = src;
+        });
+        if (res.type == "error")
+            return false;
+        if (onLoad)
+            onLoad(e);
+        t.Width = e.naturalWidth;
+        t.Height = e.naturalHeight;
+        if (t.Params.AdaptiveSize) {
+            if ((t.Width > 0) && (t.Height > 0)) {
+                t.AspectRatio = t.Width / t.Height;
+            }
+        }
+        t.ApplyClip();
+        return MediaPlayerTools.OnCacheComplete(t, keepHidden);
+    }
+
+    /**
+     * Starts the virtual timeline from CurrentPosition. No-op when already playing.
+     * @returns {Promise<void>}
+     */
+    async Play() {
+        const t = this;
+        if (!t.Paused)
+            return;
+        t.Paused = false;
+        /**
+         * Arms (or re-arms) the end-of-duration timer. Duration <= 0: position 0 and, when not looping, pauses
+         * immediately and calls OnEnded. Otherwise restarts from 0 if the remaining time is <= 0, sets StartedAt
+         * and a setTimeout (TimeFn) for the remaining time; on expiry it either loops (position 0, re-arm, OnLoop)
+         * or pauses with CurrentPosition = Duration and calls OnEnded.
+         * @returns {Promise<void>}
+         */
+        const setTimer = async () => {
+            const dur = t.Params.Duration;
+            if (dur <= 0) {
+                t.CurrentPosition = 0;
+                if (!t.Looping) {
+                    t.Paused = true;
+                    await t.OnEnded();
+                }
+                return;
+            }
+            let timeLeft = (dur - t.CurrentPosition) * 1000;
+            if (t.TimeFn)
+                clearTimeout(t.TimeFn);
+            t.TimeFn = null;
+            if (timeLeft <= 0) {
+                t.CurrentPosition = 0;
+                timeLeft = dur * 1000;
+            }
+            t.StartedAt = performance.now() - t.CurrentPosition * 1000;
+            t.TimeFn = setTimeout(async () => {
+                t.TimeFn = null;
+                if (t.Looping) {
+                    t.CurrentPosition = 0;
+                    await setTimer();
+                    await t.OnLoop();
+                } else {
+                    t.Paused = true;
+                    t.CurrentPosition = dur;
+                    await t.OnEnded();
+                }
+            }, timeLeft);
+        };
+        await setTimer();
+    }
+
+    /**
+     * Pauses the timeline (synchronous, unlike the InitBase default): clears the timer, stores GetPos() in
+     * CurrentPosition and sets Paused. No-op when already paused.
+     * @returns {void}
+     */
+    Pause() {
+        const t = this;
+        if (t.Paused)
+            return;
+        if (t.TimeFn)
+            clearTimeout(t.TimeFn);
+        t.CurrentPosition = t.GetPos();
+        t.TimeFn = null;
+        t.Paused = true;
+    }
+
+    /**
+     * Stops the timeline (synchronous): clears the timer, pauses and resets CurrentPosition to 0.
+     * No-op when already paused at position 0.
+     * @returns {void}
+     */
+    Stop() {
+        const t = this;
+        if (t.Paused && (t.CurrentPosition <= 0))
+            return;
+        if (t.TimeFn)
+            clearTimeout(t.TimeFn);
+        t.TimeFn = null;
+        t.Paused = true;
+        t.CurrentPosition = 0;
+    }
+
+    /**
+     * Gets the timeline position.
+     * @returns {number} CurrentPosition when paused; 0 when Duration <= 0; otherwise the seconds since StartedAt,
+     * capped at Duration.
+     */
+    GetPos() {
+        const t = this;
+        if (t.Paused)
+            return t.CurrentPosition;
+        const dur = t.Params.Duration;
+        if (dur <= 0)
+            return 0;
+        return Math.min((performance.now() - t.StartedAt) / 1000, dur);
+    }
+
+    /**
+     * Disables looping. When playing with an infinite Duration (<= 0) it pauses immediately and calls OnEnded;
+     * with a finite Duration the running timer ends playback at Duration.
+     * @returns {Promise<void>}
+     */
+    async Once() {
+        const t = this;
+        t.Looping = false;
+        if (t.Paused)
+            return;
+        if (t.Params.Duration > 0)
+            return;
+        t.Paused = true;
+        await t.OnEnded();
+    }
+
+    /**
+     * Seeks the timeline. Negative times are ignored; times >= Duration are clamped to Duration. When playing,
+     * the timer is stopped, CurrentPosition set and Play() called again; when paused only CurrentPosition changes.
+     * @param {number} time - Position in seconds.
+     * @returns {Promise<null|undefined>} null when the time was negative (ignored), else undefined.
+     */
+    async Seek(time) {
+        if (time < 0)
+            return null;
+        const t = this;
+        const dur = t.Params.Duration;
+        if (time >= dur)
+            time = dur;
+        const p = t.Paused;
+        if (!p) {
+            if (t.TimeFn)
+                clearTimeout(t.TimeFn);
+            t.TimeFn = null;
+            t.Paused = true;
+        }
+        t.CurrentPosition = time;
+        if (!p)
+            await t.Play();
+    }
+}
+
+/**
+ * Base class of the players that play a media file with an HTML5 media element (MediaPlayerVideo, MediaPlayerAudio): the
+ * element, a StartAt / EndAt play window, loop handling, volume, rate and the transport (Play, Pause, Stop, Seek ...).
+ * Instance fields: Params (StartAt, EndAt, Volume), Url / Source, AtStart (positioned at the window start), AtEnd (paused at
+ * the window end), LoopWatch (native-loop wrap detector, see Cache), Rate. A derived class sets what differs: the element, the
+ * size (Measure) and what happens before playing / after unmuting.
+ */
+class MediaPlayerElement {
+
+    /**
+     * Creates the player and its muted element (not loaded until Cache). Sets HaveVisual / HaveAudio, calls
+     * MediaPlayerTools.InitBase, element.loop = Looping, CanPlay = true, Url = Source = url, AtStart = true.
+     * @param {string} url - URL of the media file.
+     * @param {object} params - The params, already merged over the defaults of the derived class (StartAt, EndAt, Volume).
+     * @param {string} tag - The element to make: "video" or "audio".
+     * @param {boolean} haveVisual - The media shows a picture.
+     * @param {boolean} haveAudio - The media has a sound.
+     */
+    constructor(url, params, tag, haveVisual, haveAudio) {
+        const t = this;
+        t.Params = params;
+        const e = document.createElement(tag);
+        e.muted = true;
+        t.HaveVisual = haveVisual;
+        t.HaveAudio = haveAudio;
+        MediaPlayerTools.InitBase(t, e, params);
+        e.loop = t.Looping;
+        t.CanPlay = true;
+        t.Url = url;
+        t.Source = url;
+        t.AtStart = true;
+    }
+
+    /**
+     * Loads a media URL into a media element: appends a <source src=c> child, waits for "loadeddata" or "error"
+     * (MediaPlayerTools.waitEvent2), then polls every 100 ms until readyState >= 3 (HAVE_FUTURE_DATA). A caller that gave up
+     * waiting (ex: the sound probe of MediaPlayerTools.CanUnMute) sets e.SwCancelLoad to end the polling.
+     * @param {HTMLMediaElement} e - The media element to load into.
+     * @param {string} c - The source URL.
+     * @returns {Promise<boolean>} False when the element fired "error" (or the load was cancelled), else true.
+     */
+    static async Load(e, c) {
+        const res = await MediaPlayerTools.waitEvent2(e, "loadeddata", "error", () => {
+            const source = document.createElement('source');
+            source.src = c;
+            //  A failed <source> fires "error" on the source only (it does not bubble): without this a broken url waited forever
+            source.addEventListener("error", () => e.dispatchEvent(new Event("error")), { once: true });
+            e.appendChild(source);
+        });
+        if (res.type == "error")
+            return false;
+        while (e.readyState < 3) {
+            if (e.SwCancelLoad)
+                return false;
+            await MediaPlayerTools.delay(100);
+        }
+        return true;
+    }
+
+    /**
+     * Called by Cache when the media has loaded: sets Width / Height (0 when there is no picture) and the clip. The default:
+     * no picture (0 x 0, a 0 sized element, no clip).
+     * @returns {void}
+     */
+    Measure() {
+        const t = this;
+        t.Width = 0;
+        t.Height = 0;
+        t.Element.style.width = "0";
+        t.Element.style.height = "0";
+    }
+
+    /**
+     * Called by Play before the element plays (after AtEnd was handled). The default: nothing.
+     * @returns {void}
+     */
+    BeforePlay() {
+    }
+
+    /**
+     * Loads the media and installs the play-window logic. Must be awaited before using the player.
+     * Calls Measure (the size), reads Duration, seeks to StartAt (when > 0), computes the effective endTime (EndAt, or the
+     * duration when EndAt <= StartAt; EndAt > duration counts as 0) and the loop-watch midpoint (endTime + StartAt) / 2, then
+     * installs:
+     * - ontimeupdate: updates Duration; before endTime it detects a native `loop` wrap back below the midpoint
+     *   (when LoopWatch is armed) and seeks back to StartAt + OnLoop, otherwise arms LoopWatch once past the
+     *   midpoint (only when StartAt > 0, looping and playing); at/after endTime it seeks to StartAt when looping,
+     *   else pauses at endTime, sets AtEnd and calls OnEnded.
+     * - onended: natural end while playing -> pause, AtEnd = true, OnEnded.
+     * @param {boolean} [keepHidden] - When true the element keeps the MediaHidden class.
+     * @returns {Promise<boolean>} True when loaded, false when loading failed.
+     */
+    async Cache(keepHidden) {
+        const t = this;
+        const e = t.Element;
+        if (!await MediaPlayerElement.Load(e, t.Url))
+            return false;
+        t.Measure();
+        const duration = e.duration;
+        t.Duration = duration;
+        const p = t.Params;
+        const startAt = p.StartAt;
+        if (startAt > 0) {
+            e.currentTime = startAt;
+            t.LoopWatch = false;
+        }
+        let endAt = p.EndAt;
+        if (endAt > duration)
+            endAt = 0;
+        const endTime = endAt > startAt ? endAt : duration;
+        const loopWatch = (endTime + startAt) * 0.5;
+        e.ontimeupdate = async () => {
+            const ct = e.currentTime;
+            t.Duration = e.duration;
+            if (ct < endTime) {
+                if (t.LoopWatch) {
+                    if (ct < loopWatch) {
+                        e.currentTime = startAt;
+                        t.LoopWatch = false;
+                        if (t.OnLoop)
+                            await t.OnLoop();
+                    }
+                } else {
+                    t.LoopWatch = (startAt > 0) && t.Looping && (!t.Paused) && (ct > loopWatch);
+                }
+                return;
+            }
+            if (t.Looping) {
+                e.currentTime = startAt;
+                t.LoopWatch = false;
+            } else {
+                if (!t.Paused) {
+                    t.Paused = true;
+                    t.AtEnd = true;
+                    e.pause();
+                    e.currentTime = endTime;
+                    t.LoopWatch = false;
+                    await t.OnEnded();
+                }
+            }
+        };
+        e.onended = async ev => {
+            if (!t.Paused) {
+                t.Paused = true;
+                t.AtEnd = true;
+                e.pause();
+                t.LoopWatch = false;
+                await t.OnEnded();
+            }
+        };
+        return MediaPlayerTools.OnCacheComplete(t, keepHidden);
+    }
+
+    /**
+     * Applies Muted and Volume * Params.Volume * 0.01 to the element (nothing when the media has no sound). A derived class may
+     * route the sound elsewhere (MediaPlayerAudio: the analyser's gain).
+     * @returns {void}
+     */
+    ApplyVolume() {
+        const t = this;
+        if (!t.HaveAudio)
+            return;
+        const e = t.Element;
+        e.volume = t.Volume * t.Params.Volume * 0.01;
+        e.muted = t.Muted;
+    }
+
+    /**
+     * Mutes the player (sets Muted, ApplyVolume mutes the element). No-op when already muted.
+     * @returns {Promise<void>}
+     */
+    async Mute() {
+        if (this.Muted)
+            return;
+        this.Muted = true;
+        this.ApplyVolume();
+    }
+
+    /**
+     * Unmutes the player (ApplyVolume: when the media has a sound, element.volume = Volume * Params.Volume * 0.01 and
+     * element.muted = false). No-op when not muted. May be blocked by the browser autoplay policy (see MediaPlayerTools.CanUnMute).
+     * @returns {Promise<void>}
+     */
+    async UnMute() {
+        if (!this.Muted)
+            return;
+        this.Muted = false;
+        this.ApplyVolume();
+    }
+
+    /**
+     * Sets the player volume. Clamps to 0..1, stores it in Volume (no-op when unchanged) and applies it (ApplyVolume).
+     * @param {number} vol - Volume 0..1.
+     * @returns {Promise<void>}
+     */
+    async SetVolume(vol) {
+        if (vol < 0)
+            vol = 0;
+        if (vol > 1)
+            vol = 1;
+        if (vol == this.Volume)
+            return;
+        this.Volume = vol;
+        this.ApplyVolume();
+    }
+
+    /**
+     * Starts playback. No-op when already playing. When AtEnd, seeks to StartAt first. Sets element.loop = Looping
+     * and awaits element.play(); on success Paused=false, AtStart=false and Duration is refreshed. A rejected
+     * play() (e.g. autoplay policy) is swallowed and the player stays paused.
+     * @returns {Promise<void>}
+     */
+    async Play() {
+        const t = this;
+        if (!t.Paused)
+            return;
+        const e = t.Element;
+        if (t.AtEnd) {
+            t.AtEnd = false;
+            e.currentTime = t.Params.StartAt;
+            t.LoopWatch = false;
+        }
+        t.BeforePlay();
+        try {
+            e.loop = t.Looping;
+            await e.play();
+            t.Paused = false;
+            t.AtStart = false;
+            t.Duration = e.duration;
+        }
+        catch
+        {
+        }
+    }
+
+    /**
+     * Stops playback: pauses, seeks to StartAt, clears LoopWatch and sets Paused = AtStart = true.
+     * No-op when already paused at the start.
+     * @returns {Promise<true|undefined>} True when stopped, undefined when it was already stopped.
+     */
+    async Stop() {
+        const t = this;
+        const e = t.Element;
+        if (t.Paused && t.AtStart)
+            return;
+        e.pause();
+        e.currentTime = t.Params.StartAt;
+        t.LoopWatch = false;
+        t.Paused = true;
+        t.AtStart = true;
+        return true;
+    }
+
+    /**
+     * Pauses playback (keeps the position). No-op when already paused.
+     * @returns {Promise<void>}
+     */
+    async Pause() {
+        if (this.Paused)
+            return;
+        this.Paused = true;
+        this.Element.pause();
+    }
+
+    /**
+     * Seeks to a time: clamps it to [StartAt, endTime] (endTime = EndAt when > StartAt, else the duration),
+     * updates AtEnd/AtStart, sets element.currentTime and clears LoopWatch. Does not change the play state.
+     * @param {number} time - Position in seconds (absolute media time, not relative to StartAt).
+     * @returns {Promise<void>}
+     */
+    async Seek(time) {
+        const t = this;
+        const e = t.Element;
+        const startAt = t.Params.StartAt;
+        const endAt = t.Params.EndAt;
+        const endTime = endAt > startAt ? endAt : e.duration;
+        if (time < startAt)
+            time = startAt;
+        if (time > endTime)
+            time = endTime;
+        t.AtEnd = time >= endTime;
+        t.AtStart = time <= startAt;
+        e.currentTime = time;
+        t.LoopWatch = false;
+    }
+
+    /**
+     * Gets the current playback position.
+     * @returns {number} element.currentTime in seconds (absolute media time).
+     */
+    GetPos() {
+        return this.Element.currentTime;
+    }
+
+    /**
+     * The playback speed (1 = normal).
+     * @type {number}
+     */
+    Rate = 1;
+
+    /**
+     * The fastest speed SetRate takes (the browsers play media up to 16 times faster).
+     * @type {number}
+     */
+    MaxRate = 16;
+
+    /**
+     * Set the playback speed (element.playbackRate; the pitch of the sound is kept).
+     * @param {number} rate The speed, 1 = normal (clamped to 0.0625..MaxRate).
+     * @returns {Promise<void>}
+     */
+    async SetRate(rate) {
+        const r = Math.max(0.0625, Math.min(this.MaxRate, rate || 1));
+        this.Rate = r;
+        this.Element.playbackRate = r;
+    }
+
+    /**
+     * Enables looping (Looping = element.loop = true). No-op when already looping.
+     * @returns {Promise<void>}
+     */
+    async Loop() {
+        const t = this;
+        if (t.Looping)
+            return;
+        t.Looping = true;
+        t.Element.loop = true;
+    }
+
+    /**
+     * Disables looping (Looping = element.loop = false), so playback ends at the window end. No-op when not looping.
+     * @returns {Promise<void>}
+     */
+    async Once() {
+        const t = this;
+        if (!t.Looping)
+            return;
+        t.Looping = false;
+        t.Element.loop = false;
+    }
+}
+
+/**
+ * Base class of the texture providers of MediaPlayerEffect (MediaPlayerImageTexture, MediaPlayerTextTexture): the GL
+ * texture, the upload with mipmaps, the crop as uv transform and the uniforms. Duck-typed provider interface used by the
+ * effect: Cache(haveLod), Apply(uv, size), ApplyClip(p), Dispose(), Width / Height. A derived class implements Cache, which
+ * produces the picture and calls Upload. Instance fields: Params, Url, GL, Texture (WebGLTexture), Width / Height (picture
+ * size), HaveClip, Clip* (from ComputeClip), UvA..UvD (uv scale x/y and offset x/y of the crop).
+ */
+class MediaPlayerTexture {
+
+    /**
+     * Creates the provider and an (empty) GL texture.
+     * @param {WebGLRenderingContext|WebGL2RenderingContext} gl - The effect's GL context.
+     * @param {object} params - The params, already merged over the defaults of the derived class (Crop, EffectSizeFromImage,
+     * EffectParams ...).
+     * @param {string} url - The image url, or the text to render.
+     */
+    constructor(gl, params, url) {
+        const t = this;
+        t.Params = params;
+        t.Url = url;
+        t.GL = gl;
+        t.Texture = gl.createTexture();
+    }
+
+    /**
+     * Uploads a picture to the texture, flipped-Y with clamp-to-edge wrapping and linear filtering, and stores its size in
+     * Width / Height. When haveLod or Params.EffectParams.MipMap, generates mipmaps (LINEAR_MIPMAP_LINEAR); on WebGL1 only for
+     * power-of-two sizes (otherwise a warning is logged and mipmaps are skipped).
+     * @param {HTMLImageElement|HTMLCanvasElement|ImageBitmap} image - The picture.
+     * @param {boolean} haveLod - True when the shader uses texture2DLod (mipmaps required).
+     * @returns {number[]|null} [width, height] of the picture when Params.EffectSizeFromImage, else null.
+     */
+    Upload(image, haveLod) {
+        const t = this;
+        const gl = t.GL;
+        t.Width = image.width;
+        t.Height = image.height;
+        gl.bindTexture(gl.TEXTURE_2D, t.Texture);
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        const tp = t.Params;
+        const ep = tp.EffectParams;
+        if (haveLod || (ep && ep.MipMap)) {
+            //  (WebGL1 has mipmaps for power-of-two sizes only; a non zero v with no other bit set)
+            const powerOf2 = v => v && !(v & (v - 1));
+            let ok = true;
+            if (!(gl instanceof WebGL2RenderingContext)) {
+                if (!powerOf2(image.width)) {
+                    console.warn("Need to enabled WebGL2 to have mipmaps of images then has a non power of two dimension, width = " + image.width);
+                    ok = false;
+                }
+                else if (!powerOf2(image.height)) {
+                    console.warn("Need to enabled WebGL2 to have mipmaps of images then has a non power of two dimension, height = " + image.height);
+                    ok = false;
+                }
+            }
+            if (ok) {
+                gl.generateMipmap(gl.TEXTURE_2D);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+            }
+        }
+        if (!tp.EffectSizeFromImage)
+            return null;
+        return [image.width, image.height];
+    }
+
+    /**
+     * Binds the texture and sets the uv transform and size uniforms (called by MediaPlayerEffect each frame): with a clip,
+     * texUv = (UvA, UvB, UvC, UvD) and texSize = clip size; otherwise texUv = (1, -1, 0, 1) (flip only) and texSize = picture size.
+     * @param {WebGLUniformLocation|null} uvScaleAndOffset - Location of the vec4 "texUv" uniform (scale.xy, offset.xy), may be null.
+     * @param {WebGLUniformLocation|null} texSize - Location of the vec2 "texSize" uniform, may be null.
+     * @returns {void}
+     */
+    Apply(uvScaleAndOffset, texSize) {
+        const t = this;
+        const gl = t.GL;
+        gl.bindTexture(gl.TEXTURE_2D, t.Texture);
+        if (t.HaveClip) {
+            if (uvScaleAndOffset)
+                gl.uniform4f(uvScaleAndOffset, t.UvA, t.UvB, t.UvC, t.UvD);
+            if (texSize)
+                gl.uniform2f(texSize, t.ClipWidth, t.ClipHeight);
+            return;
+        }
+        if (uvScaleAndOffset)
+            gl.uniform4f(uvScaleAndOffset, 1.0, -1.0, 0.0, 1.0);
+        if (texSize)
+            gl.uniform2f(texSize, t.Width, t.Height);
+    }
+
+    /**
+     * Computes the crop as UV scale / offset: runs MediaPlayerTools.ComputeClip (which sets ClipX / ClipB / ClipWidth /
+     * ClipHeight) and, when clipped, sets HaveClip and UvA = ClipWidth/Width, UvB = -ClipHeight/Height, UvC = ClipX/Width,
+     * UvD = (Height - ClipB)/Height. HaveClip tells Apply whether to use it.
+     * @param {object} [p] - Params holding a Crop; defaults to this.Params.
+     * @returns {void}
+     */
+    ApplyClip(p) {
+        const t = this;
+        t.HaveClip = false;
+        p = p ?? t.Params;
+        if (!MediaPlayerTools.ComputeClip(t, p))
+            return;
+        t.HaveClip = true;
+        const ow = t.Width;
+        const oh = t.Height;
+        const cw = t.ClipWidth;
+        const ch = t.ClipHeight;
+        t.UvA = cw / ow;
+        t.UvB = -ch / oh;
+        t.UvC = t.ClipX / ow;
+        t.UvD = (oh - t.ClipB) / oh;
+    }
+
+    /**
+     * Deletes the GL texture.
+     * @returns {void}
+     */
+    Dispose() {
+        const t = this;
+        t.GL.deleteTexture(t.Texture);
+    }
 }
 
 

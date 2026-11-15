@@ -4,8 +4,12 @@ namespace SysWeaver.EmailReader
 {
     // User = the IMAP user name (often the email address), Password = the password (or an app password).
 
+    /// <summary>
+    /// Parameters for the <see cref="ImapEmailReaderService"/>
+    /// </summary>
     public sealed class ImapEmailReaderParams : CredentialParams
     {
+        /// <inheritdoc />
         public override string ToString() => String.Concat(Server, ':', Port, " (", Security, "), ", Folder ?? "INBOX", ", Auth: ", base.ToString());
 
         /// <summary>
@@ -99,7 +103,7 @@ namespace SysWeaver.EmailReader
         public ImapAddressParams[] Addresses;
 
         /// <summary>
-        /// Maximum size of the email queues
+        /// Maximum size of the email queues (minimum 10)
         /// </summary>
         public int Size = 1000;
 
@@ -114,8 +118,12 @@ namespace SysWeaver.EmailReader
         public int MaxPoll = 100;
     }
 
+    /// <summary>
+    /// An address that a mailbox receives emails for, with the system that its emails belong to
+    /// </summary>
     public sealed class ImapAddressParams
     {
+        /// <inheritdoc />
         public override string ToString() => String.Concat(Address, String.IsNullOrEmpty(System) ? "" : " System: " + System);
 
         /// <summary>
@@ -129,6 +137,9 @@ namespace SysWeaver.EmailReader
         public String System;
     }
 
+    /// <summary>
+    /// The connection security to use for the IMAP connection
+    /// </summary>
     public enum ImapSecurity
     {
         /// <summary>
@@ -149,6 +160,9 @@ namespace SysWeaver.EmailReader
         None,
     }
 
+    /// <summary>
+    /// What to do with an email after it has been read
+    /// </summary>
     public enum ImapAfterRead
     {
         /// <summary>

@@ -24,5 +24,5 @@ At runtime `FastTextLanguageIdentifier` reads the resource `SysWeaver.LanguageId
 ## Relationships
 
 - **Part of:** [SysWeaver.LanguageIdentifier.FastText](../README.md)
-- **Uses:** [Compress](../../_tools/compress/README.md) at build time
+- **Uses:** [Compress](https://github.com/dosh1974/SysWeaver.Tools/blob/main/Compress/README.md) at build time
 - **Used by:** [`FastTextLanguageIdentifier.cs`](../FastTextLanguageIdentifier.cs)

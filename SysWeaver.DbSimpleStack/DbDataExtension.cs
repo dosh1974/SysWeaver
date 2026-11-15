@@ -18,14 +18,41 @@ namespace SysWeaver.Db
 {
 
 
+    /// <summary>
+    /// Extension methods for serving database tables as table data (filtering, sorting, searching and paging)
+    /// </summary>
     public static class DbData
     {
+        /// <summary>
+        /// Query a table and return the result as table data
+        /// </summary>
+        /// <typeparam name="T">The row type</typeparam>
+        /// <param name="db">The database to use (a connection is opened and disposed)</param>
+        /// <param name="request">The table data request (filters, sorting, paging, search)</param>
+        /// <param name="refreshRate">The refresh rate (in ms) to report in the result</param>
+        /// <param name="tableName">Optionally override table name</param>
+        /// <param name="maxAllowedRows">The most rows that a single request may return</param>
+        /// <param name="extraFn">Optional action that can modify the select statement</param>
+        /// <param name="result">Optional result instance to fill, if null a new one is created</param>
+        /// <returns>The table data</returns>
         public static async Task<TableData> GetAsTableData<T>(this DbSimpleStack db, TableDataRequest request, long refreshRate = 30000, String tableName = null, long maxAllowedRows = 100000, Action<TypedSelectStatement<T>> extraFn = null, TableData result = null)
         {
             using var con = await db.GetAsync().ConfigureAwait(false);
             return await GetAsTableData<T>(con, request, refreshRate, tableName, maxAllowedRows, extraFn, result).ConfigureAwait(false);
         }
 
+        /// <summary>
+        /// Query a table and return the result as table data
+        /// </summary>
+        /// <typeparam name="T">The row type</typeparam>
+        /// <param name="con">An open connection to use for the query</param>
+        /// <param name="request">The table data request (filters, sorting, paging, search)</param>
+        /// <param name="refreshRate">The refresh rate (in ms) to report in the result</param>
+        /// <param name="tableName">Optionally override table name</param>
+        /// <param name="maxAllowedRows">The most rows that a single request may return</param>
+        /// <param name="extraFn">Optional action that can modify the select statement</param>
+        /// <param name="result">Optional result instance to fill, if null a new one is created</param>
+        /// <returns>The table data</returns>
         public static async Task<TableData> GetAsTableData<T>(this OrmConnection con, TableDataRequest request, long refreshRate = 30000, String tableName = null, long maxAllowedRows = 100000, Action<TypedSelectStatement<T>> extraFn = null, TableData result = null)
         {
             var cols = DbDataType<T>.Cols;
@@ -40,6 +67,18 @@ namespace SysWeaver.Db
             return result;
         }
 
+        /// <summary>
+        /// Query a table and return the result as typed table data
+        /// </summary>
+        /// <typeparam name="T">The row type</typeparam>
+        /// <param name="db">The database to use (a connection is opened and disposed)</param>
+        /// <param name="request">The table data request (filters, sorting, paging, search)</param>
+        /// <param name="refreshRate">The refresh rate (in ms) to report in the result</param>
+        /// <param name="tableName">Optionally override table name</param>
+        /// <param name="maxAllowedRows">The most rows that a single request may return</param>
+        /// <param name="extraFn">Optional action that can modify the select statement</param>
+        /// <param name="result">Optional result instance to fill, if null a new one is created</param>
+        /// <returns>The typed table data</returns>
         public static async Task<TypedTableData<T>> GetAsTypedTableData<T>(this DbSimpleStack db, TableDataRequest request, long refreshRate = 30000, String tableName = null, long maxAllowedRows = 100000, Action<TypedSelectStatement<T>> extraFn = null, TypedTableData<T> result = null)
         {
             using var con = await db.GetAsync().ConfigureAwait(false);
@@ -47,6 +86,18 @@ namespace SysWeaver.Db
         }
 
 
+        /// <summary>
+        /// Query a table and return the result as typed table data
+        /// </summary>
+        /// <typeparam name="T">The row type</typeparam>
+        /// <param name="con">An open connection to use for the query</param>
+        /// <param name="request">The table data request (filters, sorting, paging, search)</param>
+        /// <param name="refreshRate">The refresh rate (in ms) to report in the result</param>
+        /// <param name="tableName">Optionally override table name</param>
+        /// <param name="maxAllowedRows">The most rows that a single request may return</param>
+        /// <param name="extraFn">Optional action that can modify the select statement</param>
+        /// <param name="result">Optional result instance to fill, if null a new one is created</param>
+        /// <returns>The typed table data</returns>
         public static async Task<TypedTableData<T>> GetAsTypedTableData<T>(this OrmConnection con, TableDataRequest request, long refreshRate = 30000, String tableName = null, long maxAllowedRows = 100000, Action<TypedSelectStatement<T>> extraFn = null, TypedTableData<T> result = null)
         {
             var cols = DbDataType<T>.Cols;
@@ -64,10 +115,33 @@ namespace SysWeaver.Db
 
         const int DefaultRows = 1000;
 
+        /// <summary>
+        /// Query the rows matching a table data request
+        /// </summary>
+        /// <typeparam name="T">The row type</typeparam>
+        /// <param name="con">An open connection to use for the query</param>
+        /// <param name="request">The table data request (filters, sorting, paging, search)</param>
+        /// <param name="tableName">Optionally override table name</param>
+        /// <param name="maxAllowedRows">The most rows that a single request may return</param>
+        /// <param name="extraFn">Optional action that can modify the select statement</param>
+        /// <returns>The matching rows (including any look ahead rows)</returns>
         public static Task<IEnumerable<T>> GetFiltered<T>(this OrmConnection con, TableDataRequest request, String tableName = null, long maxAllowedRows = 100000, Action<TypedSelectStatement<T>> extraFn = null)
             => GetFiltered<T>(con, out var s, out var l, out var la, request, tableName, maxAllowedRows, extraFn);
 
 
+        /// <summary>
+        /// Query the rows matching a table data request
+        /// </summary>
+        /// <typeparam name="T">The row type</typeparam>
+        /// <param name="con">An open connection to use for the query</param>
+        /// <param name="skip">The number of rows skipped (the first row requested)</param>
+        /// <param name="limit">The number of rows requested (after applying defaults and maxAllowedRows)</param>
+        /// <param name="lookAhead">The number of extra rows queried after the requested rows</param>
+        /// <param name="request">The table data request (filters, sorting, paging, search)</param>
+        /// <param name="tableName">Optionally override table name</param>
+        /// <param name="maxAllowedRows">The most rows that a single request may return</param>
+        /// <param name="extraFn">Optional action that can modify the select statement</param>
+        /// <returns>The matching rows (up to limit plus lookAhead rows)</returns>
         public static Task<IEnumerable<T>> GetFiltered<T>(this OrmConnection con, out long skip, out long limit, out long lookAhead, TableDataRequest request, String tableName = null, long maxAllowedRows = 100000, Action<TypedSelectStatement<T>> extraFn = null)
         {
             long s = request.Row;
@@ -100,6 +174,14 @@ namespace SysWeaver.Db
             return con.QueryAsync<T>(cmd);
         }
 
+        /// <summary>
+        /// Build a select statement from a table data request (filters, full text or plain text search and sorting)
+        /// </summary>
+        /// <typeparam name="T">The row type</typeparam>
+        /// <param name="con">The connection (used for its dialect)</param>
+        /// <param name="request">The table data request</param>
+        /// <param name="allowNonIndexed">If true, filters on non indexed columns are allowed</param>
+        /// <returns>A select statement (without any paging)</returns>
         public static TypedSelectStatement<T> GetSelectStatement<T>(this OrmConnection con, TableDataRequest request, bool allowNonIndexed = false)
         {
             var sort = request.Order;

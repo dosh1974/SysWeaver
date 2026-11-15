@@ -8,6 +8,7 @@ namespace SysWeaver.EmailReader
     /// </summary>
     public sealed class ImapEmail : IncomingEmail
     {
+        /// <inheritdoc />
         public override string ToString() => String.Concat('#', Id, " from ", From, " [", Status, "]: ", Subject);
 
         /// <summary>

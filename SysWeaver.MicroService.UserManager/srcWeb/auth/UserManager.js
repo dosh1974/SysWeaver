@@ -163,15 +163,8 @@
 
     // ------------------------------------------------------------------ legacy globals
 
-    /**
-     * Define a legacy global unless already defined.
-     * @param {string} name Name.
-     * @param {*} value Value.
-     */
-    function legacy(name, value) {
-        if (!(name in window))
-            window[name] = value;
-    }
+    /** Define a legacy global unless already defined (shared with Auth.js). */
+    const legacy = A.Legacy;
 
     legacy("setPasswordRequest", UM.SetPassword);
     legacy("getCreatePasswordPolicy", UM.CreatePolicy);

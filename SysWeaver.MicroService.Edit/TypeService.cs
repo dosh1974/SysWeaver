@@ -20,11 +20,19 @@ namespace SysWeaver.MicroService
 {
 
 
+    /// <summary>
+    /// Describes types (and the api methods of the http server) so that editors can be generated for them, also registers editors for text file extensions
+    /// </summary>
     [IsMicroService]
     [WebApiUrl("../edit")]
     [OptionalDep<ApiHttpServerModule>]
     public sealed class TypeService : IPerfMonitored, IDisposable
     {
+        /// <summary>
+        /// Create the service
+        /// </summary>
+        /// <param name="manager">The service manager</param>
+        /// <param name="p">Parameters, null to use the defaults</param>
         public TypeService(ServiceManager manager, TypeParams p = null)
         {
             Manager = manager;
@@ -70,6 +78,7 @@ namespace SysWeaver.MicroService
             ];
 
 
+        /// <inheritdoc />
         public void Dispose()
         {
             var manager = Manager;
@@ -98,6 +107,7 @@ namespace SysWeaver.MicroService
 
         ApiHttpServerModule ApiMod;
 
+        /// <inheritdoc />
         public PerfMonitor PerfMon { get; private set; } = new PerfMonitor(nameof(TypeService));
 
         readonly ServiceManager Manager;
@@ -918,6 +928,9 @@ namespace SysWeaver.MicroService
 
 
 
+    /// <summary>
+    /// A type just used for testing the edit of nested objects
+    /// </summary>
     public class EditTestObject
     {
         /// <summary>
@@ -934,10 +947,13 @@ namespace SysWeaver.MicroService
     }
 
 
+    /// <summary>
+    /// A type just used for testing the edit of nested objects that may be null
+    /// </summary>
     public class EditNestedTestObject
     {
         /// <summary>
-        /// Name of something
+        /// If true, the object is enabled
         /// </summary>
         [EditDefault(true)]
         public bool Enabled;

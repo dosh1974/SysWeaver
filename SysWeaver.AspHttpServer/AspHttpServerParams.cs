@@ -1,5 +1,8 @@
 ﻿namespace SysWeaver.Net
 {
+    /// <summary>
+    /// Parameters for <see cref="AspHttpServer"/>.
+    /// </summary>
     public class AspHttpServerParams : HttpServerBaseParams
     {
         /// <summary>

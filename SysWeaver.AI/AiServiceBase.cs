@@ -21,8 +21,12 @@ namespace SysWeaver.AI
     {
 
 
+        /// <inheritdoc />
         public override string ToString() => String.Concat("Chat name: ", Name.ToQuoted(), ", Default chat model: ", DefaultChatModel.ToQuoted());
 
+        /// <summary>
+        /// The message host used to report messages
+        /// </summary>
         protected readonly IMessageHost Msg;
 
         /// <summary>
@@ -104,13 +108,32 @@ namespace SysWeaver.AI
         /// </summary>
         protected readonly AsyncLock ImageGenLock;
 
+        /// <summary>
+        /// The user storage service, null if not available
+        /// </summary>
         protected readonly IUserStorageService UserStorage;
+
+        /// <summary>
+        /// The service manager, null if the service wasn't created by a service manager
+        /// </summary>
         protected readonly ServiceManager Manager;
+
+        /// <summary>
+        /// The QR code service, null if not available
+        /// </summary>
         protected readonly IQrCodeService QrCode;
+
+        /// <summary>
+        /// The API http server module, null if not available
+        /// </summary>
         protected readonly ApiHttpServerModule Api;
 
+        /// <inheritdoc />
         public PerfMonitor PerfMon { get; }
 
+        /// <summary>
+        /// Release all resources of the service
+        /// </summary>
         public virtual void Dispose()
         {
             var sm = Manager;
@@ -161,7 +184,10 @@ namespace SysWeaver.AI
 
         static readonly ISerializerType JsonSer = SerManager.Get("json");
 
-        public static readonly ApiIoParams IoParams = new ApiIoParams([JsonSer], [JsonSer], JsonSer, JsonSer);
+        /// <summary>
+        /// The API serialization parameters used by tools (json in and out)
+        /// </summary>
+        public static readonly ApiIoParams IoParams =new ApiIoParams([JsonSer], [JsonSer], JsonSer, JsonSer);
 
         /// <summary>
         /// Unregister tools from an instance

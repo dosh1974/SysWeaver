@@ -7,6 +7,9 @@ using System.Threading.Tasks;
 
 namespace SysWeaver.Tor
 {
+    /// <summary>
+    /// An <see cref="HttpClient"/> that makes its requests through the Tor network (Tor is downloaded and started when the first client is created)
+    /// </summary>
     public class TorHttpClient : HttpClient
     {
         static volatile bool IsInited;
@@ -47,8 +50,16 @@ namespace SysWeaver.Tor
             };
         }
 
+        /// <summary>
+        /// The (socks5) proxy that goes through Tor
+        /// </summary>
         public static readonly WebProxy Proxy = new WebProxy(new Uri("socks5://localhost:" + Settings.TorSettings.SocksPort));
 
+        /// <summary>
+        /// Create a client that uses Tor
+        /// </summary>
+        /// <param name="autoDecompress">True to automatically decompress responses</param>
+        /// <returns>The client (dispose it when done)</returns>
         public static HttpClient Create(bool autoDecompress = true)
         {
             Init();
@@ -67,6 +78,7 @@ namespace SysWeaver.Tor
 
         readonly HttpClientHandler Handler;
 
+        /// <inheritdoc />
         protected override void Dispose(bool disposing)
         {
             base.Dispose(disposing);

@@ -78,6 +78,7 @@ namespace SysWeaver.AI
             Msg?.AddMessage(MessageLevels.Debug, $"{LogPrefix}Serving MCP at {url.ToQuoted()} with {Tools.Count} tool(s)");
         }
 
+        /// <inheritdoc />
         public void Dispose()
         {
             var sm = Manager;
@@ -120,6 +121,9 @@ namespace SysWeaver.AI
         readonly bool AnyOrigin;
         readonly HashSet<String> AllowedOrigins;
 
+        /// <summary>
+        /// The performance monitor used to track the requests of this service
+        /// </summary>
         public PerfMonitor PerfMon { get; } = new PerfMonitor("Mcp");
 
         #region Tools
@@ -380,6 +384,7 @@ namespace SysWeaver.AI
 
         #region Http module
 
+        /// <inheritdoc />
         public String[] OnlyForPrefixes { get; }
 
         readonly bool RequiresAuth;
@@ -389,6 +394,7 @@ namespace SysWeaver.AI
 
         const String IndexSuffix = "/index.html";
 
+        /// <inheritdoc />
         public IHttpRequestHandler Handler(HttpServerRequest context)
         {
             var url = context.LocalUrl.AsSpan();

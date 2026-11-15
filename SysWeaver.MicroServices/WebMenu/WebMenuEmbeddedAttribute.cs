@@ -4,19 +4,19 @@
 namespace SysWeaver.MicroService
 {
     /// <summary>
-    /// Put this attribute on any type that is registered in the service manager to add it to a menu
+    /// Put this attribute on any type that is registered in the service manager to add a menu item that shows a page embedded in the shell
     /// </summary>
     [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
     public class WebMenuEmbeddedAttribute : WebMenuAttribute
     {
 
         /// <summary>
-        /// Put this attribute on any type that is registered in the service manager to add it to a menu
+        /// Put this attribute on any type that is registered in the service manager to add a menu item that shows a page embedded in the shell
         /// </summary>
         /// <param name="menu">Menu name to add it to (null for default)</param>
         /// <param name="id">Id of this item, this can be path separated by /, ex: "Debug/Data/CompressionTable"</param>
         /// <param name="name">The display name of the item</param>
-        /// <param name="url"></param>
+        /// <param name="url">The url of the page to embed</param>
         /// <param name="title">The title (tool tip) to display</param>
         /// <param name="iconClass">A class name (maybe url supported later)</param>
         /// <param name="order">Optional sort order (items with same order values will be sorted by Name)</param>

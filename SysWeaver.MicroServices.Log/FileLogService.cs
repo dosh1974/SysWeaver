@@ -13,13 +13,18 @@ namespace SysWeaver.MicroService
 {
 
     /// <summary>
-    /// Message handler that output's messages to the console
+    /// Message handler that writes messages to a log file, and web apis for viewing and deleting the log file
     /// </summary>
     [IsMicroService]
     [WebApiUrl("logFile")]
     [WebMenuEmbedded(null, "Monitoring/LogFile", "Log file", "logFile/logfile.html", "View the log file", "IconTableLog", 2, Roles.AdminOps)]
     public sealed class FileLogService : IDisposable, IHaveTextFiles
     {
+        /// <summary>
+        /// Create the service and register the file log message handler
+        /// </summary>
+        /// <param name="manager">The service manager</param>
+        /// <param name="p">Parameters, null uses defaults</param>
         public FileLogService(ServiceManager manager, FileLogParams p = null)
         {
             M = manager;
@@ -37,6 +42,7 @@ namespace SysWeaver.MicroService
 
         readonly bool DumpStatsOnExit;
 
+        /// <inheritdoc />
         public override string ToString() => "[Service] " + H;
 
         FileLogMessageHandler H;
@@ -45,7 +51,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Get the content of the log file.
         /// </summary>
-        /// <returns></returns>
+        /// <returns>The content of the log file, empty if the file doesn't exist</returns>
         [WebApi(nameof(LogFile) + ".txt")]
         [WebApiAuth(Roles.AdminOps)]
         [WebApiRawText]
@@ -69,9 +75,9 @@ namespace SysWeaver.MicroService
         }
 
         /// <summary>
-        /// Name of the log file
+        /// Name to use when downloading the log file
         /// </summary>
-        /// <returns></returns>
+        /// <returns>The download name of the log file</returns>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
         [WebApiClientCacheStatic]
@@ -183,6 +189,9 @@ namespace SysWeaver.MicroService
 
         
 
+        /// <summary>
+        /// Unregister and dispose the log handler (dumps the stats first if <see cref="FileLogParams.DumpStatsOnExit"/> is set)
+        /// </summary>
         public void Dispose()
         {
             var h = Interlocked.Exchange(ref H, null);
@@ -207,6 +216,7 @@ namespace SysWeaver.MicroService
 
         
 
+        /// <inheritdoc />
         public IEnumerable<TextFile> GetTextFiles()
         {
             var h = H;
@@ -226,6 +236,7 @@ namespace SysWeaver.MicroService
                 };
         }
 
+        /// <inheritdoc />
         public Task<ReadOnlyMemory<Byte>> TryReadTextFile(String name)
         {
             var h = H;

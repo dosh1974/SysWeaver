@@ -49,6 +49,7 @@ namespace SysWeaver.AI
     /// </summary>
     public sealed class LlamaSharpLlm
     {
+        /// <inheritdoc />
         public override string ToString() => String.Concat(Name, " : ", FilePath);
 
         #region Identity
@@ -220,6 +221,9 @@ namespace SysWeaver.AI
     /// </summary>
     public sealed class LlamaSharpAiParams : AiServiceParams
     {
+        /// <summary>
+        /// Create parameters, image input is disabled by default (MaxConcurrentImages is 0).
+        /// </summary>
         public LlamaSharpAiParams()
         {
             MaxConcurrentImages = 0;

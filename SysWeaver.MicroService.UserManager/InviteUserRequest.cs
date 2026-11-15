@@ -37,10 +37,19 @@ namespace SysWeaver.MicroService
     }                                                                                                                                                                                                                                                                                                                                           
 
 
+    /// <summary>
+    /// The input of <see cref="UserManagerService.AddUser"/> and <see cref="UserManagerService.ResetPassword"/>: the action token (received by the user) and the new password hash
+    /// </summary>
     public sealed class AddUserRequest
     {
+        /// <summary>
+        /// The action token that was sent to the user
+        /// </summary>
         public String Token { get; set; }
-        
+
+        /// <summary>
+        /// The hash of the new password, made with the salt that was returned for the token
+        /// </summary>
         public String NewHash { get; set; }
 
         /// <summary>

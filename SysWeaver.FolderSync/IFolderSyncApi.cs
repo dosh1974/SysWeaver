@@ -4,6 +4,9 @@ using SysWeaver.Remote;
 
 namespace SysWeaver.FolderSync
 {
+    /// <summary>
+    /// The json api of the folder sync server
+    /// </summary>
     public interface IFolderSyncApi : IRemoteApi
     {
         /// <summary>

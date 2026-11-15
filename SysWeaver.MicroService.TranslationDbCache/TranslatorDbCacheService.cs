@@ -24,6 +24,11 @@ namespace SysWeaver.MicroService
     [WebApiUrl("translator")]
     public class TranslatorDbCacheService : IHaveStats, IPerfMonitored, ITranslator
     {
+        /// <summary>
+        /// Create the service, the database tables are initialized in the background
+        /// </summary>
+        /// <param name="manager">The service manager (must contain an <see cref="IInternalTranslator"/> that does the actual translations)</param>
+        /// <param name="p">Parameters, null uses defaults</param>
         public TranslatorDbCacheService(ServiceManager manager, TranslatorDbCacheParams p = null)
         {
             p = p ?? new TranslatorDbCacheParams();
@@ -79,6 +84,9 @@ namespace SysWeaver.MicroService
 
         readonly PeriodicTask PruneTask;
 
+        /// <summary>
+        /// Stops the periodic pruning of the caches
+        /// </summary>
         public void Dispose()
         {
             PruneTask.Dispose();
@@ -270,8 +278,10 @@ namespace SysWeaver.MicroService
             return MemCaches[(int)retention].GetOrUpdateAsync(DbTranslation.ComputeHash(text, to, from, context), hash => InternalTranslate(hash, from, to, text, context, effort, retention, contentType, serviceName, userName));
         }
 
+        /// <inheritdoc />
         public string CanTranslateFrom(string from) => T.CanTranslateFrom(from);
 
+        /// <inheritdoc />
         public string CanTranslateTo(string to) => T.CanTranslateTo(to);
 
         /// <summary>
@@ -291,16 +301,16 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Returns a formatted from language if it's valid, else null
         /// </summary>
-        /// <param name="from"></param>
-        /// <returns></returns>
+        /// <param name="from">The language to check</param>
+        /// <returns>The formatted language, or null if it isn't supported</returns>
         public Task<String> CanFrom(String from)
             => Task.FromResult(T.CanTranslateFrom(from));
 
         /// <summary>
         /// Returns a formatted to language if it's valid, else null
         /// </summary>
-        /// <param name="to"></param>
-        /// <returns></returns>
+        /// <param name="to">The language to check</param>
+        /// <returns>The formatted language, or null if it isn't supported</returns>
         public Task<String> CanTo(String to)
             => Task.FromResult(T.CanTranslateTo(to));
 
@@ -427,8 +437,10 @@ namespace SysWeaver.MicroService
 
         static readonly String StatName = nameof(TranslatorDbCacheService);
 
+        /// <inheritdoc />
         public PerfMonitor PerfMon { get; private set; } = new PerfMonitor(StatName);
 
+        /// <inheritdoc />
         public IEnumerable<Stats> GetStats()
         {
             var count = Interlocked.Read(ref TranslationCount);
@@ -451,8 +463,8 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Display all translations in the database
         /// </summary>
-        /// <param name="r"></param>
-        /// <returns></returns>
+        /// <param name="r">Table request parameters</param>
+        /// <returns>A table with the translation inputs stored in the database</returns>
         [WebApi]
         [WebApiAuth(Roles.Debug)]
         [WebMenuTable(null, "Data/Translator/{0}", "Cached translations", "Translations stored in the database cache", null, 3)]
@@ -466,7 +478,7 @@ namespace SysWeaver.MicroService
         /// Get the details of a translation
         /// </summary>
         /// <param name="key">The hash key of the specific translation</param>
-        /// <returns></returns>
+        /// <returns>The translation details, or null if it isn't found</returns>
         [WebApi]
         [WebApiAuth(Roles.Debug)]
         public async Task<Translation> GetTranslation(String key)
@@ -507,8 +519,10 @@ namespace SysWeaver.MicroService
         /// Set a specific translation
         /// </summary>
         /// <param name="r">Parameters</param>
-        /// <param name="context"></param>
-        /// <returns></returns>
+        /// <param name="context">The current request (handled internally)</param>
+        /// <returns>True when the translation was updated (never false: a translation that is not found is a 409 with the reason)</returns>
+        /// <exception cref="HttpResponseException">409 with the reason: the translation was not found (it may have been deleted or expired)</exception>
+        /// <exception cref="Exception">If the new text is empty, or the stored translation no longer matches the original translation</exception>
         [WebApi]
         [WebApiAuth(Roles.Debug)]
         [WebApiAudit("Translation")]
@@ -522,10 +536,10 @@ namespace SysWeaver.MicroService
             using var dbt = await db.BeginTransactionAsync().ConfigureAwait(false);
             var inp = await db.FirstOrDefaultAsync<DbInput>(x => x.Hash == key).ConfigureAwait(false);
             if (inp == null)
-                return false;
+                throw HttpResponseException.Gone("Can't set the translation " + (key ?? "").ToQuoted() + ": it was not found (it may have been deleted or expired), refresh the table");
             var tr = await db.FirstOrDefaultAsync<DbTranslation>(x => x.Hash == key).ConfigureAwait(false);
             if (tr == null)
-                return false;
+                throw HttpResponseException.Gone("Can't set the translation " + (key ?? "").ToQuoted() + ": its translated text was not found (it may have been deleted or expired), refresh the table");
             if (!r.OriginalTranslation.FastEquals(inp.Translated))
                 throw new Exception("The translation have changed, validate that your new translation should be used!");
             inp.Translated = text;
@@ -551,8 +565,8 @@ namespace SysWeaver.MicroService
         /// Remove a specific translation
         /// </summary>
         /// <param name="key">The hash key of the translation to remove</param>
-        /// <param name="context"></param>
-        /// <returns></returns>
+        /// <param name="context">The current request (handled internally)</param>
+        /// <returns>Always true (also if the translation didn't exist)</returns>
         [WebApi]
         [WebApiAuth(Roles.Debug)]
         [WebApiAudit("Translation")]

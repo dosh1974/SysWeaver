@@ -3,6 +3,9 @@ using SysWeaver.AI;
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// The configuration of a chart (a Chart.js configuration with some additions)
+    /// </summary>
     public sealed class ChartJsConfig
     {
         /// <summary>

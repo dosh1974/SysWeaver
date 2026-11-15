@@ -18,7 +18,9 @@ using System.Threading.Tasks;
 namespace SysWeaver.Net.ExploreModule
 {
 
-
+    /// <summary>
+    /// A module that lets a developer explore the end points and content of the HTTP server, by adding "explore" at any level of the url.
+    /// </summary>
     [WebMenuEmbedded(null, "Debug/Explore", "Explore", "explore", "Explore the HTTP server end points", "IconExplore", 1, "Debug,Dev,Ops")]
     [WebMenuEmbedded(null, "Debug/LogoDesign", "App theme", "explore/logo.html", "The icon, logo, banner and colours of this app, and previews of the ones other seeds give (copy a seed into AppInfo AppSeed to change them)", "IconLogo", 11, "Debug")]
     [WebMenuEmbedded(null, "Debug/Icons", "Icons", "explore/icons.html", "Shows all available icons ('icons/*.svg' files)", "IconImage", 10, "Debug,Dev")]
@@ -30,10 +32,17 @@ namespace SysWeaver.Net.ExploreModule
         /// </summary>
         public HttpServerRequest Redirected { get; set; }
 
+        /// <inheritdoc/>
         public PerfMonitor PerfMon { get; private set; } = new PerfMonitor(nameof(ExploreHttpServerModule));
 
         const String Name = "explore";
 
+        /// <summary>
+        /// Create the module.
+        /// </summary>
+        /// <param name="dataModule">The static data module, supplies the default client cache duration.</param>
+        /// <param name="iconModule">The icon module, used to show folder icons and previews.</param>
+        /// <param name="p">Optional parameters, null to use the defaults.</param>
         public ExploreHttpServerModule(StaticDataHttpServerModule dataModule, IconHttpServerModule iconModule, ExploreHttpServerModuleParams p = null)
         {
             var pp = p ?? new ExploreHttpServerModuleParams();
@@ -56,6 +65,10 @@ namespace SysWeaver.Net.ExploreModule
             Icons = iconModule;
         }
 
+        /// <summary>
+        /// A description of the module.
+        /// </summary>
+        /// <returns>A short description text.</returns>
         public override string ToString() => "Provides functionality to explore a web server, add \"" + Name + "\" at any level to explore the content";
 
         readonly ITextSerializer ToJson;
@@ -68,6 +81,7 @@ namespace SysWeaver.Net.ExploreModule
 
         #region IHttpServerModule
 
+        /// <inheritdoc/>
         public IHttpRequestHandler Handler(HttpServerRequest context)
         {
             var l = context.LocalUrl;
@@ -80,12 +94,14 @@ namespace SysWeaver.Net.ExploreModule
                 return null;
             return this;
         }
+        /// <inheritdoc/>
         public IEnumerable<IHttpServerEndPoint> EnumEndPoints(string root = null) => HttpServerTools.NoEndPoints;
 
         #endregion//IHttpServerModule
 
         #region IHttpRequestHandler
 
+        /// <inheritdoc/>
         public HttpRequestData Get(HttpServerRequest request)
         {
             using (PerfMon.Track(nameof(GetAsync)))
@@ -154,23 +170,31 @@ namespace SysWeaver.Net.ExploreModule
         }
 
 
+        /// <inheritdoc/>
         public ValueTask<HttpRequestData> GetAsync(HttpServerRequest request)
         {
             throw new NotImplementedException();
         }
 
+        /// <inheritdoc/>
         public int ClientCacheDuration { get; private set; } = 1;
 
+        /// <inheritdoc/>
         public int RequestCacheDuration { get; private set; } = 15;
 
+        /// <inheritdoc/>
         public HttpCompressionPriority Compression { get; private set; }
 
+        /// <inheritdoc/>
         public ICompDecoder Decoder => null;
 
+        /// <inheritdoc/>
         public IReadOnlyList<string> Auth { get; private set; }
 
+        /// <inheritdoc/>
         public ValueTask<String> GetCacheKey(HttpServerRequest request) => TaskExt.NullStringValueTask;
 
+        /// <inheritdoc/>
         public string GetEtag(out bool useAsync, HttpServerRequest request)
         {
             useAsync = false;
@@ -476,6 +500,9 @@ namespace SysWeaver.Net.ExploreModule
 
     }
 
+    /// <summary>
+    /// Information about an icon end point, as listed by the icon explorer page.
+    /// </summary>
     public sealed class IconInfo
     {
         internal IconInfo(IHttpServerEndPoint e)
@@ -489,13 +516,31 @@ namespace SysWeaver.Net.ExploreModule
             LastModified = e.LastModified;
             Size = e.Size ?? -1;
         }
+        /// <summary>
+        /// Create an empty instance (used by serializers).
+        /// </summary>
         public IconInfo()
         {
         }
+        /// <summary>
+        /// The name of the icon (the last part of the url).
+        /// </summary>
         public String Name;
+        /// <summary>
+        /// The url of the icon.
+        /// </summary>
         public String Url;
+        /// <summary>
+        /// The location (source) of the icon, see <see cref="IHttpServerEndPoint.Location"/>.
+        /// </summary>
         public String Location;
+        /// <summary>
+        /// The size of the icon in bytes, -1 if unknown.
+        /// </summary>
         public long Size;
+        /// <summary>
+        /// The time when the icon was last modified.
+        /// </summary>
         public DateTime LastModified;
     }
 

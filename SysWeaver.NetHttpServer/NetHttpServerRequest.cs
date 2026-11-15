@@ -10,8 +10,23 @@ using System.Linq;
 
 namespace SysWeaver.Net
 {
+    /// <summary>
+    /// A request handled by <see cref="NetHttpServer"/>, a wrapper around an <see cref="HttpListenerContext"/>.
+    /// </summary>
     public sealed class NetHttpServerRequest : HttpServerRequest
     {
+        /// <summary>
+        /// Create a request from a listener context (created by <see cref="NetHttpServer"/>).
+        /// </summary>
+        /// <param name="context">The listener context.</param>
+        /// <param name="rawUrl">The raw url (including the query string).</param>
+        /// <param name="url">The url.</param>
+        /// <param name="prefix">The prefix the request was received on.</param>
+        /// <param name="server">The server that handles the request.</param>
+        /// <param name="host">The host info of the request.</param>
+        /// <param name="queryStart">The index of the query start in the url.</param>
+        /// <param name="didIndex">True if the url was changed to an index document.</param>
+        /// <param name="newMethod">Optional method to use instead of the method of the context.</param>
         public NetHttpServerRequest(HttpListenerContext context, String rawUrl, String url, String prefix, HttpServerBase server, HttpServerHostInfo host, int queryStart, bool didIndex, String newMethod = null) 
             : base(
                     newMethod ?? context.Request.HttpMethod,
@@ -33,6 +48,7 @@ namespace SysWeaver.Net
         readonly NameValueCollection ResHeaders;
 
 
+        /// <inheritdoc/>
         public override IEnumerable<KeyValuePair<String, IReadOnlyList<String>>> AllReqHeaders
         {
             get
@@ -43,6 +59,7 @@ namespace SysWeaver.Net
             }
         }
 
+        /// <inheritdoc/>
         public override IEnumerable<KeyValuePair<String, IReadOnlyList<String>>> AllResHeaders
         {
             get
@@ -53,31 +70,44 @@ namespace SysWeaver.Net
             }
         }
 
+        /// <inheritdoc/>
         public override String IfNoneMatch => ReqHeaders["If-None-Match"]?.Trim();
+        /// <inheritdoc/>
         public override string AcceptEncoding => ReqHeaders["Accept-Encoding"];
 
+        /// <inheritdoc/>
         public override Stream InputStream => Req.InputStream;
+        /// <inheritdoc/>
         public override Stream OutputStream => Res.OutputStream;
         
+        /// <inheritdoc/>
         public override long ReqContentLength => Req.ContentLength64;
+        /// <inheritdoc/>
         public override String GetReqHeader(String name) => ReqHeaders[name];
+        /// <inheritdoc/>
         public override String GetResHeader(String name) => ResHeaders[name];
 
+        /// <inheritdoc/>
         public override String GetResMime() => ResContentType;
 
         String ResContentType;
 
+        /// <inheritdoc/>
         public override void SetResMime(String mime)
         {
             ResContentType = mime;
             Res.ContentType = mime;
         }
 
+        /// <inheritdoc/>
         public override String ProtocolVersion => Req.ProtocolVersion.ToString();
 
+        /// <inheritdoc/>
         public override void SetResContentLength(long length) => Res.ContentLength64 = length;
+        /// <inheritdoc/>
         public override void SetResStatusCode(int statusCode) => Res.StatusCode = statusCode;
 
+        /// <inheritdoc/>
         public override int GetResStatusCode() => Res.StatusCode;
 
 
@@ -90,17 +120,20 @@ namespace SysWeaver.Net
             return t;
         }
 
+        /// <inheritdoc/>
         public override String GetReqCookie(String name, String cookieString = null)
         {
             (Cookies ?? ReadCookies(cookieString)).TryGetValue(name, out var cookie);
             return cookie;
         }
 
+        /// <inheritdoc/>
         public override void UpdateCookie(String str)
         {
             Res.AppendHeader("Set-Cookie", str);
         }
 
+        /// <inheritdoc/>
         public override void SetResBody(ReadOnlySpan<Byte> data)
         {
             var r = Res;
@@ -114,6 +147,7 @@ namespace SysWeaver.Net
         const int SyncWriteMaxSize = 64 << 10;
 #endif//NET11_0_OR_GREATER
 
+        /// <inheritdoc/>
         /// <remarks>
         /// .NET 11+: a body up to <see cref="SyncWriteMaxSize"/> is written synchronously (http.sys copies it, the write doesn't wait for the client).
         /// An async HttpListener write allocates and frees a native overlapped, and freeing it (ThreadPoolBoundHandle.FreeNativeOverlapped) is contended on .NET 11:
@@ -133,12 +167,14 @@ namespace SysWeaver.Net
             await r.OutputStream.WriteAsync(data).ConfigureAwait(false);
         }
 
+        /// <inheritdoc/>
         public override void SetResBody(Byte[] data, int offset, int length)
         {
             var r = Res;
             r.ContentLength64 = length;
             r.OutputStream.Write(data, offset, length);
         }
+        /// <inheritdoc/>
         /// <remarks>.NET 11+: a body up to <see cref="SyncWriteMaxSize"/> is written synchronously, see <see cref="SetResBodyAsync(ReadOnlyMemory{byte})"/></remarks>
         public override Task SetResBodyAsync(Byte[] data, int offset, int length)
         {
@@ -162,16 +198,19 @@ namespace SysWeaver.Net
         }
 
 
+        /// <inheritdoc/>
         public override void SetResHeader(String header, String value)
             => Res.Headers[header] = value;
 
         bool InternalIsDead;
 
+        /// <inheritdoc/>
         public override IPAddress GetIP()
         {
             return Req.RemoteEndPoint.Address;
         }
 
+        /// <inheritdoc/>
         public override bool IsDead()
         {
             if (InternalIsDead)
@@ -196,6 +235,7 @@ namespace SysWeaver.Net
         }.Freeze();
 
 
+        /// <inheritdoc/>
         public override void SetResHeaders(int status, IEnumerable<KeyValuePair<String, IReadOnlyList<String>>> headers, IReadOnlySet<String> ignore)
         {
             ignore = ignore ?? DefaultIgnoreHeaders;
@@ -222,12 +262,14 @@ namespace SysWeaver.Net
             to.StatusCode = status;
         }
 
+        /// <inheritdoc/>
         public override void Dispose()
         {
             OnDispose();
             base.Dispose();
         }
 
+        /// <inheritdoc/>
         public override HttpServerRequest ReplaceUrl(string newUrl, HttpServerHostInfo host, String prefix, int queryStart, HttpServerBase server, String newMethod = null)
         {
             var h = new NetHttpServerRequest(Context, newUrl, newUrl, prefix, server, host, queryStart, false, newMethod);
@@ -235,6 +277,7 @@ namespace SysWeaver.Net
             return h;
         }
 
+        /// <inheritdoc/>
         public override string GetRawQuery(string def = "")
         {
             var q = Req.Url.Query;

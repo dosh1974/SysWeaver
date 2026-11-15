@@ -197,27 +197,18 @@ namespace SysWeaver.Net
             _ => HttpServerMethods.Other,
         };
 
-        /*
-         
         /// <summary>
-        /// Local urls are cached (most requests are for a limited set of urls), so that the same local url doesn't allocate a new string for every request
+        /// Local urls are cached (most requests are for a limited set of urls), so that the same local url doesn't allocate a new string for every request.
+        /// Bounded (4096 urls of at most 256 chars, the urls are controlled by the clients), a url is cached the second time it's seen.
         /// </summary>
-        static readonly LowAllocConcurrentDictionary<String, String> LocalUrlCache = new LowAllocConcurrentDictionary<String, String>(MaxCachedLocalUrls);
-        static readonly LowAllocConcurrentDictionary<String, String>.AlternateLookup<ReadOnlySpan<Char>> LocalUrlLookup = LocalUrlCache.GetAlternateLookup<ReadOnlySpan<Char>>();
-        static int LocalUrlCacheCount;
+        /// <remarks>
+        /// A direct mapped table (<see cref="SpanStringCacheTable"/>): a hit is faster than the Substring it replaces (on .NET 10 and 11),
+        /// a concurrent dictionary with a span look up was not.
+        /// </remarks>
+        static readonly SpanStringCacheTable LocalUrlCache = new SpanStringCacheTable(4096, 256);
 
         /// <summary>
-        /// The max number of cached local urls (a bound, since the urls are controlled by the clients)
-        /// </summary>
-        const int MaxCachedLocalUrls = 4096;
-
-        /// <summary>
-        /// Longer local urls are never cached
-        /// </summary>
-        const int MaxCachedLocalUrlLength = 256;
-
-        /// <summary>
-        /// Get a part of the url, a cached string if the same local url has been seen before (same result as Substring)
+        /// Get a part of the url, a cached string if the same local url has been seen before (the same result as Substring, also the same exceptions)
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static String GetLocalUrl(String url, int start, int length)
@@ -226,25 +217,8 @@ namespace SysWeaver.Net
                 return url.Substring(start, length);
             if ((start == 0) && (length == url.Length))
                 return url;
-            if (length == 0)
-                return String.Empty;
-            var s = url.AsSpan(start, length);
-            if (length > MaxCachedLocalUrlLength)
-                return new String(s);
-            if (LocalUrlLookup.TryGetValue(s, out var cached))
-                return cached;
-            var n = new String(s);
-            //  When the cache is full it's cleared, so that it adapts to the urls in use (and can't be filled with junk urls forever)
-            if (Volatile.Read(ref LocalUrlCacheCount) >= MaxCachedLocalUrls)
-            {
-                LocalUrlCache.Clear();
-                Volatile.Write(ref LocalUrlCacheCount, 0);
-            }
-            if (LocalUrlCache.TryAdd(n, n))
-                Interlocked.Increment(ref LocalUrlCacheCount);
-            return n;
+            return LocalUrlCache.Get(url.AsSpan(start, length));
         }
-        */
 
         /// <summary>
         /// True if "index.html" was added automatically
@@ -285,8 +259,7 @@ namespace SysWeaver.Net
             var pl = prefix.Length;
             QueryStringStart = queryStart + 1;
             var l = (queryStart < 0 ? url.Length : queryStart) - pl;
-            //LocalUrl = GetLocalUrl(url, pl, l); // Use string cache
-            LocalUrl = url.Substring(pl, l);
+            LocalUrl = GetLocalUrl(url, pl, l);
             Server = server;
             Host = host;
         }

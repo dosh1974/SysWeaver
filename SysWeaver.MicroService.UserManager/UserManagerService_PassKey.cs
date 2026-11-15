@@ -90,6 +90,9 @@ namespace SysWeaver.MicroService
     /// </summary>
     public sealed class LastSignInMethodException : Exception, IHttpRefusal
     {
+        /// <summary>
+        /// Create the exception
+        /// </summary>
         public LastSignInMethodException() : base("The last way to sign in can't be removed: add a password or another passkey first")
         {
         }

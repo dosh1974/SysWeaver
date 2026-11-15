@@ -3,6 +3,9 @@ using SysWeaver.AI;
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// Options for the title of a chart or an axis
+    /// </summary>
     public sealed class ChartJsTitle
     {
         /// <summary>

@@ -4,6 +4,9 @@ using SysWeaver.Net;
 namespace SysWeaver.MicroService
 {
 
+    /// <summary>
+    /// A request for a Google Maps image
+    /// </summary>
     public class GetGoogleMapRequest
     {
 
@@ -37,14 +40,14 @@ namespace SysWeaver.MicroService
         public GoogleMapTypes Type = GoogleMapTypes.Satellite;
 
         /// <summary>
-        /// The width 
+        /// The width in pixels
         /// </summary>
         [EditDefault(1920)]
         [EditRange(64, 16384)]
         public int Width = 1920;
 
         /// <summary>
-        /// The height
+        /// The height in pixels
         /// </summary>
         [EditDefault(1080)]
         [EditRange(64, 16384)]
@@ -67,7 +70,7 @@ namespace SysWeaver.MicroService
         public String Pin;
 
         /// <summary>
-        /// When using a custom pin image you must specify the pin location withing the image.
+        /// When using a custom pin image you must specify the horizontal pin location within the image.
         /// The value here should be a percentage, ex: "50%".
         /// </summary>
         [EditDefault(null)]
@@ -75,7 +78,7 @@ namespace SysWeaver.MicroService
         public String PinX;
 
         /// <summary>
-        /// When using a custom pin image you must specify the pin location withing the image.
+        /// When using a custom pin image you must specify the vertical pin location within the image.
         /// The value here should be a percentage, ex: "50%".
         /// </summary>
         [EditDefault(null)]

@@ -3,8 +3,14 @@ using System;
 namespace SysWeaver.Db
 {
 
+    /// <summary>
+    /// Connection parameters for a MySql (or compatible) database
+    /// </summary>
     public class MySqlDbParams : DbParams
     {
+        /// <summary>
+        /// Create parameters with the default connection strings, the port defaults to 3306
+        /// </summary>
         public MySqlDbParams() : base(
             "server=[Server];user=[User];port=[Port];database=[Schema];password=[Password];SSL Mode=None",
             "server=[Server];user=[User];port=[Port];password=[Password];SSL Mode=None"
@@ -30,13 +36,13 @@ namespace SysWeaver.Db
 
 
         /// <summary>
-        /// Case sensitive collation (if case insensitive attribute is set for a column)
+        /// Case sensitive collation (if case sensitive attribute is set for a column)
         /// </summary>
         public String CharSetCollateC { get; set; } = "utf8mb4_bin";
 
 
         /// <summary>
-        /// The character set collation to use for the entire db (default)
+        /// The ascii character set collation to use for ascii columns (default)
         /// </summary>
         public String CharSetAsciiCollate { get; set; } = "ascii_bin";
 
@@ -48,7 +54,7 @@ namespace SysWeaver.Db
 
 
         /// <summary>
-        /// Case sensitive ascii collation (if case insensitive attribute is set for a column)
+        /// Case sensitive ascii collation (if case sensitive attribute is set for a column)
         /// </summary>
         public String CharSetAsciiCollateC { get; set; } = "ascii_bin";
 
@@ -62,6 +68,11 @@ namespace SysWeaver.Db
         /// </summary>
         public bool AllowPublicKeyRetrieval { get; set; } = true;
 
+        /// <summary>
+        /// Builds a connection string, adds ServerRSAPublicKeyFile and AllowPublicKeyRetrieval to the base connection string
+        /// </summary>
+        /// <param name="useSchema">If true the ConnectionString is used, else the ConnectionStringNoSchema is used</param>
+        /// <returns>A connection string</returns>
         public override string BuildConnectionString(bool useSchema = true)
         {
             var s = base.BuildConnectionString(useSchema);

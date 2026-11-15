@@ -4,15 +4,19 @@ using System.Threading.Tasks;
 namespace SysWeaver.MicroService
 {
 
+    /// <summary>
+    /// A folder that can be updated remotely (pushed to), the previous versions are kept as backups
+    /// </summary>
     public sealed class FsManagedFolder
     {
         /// <summary>
-        /// Name of repository, used when synching
+        /// Name of repository, used when synching.
+        /// If null or empty, the name of the disc folder is used.
         /// </summary>
         public String Name;
 
         /// <summary>
-        /// The folder to manage on disc
+        /// The folder to manage on disc (path templates are resolved)
         /// </summary>
         public String DiscFolder;
 
@@ -23,7 +27,8 @@ namespace SysWeaver.MicroService
         public String Auth;
 
         /// <summary>
-        /// The number of days to keep backup's
+        /// The number of days to keep backup's (negative values are treated as 0).
+        /// Defaults to 30.
         /// </summary>
         public int RemoveBackupsDays = 30;
 
@@ -54,14 +59,32 @@ namespace SysWeaver.MicroService
         public bool AllowPull;
 
         /// <summary>
-        /// Optionally use this auth for pulling
+        /// Optionally use this auth for pulling (only used if <see cref="AllowPull"/> is true), null to use <see cref="Auth"/>
         /// </summary>
         public String PullAuth;
 
+        /// <summary>
+        /// The signature of the handlers that run when a folder is activated, deactivated or a new folder is uploaded
+        /// </summary>
+        /// <param name="name">The name of the managed folder</param>
+        /// <param name="folderDiscPath">The path of the folder on disc</param>
+        /// <param name="commandRunner">Runs a command line (returns the exit code)</param>
+        /// <returns>null on success, else the exception (for activate and deactivate the activation is stopped and the exception is returned, for a new folder it is only reported)</returns>
         public delegate Task<Exception> ActivationHandler(String name, String folderDiscPath, Func<String, Task<int>> commandRunner);
 
+        /// <summary>
+        /// Optional code to run when the folder is activated (after <see cref="OnActivate"/>)
+        /// </summary>
         public ActivationHandler OnActivateAsync;
+
+        /// <summary>
+        /// Optional code to run before the folder is deactivated (after <see cref="OnDeactivate"/>)
+        /// </summary>
         public ActivationHandler OnDeactivateAsync;
+
+        /// <summary>
+        /// Optional code to run when a new folder is uploaded (after <see cref="OnNewFolder"/>)
+        /// </summary>
         public ActivationHandler OnNewFolderAsync;
 
         /// <summary>

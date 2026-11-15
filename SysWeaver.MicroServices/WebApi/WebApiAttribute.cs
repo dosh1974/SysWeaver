@@ -42,7 +42,7 @@ namespace SysWeaver.MicroService
         /// </summary>
         public readonly String Mime;
         /// <summary>
-        /// True to compress the output, null = use mime default
+        /// True to disable compression of the output, false = compress if the mime type is compressible
         /// </summary>
         public readonly bool DisableCompression;
 
@@ -70,7 +70,7 @@ namespace SysWeaver.MicroService
         }
 
         /// <summary>
-        /// The method must returns some readonly memory, and in that case the function should be treated as raw data (i.e no serialization will happen).
+        /// The method must return some readonly memory that is already compressed, and in that case the function is treated as raw data (i.e no serialization will happen).
         /// </summary>
         /// <param name="mime">The mimetype of the raw output data</param>
         /// <param name="preCompressedWith">The compression method used on the returned data</param>
@@ -86,7 +86,7 @@ namespace SysWeaver.MicroService
     }
 
     /// <summary>
-    /// The method must returns some readonly memory containg UTF8 encoded text, and in that case the function should be treated as raw data (i.e no serialization will happen).
+    /// The method must return some readonly memory containing UTF8 encoded text (mime type "text/plain; charset=UTF-8"), and in that case the function is treated as raw data (i.e no serialization will happen).
     /// </summary>
     [AttributeUsage(AttributeTargets.Method, AllowMultiple = false)]
     public class WebApiRawTextAttribute : WebApiRawAttribute
@@ -94,7 +94,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// The method must returns some readonly memory containg UTF8 encoded text, and in that case the function should be treated as raw data (i.e no serialization will happen).
         /// </summary>
-        /// <param name="disableCompression">True to automatically detect if compression should happen, else the default behaviour is used</param>
+        /// <param name="disableCompression">True to disable compression, else compression is used (the text mime type is compressible)</param>
         public WebApiRawTextAttribute(bool disableCompression = false) : base("text/plain; charset=UTF-8", disableCompression)
         {
         }
@@ -121,9 +121,13 @@ namespace SysWeaver.MicroService
             MaxQueue = maxQueue;
             MaxDelay = maxDelay;
         }
+        /// <summary>Number of requests allowed per duration</summary>
         public readonly int Count;
+        /// <summary>The time frame in seconds</summary>
         public readonly int Duration;
+        /// <summary>The maximum number of requests to keep queued</summary>
         public readonly int MaxQueue;
+        /// <summary>The maximum time to delay a request</summary>
         public readonly int MaxDelay;
     }
 
@@ -147,9 +151,13 @@ namespace SysWeaver.MicroService
             MaxQueue = maxQueue;
             MaxDelay = maxDelay;
         }
+        /// <summary>Number of requests allowed per duration</summary>
         public readonly int Count;
+        /// <summary>The time frame in seconds</summary>
         public readonly int Duration;
+        /// <summary>The maximum number of requests to keep queued</summary>
         public readonly int MaxQueue;
+        /// <summary>The maximum time to delay a request</summary>
         public readonly int MaxDelay;
     }
 
@@ -198,6 +206,9 @@ namespace SysWeaver.MicroService
             MethodName = methodName;
         }
 
+        /// <summary>
+        /// Name of the filter method
+        /// </summary>
         public readonly String MethodName;
     }
 
@@ -225,6 +236,9 @@ namespace SysWeaver.MicroService
         }
 
 
+        /// <summary>
+        /// Name of the filter method
+        /// </summary>
         public readonly String MethodName;
     }
 }

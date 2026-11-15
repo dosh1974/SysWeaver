@@ -15,25 +15,37 @@ using SysWeaver.MicroService;
 
 namespace SysWeaver.Chart
 {
+    /// <summary>
+    /// Exports a chart.js chart (bar, line, pie and doughnut) as an Excel workbook with a native chart
+    /// </summary>
     public sealed class ChartJsExcelExporter : IChartExporter
     {
+        /// <summary>
+        /// The shared instance
+        /// </summary>
         public static readonly ChartJsExcelExporter Instance = new ChartJsExcelExporter();
 
         ChartJsExcelExporter()
         {
         }
 
-        public string Name => "Excel Workbook";
+        /// <inheritdoc />
+        public string Name =>"Excel Workbook";
 
-        public string Desc => "Save the chart as an Excel workbook file";
+        /// <inheritdoc />
+        public string Desc =>"Save the chart as an Excel workbook file";
 
-        public string Icon => "IconFileXlsx";
+        /// <inheritdoc />
+        public string Icon =>"IconFileXlsx";
 
-        public double Order => -2;
+        /// <inheritdoc />
+        public double Order =>-2;
 
-        public ChartExportInputTypes InputType => ChartExportInputTypes.Data;
+        /// <inheritdoc />
+        public ChartExportInputTypes InputType =>ChartExportInputTypes.Data;
 
-        public bool RequireUser => false;
+        /// <inheritdoc />
+        public bool RequireUser =>false;
 
 
         static String ColumnName(int index)
@@ -137,6 +149,7 @@ namespace SysWeaver.Chart
 
 
 
+        /// <inheritdoc />
         public Task<MemoryFile> Export(object data, object context, ChartExportOptions options = null)
         {
             options = options ?? new ChartExportOptions();

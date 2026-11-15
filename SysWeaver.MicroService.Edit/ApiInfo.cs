@@ -2,6 +2,9 @@
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// Describes a web api method, including its argument and return types
+    /// </summary>
     public sealed class ApiInfo : ApiInfoBase
     {
         /// <summary>

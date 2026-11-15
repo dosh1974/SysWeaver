@@ -5,8 +5,16 @@ using System.Linq;
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// Provides image repositories (<see cref="ImageRepo"/>) to the file uploader
+    /// </summary>
     public sealed class ImageRepoService : IFileRepoContainer
     {
+        /// <summary>
+        /// Create the service
+        /// </summary>
+        /// <param name="p">Parameters, the size names of every repository are validated</param>
+        /// <exception cref="Exception">If a size name is empty, doesn't contain "{0}", is "{0}" or is used more than once in a repository</exception>
         public ImageRepoService(ImageRepoParams p)
         {
             Repos = p?.Repos;
@@ -30,6 +38,7 @@ namespace SysWeaver.MicroService
             }
         }
 
+        /// <inheritdoc />
         public IFileRepo[] Repos { get; init; }
 
         internal static readonly IReadOnlyDictionary<String, ImageExt> SaveFormats = new Dictionary<String, ImageExt>(StringComparer.Ordinal)

@@ -234,6 +234,12 @@ namespace SysWeaver
             }
         }
 
+        /// <summary>
+        /// Make a directory and everything in it readable and writable by everyone (sets the file modes and a default ACL, symbolic links are not followed).
+        /// A directory (or parent directory) that was already handled by this process is skipped.
+        /// </summary>
+        /// <param name="directoryName">The directory</param>
+        /// <returns>Null if successful, else the exception (the directory doesn't exist, is a symbolic link, or permissions couldn't be changed)</returns>
         public Exception MakeDirectoryAccessableToEveryOne(String directoryName)
         {
             try

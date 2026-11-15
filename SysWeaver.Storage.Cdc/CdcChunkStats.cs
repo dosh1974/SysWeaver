@@ -4,6 +4,9 @@ using System.Collections.Generic;
 namespace SysWeaver
 {
 
+    /// <summary>
+    /// Chunk statistics for a single file stored within a compacted (chunked) file
+    /// </summary>
     public sealed class CdcChunkFileStats
     {
         /// <summary>
@@ -31,6 +34,14 @@ namespace SysWeaver
         /// </summary>
         public readonly long ExpandedSize;
 
+        /// <summary>
+        /// Create chunk statistics for a file
+        /// </summary>
+        /// <param name="name">File name (local within compressed file)</param>
+        /// <param name="chunkCount">Number of chunks</param>
+        /// <param name="compressedSize">Sum of all chunk lengths</param>
+        /// <param name="missingChunkCount">Number of missing chunks</param>
+        /// <param name="expandedSize">Expanded size (optional)</param>
         public CdcChunkFileStats(string name, long chunkCount, long compressedSize, long missingChunkCount, long expandedSize)
         {
             Name = name;
@@ -42,6 +53,9 @@ namespace SysWeaver
     }
 
 
+    /// <summary>
+    /// Chunk statistics for a compacted (chunked) file, as returned by expand, recover and verify operations
+    /// </summary>
     public sealed class CdcChunkStats
     {
         /// <summary>
@@ -70,7 +84,7 @@ namespace SysWeaver
         public readonly long TotalMissing;
 
         /// <summary>
-        /// Total number of unique chunks
+        /// The unique chunks (names/hashes) referenced
         /// </summary>
         public readonly IReadOnlyCollection<String> UniqueChunks;
 
@@ -94,6 +108,19 @@ namespace SysWeaver
         /// </summary>
         public readonly long FileSize;
 
+        /// <summary>
+        /// Create chunk statistics, null collections are replaced by empty ones
+        /// </summary>
+        /// <param name="fileSize">Size of the archive file</param>
+        /// <param name="fileCount">Number of files</param>
+        /// <param name="chunkCount">Total number of chunks</param>
+        /// <param name="totalMissing">Total number of missing chunks</param>
+        /// <param name="chunkCompSize">The total size of the compressed chunks</param>
+        /// <param name="chunkExpSize">The total size of the expanded chunks (only available if specified)</param>
+        /// <param name="missingChunks">All missing chunks</param>
+        /// <param name="brokenFiles">All broken files</param>
+        /// <param name="uniqueChunks">The unique chunks</param>
+        /// <param name="files">File information</param>
         public CdcChunkStats(
             long fileSize,
             long fileCount, 
@@ -121,6 +148,9 @@ namespace SysWeaver
         static readonly IReadOnlyCollection<String> Empty = new List<string>();
         static readonly IReadOnlyCollection<CdcChunkFileStats> EmptyF = new List<CdcChunkFileStats>();
 
+        /// <summary>
+        /// Statistics with all counts and sizes being zero and no chunks or files
+        /// </summary>
         public static readonly CdcChunkStats Zero = new CdcChunkStats(0, 0, 0, 0, 0, 0, Empty, Empty, Empty, EmptyF);
 
     }

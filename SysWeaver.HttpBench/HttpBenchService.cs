@@ -20,6 +20,11 @@ namespace SysWeaver.HttpBench
     [WebMenuEmbedded(null, "Debug/HttpBench", "HTTP bench", "httpbench/bench.html", "Performance test a SysWeaver server: many workers call its public end points, then a report with tables and charts", "httpbench/bench.svg", 40, null, false, nameof(CanUse))]
     public sealed class HttpBenchService : IRunTimeWebApiAuth, IDisposable
     {
+        /// <summary>
+        /// Create the service
+        /// </summary>
+        /// <param name="manager">The service manager</param>
+        /// <param name="p">Optional parameters, if null the defaults are used</param>
         public HttpBenchService(ServiceManager manager, HttpBenchParams p = null)
         {
             p = p ?? new HttpBenchParams();
@@ -31,6 +36,9 @@ namespace SysWeaver.HttpBench
             };
         }
 
+        /// <summary>
+        /// The configured auth and the id of the running test.
+        /// </summary>
         public override string ToString() => "Auth: " + (P.Auth ?? "anyone") + ", running: " + (Current?.Id.ToString(CultureInfo.InvariantCulture) ?? "none");
 
         readonly HttpBenchParams P;
@@ -51,6 +59,9 @@ namespace SysWeaver.HttpBench
         BenchRun Current;
         int NextId;
 
+        /// <summary>
+        /// Stop the running test (if any).
+        /// </summary>
         public void Dispose()
         {
             BenchRun c;

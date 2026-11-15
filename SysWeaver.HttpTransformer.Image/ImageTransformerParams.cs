@@ -2,6 +2,9 @@
 
 namespace SysWeaver.HttpTransformer
 {
+    /// <summary>
+    /// Parameters for <see cref="ImageTransformer"/>.
+    /// </summary>
     public class ImageTransformerParams : CachedTransformerParams
     {
 

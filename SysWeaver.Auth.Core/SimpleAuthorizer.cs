@@ -609,9 +609,10 @@ namespace SysWeaver.Auth
         /// Requires <see cref="SimpleAuthorizerParams.ApiKeyManagementAuth"/> (disabled if API keys are disabled).
         /// </summary>
         /// <param name="keyName">The name of the key (user name), or the full "name:key" string</param>
-        /// <returns>True if the key was removed, false if it doesn't exist</returns>
+        /// <returns>True when the key was removed (never false: a key that doesn't exist is a 409 with the reason)</returns>
         /// <param name="context">The caller (handled internally by the web api), named in the log line, may be null</param>
         /// <exception cref="ArgumentNullException"><paramref name="keyName"/> is null (DEBUG builds only).</exception>
+        /// <exception cref="SysWeaver.Net.HttpResponseException">409 with the reason: there is no API key with that name (it may already be removed)</exception>
         [WebApi(ApiKeyPath)]
         [WebApiAuth(ApiKeyAuth)]
         [WebApiAudit(ApiKeyAuditGroup)]
@@ -624,7 +625,7 @@ namespace SysWeaver.Auth
             {
                 var t = KeyValueStore.AllApp.TryGet<String[]>(ApiKeyKey);
                 if (t == null)
-                    return false;
+                    throw SysWeaver.Net.HttpResponseException.Gone("Can't remove the API key " + (keyName.Split(':')[0]).ToQuoted() + ": there are no API keys (it may already be removed), refresh the list");
                 var tl = t.Length;
                 var isFull = keyName.Contains(':');
                 int del = -1;
@@ -653,7 +654,7 @@ namespace SysWeaver.Auth
 
                 }
                 if (del < 0)
-                    return false;
+                    throw SysWeaver.Net.HttpResponseException.Gone("Can't remove the API key " + (keyName.Split(':')[0]).ToQuoted() + ": it doesn't exist (it may already be removed), refresh the list");
                 var removedName = t[del].Split(':')[0];
                 t = t.RemoveAt(del);
                 KeyValueStore.AllApp.Set(ApiKeyKey, t);

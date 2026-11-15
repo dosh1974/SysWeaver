@@ -282,7 +282,16 @@ public static class ShaderStages
         return (Blank(body, s, f => !vertex.Contains(f.Name) || fragment.Contains(f.Name)), Blank(body, s, f => vertex.Contains(f.Name)));
     }
 
-    public enum Stage { Fragment, Vertex, PerPixel }
+    /// <summary>The stage a varying declaration is rewritten for (see <see cref="RewriteVaryings"/>)</summary>
+    public enum Stage
+    {
+        /// <summary>The fragment stage (in / varying)</summary>
+        Fragment,
+        /// <summary>The vertex stage (out / varying)</summary>
+        Vertex,
+        /// <summary>No varyings: plain globals (the shader runs in a single stage)</summary>
+        PerPixel
+    }
 
     /// <summary>
     /// The top level varying declarations for a stage: GLSL ES 3.00 out (vertex) / in (fragment), integer types flat; GLSL ES 1.00 varying

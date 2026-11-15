@@ -32,10 +32,19 @@ namespace SysWeaver.MicroService
     }
 
 
+    /// <summary>
+    /// Limits for the user data of the user manager
+    /// </summary>
     public static class UserManagerTools
     {
+        /// <summary>
+        /// The maximum length of a user data string value
+        /// </summary>
         public const int MaxDataStringLength = 256;
 
+        /// <summary>
+        /// The maximum length of a user data key
+        /// </summary>
         public const int MaxDataKeyLength = 32;
 
 

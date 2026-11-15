@@ -17,10 +17,18 @@ namespace SysWeaver.Chat
 {
 
 
+    /// <summary>
+    /// A chat provider that stores the messages of each chat room in a MySql table.
+    /// </summary>
     [IsMicroService]
     [OptionalDep<IUserStorageService>]
     public class MySqlChat : IChatProvider
     {
+        /// <summary>
+        /// Create the provider (the database and the rooms in the parameters are initialized in the background).
+        /// </summary>
+        /// <param name="manager">The service manager</param>
+        /// <param name="p">Parameters, null uses the defaults</param>
         public MySqlChat(ServiceManager manager, MySqlChatParams p)
         {
             p = p ?? new MySqlChatParams();
@@ -32,6 +40,10 @@ namespace SysWeaver.Chat
 
         readonly IUserStorageService Storage;
 
+        /// <summary>
+        /// Add a provider of dynamic rooms
+        /// </summary>
+        /// <param name="provider">The room provider</param>
         public void AddRoomProvider(IMySqlRoomProvider provider)
         {
             lock (RoomProviders)
@@ -40,6 +52,10 @@ namespace SysWeaver.Chat
             }
         }
 
+        /// <summary>
+        /// Remove a provider of dynamic rooms
+        /// </summary>
+        /// <param name="provider">The room provider</param>
         public void RemoveRoomProvider(IMySqlRoomProvider provider)
         {
             lock (RoomProviders)
@@ -64,6 +80,13 @@ namespace SysWeaver.Chat
 
         readonly AsyncLock RoomsLock = new AsyncLock();
 
+        /// <summary>
+        /// Register a room (and optionally create its message table), does nothing if the room is already registered.
+        /// </summary>
+        /// <param name="room">The room, the name must be 1 to 64 chars</param>
+        /// <param name="createTable">True to create the message table of the room if it doesn't exist</param>
+        /// <returns>Always true</returns>
+        /// <exception cref="Exception">The room name is empty or too long</exception>
         public async Task<bool> InitRoom(MySqlChatRoom room, bool createTable = true)
         {
             var rooms = Rooms;
@@ -277,10 +300,15 @@ namespace SysWeaver.Chat
 
 
 
+        /// <inheritdoc/>
         public string Name { get; init; }
 
+        /// <summary>
+        /// Not supported, returns null (rooms are defined by the parameters and room providers).
+        /// </summary>
         public Task<String> CreateNewChat(String type, HttpServerRequest request) => TaskExt.NullStringTask;
 
+        /// <inheritdoc/>
         public async Task<bool> Clear(string providerChatId, HttpServerRequest request)
         {
             var room = await GetAuthenticatedRoom(providerChatId, request).ConfigureAwait(false);
@@ -301,6 +329,7 @@ namespace SysWeaver.Chat
             return true;
         }
 
+        /// <inheritdoc/>
         public async Task<bool> RemoveMessage(string providerChatId, long messageId, HttpServerRequest request)
         {
             var room = await GetAuthenticatedRoom(providerChatId, request).ConfigureAwait(false);
@@ -311,7 +340,7 @@ namespace SysWeaver.Chat
             using var lck = await room.Lock().ConfigureAwait(false);
             using var con = await db.GetAsync().ConfigureAwait(false);
             if (!await room.CheckTable(db, con).ConfigureAwait(false))
-                return false;
+                throw new Exception("Unknown message id #" + messageId);
             var m = await con.FirstOrDefaultAsync<DbChatMessage>(x =>
             {
                 x.From(table);
@@ -330,6 +359,7 @@ namespace SysWeaver.Chat
             return true;
         }
 
+        /// <inheritdoc/>
         public async Task<long> GetCurrentId(string providerChatId, HttpServerRequest request)
         {
             var room = await GetAuthenticatedRoom(providerChatId, request).ConfigureAwait(false);
@@ -413,12 +443,14 @@ namespace SysWeaver.Chat
             return Array.Empty<Chat.ChatMessage>();
         }
 
+        /// <inheritdoc/>
         public async Task<Chat.ChatMessage[]> GetMessages(string providerChatId, HttpServerRequest request, long pivotId, int maxCount)
         {
             var room = await GetAuthenticatedRoom(providerChatId, request).ConfigureAwait(false);
             return await InternalGetMessages(room, request.Session.Auth?.Guid, pivotId, maxCount).ConfigureAwait(false);
         }
 
+        /// <inheritdoc/>
         public async Task<ChatJoinResponse> Join(string providerChatId, HttpServerRequest request, long pivotId = 0, int maxCount = 50)
         {
             var room = await GetAuthenticatedRoom(providerChatId, request).ConfigureAwait(false);
@@ -428,6 +460,7 @@ namespace SysWeaver.Chat
             return new ChatJoinResponse(room.R, session, msgs, Storage);
         }
 
+        /// <inheritdoc/>
         public async Task<ChatMessage> GetChatMessage(String providerChatId, long messageId, HttpServerRequest request)
         {
             var room = await GetAuthenticatedRoom(providerChatId, request).ConfigureAwait(false);
@@ -448,6 +481,7 @@ namespace SysWeaver.Chat
         }
 
 
+        /// <inheritdoc/>
         public async Task<bool> UserMessage(string providerChatId, HttpServerRequest request, ChatMessageBody message)
         {
             var room = await GetAuthenticatedRoom(providerChatId, request).ConfigureAwait(false);
@@ -482,6 +516,7 @@ namespace SysWeaver.Chat
             return true;
         }
 
+        /// <inheritdoc/>
         public async Task<bool> SetValue(String providerChatId, HttpServerRequest request, long messageId, String key, String value)
         {
             var room = await GetAuthenticatedRoom(providerChatId, request).ConfigureAwait(false);

@@ -1,5 +1,8 @@
 ﻿namespace SysWeaver.AI
 {
+    /// <summary>
+    /// The aspect ratio of a generated image
+    /// </summary>
     public enum AiImageAspectRatios
     {
         /// <summary>

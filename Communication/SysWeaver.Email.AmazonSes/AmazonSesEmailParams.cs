@@ -3,9 +3,13 @@ using System;
 
 namespace SysWeaver.Email
 {
+    /// <summary>
+    /// Parameters for the <see cref="AmazonSesEmailService"/>
+    /// </summary>
     public sealed class AmazonSesEmailParams : CredentialParams
     {
 
+        /// <inheritdoc />
         public override string ToString() => String.Concat(Region, ", From: ", From.ToQuoted(), String.IsNullOrEmpty(ConfigurationSet) ? ", Auth: " : ", Config set: " + ConfigurationSet.ToQuoted() + ", Auth: ", base.ToString());
 
         // User = AWS access key id, Password = AWS secret access key.
@@ -36,7 +40,7 @@ namespace SysWeaver.Email
         public String ConfigurationSet { get; set; }
 
         /// <summary>
-        /// Number of times to retry sending an email (before returning a failure).
+        /// Maximum number of attempts to send an email (including the first, minimum 1) before returning a failure.
         /// Requests rejected by SES (invalid address, unverified identity etc) are not retried.
         /// Default: 3.
         /// </summary>

@@ -2,6 +2,9 @@
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// Parameters for the <see cref="FileLogService"/>
+    /// </summary>
     public sealed class FileLogParams
     {
         /// <summary>
@@ -27,7 +30,7 @@ namespace SysWeaver.MicroService
         /// </summary>
         public Message.TextStyles Style = Message.TextStyles.Verbose;
         /// <summary>
-        /// How to handle writing, 
+        /// How to handle writing (default is async)
         /// </summary>
         public MessageHandler.Modes Mode = MessageHandler.Modes.Async;
         /// <summary>

@@ -29,4 +29,4 @@ The generated `.opt/` and `web/` folders are not in the repository.
 ## Relationships
 
 - **Part of:** [SysWeaver.Chat](../README.md)
-- **Uses:** [SvgOpt](../../_tools/svg_opt/README.md) and [Compress](../../_tools/compress/README.md) at build time
+- **Uses:** [SvgOpt](https://github.com/dosh1974/SysWeaver.Tools/blob/main/SvgOpt/README.md) and [Compress](https://github.com/dosh1974/SysWeaver.Tools/blob/main/Compress/README.md) at build time

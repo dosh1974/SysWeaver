@@ -27,6 +27,11 @@ namespace SysWeaver.WebBrowser
         }
 
 
+        /// <summary>
+        /// Create the browser service, the CEF runtime is initialized during construction if <see cref="CefWebBrowserParams.Init"/> is set (else on first use)
+        /// </summary>
+        /// <param name="messageHost">The message host used for logging</param>
+        /// <param name="p">The parameters, null to use the defaults</param>
         public CefWebBrowser(IMessageHost messageHost, CefWebBrowserParams p = null)
         {
             p = p ?? new CefWebBrowserParams();
@@ -54,6 +59,9 @@ namespace SysWeaver.WebBrowser
 
         readonly IMessageHost M;
 
+        /// <summary>
+        /// Dispose all free windows, and shut down CEF if no windows are allocated
+        /// </summary>
         public void Dispose()
         {
             IsDisposing = true;
@@ -72,6 +80,10 @@ namespace SysWeaver.WebBrowser
 
         bool DidInit;
 
+        /// <summary>
+        /// Initialize the CEF runtime, does nothing if already initialized (called automatically when opening a window)
+        /// </summary>
+        /// <returns>A task that completes when CEF is initialized</returns>
         public async Task Init()
         {
             if (DidInit)
@@ -111,6 +123,10 @@ namespace SysWeaver.WebBrowser
             FreeWindows.Push(win);
         }
 
+        /// <summary>
+        /// Open a browser window, a free (previously released) window is reused if available
+        /// </summary>
+        /// <returns>The window (dispose it to release it back to the service), or null if the service is disposing</returns>
         public async Task<IBrowserWindow> OpenWindow()
         {
             if (IsDisposing)
@@ -134,6 +150,7 @@ namespace SysWeaver.WebBrowser
 
         const String Name = "CefBrowserService";
 
+        /// <inheritdoc />
         public IEnumerable<Stats> GetStats()
         {
             yield return new Stats(Name, "Allocated", Interlocked.Read(ref AllocatedWindowCount), "The maximum number of allocated browser windows");

@@ -85,7 +85,7 @@
             if (obj[mn] === undefined)
                 obj[mn] = def ?? null;
             const text = E.CreateTextInput(() => obj[mn], null, null, EditTypeDefault.Text, member.Summary, null, null, 0, def, true);
-            text.setAttribute("aria-label", member.DisplayName || mn);
+            text.setAttribute("aria-label", E.Handler.Label(member));
             editContext.Element.append(text);
             return E.Handler.Item(obj, editor, member, {
                 Focus: text, Title: def !== undefined ? E.Util.AddLine(null, _TF("Default value", "Header of a tool tip row with the default value of a property"), def) : null,

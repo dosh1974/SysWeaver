@@ -498,7 +498,7 @@
                 }
                 else {
                     //  The shared error state in the page (what failed, Try again, the technical text under Details), no toast
-                    const msg = e && e.message ? e.message : String(e);
+                    const msg = Sw.ErrorMessage(e);
                     this.ShowState({
                         Kind: "error",
                         Title: _TF("The file could not be loaded", "Title of the error state of the text viewer when the file failed to load"),
@@ -768,7 +768,7 @@
                     t.UpdateDirty();
                 }
                 catch (e) {
-                    Sw.Fail(_TF("Failed to reload the file", "Error message displayed when a file reload failed") + ":\n" + (e.message || e));
+                    Sw.Fail(_TF("Failed to reload the file", "Error message displayed when a file reload failed") + ":\n" + Sw.ErrorMessage(e));
                 }
             };
             const actions = [];
@@ -799,7 +799,7 @@
                             }
                         }
                         catch (e) {
-                            Sw.Fail(e && e.message ? e.message : String(e));
+                            Sw.Fail(Sw.ErrorMessage(e));
                         }
                     },
                 }));
@@ -1482,7 +1482,7 @@
             catch (e) {
                 //  One message per failure streak (the server may be restarting), polling goes on
                 if (!t.PollFailed)
-                    Sw.Fail(_TF("Failed to reload the file", "Error message displayed when a file reload failed") + ":\n" + (e.message || e));
+                    Sw.Fail(_TF("Failed to reload the file", "Error message displayed when a file reload failed") + ":\n" + Sw.ErrorMessage(e));
                 t.PollFailed = true;
             }
             finally {
@@ -1636,7 +1636,7 @@
                 if (Sw.Access && Sw.Access.IsDenied(e))
                     Sw.Access.ActionDenied(e, b.Save);
                 else
-                    Sw.Fail(_TF("Failed to save the file", "Error message displayed when the file failed to be saved") + ":\n" + (e.message || e));
+                    Sw.Fail(_TF("Failed to save the file", "Error message displayed when the file failed to be saved") + ":\n" + Sw.ErrorMessage(e));
             }
             finally {
                 b.Save.SetWorking(false);
@@ -1740,7 +1740,7 @@
                 if (Sw.Access && Sw.Access.IsDenied(e))
                     Sw.Access.ActionDenied(e, b.Delete);
                 else
-                    Sw.Fail(_TF("Failed to delete the file", "Error message displayed when the file failed to be deleted") + ":\n" + (e.message || e));
+                    Sw.Fail(_TF("Failed to delete the file", "Error message displayed when the file failed to be deleted") + ":\n" + Sw.ErrorMessage(e));
                 if (b.Save && !b.Save.E.classList.contains("sw-denied-action"))
                     b.Save.SetDisabled(false);
             }

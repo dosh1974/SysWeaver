@@ -61,6 +61,12 @@ namespace SysWeaver.MicroService
             sm.Remove(srcName);
         }
 
+        /// <summary>
+        /// Add a remote folder: syncs it (if <see cref="FsRemoteFolder.SyncOnStart"/>), exposes it as a web folder (if configured) and starts keeping it updated
+        /// </summary>
+        /// <param name="x">The folder</param>
+        /// <returns>The full path of the folder on disc</returns>
+        /// <exception cref="Exception">If a remote folder with the same name was already added</exception>
         public async Task<String> AddRemoteFolder(FsRemoteFolder x)
         {
 
@@ -129,6 +135,11 @@ namespace SysWeaver.MicroService
             return folder;
         }
 
+        /// <summary>
+        /// Remove a remote folder (stops updating it and removes the web folder), nothing is deleted on disc
+        /// </summary>
+        /// <param name="x">The folder (identified by its name)</param>
+        /// <returns>True if the folder was removed, false if it wasn't added</returns>
         public bool RemoveRemoteFolder(FsRemoteFolder x)
         {
             var folders = RemoteFolders;
@@ -242,7 +253,7 @@ namespace SysWeaver.MicroService
         /// Get the current version of a remote or shared folder
         /// </summary>
         /// <param name="folderName">The name of the remote or shared folder as declared in the config</param>
-        /// <param name="context"></param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
         /// <returns>The version or null if not allowed or non-existent</returns>
         [WebApi]
         public String GetFolderVersion(String folderName, HttpServerRequest context)
@@ -322,16 +333,20 @@ namespace SysWeaver.MicroService
         }
 
 
+        /// <summary>
+        /// Get information about all remote folders
+        /// </summary>
+        /// <returns>One row per remote folder</returns>
         public IEnumerable<RemoteFolderData> GetRemoteFolderData()
             => RemoteFolders.Values.Select(GetRemoteFolderData);
 
 
 
         /// <summary>
-        /// All shared folders as a table
+        /// All remote folders as a table
         /// </summary>
-        /// <param name="r"></param>
-        /// <returns></returns>
+        /// <param name="r">Table request: paging, sorting and filtering</param>
+        /// <returns>Table data, one row per remote folder</returns>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
         [WebMenuTable(null, HttpServerBase.MenuOperations + "/{0}", "Remote folders", "Details about folders that are automatically synced from a remote service", "IconSync", 22)]

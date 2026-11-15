@@ -6,17 +6,26 @@ namespace SysWeaver.AI
 
 
 
+    /// <summary>
+    /// The context of a tool call in a chat session (properties of the session, links and files attached to the response message)
+    /// </summary>
     public sealed class AiToolContext : IAiToolContext
     {
+        /// <summary>
+        /// The chat session that the tool is called from
+        /// </summary>
         public readonly IAiChatSession Session;
 
 
-        public void SetProperty<T>(String key, T value) 
+        /// <inheritdoc />
+        public void SetProperty<T>(String key, T value)
             => Session.SetProperty(key, value);
 
-        public bool TryGetProperty<T>(String key, out T value) 
+        /// <inheritdoc />
+        public bool TryGetProperty<T>(String key, out T value)
             => Session.TryGetProperty(key, out value);
 
+        /// <inheritdoc />
         public bool TryRemoveProperty<T>(String key, out T value)
             => Session.TryRemoveProperty(key, out value);
 
@@ -41,7 +50,7 @@ namespace SysWeaver.AI
         /// </summary>
         /// <param name="mime">The mimetype of the file</param>
         /// <param name="data">The data of the file</param>
-        /// <param name="filename">The data of the file</param>
+        /// <param name="filename">The name of the file</param>
         /// <returns>The local url to the file</returns>
         public String AddMessageFile(String mime, String data, String filename)
             => SaveFile(mime, data, filename);
@@ -52,7 +61,7 @@ namespace SysWeaver.AI
         /// </summary>
         /// <param name="mime">The mimetype of the file</param>
         /// <param name="data">The data of the file</param>
-        /// <param name="filename">The data of the file</param>
+        /// <param name="filename">The name of the file</param>
         /// <returns>The local url to the file</returns>
         public String AddMessageFile(String mime, ReadOnlyMemory<Byte> data, String filename)
         {
@@ -92,10 +101,10 @@ namespace SysWeaver.AI
         }
 
         /// <summary>
-        /// Atach some data to a message
+        /// Attach some data to a message
         /// </summary>
-        /// <param name="data"></param>
-        /// <returns></returns>
+        /// <param name="data">The data object to attach</param>
+        /// <returns>The local url to the data</returns>
         public String AddMessageData(Object data)
             => SaveData(data);
 

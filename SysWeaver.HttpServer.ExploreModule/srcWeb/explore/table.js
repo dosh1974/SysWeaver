@@ -593,22 +593,6 @@
     }
 
     /**
-     * A footer button: an icon button with a short visible label (span.sw-table-blabel, beside the icon on desktop, below it on compact / touch
-     * screens by table.css; the accessible name stays the tool tip).
-     * @param {string} icon Icon (inline name or icon class).
-     * @param {string} label Short visible label.
-     * @param {string} title Tooltip / accessible name.
-     * @param {function(object, Event):*} onClick Click handler.
-     * @returns {object} The Sw.Button (member SwLabel: the label element).
-     */
-    function footButton(icon, label, title, onClick) {
-        const b = iconButton(icon, title, onClick, "sw-table-fbtn");
-        b.SwLabel = el("span.sw-table-blabel", { text: label, attrs: { "aria-hidden": "true" } });
-        b.E.append(b.SwLabel);
-        return b;
-    }
-
-    /**
      * True if a rendered cell shows nothing: no text (or only the "-" of a value that is not set, ex: the Start time and Duration of
      * the Idle / System processes, Sw.Cells DateTime / Uptime for "0001-01-01T00:00:00") and no picture, icon or control (the card
      * layout leaves such fields out, see table.css `.sw-table-blank`).
@@ -1182,15 +1166,8 @@
      * @returns {string} The sentence.
      */
     function sentence(s) {
-        let x = String(s || "").trim();
-        //  (an Error message of Sw.Net: "409 - Conflict\n<reason>": the reason)
-        const nl = x.indexOf("\n");
-        if (nl > 0 && /^\d{3}\b/.test(x))
-            x = x.slice(nl + 1).trim();
-        if (!x)
-            return x;
-        x = x.charAt(0).toLocaleUpperCase() + x.slice(1);
-        return /[.!?…:)"'»]$/.test(x) ? x : x + ".";
+        //  (an Error message of Sw.Net: "409 - Conflict\n<reason>": the reason; the table's end marks also include : ) " ' »)
+        return Sw.Net.Sentence(s || "", { Capital: true, StatusLine: true, Marks: /[.!?…:)"'»]$/ });
     }
 
     /**
@@ -1626,7 +1603,7 @@
                 res = await fetch(key, { credentials: "same-origin" });
             }
             catch (e) {
-                throw cardError(_T('The card file "{0}" could not be loaded: {1}', u.pathname, e && e.message ? e.message : String(e), "Error shown instead of a data table when its card template file could not be loaded, {0} is the path, {1} the reason"));
+                throw cardError(_T('The card file "{0}" could not be loaded: {1}', u.pathname, Sw.ErrorMessage(e), "Error shown instead of a data table when its card template file could not be loaded, {0} is the path, {1} the reason"));
             }
             if (!res.ok)
                 throw cardError(_T('The card file "{0}" could not be loaded: {1}', u.pathname, String(res.status), "Error shown instead of a data table when its card template file could not be loaded, {0} is the path, {1} the reason"));
@@ -6183,15 +6160,7 @@
                 return true;
             if (t.UserFocus && t.Grid.contains(document.activeElement))
                 return true;
-            const sel = ".sw-dialog-layer, [role=menu], [role=alertdialog], [role=dialog][aria-modal=true]";
-            if (document.querySelector(sel))
-                return true;
-            try {
-                return window.top !== window && !!window.top.document.querySelector(sel);
-            }
-            catch {
-                return false;
-            }
+            return openOverlay();
         }
 
         /**
@@ -9482,7 +9451,7 @@
                 list = await GetExporters();
             }
             catch (e) {
-                Sw.Fail(e && e.message ? e.message : String(e));
+                Sw.Fail(Sw.ErrorMessage(e));
                 return;
             }
             const limit = _TF("Limits on number of rows may still apply!", "A warning in tool tips of table export menu items that the server may limit the number of exported rows");
@@ -9893,7 +9862,7 @@
                         Sw.Toast(KeepStamp(_T("Export cancelled: {0}", shownName, "Toast after the user cancelled a data table export and the server confirmed it, {0} is the file name")), { Kind: "info" });
                 }
                 else if (!bg)
-                    Sw.Fail(KeepStamp(_T("Could not export {0}: {1}", shownName, e && e.message ? e.message : String(e), "Error toast of a failed data table export, {0} is the file name, {1} the reason")));
+                    Sw.Fail(KeepStamp(_T("Could not export {0}: {1}", shownName, Sw.ErrorMessage(e), "Error toast of a failed data table export, {0} is the file name, {1} the reason")));
             }
             finally {
                 run.Stopping = false;
@@ -10183,7 +10152,7 @@
             });
         }
         catch (e) {
-            Sw.Fail(e && e.message ? e.message : String(e), true);
+            Sw.Fail(Sw.ErrorMessage(e), true);
             remove();
         }
     };

@@ -8,6 +8,10 @@ namespace SysWeaver.LanguageIdentifier
     public sealed class IdentifiedLanguage
     {
 #if DEBUG
+        /// <summary>
+        /// Debug builds only: the language code and the confidence.
+        /// </summary>
+        /// <returns>A short text for debugging.</returns>
         public override string ToString() => String.Concat(Language, ": ", Confidence);
 
 #endif//DEBUG

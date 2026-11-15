@@ -33,6 +33,18 @@ namespace SysWeaver.Inspection.Implementation
         #region Array
 
         void Array_Begin(int[] dimensions);
+
+        /// <summary>
+        /// The length of a one dimensional array (the same as <see cref="Array_Begin(int[])"/> with one dimension, without allocating the dimensions array),
+        /// a reader sets the length that was read, a writer writes it.
+        /// </summary>
+        /// <param name="length">The length (-1 for a new array when reading)</param>
+        void Array_Length(ref int length)
+        {
+            var d = new int[] { length };
+            Array_Begin(d);
+            length = d[0];
+        }
         void Array_ByteArray(int length, ref Byte[] value);
         void Array_LevelUp(int rank);
         void Array_LevelDown(int rank);

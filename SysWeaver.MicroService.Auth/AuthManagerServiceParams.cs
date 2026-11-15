@@ -3,8 +3,12 @@ using System;
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// Parameters for the <see cref="AuthManagerService"/>
+    /// </summary>
     public sealed class AuthManagerServiceParams : AuthManagerParams
     {
+        /// <inheritdoc />
         public override string ToString() => 
             String.Concat(
                 base.ToString(), ", ",
@@ -16,7 +20,7 @@ namespace SysWeaver.MicroService
         public String InstanceName;
 
         /// <summary>
-        /// Used for basic auth
+        /// Name of the site, used for basic auth and generated user images, defaults to the name of the executable
         /// </summary>
         public String SiteName;
 
@@ -26,15 +30,21 @@ namespace SysWeaver.MicroService
         public bool AllowEmailIps;
 
         /// <summary>
-        /// If true, generate transparent user images
+        /// If true, generated default user images are transparent, otherwise (default) they are opaque
         /// </summary>
         public bool TransparentUserImage;
 
     }
 
 
+    /// <summary>
+    /// The password recovery mail
+    /// </summary>
     public sealed class RecoverMailParams : ManagedMailMessage
     {
+        /// <summary>
+        /// Sets the default subject and body (the "data.PasswordRecovery.txt" resource)
+        /// </summary>
         public RecoverMailParams()
         {
             Subject = "Password recovery for [Site]";

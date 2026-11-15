@@ -13,14 +13,14 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Put this attribute on a type or method to specify the auth required
         /// </summary>
-        /// <param name="auth">The auth required for API's on this type or for this mehtod.\nnull = No auth required.\n"" = Auth required, but no specific access token is required\nComma separated list of required access tokens (one is needed).</param>
+        /// <param name="auth">The auth required for API's on this type or for this method.\nnull = No auth required.\n"" = Auth required, but no specific access token is required\nComma separated list of required access tokens (one is needed).</param>
         public WebApiAuthAttribute(String auth = "")
         {
             Auth = auth;
         }
 
         /// <summary>
-        /// Auth
+        /// The auth required (null = none, "" = any authenticated user, else comma separated access tokens)
         /// </summary>
         public readonly String Auth;
     }

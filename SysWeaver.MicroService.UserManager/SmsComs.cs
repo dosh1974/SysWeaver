@@ -5,12 +5,22 @@ using System.Threading.Tasks;
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// Communicates with users using text messages (through an <see cref="ITextMessageSender"/>)
+    /// </summary>
     public sealed class SmsComs : IUserManagerComs
     {
+        /// <inheritdoc />
         public String Name => "Sms";
 
+        /// <inheritdoc />
         public bool AllowSignUp { get; init; }
 
+        /// <summary>
+        /// Create the text message communication method
+        /// </summary>
+        /// <param name="manager">The service manager, used to get the <see cref="ITextMessageSender"/></param>
+        /// <param name="p">Parameters, null to use the defaults</param>
         public SmsComs(ServiceManager manager, SmsComsParams p)
         {
             p = p ?? new SmsComsParams();
@@ -47,6 +57,7 @@ namespace SysWeaver.MicroService
 
         readonly ITextMessageSender TextSender;
 
+        /// <inheritdoc />
         public bool CleanAndValidate(ref String target)
         {
             try
@@ -62,6 +73,7 @@ namespace SysWeaver.MicroService
         }
 
 
+        /// <inheritdoc />
         public Task Send(UserManagerComOps ops, ManagedLanguageMessages messages, String target, Dictionary<String, String> vars, String system)
         {
             bool haveLang = messages != null;
@@ -81,6 +93,7 @@ namespace SysWeaver.MicroService
             return TextSender.Send(target, body, system);
         }
 
+        /// <inheritdoc />
         public Task Send(String message, ManagedLanguageMessages messages, String target, Dictionary<String, String> vars, String system, params ManagedLanguageMessages[] fallbacks)
         {
             ManagedTextMessage get(String mm)

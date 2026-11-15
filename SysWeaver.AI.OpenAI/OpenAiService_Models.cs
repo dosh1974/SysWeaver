@@ -39,6 +39,7 @@ namespace SysWeaver.AI
             return false;
         }
 
+        /// <inheritdoc />
         protected override async Task<AiModels> FetchModels()
         {
             var r = await new OpenAIClient(ApiKey, Options).GetOpenAIModelClient().GetModelsAsync().ConfigureAwait(false);

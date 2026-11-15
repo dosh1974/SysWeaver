@@ -2860,12 +2860,7 @@ window.Sw.Sources["shell/shell.js"] = "sw/shell.js";
                 //  Text size: a section on touch screens and phones, else a submenu in the Density section (or a section without it)
                 const size = p.SettingsTextSize ? t.TextSizeMenu() : null;
                 if (size) {
-                    let touch = !!Sw.Layout.Mobile;
-                    try {
-                        touch = touch || window.matchMedia("(pointer: coarse)").matches;
-                    }
-                    catch {
-                    }
+                    const touch = Sw.Layout.IsTouchScreen();
                     const dens = p.SettingsDensity ? menu.Items[menu.Items.length - 1] : null;
                     if (!touch && dens)
                         dens.Children.push(size);
@@ -3251,13 +3246,7 @@ window.Sw.Sources["shell/shell.js"] = "sw/shell.js";
             const P = Sw.Popup;
             if (t.PopupGuard || !P || typeof P.Depth !== "function" || !(P.Depth() > 0) || t.CanGoBack())
                 return;
-            let touch = !!Sw.Layout.Mobile;
-            try {
-                touch = touch || window.matchMedia("(pointer: coarse)").matches;
-            }
-            catch {
-            }
-            if (!touch)
+            if (!Sw.Layout.IsTouchScreen())
                 return;
             t.PopupGuard = true;
             try {

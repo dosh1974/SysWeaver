@@ -8,6 +8,9 @@ namespace SysWeaver.AI
     /// </summary>
     public sealed class AnthropicAiParams : AiServiceParams
     {
+        /// <summary>
+        /// Create parameters with the default chat model set to the default Claude model.
+        /// </summary>
         public AnthropicAiParams()
         {
             DefaultChatModel = "claude-opus-5-5";

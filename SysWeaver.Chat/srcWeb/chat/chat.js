@@ -926,6 +926,7 @@
             t.E.append(t.Bubble);
             t.SetIcon(m.FromImage);
             attachHint(t.IconE);
+            t.IconE.setAttribute("aria-haspopup", "menu");
             t.IconE.addEventListener("click", ev => {
                 if (!Sw.BadClick(ev))
                     t.ShowMenu(ev, t.IconE);
@@ -3249,7 +3250,7 @@
                 cmp.Focus();
         }
         catch (e) {
-            const text = e && e.message ? e.message : String(e);
+            const text = Sw.ErrorMessage(e);
             console.warn(text);
             message(_TF("Could not open the chat", "Heading of the chat page when the chat could not be opened (followed by the reason)"), text, true);
         }

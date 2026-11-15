@@ -18,6 +18,9 @@ using SysWeaver.OsServices;
 namespace SysWeaver.MicroService
 {
 
+    /// <summary>
+    /// Manages the server: shows server and process statistics, and manages (installs, updates, configures, starts and stops) SysWeaver services, folders, key files and text files.
+    /// </summary>
     [RequiredDep<FolderSyncService>()]
     [WebApiUrl("../ServerManager")]
     [WebMenuEmbedded(null, "Server", "Server", "ServerManager/server.html", "View server stats", "icons/computer.svg", -9, Roles.AdminOps)]
@@ -110,6 +113,11 @@ namespace SysWeaver.MicroService
         readonly IFileRepo KeyRepo;
 
 
+        /// <summary>
+        /// Says hello (can be used to test that the service is reachable)
+        /// </summary>
+        /// <param name="name">The name to greet, null or empty to greet the world</param>
+        /// <returns>The greeting</returns>
         [WebApi]
         public ValueTask<String> Hello(String name)
         {
@@ -118,6 +126,11 @@ namespace SysWeaver.MicroService
             return ValueTask.FromResult("Hello " + name + "!");
         }
 
+        /// <summary>
+        /// Create the service
+        /// </summary>
+        /// <param name="manager">The service manager (the <see cref="FolderSyncService"/>, <see cref="FileUploaderService"/> and file http server module are required)</param>
+        /// <param name="p">Parameters, null to use the defaults</param>
         public ServerManagerService(ServiceManager manager, ServerManagerParams p)
         {
             p = p ?? new ServerManagerParams();
@@ -293,6 +306,7 @@ namespace SysWeaver.MicroService
         }
 
 
+        /// <inheritdoc />
         public void Dispose()
         {
             Interlocked.Exchange(ref UpdateStatsTask, null)?.Dispose();
@@ -320,13 +334,16 @@ namespace SysWeaver.MicroService
 
         #region IHttpServerModule
 
-        public String[] OnlyForPrefixes { get; } = 
+        /// <inheritdoc />
+        public String[] OnlyForPrefixes { get; } =
         [
             "ServerManager/Data/"
         ];
 
+        /// <inheritdoc />
         public PerfMonitor PerfMon { get; } = new PerfMonitor(nameof(ServerManagerService));
 
+        /// <inheritdoc />
         public IHttpRequestHandler Handler(HttpServerRequest context)
         {
             var lurl = context.LocalUrl.Split('/');
@@ -997,8 +1014,8 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Information about running processes
         /// </summary>
-        /// <param name="r"></param>
-        /// <returns></returns>
+        /// <param name="r">Table request: paging, sorting and filtering</param>
+        /// <returns>Table data, one row per running process that has metrics</returns>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
         [WebMenuTable(null, "ProcessInfo", "Process information", "Information about running processes", "icons/table_services.svg", -5)]
@@ -1069,10 +1086,10 @@ namespace SysWeaver.MicroService
         }
 
         /// <summary>
-        /// Get memory graph for a process
+        /// Get the current memory use graph for a process (a gauge of the memory the process uses of the system memory in use)
         /// </summary>
-        /// <param name="processId">Id of the process</param>
-        /// <returns>Graph data as json</returns>
+        /// <param name="processId">Id of the process (as listed by <see cref="ProcessInfoTable"/>)</param>
+        /// <returns>Graph data as json, or null if the memory use of the system isn't known yet</returns>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
         [WebApiClientCache(4)]
@@ -1093,10 +1110,10 @@ namespace SysWeaver.MicroService
 
 
         /// <summary>
-        /// Get Cpu graph for a process
+        /// Get the current Cpu use graph for a process
         /// </summary>
-        /// <param name="processId">Id of the process</param>
-        /// <returns>Graph data as json</returns>
+        /// <param name="processId">Id of the process (as listed by <see cref="ProcessInfoTable"/>)</param>
+        /// <returns>Graph data as json (a gauge of the CPU use of the process)</returns>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
         [WebApiClientCache(4)]
@@ -1109,10 +1126,10 @@ namespace SysWeaver.MicroService
         }
 
         /// <summary>
-        /// Get Memory graph for a process
+        /// Get a historical Memory use graph (the last 24 hours) for a process
         /// </summary>
-        /// <param name="processId">Id of the process</param>
-        /// <returns>Graph data as json</returns>
+        /// <param name="processId">Id of the process (as listed by <see cref="ProcessInfoTable"/>)</param>
+        /// <returns>Graph data as json (memory use of the process in MB)</returns>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
         [WebApiClientCache(4)]
@@ -1126,10 +1143,10 @@ namespace SysWeaver.MicroService
 
 
         /// <summary>
-        /// Get Cpu graph for a process
+        /// Get a historical Cpu use graph (the last 24 hours) for a process
         /// </summary>
-        /// <param name="processId">Id of the process</param>
-        /// <returns>Graph data as json</returns>
+        /// <param name="processId">Id of the process (as listed by <see cref="ProcessInfoTable"/>)</param>
+        /// <returns>Graph data as json (CPU use of the process in %)</returns>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
         [WebApiClientCache(4)]
@@ -1142,10 +1159,10 @@ namespace SysWeaver.MicroService
         }
 
         /// <summary>
-        /// Get Memory graph for a process
+        /// Get a short historical Memory use graph (the last 3 minutes) for a process
         /// </summary>
-        /// <param name="processId">Id of the process</param>
-        /// <returns>Graph data as json</returns>
+        /// <param name="processId">Id of the process (as listed by <see cref="ProcessInfoTable"/>)</param>
+        /// <returns>Graph data as json (memory use of the process in MB)</returns>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
         [WebApiClientCache(4)]
@@ -1159,10 +1176,10 @@ namespace SysWeaver.MicroService
 
 
         /// <summary>
-        /// Get Cpu graph for a process
+        /// Get a short historical Cpu use graph (the last 3 minutes) for a process
         /// </summary>
-        /// <param name="processId">Id of the process</param>
-        /// <returns>Graph data as json</returns>
+        /// <param name="processId">Id of the process (as listed by <see cref="ProcessInfoTable"/>)</param>
+        /// <returns>Graph data as json (CPU use of the process in %)</returns>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
         [WebApiClientCache(4)]
@@ -1204,7 +1221,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Current CPU use chart
         /// </summary>
-        /// <returns></returns>
+        /// <returns>Graph data as json (a gauge of the current total CPU use of the server)</returns>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
         [WebApiClientCache(1)]
@@ -1265,9 +1282,9 @@ namespace SysWeaver.MicroService
         }
 
         /// <summary>
-        /// Get a historical chart for the Cpu memory use
+        /// Get a historical chart for the system CPU use (the last 24 hours)
         /// </summary>
-        /// <returns>Graph data as json</returns>
+        /// <returns>Graph data as json (CPU use of the server in %)</returns>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
         [WebApiClientCache(1)]
@@ -1278,9 +1295,9 @@ namespace SysWeaver.MicroService
 
 
         /// <summary>
-        /// Get a historical chart for the Cpu memory use
+        /// Get a short historical chart for the system CPU use (the last 3 minutes)
         /// </summary>
-        /// <returns>Graph data as json</returns>
+        /// <returns>Graph data as json (CPU use of the server in %)</returns>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
         [WebApiClientCache(1)]
@@ -1303,7 +1320,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Current system memory use and size
         /// </summary>
-        /// <returns></returns>
+        /// <returns>The current memory information (total, used and free system memory)</returns>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
         [WebApiClientCache(1)]
@@ -1313,7 +1330,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Current system memory use chart
         /// </summary>
-        /// <returns></returns>
+        /// <returns>Graph data as json</returns>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
         [WebApiClientCache(1)]
@@ -1383,9 +1400,9 @@ namespace SysWeaver.MicroService
         }
 
         /// <summary>
-        /// Get a historical chart for the system memory use
+        /// Get a historical chart for the system memory use (the last 24 hours)
         /// </summary>
-        /// <returns>Graph data as json</returns>
+        /// <returns>Graph data as json (memory use of the server in %)</returns>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
         [WebApiClientCache(1)]
@@ -1396,9 +1413,9 @@ namespace SysWeaver.MicroService
 
 
         /// <summary>
-        /// Get a historical chart for the system memory use
+        /// Get a short historical chart for the system memory use (the last 3 minutes)
         /// </summary>
-        /// <returns>Graph data as json</returns>
+        /// <returns>Graph data as json (memory use of the server in %)</returns>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
         [WebApiClientCache(1)]
@@ -1421,8 +1438,8 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Information of the server drives
         /// </summary>
-        /// <param name="r"></param>
-        /// <returns></returns>
+        /// <param name="r">Table request: paging, sorting and filtering</param>
+        /// <returns>Table data, one row per drive of the server</returns>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
         [WebMenuTable(null, "DriveInfo", "Drive information", "Information of the server drives", "icons/ssd.svg", -4)]
@@ -1435,7 +1452,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Get static server info
         /// </summary>
-        /// <returns></returns>
+        /// <returns>Machine name, operating system, processor count, memory size, time zone and the current time (and a token that can be used to reboot the server)</returns>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
         public SmServerInfo GetServerInfo()
@@ -1466,7 +1483,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Get dynamic server stats
         /// </summary>
-        /// <returns></returns>
+        /// <returns>The number of processes and the current time of the server (UTC and local, with the name of the time zone)</returns>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
         public SmServerStats GetServerStats()
@@ -1488,8 +1505,8 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Get a chart for a single drive, start at 0 and increase until null is returned
         /// </summary>
-        /// <param name="chartIndex"></param>
-        /// <returns></returns>
+        /// <param name="chartIndex">The index of the drive (0 is the first drive, see <see cref="DriveInfoTable"/>)</param>
+        /// <returns>Graph data as json, or null if there is no drive with that index</returns>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
         [WebApiClientCache(9)]
@@ -1566,8 +1583,8 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Get a historical chart for a single drive, start at 0 and increase until null is returned
         /// </summary>
-        /// <param name="chartIndex"></param>
-        /// <returns>Graph data as json</returns>
+        /// <param name="chartIndex">The index of the drive (0 is the first drive, see <see cref="DriveInfoTable"/>)</param>
+        /// <returns>Graph data as json (disc use of the last 90 days), or null if there is no history for a drive with that index</returns>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
         [WebApiClientCache(9)]
@@ -1582,10 +1599,10 @@ namespace SysWeaver.MicroService
 
 
         /// <summary>
-        /// Get a historical chart for a single drive, start at 0 and increase until null is returned
+        /// Get a short historical chart (the last three days) for a single drive, start at 0 and increase until null is returned
         /// </summary>
-        /// <param name="chartIndex"></param>
-        /// <returns>Graph data as json</returns>
+        /// <param name="chartIndex">The index of the drive (0 is the first drive, see <see cref="DriveInfoTable"/>)</param>
+        /// <returns>Graph data as json (disc use of the last three days), or null if there is no history for a drive with that index</returns>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
         [WebApiClientCache(9)]
@@ -1604,9 +1621,10 @@ namespace SysWeaver.MicroService
         #region Services
 
         /// <summary>
-        /// Current CPU use chart
+        /// Chart of how many of the managed services are running (the services the caller may see, see <see cref="GetServices"/>)
         /// </summary>
-        /// <returns></returns>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
+        /// <returns>Graph data as json (running versus stopped services)</returns>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
         [WebApiClientCache(1)]
@@ -1668,11 +1686,11 @@ namespace SysWeaver.MicroService
         }
 
         /// <summary>
-        /// Get Memory graph for a managed service
+        /// Get the current Memory use graph for a managed service (a gauge of the memory the service process uses of the system memory in use)
         /// </summary>
         /// <param name="serviceName">Name of the service</param>
-        /// <param name="context"></param>
-        /// <returns>Graph data as json</returns>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
+        /// <returns>Graph data as json, or null if the memory use of the system isn't known yet</returns>
         [WebApi]
         [WebApiAuth]
         [WebApiClientCache(4)]
@@ -1692,11 +1710,11 @@ namespace SysWeaver.MicroService
 
 
         /// <summary>
-        /// Get Cpu graph for a managed service
+        /// Get the current Cpu use graph for a managed service
         /// </summary>
         /// <param name="serviceName">Name of the service</param>
-        /// <param name="context"></param>
-        /// <returns>Graph data as json</returns>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
+        /// <returns>Graph data as json (a gauge of the CPU use of the service process, 0 if it isn't running)</returns>
         [WebApi]
         [WebApiAuth]
         [WebApiClientCache(4)]
@@ -1710,11 +1728,11 @@ namespace SysWeaver.MicroService
 
 
         /// <summary>
-        /// Get Memory graph for a managed service
+        /// Get a historical Memory use graph (the last 24 hours) for a managed service
         /// </summary>
         /// <param name="serviceName">Name of the service</param>
-        /// <param name="context"></param>
-        /// <returns>Graph data as json</returns>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
+        /// <returns>Graph data as json (memory use of the service process in MB)</returns>
         [WebApi]
         [WebApiAuth]
         [WebApiClientCache(4)]
@@ -1728,11 +1746,11 @@ namespace SysWeaver.MicroService
 
 
         /// <summary>
-        /// Get Cpu graph for a managed service
+        /// Get a historical Cpu use graph (the last 24 hours) for a managed service
         /// </summary>
         /// <param name="serviceName">Name of the service</param>
-        /// <param name="context"></param>
-        /// <returns>Graph data as json</returns>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
+        /// <returns>Graph data as json (CPU use of the service process in %)</returns>
         [WebApi]
         [WebApiAuth]
         [WebApiClientCache(4)]
@@ -1745,11 +1763,11 @@ namespace SysWeaver.MicroService
         }
 
         /// <summary>
-        /// Get Memory graph for a managed service
+        /// Get a short historical Memory use graph (the last 3 minutes) for a managed service
         /// </summary>
         /// <param name="serviceName">Name of the service</param>
-        /// <param name="context"></param>
-        /// <returns>Graph data as json</returns>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
+        /// <returns>Graph data as json (memory use of the service process in MB)</returns>
         [WebApi]
         [WebApiAuth]
         [WebApiClientCache(4)]
@@ -1763,11 +1781,11 @@ namespace SysWeaver.MicroService
 
 
         /// <summary>
-        /// Get Cpu graph for a managed service
+        /// Get a short historical Cpu use graph (the last 3 minutes) for a managed service
         /// </summary>
         /// <param name="serviceName">Name of the service</param>
-        /// <param name="context"></param>
-        /// <returns>Graph data as json</returns>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
+        /// <returns>Graph data as json (CPU use of the service process in %)</returns>
         [WebApi]
         [WebApiAuth]
         [WebApiClientCache(4)]
@@ -1796,7 +1814,7 @@ namespace SysWeaver.MicroService
         /// Get details of a managed service
         /// </summary>
         /// <param name="serviceName">Name of the managed service</param>
-        /// <param name="context"></param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
         /// <returns>Details</returns>
         [WebApi]
         [WebApiAuth]
@@ -1829,7 +1847,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Get a list of all services that is managed
         /// </summary>
-        /// <param name="context"></param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
         /// <returns>List of services</returns>
         [WebApi]
         [WebApiAuth]
@@ -1873,7 +1891,7 @@ namespace SysWeaver.MicroService
         /// Restart a managed service
         /// </summary>
         /// <param name="serviceName">Name of the managed service</param>
-        /// <param name="context"></param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
         /// <returns>Updated service details</returns>
         [WebApi]
         [WebApiAuth]
@@ -1886,7 +1904,7 @@ namespace SysWeaver.MicroService
         /// Pause a managed service (no web requests will be allowed)
         /// </summary>
         /// <param name="serviceName">Name of the managed service</param>
-        /// <param name="context"></param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
         /// <returns>Updated service details</returns>
         [WebApi]
         [WebApiAuth]
@@ -1898,7 +1916,7 @@ namespace SysWeaver.MicroService
         /// Continue a managed service (after being paused)
         /// </summary>
         /// <param name="serviceName">Name of the managed service</param>
-        /// <param name="context"></param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
         /// <returns>Updated service details</returns>
         [WebApi]
         [WebApiAuth]
@@ -1910,7 +1928,7 @@ namespace SysWeaver.MicroService
         /// Stop a managed service (will restart when computer start)
         /// </summary>
         /// <param name="serviceName">Name of the managed service</param>
-        /// <param name="context"></param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
         /// <returns>Updated service details</returns>
         [WebApi]
         [WebApiAuth]
@@ -1922,7 +1940,7 @@ namespace SysWeaver.MicroService
         /// Start a managed service (install and start)
         /// </summary>
         /// <param name="serviceName">Name of the managed service</param>
-        /// <param name="context"></param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
         /// <returns>Updated service details</returns>
         [WebApi]
         [WebApiAuth]
@@ -1934,7 +1952,7 @@ namespace SysWeaver.MicroService
         /// Uninstall a managed service (stop and uninstall)
         /// </summary>
         /// <param name="serviceName">Name of the managed service</param>
-        /// <param name="context"></param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
         /// <returns>Updated service details</returns>
         [WebApi]
         [WebApiAuth]
@@ -1950,7 +1968,7 @@ namespace SysWeaver.MicroService
         /// Kill the service process
         /// </summary>
         /// <param name="serviceName">Name of the managed service</param>
-        /// <param name="context"></param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
         /// <returns>Updated service details</returns>
         [WebApi]
         [WebApiAuth]
@@ -1995,11 +2013,11 @@ namespace SysWeaver.MicroService
         }
 
         /// <summary>
-        /// All synched folders as a table
+        /// All managed services as a table (administrators also get the action buttons for each service)
         /// </summary>
-        /// <param name="r"></param>
-        /// <param name="context"></param>
-        /// <returns></returns>
+        /// <param name="r">Table request: paging, sorting and filtering</param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
+        /// <returns>Table data, one row per managed service that the caller may see</returns>
         [WebApi]
         [WebApiAuth]
         [WebApiRequestCache(4)]
@@ -2018,9 +2036,9 @@ namespace SysWeaver.MicroService
         #region Storage
 
         /// <summary>
-        /// Returns stats for folders
+        /// Returns stats for the folders of the chunked (compressed) storage, the first row is the sum of all folders (if there are more than one)
         /// </summary>
-        /// <returns></returns>
+        /// <returns>One entry per chunk storage folder, with the total first</returns>
         [WebApi]
         [WebApiClientCache(15)]
         [WebApiRequestCache(14)]
@@ -2047,8 +2065,8 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Statistics about the chunked storage
         /// </summary>
-        /// <param name="r"></param>
-        /// <returns></returns>
+        /// <param name="r">Table request: paging, sorting and filtering</param>
+        /// <returns>Table data, the rows of <see cref="GetStorageStats"/></returns>
         [WebApi]
         [WebApiAuth(Roles.Debug)]
         [WebMenuTable(null, "ChunkStorage", "Chunk storage", "Analysis of the chunk storage", "icons/brick.svg", -3)]
@@ -2105,9 +2123,9 @@ namespace SysWeaver.MicroService
         /// Get version details
         /// </summary>
         /// <param name="versionName">ServiceName,UploadedTime,DiscFolder</param>
-        /// <param name="context"></param>
-        /// <returns></returns>
-        /// <exception cref="Exception"></exception>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
+        /// <returns>Details of the version of the managed service</returns>
+        /// <exception cref="Exception">The version was not found</exception>
         [WebApi]
         [WebApiAuth]
         [WebApiRequestCache(4)]
@@ -2121,12 +2139,12 @@ namespace SysWeaver.MicroService
 
 
         /// <summary>
-        /// Get version details
+        /// Activate a version of a managed service (the version becomes the folder the service runs from)
         /// </summary>
         /// <param name="versionName">ServiceName,UploadedTime,DiscFolder</param>
-        /// <param name="context"></param>
-        /// <returns></returns>
-        /// <exception cref="Exception"></exception>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
+        /// <returns>True if the version was activated (failures throw)</returns>
+        /// <exception cref="Exception">The version was not found, or it could not be activated</exception>
         [WebApi]
         [WebApiAuth]
         [WebApiAudit(AuditGroup)]
@@ -2153,7 +2171,7 @@ namespace SysWeaver.MicroService
         /// Touch a version (set last access time to now)
         /// </summary>
         /// <param name="versionName">ServiceName,UploadedTime,DiscFolder</param>
-        /// <param name="context"></param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
         /// <returns>Compressed file stats or null if not compressed</returns>
         [WebApi]
         [WebApiAuth]
@@ -2178,7 +2196,7 @@ namespace SysWeaver.MicroService
         /// Verify a compressed version (looking for missing chunks etc)
         /// </summary>
         /// <param name="versionName">ServiceName,UploadedTime,DiscFolder</param>
-        /// <param name="context"></param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
         /// <returns>Compressed file stats or null if not compressed</returns>
         [WebApi]
         [WebApiAuth]
@@ -2202,7 +2220,7 @@ namespace SysWeaver.MicroService
         /// Expand a compressed version to it's individual files
         /// </summary>
         /// <param name="versionName">ServiceName,UploadedTime,DiscFolder</param>
-        /// <param name="context"></param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
         /// <returns>Compressed file stats or null if not compressed</returns>
         [WebApi]
         [WebApiAuth]
@@ -2225,11 +2243,11 @@ namespace SysWeaver.MicroService
 
 
         /// <summary>
-        /// Expand a compressed version to it's individual files
+        /// Compress a version (store it as chunked, compressed data to save disc space)
         /// </summary>
         /// <param name="versionName">ServiceName,UploadedTime,DiscFolder</param>
-        /// <param name="context"></param>
-        /// <returns>True if successful</returns>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
+        /// <returns>True if the version was compressed, false if it already was compressed</returns>
         [WebApi]
         [WebApiAuth]
         [WebApiAudit(AuditGroup)]
@@ -2253,7 +2271,7 @@ namespace SysWeaver.MicroService
         /// Delete a version
         /// </summary>
         /// <param name="versionName">ServiceName,UploadedTime,DiscFolder</param>
-        /// <param name="context"></param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
         /// <returns>True if successful</returns>
         [WebApi]
         [WebApiAuth]
@@ -2281,8 +2299,8 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Use a master config file (copy it into the active version folder)
         /// </summary>
-        /// <param name="data"></param>
-        /// <param name="context"></param>
+        /// <param name="data">The service name and the name of the config file (a master config file lives in the folder above the active version)</param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
         /// <returns>True if sucessfully copied</returns>
         /// <exception cref="Exception"></exception>
         [WebApi]
@@ -2314,10 +2332,10 @@ namespace SysWeaver.MicroService
         }
 
         /// <summary>
-        /// Make a backup config file, the active config file
+        /// Make a backup config file the active config file (the backup is renamed to the config file name, the config file it replaces is backed up first)
         /// </summary>
-        /// <param name="data"></param>
-        /// <param name="context"></param>
+        /// <param name="data">The service name, the name of the backup config file and if it's a master config (else a config of the active version)</param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
         /// <returns>True if sucessfully renamed</returns>
         /// <exception cref="Exception"></exception>
         [WebApi]
@@ -2360,10 +2378,11 @@ namespace SysWeaver.MicroService
         /// Delete a config file.
         /// WARNING backup is not guaranteed!
         /// </summary>
-        /// <param name="data"></param>
-        /// <param name="context"></param>
-        /// <returns>True if sucessfully deleted</returns>
-        /// <exception cref="Exception"></exception>
+        /// <param name="data">The service name, the name of the config file and if it's a master config (else a config of the active version)</param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
+        /// <returns>True when the file was deleted (never false: failures throw)</returns>
+        /// <exception cref="HttpResponseException">409 with the reason: the file no longer exists</exception>
+        /// <exception cref="Exception">The file could not be moved to the backup folder, or the backup folder could not be created</exception>
         [WebApi]
         [WebApiAuth]
         [WebApiAudit(AuditGroup)]
@@ -2382,8 +2401,9 @@ namespace SysWeaver.MicroService
             if (!IsValidConfigName(sname))
                 throw new Exception("Invalid config name!");
             sname = Path.Combine(bin, sname);
-            if (!(await DeleteFileWithBackup(sname, Path.Combine(masterBin, "bak")).ConfigureAwait(false)))
-                return false;
+            if (!File.Exists(sname))
+                throw HttpResponseException.Gone("Can't delete the config " + data.Config.ToQuoted() + " of the service " + data.ServiceName.ToQuoted() + ": the file doesn't exist (any more), refresh the list");
+            await DeleteFileWithBackup(sname, Path.Combine(masterBin, "bak")).ConfigureAwait(false);
             Syncer.GetManagedFolders(info.Syncher.Name);
             //  Every session: the cached tables of the other users' sessions are stale too (AS7-12)
             context.Server.InvalidateCacheEverywhere();
@@ -2395,9 +2415,10 @@ namespace SysWeaver.MicroService
         /// WARNING backup is not guaranteed!
         /// </summary>
         /// <param name="serviceName">Name of the service</param>
-        /// <param name="context"></param>
-        /// <returns>True if sucessfully deleted</returns>
-        /// <exception cref="Exception"></exception>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
+        /// <returns>True when the log was deleted (never false: failures throw)</returns>
+        /// <exception cref="HttpResponseException">409 with the reason: the service has no log file</exception>
+        /// <exception cref="Exception">The log could not be moved to the backup folder, or the backup folder could not be created</exception>
         [WebApi]
         [WebApiAuth]
         [WebApiAudit(AuditGroup)]
@@ -2412,8 +2433,9 @@ namespace SysWeaver.MicroService
             var baseName = Path.GetFileNameWithoutExtension(exeName);
             var sname = Path.Combine(discFolder, baseName + ".log");
             var masterBin = Path.GetDirectoryName(discFolder);
-            if (!(await DeleteFileWithBackup(sname, Path.Combine(masterBin, "bak")).ConfigureAwait(false)))
-                return false;
+            if (!File.Exists(sname))
+                throw HttpResponseException.Gone("Can't delete the log of the service " + serviceName.ToQuoted() + ": there is no log file (any more), refresh the list");
+            await DeleteFileWithBackup(sname, Path.Combine(masterBin, "bak")).ConfigureAwait(false);
             Syncer.GetManagedFolders(info.Syncher.Name);
             //  Every session: the cached tables of the other users' sessions are stale too (AS7-12)
             context.Server.InvalidateCacheEverywhere();
@@ -2421,11 +2443,11 @@ namespace SysWeaver.MicroService
         }
 
         /// <summary>
-        /// Update a config file
+        /// Update a config file (the existing file is backed up first)
         /// </summary>
-        /// <param name="data"></param>
-        /// <param name="context"></param>
-        /// <returns>True if sucessfully renamed</returns>
+        /// <param name="data">The new content, and the url of the config file (ends with "{folder}/{service name}/{config file name}", the folder "Data" is the master config)</param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
+        /// <returns>True if sucessfully saved</returns>
         /// <exception cref="Exception"></exception>
         [WebApi]
         [WebApiAuth]
@@ -2464,10 +2486,11 @@ namespace SysWeaver.MicroService
         /// Delete a config file.
         /// WARNING no backup is made!
         /// </summary>
-        /// <param name="data"></param>
-        /// <param name="context"></param>
-        /// <returns>True if sucessfully renamed</returns>
-        /// <exception cref="Exception"></exception>
+        /// <param name="data">The url of the config file (ends with "{folder}/{service name}/{config file name}", the folder "Data" is the master config)</param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
+        /// <returns>True when the file was deleted (never false: failures throw)</returns>
+        /// <exception cref="HttpResponseException">409 with the reason: the file no longer exists</exception>
+        /// <exception cref="Exception">The file could not be moved to the backup folder, or the backup folder could not be created</exception>
         [WebApi]
         [WebApiAuth]
         [WebApiAudit(AuditGroup)]
@@ -2492,10 +2515,11 @@ namespace SysWeaver.MicroService
         /// Delete a log file.
         /// WARNING backup is not guaranteed!
         /// </summary>
-        /// <param name="data"></param>
-        /// <param name="context"></param>
-        /// <returns>True if sucessfully renamed</returns>
-        /// <exception cref="Exception"></exception>
+        /// <param name="data">The url of the log file ("..../{service name}/{log file name}", the log of that service is deleted)</param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
+        /// <returns>True when the file was deleted (never false: failures throw)</returns>
+        /// <exception cref="HttpResponseException">409 with the reason: the file no longer exists</exception>
+        /// <exception cref="Exception">The file could not be moved to the backup folder, or the backup folder could not be created</exception>
         [WebApi]
         [WebApiAuth]
         [WebApiAudit(AuditGroup)]
@@ -2574,8 +2598,8 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Get a table of all key files found in the key folder
         /// </summary>
-        /// <param name="r"></param>
-        /// <returns></returns>
+        /// <param name="r">Table request: paging, sorting and filtering</param>
+        /// <returns>Table data, one row per key file</returns>
         [WebApi]
         [WebApiAuth(Roles.Admin)]
         [WebApiRequestCache(4)]
@@ -2623,6 +2647,7 @@ namespace SysWeaver.MicroService
 
         #region IHaveStats
 
+        /// <inheritdoc />
         public IEnumerable<Stats> GetStats()
         {
             var sys = nameof(ServerManagerService);
@@ -2640,23 +2665,23 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Delete a file and create a .gz backup
         /// </summary>
-        /// <param name="sname"></param>
-        /// <param name="bak"></param>
-        /// <returns></returns>
+        /// <param name="sname">The file to delete</param>
+        /// <param name="bak">The folder to put the backup in</param>
+        /// <returns>Always true (failures throw)</returns>
+        /// <exception cref="Exception">The backup folder could not be created, or the file could not be moved to it</exception>
         async Task<bool> DeleteFileWithBackup(String sname, String bak)
         {
             var fi = new FileInfo(sname);
-            if (await PathExt.EnsureFolderExistAsync(bak).ConfigureAwait(false) == null)
-            {
-                var dname = ServiceHost.AppendDateAndMakeUnique(bak, fi.Name, fi.LastWriteTime);
-                var ex = await PathExt.TryMoveFileAsync(sname, dname).ConfigureAwait(false);
-                if (ex != null)
-                    throw ex;
-                if (await PathExt.TryGZipFileAsync(dname, dname + ".gz", CompressionLevel.SmallestSize).ConfigureAwait(false) == null)
-                    await PathExt.TryDeleteFileAsync(dname).ConfigureAwait(false);
-                return true;
-            }
-            return false;
+            var bex = await PathExt.EnsureFolderExistAsync(bak).ConfigureAwait(false);
+            if (bex != null)
+                throw new Exception("Can't delete the file " + fi.Name.ToQuoted() + ": the backup folder " + bak.ToQuoted() + " can't be created (" + bex.Message + ")", bex);
+            var dname = ServiceHost.AppendDateAndMakeUnique(bak, fi.Name, fi.LastWriteTime);
+            var ex = await PathExt.TryMoveFileAsync(sname, dname).ConfigureAwait(false);
+            if (ex != null)
+                throw new Exception("Can't delete the file " + fi.Name.ToQuoted() + ": it can't be moved to the backup folder (" + ex.Message + ")", ex);
+            if (await PathExt.TryGZipFileAsync(dname, dname + ".gz", CompressionLevel.SmallestSize).ConfigureAwait(false) == null)
+                await PathExt.TryDeleteFileAsync(dname).ConfigureAwait(false);
+            return true;
         }
 
         #region IHaveTextFiles
@@ -2689,9 +2714,9 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Information about files on the system
         /// </summary>
-        /// <param name="r"></param>
-        /// <param name="context"></param>
-        /// <returns></returns>
+        /// <param name="r">Table request: paging, sorting and filtering</param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
+        /// <returns>Table data, one row per text file the caller is allowed to see</returns>
         [WebApi]
         [WebApiAuth]
         [WebMenuTable(null, "Files", "Files", "Information about files on the system", "icons/organize.svg", -1)]
@@ -2703,9 +2728,11 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Delete a text file
         /// </summary>
-        /// <param name="file"></param>
-        /// <param name="context"></param>
-        /// <returns></returns>
+        /// <param name="file">The name of the file (as listed by <see cref="TextFilesTable"/>)</param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
+        /// <returns>True when the file was deleted (never false: failures throw)</returns>
+        /// <exception cref="HttpResponseException">409 with the reason: the file no longer exists; 403 if the caller may not delete it</exception>
+        /// <exception cref="Exception">Unknown file, deleting it is not allowed, or it could not be moved to the backup folder</exception>
         [WebApi]
         [WebApiAuth]
         [WebApiAudit(AuditGroup)]
@@ -2717,6 +2744,8 @@ namespace SysWeaver.MicroService
                 throw new Exception("May not delete this file!");
             if (!context.Session.Auth.IsValid(RequiredTokensCache.Get(ref x.AuthTokens, x.Auth)))
                 throw new HttpResponseException(403, "You are not allowed to delete this file");
+            if (!File.Exists(x.Filename))
+                throw HttpResponseException.Gone("Can't delete the file " + file.Name.ToQuoted() + ": it doesn't exist (any more), refresh the list");
             return await DeleteFileWithBackup(x.Filename, Path.Combine(EnvInfo.ExecutableDir, "bak")).ConfigureAwait(false);
         }
 
@@ -2724,9 +2753,9 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Save a text file
         /// </summary>
-        /// <param name="file"></param>
-        /// <param name="context"></param>
-        /// <returns></returns>
+        /// <param name="file">The name of the file (as listed by <see cref="TextFilesTable"/>) and the new content</param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
+        /// <returns>True when the file was saved (the old file is backed up first)</returns>
         [WebApi]
         [WebApiAuth]
         [WebApiAudit(AuditGroup)]
@@ -2753,8 +2782,7 @@ namespace SysWeaver.MicroService
             await File.WriteAllTextAsync(tempName, textData).ConfigureAwait(false);
             try
             {
-                if (!(await DeleteFileWithBackup(dname, isKey ? BakKeysFolder : BakFolder).ConfigureAwait(false)))
-                    throw new Exception("Failed to backup the original file!");
+                await DeleteFileWithBackup(dname, isKey ? BakKeysFolder : BakFolder).ConfigureAwait(false);
             }
             catch
             {
@@ -2778,6 +2806,7 @@ namespace SysWeaver.MicroService
 
         }
 
+        /// <inheritdoc />
         public IEnumerable<TextFile> GetTextFiles()
         {
             foreach (var x in TextFiles.Values)
@@ -2801,6 +2830,7 @@ namespace SysWeaver.MicroService
 
         }
 
+        /// <inheritdoc />
         public async Task<ReadOnlyMemory<Byte>> TryReadTextFile(String name)
         {
 

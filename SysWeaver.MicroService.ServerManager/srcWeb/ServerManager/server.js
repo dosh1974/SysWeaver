@@ -124,15 +124,6 @@ function smPercent(v) {
 }
 
 /**
- * Show the meter level of a KPI tile also as text (SmShared.KpiSub).
- * @param {object} kpi - The tile (Sw.Kpi).
- * @param {string} text - The context line.
- */
-function smKpiSub(kpi, text) {
-    SmShared.KpiSub(kpi, text);
-}
-
-/**
  * The used / free values (in GB) and the title of a two value chart (GetDriveChart, GetMemChart: dataset 0 = [used, free]).
  * @param {?object} c - The chart config.
  * @returns {?{Title: string, Used: number, Free: number}} The values, null when unusable.
@@ -280,7 +271,7 @@ function serverMain() {
         //  the RefreshRate of the reply), GetDriveChart?<i> (every 10 s), GetServerStats (every 5 s)
         const setUse = (k, pct, sub) => {
             k.Set({ Value: smPercent(pct), MeterValue: pct });
-            smKpiSub(k, sub);
+            SmShared.KpiSub(k, sub);
         };
         const values = c => {
             const d = c && c.data && c.data.datasets && c.data.datasets[0] && c.data.datasets[0].data;

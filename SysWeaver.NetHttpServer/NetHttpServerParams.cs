@@ -4,6 +4,9 @@ namespace SysWeaver.Net
 {
 
 
+    /// <summary>
+    /// Parameters for <see cref="NetHttpServer"/>.
+    /// </summary>
     public class NetHttpServerParams : HttpServerBaseParams
     {
         /// <summary>

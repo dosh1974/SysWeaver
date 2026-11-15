@@ -2,6 +2,9 @@
 
 namespace SysWeaver.Knowledge
 {
+    /// <summary>
+    /// Constants shared by the knowledge sets
+    /// </summary>
     public static class InfoConsts
     {
         /// <summary>
@@ -14,6 +17,9 @@ namespace SysWeaver.Knowledge
         /// </summary>
         public const int VintageYear = 1940;
 
+        /// <summary>
+        /// The group (category) name used for info that doesn't belong to a specific group
+        /// </summary>
         public const String GenericGroup = "Misc";
 
     }

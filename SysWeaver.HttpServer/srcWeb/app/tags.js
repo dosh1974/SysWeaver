@@ -153,15 +153,6 @@ function SetTagClassName(tagRet, className) {
     }
 
     /**
-     * Text of an error.
-     * @param {*} e - Error or value.
-     * @returns {string} Text.
-     */
-    function errText(e) {
-        return (e && e.message) ? e.message : String(e);
-    }
-
-    /**
      * A tag gallery (see the file header).
      */
     class TagsGallery {
@@ -247,7 +238,7 @@ function SetTagClassName(tagRet, className) {
                                 Sw.Fail(p.RemoveError + "!");
                         }
                         catch (e) {
-                            Sw.Fail(p.RemoveError + ": " + errText(e));
+                            Sw.Fail(p.RemoveError + ": " + Sw.ErrorMessage(e));
                         }
                         await this.Update();
                     },
@@ -283,7 +274,7 @@ function SetTagClassName(tagRet, className) {
                                 res = await o.FindTags(search);
                             }
                             catch (e) {
-                                Sw.Fail(err + ": " + errText(e));
+                                Sw.Fail(err + ": " + Sw.ErrorMessage(e));
                                 return [];
                             }
                             if (!res) {
@@ -300,7 +291,7 @@ function SetTagClassName(tagRet, className) {
                             Sw.Fail(p.AddError + "!");
                     }
                     catch (e) {
-                        Sw.Fail(p.AddError + ": " + errText(e));
+                        Sw.Fail(p.AddError + ": " + Sw.ErrorMessage(e));
                     }
                     await this.Update();
                 },

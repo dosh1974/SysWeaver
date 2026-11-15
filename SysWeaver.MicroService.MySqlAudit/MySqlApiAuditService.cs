@@ -15,10 +15,18 @@ using SysWeaver.Serialization;
 namespace SysWeaver.MicroService
 {
 
+    /// <summary>
+    /// Stores audited API calls and their clients in a MySql database (batched writes), and shows them in tables
+    /// </summary>
     [WebApiUrl("Audit")]
     [WebMenuPath(null, "Admin/Audit", "Audit", "Audit information (API calls and clients)", "icons/fingerprint.svg", 10)]
     public sealed class MySqlApiAuditService : IApiAuditService, IDisposable
     {
+        /// <summary>
+        /// Create the service, the database is initialized in the background and queued audit data is written every 100 ms
+        /// </summary>
+        /// <param name="manager">The service manager</param>
+        /// <param name="p">Parameters, null uses defaults</param>
         public MySqlApiAuditService(ServiceManager manager, MySqlApiAuditParams p = null)
         {
             p = p ?? new MySqlApiAuditParams();
@@ -29,6 +37,9 @@ namespace SysWeaver.MicroService
 
         volatile bool IsDisposing;
 
+        /// <summary>
+        /// Stops accepting audit data and stops the write task
+        /// </summary>
         public void Dispose()
         {
             IsDisposing = true;
@@ -76,7 +87,8 @@ namespace SysWeaver.MicroService
 
         readonly ITextSerializerType JsonSer = SerManager.GetText("json");
 
-        public async Task Flush() 
+        /// <inheritdoc />
+        public async Task Flush()
             => await WriteData().ConfigureAwait(false);
 
         readonly AsyncLock WriteLock = new();
@@ -224,6 +236,7 @@ namespace SysWeaver.MicroService
 
         readonly ConcurrentQueue<Temp> Calls = new ConcurrentQueue<Temp>();
 
+        /// <inheritdoc />
         public void OnApiBegin(long id, HttpServerRequest r, IHttpApiAudit api, object value)
         {
             if (IsDisposing)
@@ -232,6 +245,7 @@ namespace SysWeaver.MicroService
             Calls.Enqueue(new Temp(0, id, value, s.Auth, s.Token, s.DeviceId, s.ClientTimeZone, s.UserAgent, s.ClientLanguage, r.GetIpAddress(), api));
         }
 
+        /// <inheritdoc />
         public void OnApiEnd(long id, HttpServerRequest r, IHttpApiAudit api, object value)
         {
             if (IsDisposing)
@@ -239,6 +253,7 @@ namespace SysWeaver.MicroService
             Calls.Enqueue(new Temp(1, id, value, r.Session.Auth));
         }
 
+        /// <inheritdoc />
         public void OnApiException(long id, HttpServerRequest r, IHttpApiAudit api, Exception ex)
         {
             if (IsDisposing)
