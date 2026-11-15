@@ -1925,9 +1925,24 @@ class MediaPlayerImageTexture extends MediaPlayerTexture {
     async Cache(haveLod) {
         const t = this;
         const image = new Image();
+        //  A picture of another site is only usable as a texture with CORS (else WebGL refuses the tainted picture): asked for, so a
+        //  site that allows it works; one that doesn't fails to load here ("cross-origin", the thumbnail service then proxies it)
+        let cross = false;
+        try {
+            const u = new URL(t.Url, document.baseURI);
+            cross = /^https?:$/.test(u.protocol) && u.origin !== location.origin;
+        }
+        catch {
+            cross = false;
+        }
+        if (cross)
+            image.crossOrigin = "anonymous";
         const res = await MediaPlayerTools.waitEvent2(image, "load", "error", () => image.src = t.Url);
-        if (res.type == "error")
+        if (res.type == "error") {
+            if (cross)
+                throw new Error("The picture " + t.Url + " can't be used: its site doesn't allow other sites to use it (cross-origin, CORS)");
             return false;
+        }
         t.Image = image;
         return t.Upload(image, haveLod);
     }

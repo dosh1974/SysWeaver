@@ -228,7 +228,7 @@ namespace SysWeaver.AI
 
         /// <summary>
         /// If true, the result should have a transparent background.
-        /// Only respected if the workflow has a transparency option (a boolean named or titled "transparent").
+        /// Only respected if the workflow has a transparency option (a boolean named or titled "transparent"), or the model makes a transparent image from the prompt (ex: Qwen-Image 2.1, a transparency prefix / suffix is added to the prompt).
         /// </summary>
         bool Transparent { get; set; }
     }

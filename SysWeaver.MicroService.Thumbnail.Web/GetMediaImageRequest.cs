@@ -11,6 +11,9 @@ namespace SysWeaver.MicroService
         internal override int Type => (int)MediaTypes.Image;
         internal override Object Params => Options;
 
+        /// <summary>With an effect the image is its WebGL texture</summary>
+        internal override (Func<String> Get, Action<String> Set)[] TextureUrls => String.IsNullOrEmpty(Options?.Effect) ? [] : [(() => Url, v => Url = v)];
+
         /// <summary>
         /// Image options
         /// </summary>

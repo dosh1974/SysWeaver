@@ -62,15 +62,66 @@ namespace SysWeaver.AI
         /// <param name="Types">The task types this applies to, null for all</param>
         /// <param name="Negative">How negative prompts are handled</param>
         /// <param name="Guidance">The guidance (one instruction per line)</param>
-        sealed record Guide(String Name, Regex Match, ComfyTaskTypes[] Types, Negatives Negative, String Guidance);
+        /// <param name="TransparentPrefix">Text added before the prompt when a transparent result is requested (the model makes a transparent image from the prompt), null if none</param>
+        /// <param name="TransparentSuffix">Text added after the prompt when a transparent result is requested, null if none</param>
+        sealed record Guide(String Name, Regex Match, ComfyTaskTypes[] Types, Negatives Negative, String Guidance, String TransparentPrefix = null, String TransparentSuffix = null)
+        {
+            /// <summary>
+            /// True if the model makes a transparent result from the prompt (it has a transparent prefix and / or suffix)
+            /// </summary>
+            public bool PromptTransparency => (TransparentPrefix != null) || (TransparentSuffix != null);
+        }
 
         static Guide G(String name, String pattern, Negatives negative, String guidance, params ComfyTaskTypes[] types)
             => new Guide(name, new Regex(pattern, RegexOptions.Multiline | RegexOptions.CultureInvariant), types.Length == 0 ? null : types, negative, guidance);
+
+        /// <summary>
+        /// A model that makes a transparent result when the prompt gets a prefix and / or suffix (see <see cref="Guide.TransparentPrefix"/>)
+        /// </summary>
+        static Guide GT(String name, String pattern, Negatives negative, String guidance, String transparentPrefix, String transparentSuffix, params ComfyTaskTypes[] types)
+            => G(name, pattern, negative, guidance, types) with { TransparentPrefix = transparentPrefix, TransparentSuffix = transparentSuffix };
 
         const ComfyTaskTypes I2I = ComfyTaskTypes.ImagesToImage;
         const ComfyTaskTypes T2I = ComfyTaskTypes.TextToImage;
         const ComfyTaskTypes I2V = ComfyTaskTypes.ImagesToVideo;
         const ComfyTaskTypes T2V = ComfyTaskTypes.TextToVideo;
+
+        #region Qwen-Image
+
+        /// <summary>
+        /// Qwen-Image 2.1 or later: a model file with a dotted version ("qwen_image_2.1_int8_convrot.safetensors", "qwen-image-edit-2_1",
+        /// "qwen_image_3"), or a node class with the version ("TextEncodeQwenImage21", "QwenImage21Cache").
+        /// A date version ("qwen_image_2512", "qwen_image_edit_2509") is an older release and doesn't match.
+        /// </summary>
+        const String QwenImage21Pattern = @"qwen[_\-]?image(?:[_\-]?edit)?[_\-]?v?(?:2[._][1-9]|[3-9](?:[._]\d|(?!\d)))|qwenimage(?:edit)?(?:2[1-9]|[3-9]\d?)(?!\d)";
+
+        /// <summary>
+        /// The prompt prefix that makes Qwen-Image 2.1 (and later) create an image with transparency
+        /// </summary>
+        const String QwenImageTransparentPrefix = "This is an RGBA format image with transparency. ";
+
+        /// <summary>
+        /// The prompt suffix that makes Qwen-Image 2.1 (and later) create an image with transparency
+        /// </summary>
+        const String QwenImageTransparentSuffix = " The image has an alpha channel and a transparent background.";
+
+        const String QwenImageEditGuidance = """
+                Write a direct edit instruction, ex: "Turn the cat into a dog" or "Replace the background with a beach at sunset".
+                Be explicit about what to keep unchanged (identity, face, pose, clothing, lighting, composition) and what exactly to change.
+                With several input images, refer to them by number ("the person in image 1", "the product from image 2") and describe positions and relations ("on the left", "facing each other").
+                Text in the image: give the exact text in quotes and where it goes; English and Chinese text both render well.
+                The model is unstable with vague instructions, so a precise, complete instruction (one to four sentences) works best.
+                """;
+
+        const String QwenImageGuidance = """
+                Natural language, English or Chinese, detailed and structured (it uses a Qwen VL language model as the text encoder, so long and precise instructions are understood).
+                Describe the subject, composition, setting, lighting, color palette and the style or medium.
+                Text rendering is a strength: give the exact text in quotes and describe the layout explicitly (where the title goes, colors, sections, exact wording); Chinese text renders very well.
+                For posters, infographics, icons or UI describe every element and its position.
+                About 50-200 words; a longer, precise prompt is better than a short vague one.
+                """;
+
+        #endregion//Qwen-Image
 
         /// <summary>
         /// The known models, the first match is used (so more specific entries are first).
@@ -89,13 +140,8 @@ namespace SysWeaver.AI
                 For text in the image: Replace "old text" with "new text", maintain the same font style and color.
                 Keep it to one or a few related edits, written in English, one or two sentences.
                 """),
-            G("Qwen-Image-Edit", @"qwen[_\-]?image", Negatives.Used, """
-                Write a direct edit instruction, ex: "Turn the cat into a dog" or "Replace the background with a beach at sunset".
-                Be explicit about what to keep unchanged (identity, face, pose, clothing, lighting, composition) and what exactly to change.
-                With several input images, refer to them by number ("the person in image 1", "the product from image 2") and describe positions and relations ("on the left", "facing each other").
-                Text in the image: give the exact text in quotes and where it goes; English and Chinese text both render well.
-                The model is unstable with vague instructions, so a precise, complete instruction (one to four sentences) works best.
-                """, I2I),
+            GT("Qwen-Image-Edit 2.1", QwenImage21Pattern, Negatives.Used, QwenImageEditGuidance, QwenImageTransparentPrefix, QwenImageTransparentSuffix, I2I),
+            G("Qwen-Image-Edit", @"qwen[_\-]?image", Negatives.Used, QwenImageEditGuidance, I2I),
             G("OmniGen2", @"omnigen", Negatives.Used, """
                 Write the instruction in English, stating both what to change and how.
                 Refer to the input images by number, ex: "Add the bird from image 1 onto the desk in image 2".
@@ -133,13 +179,8 @@ namespace SysWeaver.AI
                 Detailed natural language prose (it uses CLIP, T5 and a Llama text encoder): subject, appearance, action, setting, composition, lighting, style and mood.
                 About 50-150 words. Text to render goes in quotes.
                 """),
-            G("Qwen-Image", @"qwen[_\-]?image", Negatives.Used, """
-                Natural language, English or Chinese, detailed and structured (it uses a Qwen VL language model as the text encoder, so long and precise instructions are understood).
-                Describe the subject, composition, setting, lighting, color palette and the style or medium.
-                Text rendering is a strength: give the exact text in quotes and describe the layout explicitly (where the title goes, colors, sections, exact wording); Chinese text renders very well.
-                For posters, infographics, icons or UI describe every element and its position.
-                About 50-200 words; a longer, precise prompt is better than a short vague one.
-                """),
+            GT("Qwen-Image 2.1", QwenImage21Pattern, Negatives.Used, QwenImageGuidance, QwenImageTransparentPrefix, QwenImageTransparentSuffix),
+            G("Qwen-Image", @"qwen[_\-]?image", Negatives.Used, QwenImageGuidance),
             G("Z-Image", @"z[_\-]?image", Negatives.Ignored, """
                 Detailed descriptive prose or comma separated descriptions, English or Chinese.
                 Describe the subject, appearance, clothing, pose, setting, lighting, camera and style in concrete terms; world knowledge (famous places, styles) is understood.
@@ -437,6 +478,15 @@ namespace SysWeaver.AI
                 if (suffix != null)
                     Line($"- The prompt must end with exactly this text: {Json(suffix)}");
                 Line("- Write the rest of the prompt so that it reads naturally together with it, and don't repeat it.");
+                Line();
+            }
+
+            //  Transparency made from the prompt (ex: Qwen-Image 2.1)
+            if (PromptTransparency)
+            {
+                Line("# Transparency");
+                Line("- A transparent background is a separate option: when it's used, the workflow adds the text that the model needs for it to the prompt, so never write about transparency, alpha channels or RGBA yourself.");
+                Line("- If the request asks for a transparent background (ex: a sticker, an icon, a logo, a cut-out product), describe only the subject(s), cleanly isolated and fully in frame, without a background scene.");
                 Line();
             }
 

@@ -29,6 +29,13 @@ namespace SysWeaver.MicroService
         public int MaxConcurrency = 32;
 
         /// <summary>
+        /// The effect that draws a sound for its screenshot (GetMediaAudio / MediaAudio, when the request names no Effect): the name of an
+        /// effect in mediaView/audioEffects (ex: "Led_Spectrum"), or an url / a path relative to the mediaView folder (ex: "audioEffects/Spectrum.glsl").
+        /// Null or empty = "Led_Spectrum".
+        /// </summary>
+        public String AudioEffect = "Led_Spectrum";
+
+        /// <summary>
         /// The Google Maps (embed) api key, used when creating map images.
         /// Defaults to reading the key from the file "$(KeyFolder)/GoogleMaps_Embed.txt".
         /// </summary>

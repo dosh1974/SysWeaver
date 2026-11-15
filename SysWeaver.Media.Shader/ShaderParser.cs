@@ -960,6 +960,28 @@ public static class ShaderParser
         ("iChannelResolution", "uniform vec3 iChannelResolution[4];"),
     ];
 
+    /// <summary>
+    /// ShaderToy's channel inputs, declared by the prefix only when the code uses them (and doesn't declare them): the texture of the player
+    /// (an image, or the audio texture: 512 x 2, row 0 = spectrum, row 1 = waveform), like SysWeaver's media player (media_effect_program.js)
+    /// and Effect Weaver's editor (image / audio / collage effects)
+    /// </summary>
+    static readonly (string Name, string Declaration)[] ChannelUniforms =
+    [
+        ("iChannel0", "uniform sampler2D iChannel0;"),
+        ("iChannel1", "uniform sampler2D iChannel1;"),
+        ("iChannel2", "uniform sampler2D iChannel2;"),
+        ("iChannel3", "uniform sampler2D iChannel3;"),
+    ];
+
+    /// <summary>The declarations of the <see cref="ChannelUniforms"/> a body uses (comments removed) and doesn't declare</summary>
+    static IEnumerable<string> UsedChannels(EffectInfo fx, string body)
+    {
+        if (!body.Contains("iChannel", StringComparison.Ordinal))
+            return [];
+        var code = CommentRx.Replace(body, " ");
+        return ChannelUniforms.Where(x => !fx.Uniforms.Contains(x.Name) && Regex.IsMatch(code, @"\b" + x.Name + @"\b")).Select(x => x.Declaration);
+    }
+
     /// <summary>Extensions that are part of GLSL ES 3.00 (their #extension directives are removed)</summary>
     static readonly HashSet<string> CoreExtensions = new(StringComparer.Ordinal)
     {
@@ -1110,8 +1132,9 @@ void main()
                 lines[i] = "";
             }
         }
-        // WebGL2 doesn't support derivatives in GLSL ES 1.00, such shaders (with their own main) are converted to GLSL ES 3.00
-        bool convert = own && version == null && webGL2 && deriv;
+        // WebGL2 doesn't support derivatives or texture lod (GL_EXT_shader_texture_lod) in GLSL ES 1.00, such shaders (with their own main) are
+        // converted to GLSL ES 3.00
+        bool convert = own && version == null && webGL2 && (deriv || fx.UsesLod);
         bool es3 = own ? convert || (version != null && version.Contains("300")) : webGL2;
         var body = string.Join("\n", lines);
         if (convert)
@@ -1170,6 +1193,8 @@ void main()
         foreach (var (name, decl) in ShaderToyUniforms)
             if (!fx.Uniforms.Contains(name) && (code == null || Regex.IsMatch(code, @"\b" + name + @"\b")))
                 sb.Append(decl).Append('\n');
+        foreach (var decl in UsedChannels(fx, body))
+            sb.Append(decl).Append('\n');
         if (es3)
             sb.Append("out vec4 effectSaverFragColor;\n");
         string tail;
@@ -1196,6 +1221,8 @@ void main()
         foreach (var (name, decl) in ShaderToyUniforms)
             if (!fx.Uniforms.Contains(name) && (code == null || name == "iResolution" || Regex.IsMatch(code, @"\b" + name + @"\b")))
                 sb.Append(decl).Append('\n');
+        foreach (var decl in UsedChannels(fx, body))
+            sb.Append(decl).Append('\n');
         if (!es3)
             sb.Append("attribute vec2 ").Append(ShaderStages.PositionAttribute).Append(";\n");
         return new(sb.ToString(), body, ShaderStages.VertexMain(body, es3, export));

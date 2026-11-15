@@ -53,6 +53,20 @@ namespace SysWeaver.MicroService
         Task<Byte[]> MediaEffect(GetMediaEffectRequest r);
 
         /// <summary>
+        /// Get data from a sound url (a screenshot of an audio effect drawing the sound in its middle, and information about it)
+        /// </summary>
+        /// <param name="r">The sound url, audio options (the effect, default the service's AudioEffect: Led_Spectrum), the size of the screenshot and an optional extra delay</param>
+        /// <returns>The screenshot (png) and information about it</returns>
+        Task<ScreenshotImageResponse> GetMediaAudio(GetMediaAudioRequest r);
+
+        /// <summary>
+        /// Get a png from a sound url
+        /// </summary>
+        /// <param name="r">The sound url, audio options (the effect, default the service's AudioEffect: Led_Spectrum), the size of the screenshot and an optional extra delay</param>
+        /// <returns>The screenshot as png image data</returns>
+        Task<Byte[]> MediaAudio(GetMediaAudioRequest r);
+
+        /// <summary>
         /// Get data from a YouTube code (a screenshot of a frame of the video and information about it)
         /// </summary>
         /// <param name="r">The YouTube video code, the size of the screenshot, when to take it (position in seconds) and an optional extra delay</param>

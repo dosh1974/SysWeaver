@@ -545,7 +545,7 @@ namespace SysWeaver.WebBrowser
             if ((s != null) && s.Alive)
                 return s;
             if ((s != null) && (Interlocked.CompareExchange(ref Current, null, s) == s))
-                StopLater(s, "not usable anymore");
+                await StopLater(s, "not usable anymore").ConfigureAwait(false);
             //  A profile can only be used by one browser process, wait for the previous browser to release it
             try
             {
@@ -639,7 +639,7 @@ namespace SysWeaver.WebBrowser
                     M?.AddMessage(String.Concat(Prefix, "Browser #", s.Id.ToString(CultureInfo.InvariantCulture), " failed to open a window, starting a new browser"), ex, MessageLevels.Warning);
                 }
                 s.Dead = true;
-                StopLater(s, "failed to open a window");
+                await StopLater(s, "failed to open a window").ConfigureAwait(false);
                 s = await GetSession().ConfigureAwait(false);
                 return await InternalOpen(s).ConfigureAwait(false);
             }

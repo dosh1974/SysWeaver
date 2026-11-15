@@ -10,6 +10,11 @@
  * serves active content with a CSP sandbox).
  * A plain file url (no query) is loaded by the frame itself (relative links, images and styles resolve as on the page); an api url (with a
  * query, ex: ReadTextFile?"x.html") serves the html as text, so it is fetched and shown through srcdoc.
+ *
+ * `sandbox=0`: the page runs with this site's origin (no frame sandbox), so the files and apis it uses (with the session) work, ex: a page an
+ * AI made in a chat (C# ChatDataViews). Only for a plain http(s) file url: the frame loads it itself, so the page gets no more than opening
+ * it in a tab gives (its response headers apply, ex: user storage serves active content with a CSP sandbox of its own). A srcdoc page or a
+ * blob: url would run with this site's origin without any such header, so they are always sandboxed.
  */
 (function () {
     "use strict";
@@ -50,7 +55,10 @@
             if (!f) {
                 f = ctx.Frame = document.createElement("iframe");
                 f.className = "html-frame";
-                f.setAttribute("sandbox", Sandbox);
+                //  "sandbox=0": no sandbox, only for a plain http(s) file url (see the file description: never for srcdoc or a blob: url,
+                //  they would run with this site's origin without the headers of the file)
+                if (!(plain && (Sw.Url.Get("sandbox") === "0") && /^https?:$/.test(new URL(ctx.Url, location.href).protocol)))
+                    f.setAttribute("sandbox", Sandbox);
                 f.setAttribute("referrerpolicy", "no-referrer");
                 f.title = ctx.Name;
                 ctx.Host.append(f);

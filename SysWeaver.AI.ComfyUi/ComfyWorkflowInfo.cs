@@ -65,6 +65,16 @@ namespace SysWeaver.AI
         public String PromptSuffix;
 
         /// <summary>
+        /// Text that is added before the prompt when a transparent result is requested (the model makes transparency from the prompt, ex: Qwen-Image 2.1), null if none
+        /// </summary>
+        public String TransparentPrefix;
+
+        /// <summary>
+        /// Text that is added after the prompt when a transparent result is requested, null if none
+        /// </summary>
+        public String TransparentSuffix;
+
+        /// <summary>
         /// The default (positive) prompt of the workflow, null if none
         /// </summary>
         public String DefaultPrompt;
@@ -151,6 +161,8 @@ namespace SysWeaver.AI
                 Loras = w.Loras.ToArray(),
                 PromptPrefix = w.PromptPrefix,
                 PromptSuffix = w.PromptSuffix,
+                TransparentPrefix = w.TransparentPrefix,
+                TransparentSuffix = w.TransparentSuffix,
                 DefaultPrompt = w.DefaultPrompt,
                 DefaultNegativePrompt = w.DefaultNegativePrompt,
                 OutputNode = w.OutputNode,

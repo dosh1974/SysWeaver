@@ -99,6 +99,43 @@ namespace SysWeaver.AI
         public readonly String PromptSuffix;
 
         /// <summary>
+        /// Text that is added before the prompt when a transparent result is requested (the model makes a transparent image from the prompt,
+        /// ex: Qwen-Image 2.1), null if none. Comes from the model (family) of the workflow, see <see cref="ModelName"/>.
+        /// </summary>
+        public String TransparentPrefix => PromptTransparency ? GetGuide().TransparentPrefix : null;
+
+        /// <summary>
+        /// Text that is added after the prompt when a transparent result is requested, null if none, see <see cref="TransparentPrefix"/>.
+        /// </summary>
+        public String TransparentSuffix => PromptTransparency ? GetGuide().TransparentSuffix : null;
+
+        /// <summary>
+        /// True if a transparent result is made by adding <see cref="TransparentPrefix"/> / <see cref="TransparentSuffix"/> to the prompt
+        /// (the model supports it and the workflow has a prompt)
+        /// </summary>
+        public readonly bool PromptTransparency;
+
+        /// <summary>
+        /// Add the transparent prefix and suffix to a prompt (unless already present)
+        /// </summary>
+        /// <param name="prompt">The prompt</param>
+        /// <returns>The prompt for a transparent result</returns>
+        internal String TransparentAffix(String prompt)
+        {
+            if (!PromptTransparency)
+                return prompt;
+            prompt ??= "";
+            var g = GetGuide();
+            var pre = g.TransparentPrefix;
+            if (!String.IsNullOrEmpty(pre) && !prompt.Contains(pre.Trim(), StringComparison.OrdinalIgnoreCase))
+                prompt = pre + prompt.TrimStart();
+            var suf = g.TransparentSuffix;
+            if (!String.IsNullOrEmpty(suf) && !prompt.Contains(suf.Trim(), StringComparison.OrdinalIgnoreCase))
+                prompt = prompt.TrimEnd() + suf;
+            return prompt;
+        }
+
+        /// <summary>
         /// Check if a parameter is supported (case insensitive)
         /// </summary>
         /// <param name="name">The parameter name, ex: "Width"</param>
@@ -166,6 +203,28 @@ namespace SysWeaver.AI
             /// </summary>
             public double OrigSteps;
             public String Description;
+
+            /// <summary>
+            /// Remove the prefix and suffix from a prompt (if present), ex: from the default prompt of the workflow before adding more text around it
+            /// </summary>
+            public String StripAffix(String prompt)
+            {
+                var p = Prefix?.Trim();
+                if (!String.IsNullOrEmpty(p))
+                {
+                    var t = prompt.TrimStart();
+                    if (t.StartsWith(p, StringComparison.OrdinalIgnoreCase))
+                        prompt = t.Substring(p.Length).TrimStart();
+                }
+                var s = Suffix?.Trim();
+                if (!String.IsNullOrEmpty(s))
+                {
+                    var t = prompt.TrimEnd();
+                    if (t.EndsWith(s, StringComparison.OrdinalIgnoreCase))
+                        prompt = t.Substring(0, t.Length - s.Length).TrimEnd();
+                }
+                return prompt;
+            }
 
             /// <summary>
             /// Add the prefix and suffix to a prompt (unless already present)
@@ -256,7 +315,13 @@ namespace SysWeaver.AI
             OutputNode = outputNode;
             OutputTag = outputTag;
             Targets = targets;
-            Parameters = ParamOrder.Where(x => (x != PStepsSplit) && targets.ContainsKey(x)).ToArray();
+            //  A model that makes a transparent image from the prompt (ex: Qwen-Image 2.1): Transparent is supported by a prompt prefix / suffix
+            //  (also when the workflow has a transparency option of its own, both are used)
+            var promptTransparency = (type <= ComfyTaskTypes.ImagesToVideo) && targets.ContainsKey(PPrompt) && (GetGuide()?.PromptTransparency ?? false);
+            PromptTransparency = promptTransparency;
+            if (promptTransparency)
+                mappings.Add(String.Concat("Transparent adds the ", ModelName, " transparency prefix / suffix to the prompt"));
+            Parameters = ParamOrder.Where(x => (x != PStepsSplit) && (targets.ContainsKey(x) || (promptTransparency && (x == PTransparent)))).ToArray();
             FileCount = targets.TryGetValue(PFiles, out var f) ? f.Count : 0;
             Workflow = wf;
             SizedWorkflow = sized;

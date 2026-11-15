@@ -5,7 +5,7 @@
  *
  * Loading: included by MediaPlayer.Init (when window.MediaLoadAll is set) or lazily by MediaPlayer.Create
  * (MediaTypes.Audio).
- * Globals defined: MediaPlayerParamsAudio, MediaPlayerAudio, MediaAudioAnalyser (the spectrum / waveform of the sound) and
+ * Globals defined: MediaPlayerParamsAudio, MediaPlayerAudio, MediaAudioAnalyser (the spectrum / waveform of the sound), MediaAudioSamples (its offline analysis) and
  * MediaPlayerAudioTexture (the sound as a texture of MediaPlayerEffect, ShaderToy's audio input).
  * Dependencies: MediaPlayerElement and MediaPlayerTools (media_player_tools.js: the play window, volume and transport shared with
  * MediaPlayerVideo, InitBase, OnCacheComplete, waitEvent2, delay; no SysWeaver core needed).
@@ -133,6 +133,19 @@ class MediaAudioAnalyser {
     static Width = 512;
 
     /**
+     * Offline analysis (also `window.MediaAudioOffline = true` before the player is made, ex: the screenshot page): the sound is decoded
+     * (no user gesture needed) and the data is computed from its samples at the play position (MediaAudioSamples), so it is the same
+     * on every run, also paused or seeked, and without any sound output. Default false: the live AnalyserNodes.
+     * @type {boolean}
+     */
+    static Offline = false;
+
+    /** @returns {boolean} The analysis is offline (Offline or window.MediaAudioOffline). */
+    static get IsOffline() {
+        return MediaAudioAnalyser.Offline || !!window.MediaAudioOffline;
+    }
+
+    /**
      * @param {MediaPlayerAudio} player - The player of the sound.
      */
     constructor(player) {
@@ -143,6 +156,14 @@ class MediaAudioAnalyser {
         const n = MediaAudioAnalyser.Width;
         t.Freq = new Float32Array(n);
         t.Wave = new Float32Array(n);
+        if (MediaAudioAnalyser.IsOffline) {
+            //  The samples of the sound (Ready: decoded, or failed: silence), no live graph
+            t.Ready = MediaAudioSamples.Load(player.Url).then(s => t.Samples = s, e => {
+                console.warn("Media: no offline audio analysis, " + (e && e.message ? e.message : e));
+                return null;
+            });
+            return;
+        }
         /** Gesture / "AudioEnabled" handler. @returns {void} */
         t.OnGesture = () => t.TryStart();
         for (const ev of ["pointerdown", "keydown"])
@@ -171,7 +192,8 @@ class MediaAudioAnalyser {
      */
     TryStart() {
         const t = this;
-        if (t.Live || t.Disposed)
+        //  (offline analysis: no live graph, the samples are used)
+        if (t.Live || t.Disposed || t.Ready)
             return;
         let ctx = t.Ctx;
         if (!ctx) {
@@ -267,6 +289,12 @@ class MediaAudioAnalyser {
         const n = MediaAudioAnalyser.Width;
         const nodes = t.Nodes;
         t.Quiet = true;
+        //  Offline: from the samples at the play position
+        if (t.Samples) {
+            t.Silent = null;
+            t.Quiet = t.Samples.Fill(out, t.Player.GetPos() || 0, scale);
+            return;
+        }
         if (!t.Live) {
             if (t.Silent === out)
                 return;
@@ -335,6 +363,143 @@ class MediaAudioAnalyser {
 }
 
 /**
+ * A decoded sound and ShaderToy's audio data at any position (the offline analysis of MediaAudioAnalyser): computed from the samples like
+ * the browser's AnalyserNode (fft of 2048 samples, Blackman window, -100 .. -30 dB, smoothing 0.5 over the frames at 60 / s), the same as
+ * Effect Weaver's editor (EwAudio), so a screenshot shows the sound at that time without a running AudioContext (a headless browser).
+ */
+class MediaAudioSamples {
+    static #N = 2048;
+    static #Smooth = [0.5, 0.25, 0.125, 0.125];
+
+    /**
+     * Decode a sound (44.1 kHz, an offline context: no user gesture needed).
+     * @param {string} url The url of the sound.
+     * @returns {Promise<MediaAudioSamples>} The samples.
+     */
+    static async Load(url) {
+        const res = await fetch(url, { credentials: "same-origin" });
+        if (!res.ok)
+            throw new Error("HTTP " + res.status + " " + url);
+        const buf = await new OfflineAudioContext(2, 1, 44100).decodeAudioData(await res.arrayBuffer());
+        return new MediaAudioSamples(buf);
+    }
+
+    /** @param {AudioBuffer} buffer The decoded sound. */
+    constructor(buffer) {
+        const t = this;
+        const n = MediaAudioSamples.#N;
+        t.Rate = buffer.sampleRate;
+        t.Duration = buffer.duration;
+        const l = buffer.getChannelData(0);
+        const r = buffer.numberOfChannels > 1 ? buffer.getChannelData(1) : l;
+        const m = new Float32Array(l.length);
+        for (let i = 0; i < m.length; ++i)
+            m[i] = (l[i] + r[i]) * 0.5;
+        t.Ch = [m, l, r];
+        t.Win = new Float32Array(n);
+        t.Rev = new Uint16Array(n);
+        t.Cos = new Float64Array(n / 2);
+        t.Sin = new Float64Array(n / 2);
+        t.Re = new Float64Array(n);
+        t.Im = new Float64Array(n);
+        for (let i = 0; i < n; ++i) {
+            t.Win[i] = 0.42 - 0.5 * Math.cos(2 * Math.PI * i / n) + 0.08 * Math.cos(4 * Math.PI * i / n);
+            let x = i, y = 0;
+            for (let b = 0; b < 11; ++b) {
+                y = (y << 1) | (x & 1);
+                x >>= 1;
+            }
+            t.Rev[i] = y;
+        }
+        for (let i = 0; i < n / 2; ++i) {
+            t.Cos[i] = Math.cos(-2 * Math.PI * i / n);
+            t.Sin[i] = Math.sin(-2 * Math.PI * i / n);
+        }
+        t.Cache = new Map();
+    }
+
+    /** The magnitudes (/ N) of the first Width bins of channel c, for the N samples before sample end. */
+    #Spectrum(c, end, out) {
+        const t = this;
+        const n = MediaAudioSamples.#N, re = t.Re, im = t.Im, x = t.Ch[c], w = t.Win, rev = t.Rev;
+        const start = end - n;
+        for (let i = 0; i < n; ++i) {
+            const k = start + i;
+            re[rev[i]] = k >= 0 && k < x.length ? x[k] * w[i] : 0;
+            im[rev[i]] = 0;
+        }
+        for (let size = 2; size <= n; size <<= 1) {
+            const half = size >> 1, step = n / size;
+            for (let i = 0; i < n; i += size)
+                for (let j = 0, k = 0; j < half; ++j, k += step) {
+                    const a = i + j, b = a + half;
+                    const tr = re[b] * t.Cos[k] - im[b] * t.Sin[k];
+                    const ti = re[b] * t.Sin[k] + im[b] * t.Cos[k];
+                    re[b] = re[a] - tr;
+                    im[b] = im[a] - ti;
+                    re[a] += tr;
+                    im[a] += ti;
+                }
+        }
+        for (let i = 0; i < out.length; ++i)
+            out[i] = Math.sqrt(re[i] * re[i] + im[i] * im[i]) / n;
+    }
+
+    /** The spectra of frame q (60 / s), cached. */
+    #Frame(q) {
+        const t = this;
+        let f = t.Cache.get(q);
+        if (f)
+            return f;
+        const w = MediaAudioAnalyser.Width;
+        f = new Float32Array(3 * w);
+        for (let c = 0; c < 3; ++c)
+            t.#Spectrum(c, Math.round(q / 60 * t.Rate), f.subarray(c * w, c * w + w));
+        t.Cache.set(q, f);
+        if (t.Cache.size > 24)
+            t.Cache.delete(t.Cache.keys().next().value);
+        return f;
+    }
+
+    /**
+     * The audio data at a position: Width x 2 interleaved RGB (row 0 the spectrum, row 1 the waveform; r = mono, g = left, b = right), times scale.
+     * @param {Float32Array|Uint8ClampedArray} out The data.
+     * @param {number} time The position in the sound (seconds).
+     * @param {number} scale 1 for floats, 255 for bytes.
+     * @returns {boolean} True when it is silence.
+     */
+    Fill(out, time, scale) {
+        const t = this;
+        const w = MediaAudioAnalyser.Width;
+        const s = Math.max(0, Math.min(t.Duration, time));
+        const q = Math.floor(s * 60);
+        const K = MediaAudioSamples.#Smooth;
+        const frames = K.map((_, j) => t.#Frame(q - j));
+        const end = Math.floor(s * t.Rate);
+        let quiet = true;
+        for (let c = 0; c < 3; ++c) {
+            for (let i = 0; i < w; ++i) {
+                let m = 0;
+                for (let j = 0; j < K.length; ++j)
+                    m += K[j] * frames[j][c * w + i];
+                const v = ((m > 0 ? 20 * Math.log10(m) : -1000) + 100) / 70;
+                const x = v > 0 ? (v < 1 ? v : 1) : 0;
+                if (x > 0.001)
+                    quiet = false;
+                out[i * 3 + c] = x * scale;
+            }
+            const ch = t.Ch[c];
+            for (let i = 0; i < w; ++i) {
+                const j = end - w + i;
+                const v = ((j >= 0 && j < ch.length ? ch[j] : 0) + 1) * 0.5;
+                out[(w + i) * 3 + c] = (v > 0 ? (v < 1 ? v : 1) : 0) * scale;
+            }
+        }
+        return quiet;
+    }
+}
+
+/**
  * Texture provider of the sound of an audio player for MediaPlayerEffect (duck typed like MediaPlayerImageTexture: Cache(haveLod),
  * Apply(uv, size), ApplyClip(p), Dispose(), Width/Height, plus Update() before every frame and SampleRate).
  * ShaderToy's audio texture: Width (512) x 2 texels, row 0 (v = 0.25) the spectrum, row 1 (v = 0.75) the waveform; r = mono, g = left,
@@ -377,6 +542,9 @@ class MediaPlayerAudioTexture {
     async Cache() {
         const t = this;
         const gl = t.GL;
+        //  Offline analysis: the sound is decoded first (the first frames already show it)
+        if (t.Analyser.Ready)
+            await t.Analyser.Ready;
         gl.bindTexture(gl.TEXTURE_2D, t.Texture);
         t.Upload(true);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -453,5 +621,6 @@ class MediaPlayerAudioTexture {
     m.MediaPlayerParamsAudio = MediaPlayerParamsAudio;
     m.MediaPlayerAudio = MediaPlayerAudio;
     m.MediaAudioAnalyser = MediaAudioAnalyser;
+    m.MediaAudioSamples = MediaAudioSamples;
     m.MediaPlayerAudioTexture = MediaPlayerAudioTexture;
 })();

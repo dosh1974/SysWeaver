@@ -107,7 +107,15 @@ namespace SysWeaver.AI
                         foreach (var t in l)
                             values.Add((t.Tag, t.Input, value(t)));
                 }
-                if (p.Prompt != null)
+                //  A transparent result from a model that makes it from the prompt (ex: Qwen-Image 2.1): the transparency prefix / suffix go
+                //  around the prompt (inside any LoRA trigger prefix / suffix of the workflow); without a prompt the workflow's default prompt is used
+                if ((p is IVisualComfyParams tv) && tv.Transparent && tw.PromptTransparency)
+                {
+                    var prompt = p.Prompt ?? tw.DefaultPrompt;
+                    if (prompt != null)
+                        Set(ComfyTaskWorkflow.PPrompt, t => t.Affix(tw.TransparentAffix(t.StripAffix(prompt))));
+                }
+                else if (p.Prompt != null)
                     Set(ComfyTaskWorkflow.PPrompt, t => t.Affix(p.Prompt));
                 if (p.NegativePrompt != null)
                     Set(ComfyTaskWorkflow.PNegative, _ => p.NegativePrompt);

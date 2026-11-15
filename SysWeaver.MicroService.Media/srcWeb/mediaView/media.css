@@ -344,11 +344,12 @@ Media-View.MediaChrome,
     display: block;
     overflow: hidden;
     background: var(--media-stage);
-    /* The player colours: light controls on a dark stage over any picture, whatever the theme (as in every video player) */
-    --media-stage: #000; /* SwWeb:allow-design (the stage around a media is black in every theme) */
-    --media-fg: #fff; /* SwWeb:allow-design (light controls on the dark stage and over the picture) */
-    --media-fg-2: rgb(255 255 255 / 0.9); /* SwWeb:allow-design (the time, on the dark stage) */
-    --media-fg-3: rgb(255 255 255 / 0.25); /* SwWeb:allow-design (the speaker of an audio media, on the dark stage) */
+    /* The stage: the page background of the theme (also behind transparent media), unless the user picked another (data-media-bg below).
+       The player colours: light controls on their dark shades over any picture, whatever the theme (as in every video player) */
+    --media-stage: var(--sw-bg);
+    --media-fg: #fff; /* SwWeb:allow-design (light controls on the dark shades over the picture) */
+    --media-fg-2: rgb(255 255 255 / 0.9); /* SwWeb:allow-design (the time, on the dark shade) */
+    --media-fg-3: var(--sw-text-3); /* the speaker of an audio media, on the stage (the page background) */
     --media-track: rgb(255 255 255 / 0.3); /* SwWeb:allow-design (the slider track over the picture) */
     --media-hover: rgb(255 255 255 / 0.15); /* SwWeb:allow-design (hovered bar button over the picture) */
     --media-scrim: rgb(0 0 0 / 0.55); /* SwWeb:allow-design (behind the big Play button, over the picture) */
@@ -359,9 +360,29 @@ Media-View.MediaChrome,
     text-align: left;
 }
 
-    /* A transparent media (its Transparent setting): the page background of the theme shows through its see-through parts */
-    Media-View.MediaChrome.MediaTransparent {
+    /* The stage the user chose (the background menu of the player, data-media-bg, Prefs.Background in media.js) */
+    Media-View.MediaChrome[data-media-bg="checker"] {
+        --media-stage: repeating-conic-gradient(#c8c8c8 0 25%, #ffffff 0 50%) 0 0 / 16px 16px; /* SwWeb:allow-design (the checkerboard that shows transparency, every theme) */
+    }
+
+    Media-View.MediaChrome[data-media-bg="theme"] {
         --media-stage: var(--sw-bg);
+    }
+
+    Media-View.MediaChrome[data-media-bg="white"] {
+        --media-stage: #ffffff; /* SwWeb:allow-design (a color the user picked as the stage) */
+    }
+
+    Media-View.MediaChrome[data-media-bg="black"] {
+        --media-stage: #000000; /* SwWeb:allow-design (a color the user picked as the stage) */
+    }
+
+    Media-View.MediaChrome[data-media-bg="gray"] {
+        --media-stage: #808080; /* SwWeb:allow-design (a color the user picked as the stage) */
+    }
+
+    Media-View.MediaChrome[data-media-bg="magenta"] {
+        --media-stage: #ff00ff; /* SwWeb:allow-design (a color the user picked as the stage) */
     }
 
     Media-View.MediaChrome:focus-visible {

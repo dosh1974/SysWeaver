@@ -47,7 +47,13 @@ namespace SysWeaver.MicroService
                 { "*", p.Auth },
             }.Freeze();
             MaxScreenShotLock = new AsyncLock(Math.Max(1, p.MaxConcurrency));
+            var ae = String.IsNullOrWhiteSpace(p.AudioEffect) ? "Led_Spectrum" : p.AudioEffect.Trim();
+            //  A name: an effect of mediaView/audioEffects, else an url / a path relative to the mediaView folder
+            AudioEffect = ae.IndexOf('/') < 0 && !ae.EndsWith(".glsl", StringComparison.OrdinalIgnoreCase) ? "audioEffects/" + ae + ".glsl" : ae;
         }
+
+        /// <summary>The effect that draws a sound (relative to the mediaView folder, or an url), see <see cref="ThumbnailWebParams.AudioEffect"/></summary>
+        readonly String AudioEffect;
 
         /// <summary>
         /// Get the http prefix to use when the browser should load a page from this server
@@ -101,9 +107,8 @@ namespace SysWeaver.MicroService
         public async Task<StaticMemoryHttpRequestHandler> GetProxiedUrl(String url)
         {
             var ext = GetUrlExtension(url);
-            String newUrl;
-            using (var rng = SecureRng.Get())
-                newUrl = rng.GetGuid24();
+            //  (hex: a base64 name has "/" and "+", a "+" in the path can come back as a space and the proxied file isn't found)
+            var newUrl = Guid.NewGuid().ToString("N");
             newUrl = newUrl + ext;
 
             var c = CorsProxy;
@@ -377,38 +382,85 @@ namespace SysWeaver.MicroService
             String e = "";
             if (d != null)
                 e = String.Concat("&props=", Uri.EscapeDataString(JsonSer.ToString(d)));
+            //  A position as a part of the duration (a sound: the middle)
+            if (r.RelPos is double rp)
+                e = String.Concat(e, "&rpos=", rp.ToString(CultureInfo.InvariantCulture));
             return String.Concat(GetPrefix(context), "mediaView/MediaPreview.html?type=", r.Type, "&link=", Uri.EscapeDataString(r.Url), "&pos=", r.Pos.ToString(CultureInfo.InvariantCulture), e);
+        }
+
+        /// <summary>
+        /// An url of another origin than the page (an absolute http(s) url to another host / port than the prefix)
+        /// </summary>
+        static bool IsCrossOrigin(String url, String prefix)
+        {
+            if (String.IsNullOrEmpty(url) || !Uri.TryCreate(url, UriKind.Absolute, out var u) || (u.Scheme != Uri.UriSchemeHttp && u.Scheme != Uri.UriSchemeHttps))
+                return false;
+            if (!Uri.TryCreate(prefix, UriKind.Absolute, out var p))
+                return true;
+            return !String.Equals(u.Scheme, p.Scheme, StringComparison.OrdinalIgnoreCase) || !String.Equals(u.Host, p.Host, StringComparison.OrdinalIgnoreCase) || u.Port != p.Port;
+        }
+
+        /// <summary>
+        /// Serve an url from this server (the CORS proxy, <see cref="GetProxiedUrl"/>): the url the page uses instead, null if it can't be downloaded
+        /// </summary>
+        async Task<String> Proxy(String url)
+        {
+            var h = await GetProxiedUrl(url).ConfigureAwait(false);
+            return h == null ? null : "../" + h.Uri;
+        }
+
+        /// <summary>
+        /// The urls the page uses as WebGL textures or fetches (an effect's picture, an image under an effect, a sound for the offline analysis):
+        /// those of another origin are served by this server (the CORS proxy), a browser refuses them otherwise (a tainted texture, a blocked fetch)
+        /// </summary>
+        async Task ProxyTextures(GetMediaRequest r, HttpServerRequest context)
+        {
+            var prefix = GetPrefix(context, false);
+            foreach (var (get, set) in r.TextureUrls)
+            {
+                var url = get();
+                if (!IsCrossOrigin(url, prefix))
+                    continue;
+                var p = await Proxy(url).ConfigureAwait(false);
+                if (p != null)
+                    set(p);
+            }
+        }
+
+        /// <summary>A page error caused by a cross origin media (a refused texture / fetch)</summary>
+        static bool IsCorsError(String desc)
+        {
+            var d = desc.FastToLower();
+            return d.FastIndexOf("cors") >= 0 || d.FastIndexOf("cross-origin") >= 0 || d.FastIndexOf("cross origin") >= 0;
+        }
+
+        /// <summary>
+        /// The screenshot of a media (MediaPreview.html): cross origin textures are proxied first; a page error about a cross origin media
+        /// proxies the media itself and tries again
+        /// </summary>
+        async Task<Tuple<Byte[], MediaInfo>> InternalShot(GetMediaRequest r, HttpServerRequest context, ScreenshotImageFormats format, int quality)
+        {
+            await ProxyTextures(r, context).ConfigureAwait(false);
+            var x = await GetAdaptiveImageAsync(InternalGetMediaUrl(r, context), r.Width, r.Height, 1, format, quality, false, r.ExtraDelayMs).ConfigureAwait(false);
+            var desc = x.Item2?.Desc ?? "";
+            if (!desc.FastStartsWith("Error:"))
+                return x;
+            if (!IsCorsError(desc))
+                throw new Exception(desc);
+            var p = await Proxy(r.Url).ConfigureAwait(false);
+            if (p == null)
+                throw new Exception(desc);
+            r.Url = p;
+            x = await GetAdaptiveImageAsync(InternalGetMediaUrl(r, context), r.Width, r.Height, 1, format, quality, false, r.ExtraDelayMs).ConfigureAwait(false);
+            desc = x.Item2?.Desc ?? "";
+            if (desc.FastStartsWith("Error:"))
+                throw new Exception(desc);
+            return x;
         }
 
         async Task<ScreenshotImageResponse> InternalGetMedia(GetMediaRequest r, HttpServerRequest context, ScreenshotImageFormats format = ScreenshotImageFormats.Png, int quality = 70)
         {
-            var url = InternalGetMediaUrl(r, context);
-            var x = await GetAdaptiveImageAsync(url, r.Width, r.Height, 1, format, quality, false, r.ExtraDelayMs).ConfigureAwait(false);
-            var desc = x.Item2?.Desc ?? "";
-            if (desc.FastStartsWith("Error:"))
-            {
-                if (desc.FastToLower().FastIndexOf("cors") >0)
-                {
-                    var h = await GetProxiedUrl(r.Url).ConfigureAwait(false);
-                    if (h != null)
-                    {
-                        r.Url = "../" + h.Uri;
-                        url = InternalGetMediaUrl(r, context);
-                        x = await GetAdaptiveImageAsync(url, r.Width, r.Height, 1, format, quality, false, r.ExtraDelayMs).ConfigureAwait(false);
-                        desc = x.Item2?.Desc ?? "";
-                        if (desc.FastStartsWith("Error:"))
-                            throw new Exception(desc);
-                    }
-                    else
-                    {
-                        throw new Exception(desc);
-                    }
-                }
-                else
-                {
-                    throw new Exception(desc);
-                }
-            }
+            var x = await InternalShot(r, context, format, quality).ConfigureAwait(false);
             return new ScreenshotImageResponse
             {
                 Data = x.Item1,
@@ -417,36 +469,7 @@ namespace SysWeaver.MicroService
         }
 
         async Task<ReadOnlyMemory<Byte>> InternalGetMediaPng(GetMediaRequest r, HttpServerRequest context)
-        {
-            var url = InternalGetMediaUrl(r, context);
-            var x = await GetAdaptiveImageAsync(url, r.Width, r.Height, 1, ScreenshotImageFormats.Png, 70, false, r.ExtraDelayMs).ConfigureAwait(false);
-            var desc = x.Item2?.Desc ?? "";
-            if (desc.FastStartsWith("Error:"))
-            {
-                if (desc.FastToLower().FastIndexOf("cors") > 0)
-                {
-                    var h = await GetProxiedUrl(r.Url).ConfigureAwait(false);
-                    if (h != null)
-                    {
-                        r.Url = "../" + h.Uri;
-                        url = InternalGetMediaUrl(r, context);
-                        x = await GetAdaptiveImageAsync(url, r.Width, r.Height, 1, ScreenshotImageFormats.Png, 70, false, r.ExtraDelayMs).ConfigureAwait(false);
-                        desc = x.Item2?.Desc ?? "";
-                        if (desc.FastStartsWith("Error:"))
-                            throw new Exception(desc);
-                    }
-                    else
-                    {
-                        throw new Exception(desc);
-                    }
-                }
-                else
-                {
-                    throw new Exception(desc);
-                }
-            }
-            return x.Item1;
-        }
+            => (await InternalShot(r, context, ScreenshotImageFormats.Png, 70).ConfigureAwait(false)).Item1;
 
 
         #region Media Image
@@ -538,6 +561,47 @@ namespace SysWeaver.MicroService
             => InternalGetMediaPng(r, context);
 
         #endregion//Media Effect
+
+        #region Media Audio
+
+        /// <summary>The audio request with its effect: the request's, else the service's AudioEffect (Led_Spectrum)</summary>
+        GetMediaAudioRequest WithAudioEffect(GetMediaAudioRequest r)
+        {
+            r.Options ??= new SysWeaver.MicroService.Media.MediaAudio();
+            if (String.IsNullOrWhiteSpace(r.Options.Effect))
+                r.Options.Effect = AudioEffect;
+            return r;
+        }
+
+        /// <summary>
+        /// Get data from a sound url: an audio effect draws the sound (the request's Options.Effect, else the service's AudioEffect, by default
+        /// Led_Spectrum) with the media viewer in a browser window, the screenshot shows it in the middle of the sound (its duration × 0.5: the
+        /// audio texture is computed from the decoded samples at that position)
+        /// </summary>
+        /// <param name="r">The sound url, audio options (the effect and its settings), the size of the screenshot and an optional extra delay</param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
+        /// <returns>The screenshot (png) and information about it (the size, the duration and the url)</returns>
+        [WebApi]
+        [WebApiClientCache(30)]
+        [WebApiRequestCache(25, WebApiCaches.Globally)]
+        [WebApiCompression("")]
+        public Task<ScreenshotImageResponse> GetMediaAudio(GetMediaAudioRequest r, HttpServerRequest context)
+            => InternalGetMedia(WithAudioEffect(r), context);
+
+        /// <summary>
+        /// Get a png from a sound url (see <see cref="GetMediaAudio"/>, this returns only the image)
+        /// </summary>
+        /// <param name="r">The sound url, audio options (the effect and its settings), the size of the screenshot and an optional extra delay</param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
+        /// <returns>The screenshot as png image data</returns>
+        [WebApiClientCache(30)]
+        [WebApiRequestCache(25, WebApiCaches.Globally)]
+        [WebApiRaw("image/png", true)]
+        [WebApi(nameof(MediaAudio) + ".png")]
+        public Task<ReadOnlyMemory<Byte>> MediaAudio(GetMediaAudioRequest r, HttpServerRequest context)
+            => InternalGetMediaPng(WithAudioEffect(r), context);
+
+        #endregion//Media Audio
 
         #region Media YouTube
 

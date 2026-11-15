@@ -104,6 +104,47 @@ namespace SysWeaver.MicroService
         public String[] GetAudioEffects(HttpServerRequest context)
             => InternalGet("mediaView/audioEffects", context);
 
+        /// <summary>
+        /// The most references ResolveEffectMedia takes (a collage)
+        /// </summary>
+        const int MaxEffectMediaRefs = 64;
+
+        /// <summary>
+        /// The media of an effect's media line (<see cref="MediaEffectMediaRequest"/>): its references that aren't urls, or the defaults of its
+        /// kind (no references), resolved by the services that know them (<see cref="IEffectMediaResolver"/>, ex: Effect Weaver's editor: its
+        /// stock media and the user's own media). Used by the media player when an effect's settings name no Texture.
+        /// </summary>
+        /// <param name="r">The kind and references of the line</param>
+        /// <param name="context">The request (the user's own media are the session's user's)</param>
+        /// <returns>The urls (absolute or relative to the mediaView folder), empty if no service knows them</returns>
+        [WebApi]
+        [WebApiSessionRateLimit(10, 1, 20, 5)]
+        public async Task<MediaEffectMediaResponse> ResolveEffectMedia(MediaEffectMediaRequest r, HttpServerRequest context)
+        {
+            var res = new MediaEffectMediaResponse();
+            var kind = r?.Kind ?? "";
+            if (kind != "image" && kind != "audio" && kind != "collage")
+                return res;
+            var refs = (r.Refs ?? []).Where(x => !String.IsNullOrWhiteSpace(x) && x.Length <= 2048).Take(MaxEffectMediaRefs).ToArray();
+            foreach (var x in Manager.GetAll<IEffectMediaResolver>())
+            {
+                try
+                {
+                    var urls = await x.ResolveEffectMedia(kind, refs, context);
+                    if (urls is { Length: > 0 })
+                    {
+                        res.Urls = urls;
+                        break;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Manager.AddMessage("Effect media " + kind + " " + String.Join(" ", refs) + ": " + ex.Message, MessageLevels.Warning);
+                }
+            }
+            return res;
+        }
+
 
         /// <summary>
         /// The longest effect source BuildEffect accepts (characters)

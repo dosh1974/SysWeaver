@@ -69,7 +69,33 @@
         SetLoop: v => Sw.Storage.Set(Prefs.LoopKey, v ? "true" : "false"),
         /** @param {number} v Volume. */
         SetVolume: v => Sw.Storage.Set(Prefs.VolumeKey, "" + v),
+        /** @type {string} Storage key: the stage behind a media (a Backgrounds value). */
+        BackgroundKey: "SysWeaver.Media.Background",
+        /** @type {string} The default stage: the page background of the theme (also behind transparent media). */
+        DefaultBackground: "theme",
+        /** @returns {string} The chosen stage background (default: the page background of the theme). */
+        Background: () => {
+            const v = Sw.Storage.Get(Prefs.BackgroundKey) ?? "";
+            return Backgrounds.some(x => x.Value === v) ? v : Prefs.DefaultBackground;
+        },
+        /** @param {string} v The stage background. */
+        SetBackground: v => Sw.Storage.Set(Prefs.BackgroundKey, v || Prefs.DefaultBackground),
     };
+
+    /**
+     * The stages behind a media (the player chrome's background menu: what shows through the transparent parts of an effect, an image
+     * or a video, and around a media that doesn't fill the view). The view gets `data-media-bg` (media.css). The default is the page
+     * background of the theme (Prefs.DefaultBackground).
+     * @type {Array<{Value:string, Label:function():string}>}
+     */
+    const Backgrounds = [
+        { Value: "theme", Label: () => _TF("Page background", "Menu item of the background menu of the media player: the background color of the page theme is shown behind the media") },
+        { Value: "checker", Label: () => _TF("Checkerboard", "Menu item of the background menu of the media player: a checkerboard pattern is shown behind the transparent parts of the media") },
+        { Value: "white", Label: () => _TF("White", "Menu item of the background menu of the media player: this color is shown behind the media. A color name.") },
+        { Value: "black", Label: () => _TF("Black", "Menu item of the background menu of the media player: this color is shown behind the media. A color name.") },
+        { Value: "gray", Label: () => _TF("Gray", "Menu item of the background menu of the media player: this color is shown behind the media. A color name.") },
+        { Value: "magenta", Label: () => _TF("Magenta", "Menu item of the background menu of the media player: this color is shown behind the media. A color name.") },
+    ];
 
     // ------------------------------------------------------------------ helpers
 
@@ -1824,16 +1850,37 @@
      * @param {?function():void} [o.Edit] Opens the media in the editor: an "Edit" menu item and the E key (none: no edit).
      * @param {?function():void} [o.Download] Saves the media file: a "Download" menu item (none: the media is no file, ex: a YouTube video or a text).
      * @param {function():boolean} [o.Transparent] True when the media is transparent (its settings; the player's own Params.Transparent
-     *   counts too, an image / text with an effect has the effect's params): class MediaTransparent, the theme background as the stage.
+     *   counts too, an image / text with an effect has the effect's params): class MediaTransparent (the stage is the page background anyway, see o.Background).
      * @param {function():string} [o.Title] The name in the title bar (default: the page title).
      * @param {boolean} [o.StartHidden] True: no controls and no title at the start (until a pointer move, a tap, a key or the focus;
      *   shown when the media still doesn't play after 1.5 s; never for audio only media).
      * @param {boolean} [o.EndHud] True: the controls and the big Play button show when the media reaches its end (not looped). Default
      *   false: nothing over the last picture until a pointer move, a tap, a key or the focus (never for audio only media).
+     * @param {{Get:function():string, Set:function(string):void}} [o.Background] The stage behind the media (Backgrounds values: the
+     *   background button and menu of a media with a picture). Default: the viewer's preference (localStorage
+     *   "SysWeaver.Media.Background"), shown by the view itself (`data-media-bg`, media.css). A host that draws its own background passes
+     *   Get / Set.
+     * @param {boolean} [o.Links] False: no address features (no Show url, Open the original file, Copy information, no pasted or dropped
+     *   links), for a player of something that isn't a media file (ex: Effect Weaver's editor view). Default true.
+     * @param {function():boolean} [o.MediaClicks] False: a click / double click on the media doesn't play / pause / jump / go full screen
+     *   (the host uses the pointer, ex: dragging sets a value). Default: always true.
      */
     function CreateChrome(view, getPlayer, o) {
         const el = Sw.el;
         const player0 = getPlayer();
+        const links = o.Links !== false;
+        //  The stage behind the media: the host's (o.Background), else the viewer's preference shown by the view (data-media-bg)
+        const bg = o.Background || {
+            Get: () => Prefs.Background(),
+            Set: v => {
+                Prefs.SetBackground(v);
+                view.dataset.mediaBg = v;
+            },
+        };
+        if (!o.Background)
+            view.dataset.mediaBg = Prefs.Background();
+        /** @returns {Array<object>} The items of the background menu. */
+        const bgItems = () => Backgrounds.map(x => ({ Text: x.Label(), Radio: true, Checked: (bg.Get() || Prefs.DefaultBackground) === x.Value, OnClick: () => bg.Set(x.Value) }));
         view.classList.add("MediaChrome");
         view.tabIndex = 0;
         view.setAttribute("role", "region");
@@ -2072,14 +2119,17 @@
             }
             if (p.HaveAudio)
                 items.push({ Text: _TF("Mute", "Tool tip of the mute button of the media viewer"), Checked: !!p.Muted, Hint: "M", OnClick: toggleMute });
+            if (p.HaveVisual)
+                items.push({ Text: _TF("Background", "Menu item of the media viewer with the stages behind the media (a sub menu: checkerboard, colors)"), Icon: "layers", Items: bgItems() });
             items.push("-");
             if (panel)
                 items.push({ Text: _TF("Show the statistics", "Menu item of the media viewer that shows / hides the statistics panel"), Checked: !panel.hidden, Hint: "I", OnClick: () => setStats(panel.hidden) });
             items.push({ Text: Sw.FullScreen.Is() ? _TF("Leave full screen", "Tool tip of the full screen button of the media viewer in full screen") : _TF("Full screen", "Tool tip of the full screen button of the media viewer"), Icon: Sw.FullScreen.Is() ? "fullscreenExit" : "fullscreen", Hint: "F", OnClick: toggleFull });
-            items.push("-",
-                { Text: _TF("Show url...", "Menu item of the media viewer that asks for a media address and shows it"), Icon: "link", Hint: "U", OnClick: askLink },
-                { Text: _TF("Copy information to clipboard", "Menu item of the media viewer that copies the address, the state, the statistics and the settings of the media"), Icon: "copy", OnClick: copyInfo },
-                { Text: _TF("Open the original file", "Menu item of the media viewer that opens the original file in a new tab (or its editor)"), Icon: "external", OnClick: () => Sw.Page.EditOrOpen(p.Source) });
+            if (links)
+                items.push("-",
+                    { Text: _TF("Show url...", "Menu item of the media viewer that asks for a media address and shows it"), Icon: "link", Hint: "U", OnClick: askLink },
+                    { Text: _TF("Copy information to clipboard", "Menu item of the media viewer that copies the address, the state, the statistics and the settings of the media"), Icon: "copy", OnClick: copyInfo },
+                    { Text: _TF("Open the original file", "Menu item of the media viewer that opens the original file in a new tab (or its editor)"), Icon: "external", OnClick: () => Sw.Page.EditOrOpen(p.Source) });
             if (o.Download)
                 items.push({ Text: _TF("Download", "Menu item of the media viewer that saves the media file (an image, a video, a sound) to the computer"), Icon: "download", OnClick: o.Download });
             if (o.Edit)
@@ -2120,6 +2170,14 @@
         const openB = b("external", _TF("Open the original file in a new tab (or in its editor, when there is one)", "Media player button tool tip of the button that opens the original media file"),
             () => Sw.Page.EditOrOpen(getPlayer().Source));
         const fullB = b("fullscreen", _TF("Full screen", "Tool tip of the full screen button of the media viewer"), toggleFull, { Shortcut: "F" });
+        //  The stage behind the media (a media with a picture: an effect, an image, a video)
+        const bgB = new Sw.Button({
+            Icon: "layers", Title: _TF("Background: what shows behind the media (transparent parts, around it)", "Tool tip of the background button of the media viewer"),
+            Kind: "ghost", Class: "media-chrome-button", Menu: () => [{ Title: _TF("Background", "Header of the background menu of the media viewer") }, ...bgItems()], MenuOptions: { Side: "above", Align: "end" },
+        });
+        bgB.E.hidden = !player0.HaveVisual;
+        if (!links)
+            openB.E.hidden = true;
         const moreB = new Sw.Button({
             Icon: "moreV", Title: _TF("More: speed, jump 15 seconds, show an address, copy the information ...", "Tool tip of the menu button of the media viewer"),
             Kind: "ghost", Class: "media-chrome-button", Menu: () => menuItems(), MenuOptions: { Side: "above", Align: "end" },
@@ -2140,7 +2198,7 @@
                 muteB.E, volS.E,
                 timeE,
                 el("span.media-bar-gap"),
-                statsB ? statsB.E : null, openB.E, fullB.E, moreB.E));
+                statsB ? statsB.E : null, bgB.E, openB.E, fullB.E, moreB.E));
         //  The sound controls and the speaker of a media without a picture follow the current player (update): a rebuild in the editor
         //  can add a picture (a sound with an effect) or a sound (an effect with a sound texture)
         const art = el("div.media-audio-art", { attrs: { "aria-hidden": "true" } }, Sw.Icon("IconMediaPreviewVolLoud"));
@@ -2252,7 +2310,7 @@
         let lastSide = 0;
         let skipping = 0;
         view.addEventListener("click", ev => {
-            if (!onMedia(ev) || Sw.BadClick(ev))
+            if (!onMedia(ev) || Sw.BadClick(ev) || (o.MediaClicks && !o.MediaClicks()))
                 return;
             const now = Date.now();
             const side = sideOf(ev);
@@ -2317,36 +2375,38 @@
                 Sw.Toast(_TF("Not a media address: use a YouTube link or the address of a file of a known type (an image, a video, an audio file, .glsl).", "Error of the media viewer dialog that asks for a media address"), { Kind: "warning" });
         };
         const dropText = dt => dt ? (dt.getData("text/uri-list") || dt.getData("text/plain") || "") : "";
-        view.addEventListener("dragover", ev => {
-            const types = ev.dataTransfer ? [...ev.dataTransfer.types] : [];
-            if (!types.includes("text/uri-list") && !types.includes("text/plain"))
-                return;
-            ev.preventDefault();
-            ev.dataTransfer.dropEffect = "link";
-            view.classList.add("MediaDropping");
-        });
-        view.addEventListener("dragleave", ev => {
-            if (!view.contains(ev.relatedTarget))
+        if (links) {
+            view.addEventListener("dragover", ev => {
+                const types = ev.dataTransfer ? [...ev.dataTransfer.types] : [];
+                if (!types.includes("text/uri-list") && !types.includes("text/plain"))
+                    return;
+                ev.preventDefault();
+                ev.dataTransfer.dropEffect = "link";
+                view.classList.add("MediaDropping");
+            });
+            view.addEventListener("dragleave", ev => {
+                if (!view.contains(ev.relatedTarget))
+                    view.classList.remove("MediaDropping");
+            });
+            view.addEventListener("drop", ev => {
                 view.classList.remove("MediaDropping");
-        });
-        view.addEventListener("drop", ev => {
-            view.classList.remove("MediaDropping");
-            const text = dropText(ev.dataTransfer);
-            if (!text)
-                return;
-            ev.preventDefault();
-            takeLink(text);
-        });
-        document.addEventListener("paste", ev => {
-            const a = document.activeElement;
-            if (a && (a.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)))
-                return;
-            const text = ev.clipboardData ? ev.clipboardData.getData("text/plain") : "";
-            if (!text)
-                return;
-            ev.preventDefault();
-            takeLink(text);
-        });
+                const text = dropText(ev.dataTransfer);
+                if (!text)
+                    return;
+                ev.preventDefault();
+                takeLink(text);
+            });
+            document.addEventListener("paste", ev => {
+                const a = document.activeElement;
+                if (a && (a.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)))
+                    return;
+                const text = ev.clipboardData ? ev.clipboardData.getData("text/plain") : "";
+                if (!text)
+                    return;
+                ev.preventDefault();
+                takeLink(text);
+            });
+        }
 
         // ---- keys
 
@@ -2390,6 +2450,8 @@
                     skip(k === "j" ? -15 : 15);
                     break;
                 case "u":
+                    if (!links)
+                        return;
                     askLink();
                     break;
                 case "e":
@@ -2456,6 +2518,7 @@
                 put("loop", !!p.Looping, v => loopB.SetPressed(v));
                 put("visual", !!p.HaveVisual, v => {
                     art.hidden = v;
+                    bgB.E.hidden = !v;
                     view.classList.toggle("MediaAudioOnly", !v);
                 });
                 put("audio", !!p.HaveAudio, v => muteB.E.hidden = volS.E.hidden = !v);
@@ -2572,7 +2635,8 @@
 
     /**
      * Boot function of `MediaPreview.html`: a bare player that fills the window, also used to take screenshots.
-     * URL params: `link`/`d`, `type`/`t`, `props`, `pos` (seek position, s), `fill`, `full` (full screen; re-entered on the
+     * URL params: `link`/`d`, `type`/`t`, `props`, `pos` (seek position, s), `rpos` (the seek position as a part of the duration, 0.5 = the
+     * middle; a media without a duration uses pos), `fill`, `full` (full screen; re-entered on the
      * first key / click), `back` (a click goes back, held off until the full screen / audio gestures were consumed),
      * `hack` (logging screenshot host; it never removes the caption), `caption` (a text media gets the "Text from the link" caption and the limited
      * area, as in the shell's content frame; set by the effect pages). With a screenshot host (contract with Thumbnail.Web / MediaThumbnail): `isSupported()`
@@ -2592,6 +2656,9 @@
                 await shost.isSupported();
                 window.ScreenShotHost = shost;
                 target.classList.add("NoFade");
+                //  The sound of an audio effect is analysed from its samples (a headless browser runs no AudioContext; the same picture
+                //  every time, at the paused position)
+                window.MediaAudioOffline = true;
             }
             let fill = U.Has("fill") || !!shost;
             const full = U.Has("full");
@@ -2618,7 +2685,9 @@
                 Sw.Page.Loaded();
                 return;
             }
-            const pos = parseFloat(U.Get("pos") ?? "0") || 0;
+            let pos = parseFloat(U.Get("pos") ?? "0") || 0;
+            //  `rpos`: the position as a part of the duration (0.5 = the middle of a sound), when the media has one (else pos)
+            const rpos = parseFloat(U.Get("rpos") ?? "");
             //  A text from the url inside the app shell: captioned and limited to an area in the middle (MediaCaptioned).
             //  Only a real screenshot host (headless capture, never inside the app) skips it: the caption depends only on the
             //  text coming from the url, never on other url parameters (the debug `hack` host or unknown ones can't drop it)
@@ -2690,6 +2759,8 @@
                     await player.WhenReady();
                 if (fontError && realHost)
                     throw fontError;
+                if (isFinite(rpos) && rpos >= 0 && player.Duration > 0 && isFinite(player.Duration))
+                    pos = player.Duration * Math.min(1, rpos);
                 const adapt = !!player.Params.AdaptiveSize;
                 /** @returns {Array<number>} The clipped media size [w, h]. */
                 const updateSize = () => MediaPlayerTools.UpdateSize(target, player, fill);

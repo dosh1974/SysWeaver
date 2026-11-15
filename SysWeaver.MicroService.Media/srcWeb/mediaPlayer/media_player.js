@@ -116,6 +116,87 @@ class MediaPlayer {
         return (typeof url === "string") && MediaPlayer.AudioExtRx.test(url.split(/[?#]/)[0]);
     }
 
+    /** @type {string} The url of this script (the media line's server api is next to it: ../mediaView/Api/). */
+    static #Script = document.currentScript ? document.currentScript.src : document.baseURI;
+
+    /**
+     * The media line of an effect (Effect Weaver's media effects, a comment line in the shader): "//  media: image stock:a.png",
+     * "//  media: audio https://example.com/song.mp3", "//  media: collage stock:a.png my:b.jpg"; a line without references uses the
+     * defaults of its kind (the server's).
+     * @type {RegExp}
+     */
+    static MediaLineRx = /^[ \t]*\/\/[ \t]*media[ \t]*:[ \t]*(image|audio|collage)\b([^\r\n]*)$/im;
+
+    /**
+     * The media line of an effect source.
+     * @param {string} src The source (the .glsl file).
+     * @returns {{Kind:string, Refs:string[]}|null} Its kind and references, null without a line.
+     */
+    static MediaLine(src) {
+        const m = typeof src === "string" ? MediaPlayer.MediaLineRx.exec(src) : null;
+        return m ? { Kind: m[1].toLowerCase(), Refs: m[2].split(/\s+/).filter(x => /^(https?:\/\/\S+|[a-z][a-z0-9]*:[^\s/\\:]+)$/i.test(x)) } : null;
+    }
+
+    /**
+     * The texture an effect's media line names, for an effect whose settings name no Texture (the settings win): urls as they are, other
+     * references (Effect Weaver's "stock:file", "my:file") and a line without references by the server (MediaService.ResolveEffectMedia, a
+     * host app that knows them). An image or a sound (one, a collage's first picture: the player has no atlas of several pictures).
+     * Kept as hidden (non enumerable) params, LineTexture / LineTextureAudio, so the settings (the editor, a shared link) stay as they are.
+     * @param {string} url The url of the effect.
+     * @param {object} mediaParams The effect params (null: new ones are made).
+     * @returns {Promise<object|null>} The params (the same object), with the texture of the line when it has one.
+     */
+    static async #LineMedia(url, mediaParams) {
+        if (mediaParams && mediaParams.Texture)
+            return mediaParams;
+        let line = null;
+        try {
+            const res = await fetch(url, { credentials: "same-origin" });
+            if (res.ok)
+                line = MediaPlayer.MediaLine(await res.text());
+        }
+        catch {
+            line = null;
+        }
+        if (!line)
+            return mediaParams;
+        let urls = line.Refs.length && line.Refs.every(x => /^https?:/i.test(x)) ? line.Refs : null;
+        if (!urls) {
+            try {
+                const res = await fetch(new URL("../mediaView/Api/ResolveEffectMedia", MediaPlayer.#Script).href, {
+                    method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin",
+                    body: JSON.stringify({ Kind: line.Kind, Refs: line.Refs }),
+                });
+                const r = res.ok ? await res.json() : null;
+                const base = new URL("../mediaView/", MediaPlayer.#Script);
+                urls = (r && r.Urls ? r.Urls : []).map(x => new URL(x, base).href);
+            }
+            catch (e) {
+                console.warn("Media: the media of the effect " + url + " can't be resolved: " + e.message);
+                urls = [];
+            }
+        }
+        if (!urls.length)
+            return mediaParams;
+        const p = mediaParams || {};
+        Object.defineProperty(p, "LineTexture", { value: urls[0], enumerable: false, configurable: true, writable: true });
+        Object.defineProperty(p, "LineTextureAudio", { value: line.Kind === "audio", enumerable: false, configurable: true, writable: true });
+        return p;
+    }
+
+    /**
+     * The texture of an effect: its Texture setting, else the texture of its media line (#LineMedia).
+     * @param {object} mediaParams The effect params.
+     * @returns {{Url:string, Audio:boolean}|null} The url and whether it is a sound, null for none.
+     */
+    static #TextureOf(mediaParams) {
+        if (!mediaParams)
+            return null;
+        if (mediaParams.Texture)
+            return { Url: mediaParams.Texture, Audio: MediaPlayer.IsAudioUrl(mediaParams.Texture) };
+        return mediaParams.LineTexture ? { Url: mediaParams.LineTexture, Audio: !!mediaParams.LineTextureAudio || MediaPlayer.IsAudioUrl(mediaParams.LineTexture) } : null;
+    }
+
     /**
      * Load a script once (relative to this folder; absolute urls are used as is).
      * Uses the core loader `Sw.Net.IncludeJs` when available (it also knows the scripts of static script tags),
@@ -200,7 +281,7 @@ class MediaPlayer {
      * @returns {string} The key.
      */
     static #NeedKey(type, mediaParams) {
-        if ((type === MediaTypes.Effect) && mediaParams && MediaPlayer.IsAudioUrl(mediaParams.Texture))
+        if ((type === MediaTypes.Effect) && MediaPlayer.#TextureOf(mediaParams)?.Audio)
             return "2Fx";
         const fx = (type === MediaTypes.Image || type === MediaTypes.Text || type === MediaTypes.Audio) && mediaParams && mediaParams.Effect;
         return fx ? (type + "Fx") : ("" + type);
@@ -240,9 +321,11 @@ class MediaPlayer {
             case MediaTypes.YouTube:
                 return new MediaPlayerYoutube(data, mediaParams);
             case MediaTypes.Effect: {
-                //  The Texture of an effect: a sound (by its extension) plays with it, else it is an image
-                const tx = mediaParams && mediaParams.Texture;
-                if (MediaPlayer.IsAudioUrl(tx))
+                //  The Texture of an effect (else the one of its media line): a sound (by its extension, or the line's kind) plays with it,
+                //  else it is an image
+                const tex = MediaPlayer.#TextureOf(mediaParams);
+                const tx = tex ? tex.Url : null;
+                if (tex && tex.Audio)
                     return MediaPlayer.#WithSound(data, mediaParams, tx, null);
                 if (tx)
                     return new MediaPlayerEffect(data, mediaParams, gl => new MediaPlayerImageTexture(gl, { EffectSizeFromImage: false, EffectParams: mediaParams }, tx));
@@ -292,6 +375,9 @@ class MediaPlayer {
      * @returns {Promise<object|null>} A media player object, null for an unknown type.
      */
     static async Create(type, data, mediaParams) {
+        //  An effect without a Texture setting: the media its shader names (its media line)
+        if (type === MediaTypes.Effect && typeof data === "string")
+            mediaParams = await MediaPlayer.#LineMedia(data, mediaParams);
         const need = MediaPlayer.#Needs[MediaPlayer.#NeedKey(type, mediaParams)];
         if (!need)
             return null;

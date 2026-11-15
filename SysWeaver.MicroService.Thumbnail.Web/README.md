@@ -28,16 +28,16 @@ Media, effect, YouTube and map thumbnails are rendered by loading the `mediaView
 
 ## Key features
 
-- Web API (`Thumbnail/`): media image, video, effect and YouTube thumbnails, Google Maps images and web page screenshots, as JSON (image plus `MediaInfo`) or raw PNG/JPEG
+- Web API (`Thumbnail/`): media image, video, effect, audio and YouTube thumbnails (audio: `GetMediaAudio` / `MediaAudio.png`, an audio effect draws the sound in its middle: the request's `Options.Effect`, else `ThumbnailWebParams.AudioEffect`, default `Led_Spectrum`; the page analyses the decoded samples, no AudioContext needed), Google Maps images and web page screenshots, as JSON (image plus `MediaInfo`) or raw PNG/JPEG
 - HTTP module: `thumbnailWeb/<W>x<H>.png?<url>` returns a thumbnail of any URL
-- A short-lived proxy (`thumbnailWebProxy/`) for media that cannot be loaded cross-origin
+- A short-lived proxy (`thumbnailWebProxy/`) for media that cannot be loaded cross-origin: the textures of effects (an effect's `Texture`, an image under an effect) and sounds of another origin are always proxied (a browser refuses them as WebGL textures / fetches), a page error about a cross-origin media proxies the media and tries again
 - Implements `IThumbnailWebService` (from [SysWeaver.Media](../SysWeaver.Media/README.md)); `IThumbnailRemoteService` describes the API for use from other servers
 - Run-time configurable auth for all methods (`ThumbnailWebParams.Auth`, default the `Service` role), caching and a concurrency limit (`MaxConcurrency`)
 
 ## Key components
 
 - [`ThumbnailWebService`](ThumbnailWebService.cs) — the service, API and HTTP module
-- [`ThumbnailWebParams`](ThumbnailWebParams.cs) — auth, caching, concurrency and the Google Maps key
+- [`ThumbnailWebParams`](ThumbnailWebParams.cs) — auth, caching, concurrency, the Google Maps key and the effect that draws sounds (`AudioEffect`)
 - [`IThumbnailRemoteService`](IThumbnailWebService.cs) — the remote interface
 
 ## Using it

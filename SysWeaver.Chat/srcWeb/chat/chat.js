@@ -661,27 +661,33 @@
             if (source) {
                 //  A toggle with one name ("Source") and its state in aria-pressed (and the pressed look), not a name that changes
                 let onSource = false;
+                const flipSource = () => {
+                    onSource = !onSource;
+                    //  Both views are kept once made (shown / hidden), so the page keeps its state and scroll and is not loaded again
+                    if (!srcView) {
+                        srcView = create(source, true, false);
+                        srcView.hidden = true;
+                        content.after(srcView);
+                    }
+                    content.hidden = onSource;
+                    srcView.hidden = !onSource;
+                    shown = onSource ? source : main.Url;
+                    src.E.setAttribute("aria-pressed", onSource ? "true" : "false");
+                    box.classList.toggle("chat-att-on-source", onSource);
+                    //  A collapsed attachment is expanded, so the chosen view shows
+                    if (box.classList.contains("chat-att-collapsed"))
+                        flip();
+                };
                 const src = new Sw.Button({
                     Icon: "code", Kind: "ghost", Small: true, Class: "chat-att-source",
                     Text: _TF("Source", "Text of a toggle button in the title bar of an embedded page or image in a chat message: shows its source code instead of the page while pressed"),
                     Title: _TF("Show the source code instead of the page", "Tool tip of a toggle button in the title bar of an embedded page or image in a chat message: shows its source code instead"),
-                    OnClick: () => {
-                        onSource = !onSource;
-                        //  Both views are kept once made (shown / hidden), so the page keeps its state and scroll and is not loaded again
-                        if (!srcView) {
-                            srcView = create(source, true, false);
-                            srcView.hidden = true;
-                            content.after(srcView);
-                        }
-                        content.hidden = onSource;
-                        srcView.hidden = !onSource;
-                        shown = onSource ? source : main.Url;
-                        src.E.setAttribute("aria-pressed", onSource ? "true" : "false");
-                        box.classList.toggle("chat-att-on-source", onSource);
-                    },
+                    OnClick: flipSource,
                 });
                 src.E.setAttribute("aria-pressed", "false");
                 bar.append(src.E);
+                //  The menu (Attachments.MenuItems) offers the same switch ("View source" / "View page")
+                a.Source = { Toggle: flipSource, IsOn: () => onSource };
             }
             const open = new Sw.Button({
                 Icon: "external", Kind: "ghost", Small: true, Class: "chat-att-open",
@@ -789,6 +795,20 @@
                         await composer.RemoveAttachment(a.Org, false);
                         await copy(a.IsImage ? "![](" + a.Org + ")" : "[" + a.Name.replace(/[[\]\\]/g, "\\$&") + "](" + a.Url + ")");
                     },
+                });
+            }
+            //  An embedded file with a source view (see Attachments.Framed): switch between the view and the source
+            if (a.Source) {
+                const on = a.Source.IsOn();
+                items.push({
+                    Text: on
+                        ? _TF("View page", "Text of a menu item of an embedded file in a chat message that shows the file (the page, image or viewer) again instead of its source code")
+                        : _TF("View source", "Text of a menu item of an embedded file in a chat message that shows its source code instead of the page, image or viewer"),
+                    Icon: "code",
+                    Title: on
+                        ? _TF("Show the file instead of its source code", "Tool tip of the View page menu item of an embedded file in a chat message")
+                        : _TF("Show the source code of the file (read only)", "Tool tip of the View source menu item of an embedded file in a chat message"),
+                    OnClick: () => a.Source.Toggle(),
                 });
             }
             const download = !a.IsImage && !a.IsHtml;
