@@ -7,7 +7,8 @@
  * tags by the mediaView/backgroundEffects|imageEffects/index.html and *EffectsLib.html pages, which construct
  * MediaPlayerEffect directly.
  *
- * Globals defined: MediaPlayerParamsEffect, MediaPlayerEffect, MediaPlayerImageTexture.
+ * Globals defined: MediaPlayerParamsEffect, MediaPlayerEffect, MediaPlayerImageTexture (the audio texture, MediaPlayerAudioTexture,
+ * is in media_player_audio.js).
  * At class definition time MediaPlayerEffect.DpiScale is read from localStorage["SysWeaver.Media.EffectDpiScale"].
  *
  * Dependencies: EffectProgramData / EffectProgram (media_effect_program.js); MediaPlayerTools
@@ -19,9 +20,10 @@
  * Conventions:
  * - The effect renders a fullscreen triangle; the fragment shader receives the uniforms time/iTime, iTimeDelta,
  *   resolution/iResolution, iFrame, iDate, mouse/iMouse, scroll, customDark (xyz = CustomX/Y/Z, w = dark mode
- *   0..1) and, with a texture provider, tex/texUv/texSize.
- * - Texture providers (MediaPlayerImageTexture, MediaPlayerTextTexture) are duck-typed:
- *   Cache(haveLod), Apply(uvLoc, sizeLoc), ApplyClip(p), Dispose(), Width/Height.
+ *   0..1) and, with a texture provider, tex (or ShaderToy's iChannel0)/texUv/texSize, iChannelResolution[0], iChannelTime[0], iSampleRate.
+ * - Texture providers (MediaPlayerImageTexture, MediaPlayerTextTexture, MediaPlayerAudioTexture) are duck-typed:
+ *   Cache(haveLod), Apply(uvLoc, sizeLoc), ApplyClip(p), Dispose(), Width/Height; optional Update() (every frame), SampleRate.
+ * - With a sound (FollowMedia, an audio texture) the effect plays on the sound's time line with its controls.
  * - Remote control: MediaPlayerTools.SetupMediaMessages maps MediaCustomX/Y/Z and MediaDebugLoseContext messages
  *   to SetCustomX/Y/Z and DebugLoseContext.
  */
@@ -54,7 +56,7 @@ class MediaPlayerParamsEffect {
     WrapU = false;
     /** @type {boolean} Use REPEAT wrapping on the T (V) axis of the texture (applied in render when ApplyTextue); render honors both WrapY and the C# name WrapV. Default false. */
     WrapY = false;
-    /** @type {string|null} Declared (texture URL in C#); not read in this folder. Default null. */
+    /** @type {string|null} The url of a texture of an effect (MediaPlayer.Create): an image, or a sound (by its extension, see MediaPlayer.IsAudioUrl) that plays with the effect and is its audio texture. Default null. */
     Texture = null;
     /** @type {boolean} Obsolete, not read: WebGL 2 is always used when available (kept so stored params still load). */
     WebGL2 = false;
@@ -434,9 +436,10 @@ class MediaPlayerEffect {
      * @param {string} url - URL of the .glsl effect source.
      * @param {MediaPlayerParamsEffect|object} [params] - Effect params.
      * @param {function(WebGLRenderingContext):object} [createTextureFn] - Factory for a texture provider
-     * (MediaPlayerImageTexture / MediaPlayerTextTexture), called from InitGL.
+     * (MediaPlayerImageTexture / MediaPlayerTextTexture / MediaPlayerAudioTexture), called from InitGL.
+     * @param {MediaPlayerAudio} [media] - A sound that plays with the effect (an audio texture): see FollowMedia.
      */
-    constructor(url, params, createTextureFn) {
+    constructor(url, params, createTextureFn, media) {
         const t = this;
         const cp = new MediaPlayerParamsEffect();
         if (params)
@@ -495,6 +498,118 @@ class MediaPlayerEffect {
 		t.CustomX = MediaPlayerEffect.GetAnimFn(params.CustomAnimX, params.CustomX);
 		t.CustomY = MediaPlayerEffect.GetAnimFn(params.CustomAnimY, params.CustomY);
 		t.CustomZ = MediaPlayerEffect.GetAnimFn(params.CustomAnimZ, params.CustomZ);
+        if (media)
+            t.FollowMedia(media);
+    }
+
+    /** @type {MediaPlayerAudio|null} The sound that plays with the effect (FollowMedia), null when none. */
+    Media = null;
+
+    /**
+     * Plays a sound with the effect, on one time line: the effect time is the sound's position, and the player's controls are the sound's
+     * (play, pause, stop, seek, speed, loop / once, mute, volume), so the effect has the controls of an audio player. Its end ends the effect.
+     * A sound of another site is loaded with cors (else its analysis is silence).
+     * @param {MediaPlayerAudio} media - The (not yet loaded) audio player.
+     * @returns {void}
+     */
+    FollowMedia(media) {
+        const t = this;
+        t.Media = media;
+        t.HaveAudio = true;
+        try {
+            if (new URL(media.Url, location.href).origin !== location.origin)
+                media.Element.crossOrigin = "anonymous";
+        }
+        catch {
+        }
+        //  The state is the sound's
+        for (const k of ["Volume", "Muted", "Looping", "Duration", "AtEnd", "Rate", "MaxRate"])
+            Object.defineProperty(t, k, { get: () => media[k], set: v => media[k] = v, configurable: true, enumerable: true });
+        const proto = MediaPlayerEffect.prototype;
+        t.Mute = () => media.Mute();
+        t.UnMute = () => media.UnMute();
+        t.SetVolume = v => media.SetVolume(v);
+        t.ResetVolume = () => media.ResetVolume();
+        t.GetTrueVolume = () => media.GetTrueVolume();
+        t.Loop = () => media.Loop();
+        t.Once = () => media.Once();
+        t.SetRate = r => media.SetRate(r);
+        t.GetPos = () => media.GetPos();
+        t.Play = async () => {
+            if (!t.Paused)
+                return;
+            await media.Play();
+            if (!media.Paused)
+                await proto.Play.call(t);
+        };
+        t.Pause = async () => {
+            await media.Pause();
+            await proto.Pause.call(t);
+            t.RenderTail();
+        };
+        t.Stop = async () => {
+            await media.Stop();
+            await proto.Stop.call(t);
+            t.RenderTail();
+        };
+        t.Seek = async time => {
+            await media.Seek(time);
+            t.Rendered = false;
+            if (t.Paused) {
+                await t.Validate();
+                MediaPlayerEffect.render(t);
+            }
+        };
+        t.OnDispose = async () => {
+            await proto.OnDispose.call(t);
+            await media.OnDispose();
+            media.Analyser?.Dispose();
+        };
+        media.OnLoop = () => t.OnLoop();
+        media.OnEnded = async () => {
+            await proto.Pause.call(t);
+            t.RenderTail();
+            await t.OnEnded();
+        };
+    }
+
+    /** @type {number} Longest time (ms) RenderTail renders after the sound stopped. */
+    static TailMs = 3000;
+
+    /**
+     * The sound stopped (its end, pause, stop): the analysis goes on (the analyser gets silence) and the effect keeps rendering, at the
+     * stopped time, until its texture is silent (the fft window has passed and the smoothing faded out; at most TailMs), so the
+     * spectrum / waveform fall to zero instead of freezing with the last values.
+     * @returns {void}
+     */
+    RenderTail() {
+        const t = this;
+        const tex = t.Texture;
+        if ((!tex) || (typeof tex.Quiet !== "boolean"))
+            return;
+        t.TailUntil = performance.now() + MediaPlayerEffect.TailMs;
+        if (t.Tailing)
+            return;
+        t.Tailing = true;
+        const step = () => {
+            //  (playing again: the frame loop draws; disposed / lost context: nothing to draw)
+            if ((!t.Paused) || t.IsAnimating || (!t.GL) || (!t.Texture) || (performance.now() > t.TailUntil)) {
+                t.Tailing = false;
+                return;
+            }
+            t.Rendered = false;
+            MediaPlayerEffect.render(t);
+            //  (one more frame after the data turned silent: that frame drew it)
+            if (t.Texture.Quiet && t.TailQuiet) {
+                t.Tailing = false;
+                t.TailQuiet = false;
+                return;
+            }
+            t.TailQuiet = t.Texture.Quiet;
+            requestAnimationFrame(step);
+        };
+        t.TailQuiet = false;
+        requestAnimationFrame(step);
     }
 
 	/**
@@ -669,6 +784,33 @@ class MediaPlayerEffect {
             t.ApplyTextue = true;
             t.GetRender()();
         }
+    }
+
+    /**
+     * Binds the texture provider to texture unit 0 for a program: the sampler "tex" (else ShaderToy's "iChannel0"), texUv, texSize,
+     * iChannelResolution[0] and iSampleRate (the sound's, else 44100).
+     * @param {WebGLProgram} p - The program (in use).
+     * @returns {boolean} True when the program samples the texture.
+     */
+    ApplyTexture(p) {
+        const t = this;
+        const tex = t.Texture;
+        const gl = t.GL;
+        if (!tex)
+            return false;
+        const tu = gl.getUniformLocation(p, "tex") ?? gl.getUniformLocation(p, "iChannel0");
+        if (!tu)
+            return false;
+        gl.activeTexture(gl.TEXTURE0);
+        tex.Apply(gl.getUniformLocation(p, "texUv"), gl.getUniformLocation(p, "texSize"));
+        gl.uniform1i(tu, 0);
+        const cr = gl.getUniformLocation(p, "iChannelResolution");
+        if (cr)
+            gl.uniform3f(cr, tex.Width || 0, tex.Height || 0, 1);
+        const sr = gl.getUniformLocation(p, "iSampleRate");
+        if (sr)
+            gl.uniform1f(sr, tex.SampleRate || 44100);
+        return true;
     }
 
 	/** @type {{Get:function():number, Set:function(number):void}} customDark.x animator (initializer 0 is replaced in the constructor). */
@@ -1061,17 +1203,10 @@ class MediaPlayerEffect {
             /** Sets customDark (vec4). @param {number} x - X. @param {number} y - Y. @param {number} z - Z. @param {number} isDarkMode - Dark 0..1. */
             t.UniformCustomDark = (x, y, z, isDarkMode) => gl.uniform4f(cd, x, y, z, isDarkMode);
 
-        const tex = t.Texture;
-        if (tex) {
-            const tu = gl.getUniformLocation(p, "tex");
-            const tuv = gl.getUniformLocation(p, "texUv");
-            const ts = gl.getUniformLocation(p, "texSize");
-            if (tu) {
-                gl.activeTexture(gl.TEXTURE0);
-                tex.Apply(tuv, ts);
-                gl.uniform1i(tu, 0);
-            }
-        }
+        t.ApplyTexture(p);
+        const pct = gl.getUniformLocation(p, "iChannelTime");
+        /** Sets iChannelTime[0] (the time of the texture: the effect time); no-op when absent. @type {function(number):void} */
+        t.UniformChannelTime = pct ? time => gl.uniform1f(pct, time) : time => { };
         gl.enableVertexAttribArray(t.AttrPos);
         gl.bindBuffer(gl.ARRAY_BUFFER, t.Pos);
         gl.vertexAttribPointer(t.AttrPos, 2, gl.FLOAT, false, 0, 0);
@@ -1109,7 +1244,8 @@ class MediaPlayerEffect {
         //  WebGL 2 whenever the browser has it; a raw GLSL ES 1.00 shader that uses WebGL 1 extensions (derivatives, texture lod)
         //  keeps WebGL 1, those extension directives don't compile in WebGL 2
         const src = typeof t.Src === "string" ? t.Src : "";
-        const gl1Only = (!ew) && (!/^\s*#version\s+300/m.test(src)) && /#extension|\b(dFdx|dFdy|fwidth|texture2DLod(EXT)?)\b/.test(src);
+        //  (a ShaderToy shader that uses GLSL ES 3.00 functions is compiled as GLSL ES 3.00: WebGL 2, its derivatives are core)
+        const gl1Only = (!ew) && (!/^\s*#version\s+300/m.test(src)) && (!EffectProgramData.NeedsEs3(src)) && /#extension|\b(dFdx|dFdy|fwidth|texture2DLod(EXT)?)\b/.test(src);
         t.InitGL(!gl1Only);
 
         const gl = t.GL;
@@ -1269,7 +1405,12 @@ class MediaPlayerEffect {
     async Cache(keepHidden) {
         const t = this;
         const c = t.Url;
-        let src;
+        //  The sound of the effect (FollowMedia) first: its texture reads its analyser
+        const media = t.Media;
+        if (media && (!media.Cached) && (!await media.Cache(true))) {
+            console.warn("Failed to load the sound \"" + media.Url + "\" of effect \"" + c + "\"");
+            return false;
+        }
         const r = new Request(c, {
             method: "GET",
             mode: "cors",
@@ -1406,7 +1547,19 @@ class MediaPlayerEffect {
         let time = t.CurrentPosition;
         const isRunning = typeof animTime !== "undefined";
         const pq = isRunning ? t.Query : null;
-        if (isRunning) {
+        const media = t.Media;
+        if (media) {
+            //  The time of the sound; between its (coarse) position updates it runs on with the frame clock (at most 0.25 s: a stalled
+            //  sound stops the effect too)
+            const mp = media.GetPos();
+            const now = isRunning ? animTime : performance.now();
+            if (mp !== t.MediaPos) {
+                t.MediaPos = mp;
+                t.MediaAt = now;
+            }
+            time = mp + ((isRunning && !media.Paused) ? Math.min(0.25, Math.max(0, now - t.MediaAt) * 0.001 * (media.Rate || 1)) : 0);
+        }
+        else if (isRunning) {
             if (typeof t.RenderTime === "undefined")
                 t.RenderTime = animTime;
             time = (animTime - t.RenderTime) * 0.001 * (t.Rate || 1) + t.ResumeTime;
@@ -1513,23 +1666,20 @@ class MediaPlayerEffect {
 		
         if (t.ApplyTextue) {
             t.ApplyTextue = false;
-            const tex = t.Texture;
-            if (tex) {
-                const pr = t.Program.Program;
-                const tu = gl.getUniformLocation(pr, "tex");
-                const tuv = gl.getUniformLocation(pr, "texUv");
-                const ts = gl.getUniformLocation(pr, "texSize");
-                if (tu) {
-                    gl.activeTexture(gl.TEXTURE0);
-                    tex.Apply(tuv, ts);
-                    gl.uniform1i(tu, 0);
-                    if (p.WrapU)
-                        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
-                    if (p.WrapV || p.WrapY)
-                        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
-                }
+            if (t.ApplyTexture(t.Program.Program)) {
+                if (p.WrapU)
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+                if (p.WrapV || p.WrapY)
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
             }
         }
+        //  A texture that changes every frame (the sound)
+        const ftex = t.Texture;
+        if (ftex && ftex.Update) {
+            gl.activeTexture(gl.TEXTURE0);
+            ftex.Update();
+        }
+        t.UniformChannelTime(time);
         const date = p.Speed > 0 ? new Date() : MediaPlayerEffect.ZeroDate;
         t.UniformDate(date);
         /**

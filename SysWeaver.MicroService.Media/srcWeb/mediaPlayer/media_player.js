@@ -96,7 +96,25 @@ class MediaPlayer {
         //  (the image texture of the effect takes the defaults of MediaPlayerParamsImage, media_player_image.js)
         "0Fx": { Files: ["media_player_effect.js", "media_effect_program.js", "media_player_image.js"], Classes: ["MediaPlayerEffect", "EffectProgramData", "MediaPlayerImage"] },
         "5Fx": { Files: ["media_player_effect.js", "media_effect_program.js", "media_player_text.js"], Classes: ["MediaPlayerEffect", "EffectProgramData", "MediaPlayerText"] },
+        //  A sound with an effect, or an effect with a sound as its texture (MediaPlayerAudioTexture)
+        "2Fx": { Files: ["media_player_effect.js", "media_effect_program.js", "media_player_audio.js"], Classes: ["MediaPlayerEffect", "EffectProgramData", "MediaPlayerAudio"] },
     };
+
+    /**
+     * Audio file extensions (an effect's Texture with one of them is a sound); keep in sync with the Audio extensions of the core
+     * (Sw.Format, format.js), this library runs without it.
+     * @type {RegExp}
+     */
+    static AudioExtRx = /\.(mp3|wav|aac|flac|m4a|m4b|opus|oga|ogg|weba)$/i;
+
+    /**
+     * Check if a url is a sound by its file extension (the query and fragment are ignored).
+     * @param {string} url The url.
+     * @returns {boolean} True for an audio file.
+     */
+    static IsAudioUrl(url) {
+        return (typeof url === "string") && MediaPlayer.AudioExtRx.test(url.split(/[?#]/)[0]);
+    }
 
     /**
      * Load a script once (relative to this folder; absolute urls are used as is).
@@ -182,15 +200,19 @@ class MediaPlayer {
      * @returns {string} The key.
      */
     static #NeedKey(type, mediaParams) {
-        const fx = (type === MediaTypes.Image || type === MediaTypes.Text) && mediaParams && mediaParams.Effect;
+        if ((type === MediaTypes.Effect) && mediaParams && MediaPlayer.IsAudioUrl(mediaParams.Texture))
+            return "2Fx";
+        const fx = (type === MediaTypes.Image || type === MediaTypes.Text || type === MediaTypes.Audio) && mediaParams && mediaParams.Effect;
         return fx ? (type + "Fx") : ("" + type);
     }
 
     /**
      * Construct the player for a type (the classes must be loaded).
      * Image -> MediaPlayerImage (with an Effect: a MediaPlayerEffect for mediaParams.Effect / mediaParams.EffectParams
-     * with a MediaPlayerImageTexture as texture provider); Video -> MediaPlayerVideo; Audio -> MediaPlayerAudio;
-     * YouTube -> MediaPlayerYoutube (data = video id); Effect -> MediaPlayerEffect (data = .glsl url);
+     * with a MediaPlayerImageTexture as texture provider); Video -> MediaPlayerVideo; Audio -> MediaPlayerAudio (with an Effect: a
+     * MediaPlayerEffect that plays the sound, with a MediaPlayerAudioTexture); YouTube -> MediaPlayerYoutube (data = video id);
+     * Effect -> MediaPlayerEffect (data = .glsl url; mediaParams.Texture: a sound (IsAudioUrl) that plays with it as an audio texture,
+     * else an image texture);
      * Text -> MediaPlayerText (with an Effect: MediaPlayerEffect + MediaPlayerTextTexture).
      * In the "with effect" variants the returned player's Params are the effect params, not mediaParams.
      * @param {number} type Media type.
@@ -212,11 +234,20 @@ class MediaPlayer {
             case MediaTypes.Video:
                 return new MediaPlayerVideo(data, mediaParams);
             case MediaTypes.Audio:
+                if (fx)
+                    return MediaPlayer.#WithSound(mediaParams.Effect, mediaParams.EffectParams, data, mediaParams);
                 return new MediaPlayerAudio(data, mediaParams);
             case MediaTypes.YouTube:
                 return new MediaPlayerYoutube(data, mediaParams);
-            case MediaTypes.Effect:
+            case MediaTypes.Effect: {
+                //  The Texture of an effect: a sound (by its extension) plays with it, else it is an image
+                const tx = mediaParams && mediaParams.Texture;
+                if (MediaPlayer.IsAudioUrl(tx))
+                    return MediaPlayer.#WithSound(data, mediaParams, tx, null);
+                if (tx)
+                    return new MediaPlayerEffect(data, mediaParams, gl => new MediaPlayerImageTexture(gl, { EffectSizeFromImage: false, EffectParams: mediaParams }, tx));
                 return new MediaPlayerEffect(data, mediaParams);
+            }
             case MediaTypes.Text:
                 //  A collage writes its grid (tile counts, sizes) into EffectParams.FxProps while the texture is made: that object must be
                 //  the one the effect player reads (its params are a shallow copy), also when the props had no EffectParams / FxProps
@@ -237,6 +268,19 @@ class MediaPlayer {
                 return new MediaPlayerText(data, mediaParams);
         }
         return null;
+    }
+
+    /**
+     * An effect that plays a sound on its time line and gets it as its texture (MediaPlayerAudioTexture, see MediaPlayerEffect.FollowMedia).
+     * @param {string} effect Url of the .glsl effect.
+     * @param {object} effectParams The effect params.
+     * @param {string} sound Url of the sound.
+     * @param {object|null} soundParams The audio params (MediaPlayerParamsAudio: Volume, StartAt, EndAt), null = defaults.
+     * @returns {MediaPlayerEffect} The player.
+     */
+    static #WithSound(effect, effectParams, sound, soundParams) {
+        const media = new MediaPlayerAudio(sound, soundParams);
+        return new MediaPlayerEffect(effect, effectParams, gl => new MediaPlayerAudioTexture(gl, media), media);
     }
 
     /**

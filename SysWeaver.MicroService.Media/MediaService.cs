@@ -93,6 +93,17 @@ namespace SysWeaver.MicroService
         public String[] GetCounterEffects(HttpServerRequest context)
             => InternalGet("mediaView/counterEffects", context);
 
+        /// <summary>
+        /// Get a list of all audio effects (effects that draw a sound, its audio texture)
+        /// </summary>
+        /// <param name="context"></param>
+        /// <returns></returns>
+        [WebApi]
+        [WebApiClientCache(30)]
+        [WebApiRequestCache(28, WebApiCaches.Globally)]
+        public String[] GetAudioEffects(HttpServerRequest context)
+            => InternalGet("mediaView/audioEffects", context);
+
 
         /// <summary>
         /// The longest effect source BuildEffect accepts (characters)

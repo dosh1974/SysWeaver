@@ -41,7 +41,25 @@ namespace SysWeaver.MicroService.Media
         [EditMin(0)]
         public double EndAt = 0;
 
-        public override int GetHashCode() => HashCode.Combine(Volume, StartAt, EndAt);
+        /// <summary>
+        /// An optional realtime effect that plays with the sound and gets it as its texture (ShaderToy's audio texture: 512 x 2,
+        /// row 0 the spectrum, row 1 the waveform; r = mono, g = left, b = right).
+        /// null = the default effect of the media viewer / editor (DefaultAudioEffect in mediaView/media.js), "" = no effect (the sound only),
+        /// anything else = the effect file to use.
+        /// Not used by a video (hidden).
+        /// </summary>
+        [EditAllowNull]
+        [EditDefault(null)]
+        [EditHideIf("this." + nameof(MediaVideo.Stream) + "!==undefined")]
+        public string Effect;
+
+        /// <summary>
+        /// Effect parameters
+        /// </summary>
+        [EditHideIf(nameof(Effect), false)]
+        public MediaEffect EffectParams;
+
+        public override int GetHashCode() => HashCode.Combine(Volume, StartAt, EndAt, Effect, EffectParams);
 
         public override bool Equals(object obj) => Equals(obj as MediaAudio);
 
@@ -55,6 +73,10 @@ namespace SysWeaver.MicroService.Media
             if (StartAt != other.StartAt)
                 return false;
             if (EndAt != other.EndAt)
+                return false;
+            if (Effect != other.Effect)
+                return false;
+            if (!Equals(EffectParams, other.EffectParams))
                 return false;
             return true;
         }

@@ -74,6 +74,47 @@
     // ------------------------------------------------------------------ helpers
 
     /**
+     * The effect a sound plays with in the viewer and the editor when its settings name none (its Effect is null or missing); an
+     * empty Effect ("") plays the sound without an effect, any other value is the effect to use. Relative to this script's folder.
+     * Change it here to use another effect, or set it to "" for no default effect.
+     * @type {string}
+     */
+    const DefaultAudioEffect = "audioEffects/corridor.glsl";
+
+    /** @type {string} The folder of this script (DefaultAudioEffect is relative to it, the pages using it can be elsewhere). */
+    const ScriptBase = document.currentScript ? document.currentScript.src : document.baseURI;
+
+    /**
+     * The params a player is made with: a sound whose Effect is null or missing gets the default effect (DefaultAudioEffect), an
+     * Effect of "" means none (the audio player). The given props are not changed.
+     * @param {number} type The media type.
+     * @param {?object} props The media params.
+     * @returns {?object} The params for MediaPlayer.Create.
+     */
+    function PlayerParams(type, props) {
+        if (type !== MediaTypes.Audio)
+            return props;
+        const fx = props ? props.Effect : null;
+        if (fx === "")
+            return Object.assign({}, props, { Effect: null });
+        if ((fx !== null && fx !== undefined) || !DefaultAudioEffect)
+            return props;
+        return Object.assign({}, props || {}, { Effect: new URL(DefaultAudioEffect, ScriptBase).href });
+    }
+
+    /**
+     * The params of the sound of a player (Volume, StartAt, EndAt): its own, or, for an effect that plays a sound (an audio with an
+     * effect, an effect with a sound texture), the sound's (the effect's Params are the effect settings).
+     * @param {?object} player - The player.
+     * @returns {?object} The params, null without a player.
+     */
+    function SoundParams(player) {
+        if (!player)
+            return null;
+        return player.Media ? player.Media.Params : player.Params;
+    }
+
+    /**
      * Guesses the media type from the file extension of a URL.
      * @param {string} url - Media URL.
      * @returns {number} `MediaTypes.Image`, `MediaTypes.Video`, `MediaTypes.Audio`, `MediaTypes.Effect` (".glsl"), or -1.
@@ -207,8 +248,8 @@
      *    look like content of this site; it is shown in a window of its own (a new tab, the editor's "New window", the
      *    screenshot host) or when framed by another host.
      * YouTube (a video code) and text (the text itself) are not urls and are not checked.
-     * The same rule applies to the url-like members of the `props` parameter: `Effect` (the effect of an image / text) and
-     * `FontUrl` (the font of a text); for them "Open in a new tab" opens this page in a new tab.
+     * The same rule applies to the url-like members of the `props` parameter: `Effect` (the effect of an image / text / sound),
+     * `FontUrl` (the font of a text) and `Texture` (the image or sound of an effect); for them "Open in a new tab" opens this page in a new tab.
      * @param {{Data: string, Type: number, Props: (object|null)}} mp The media parameters (ReadMediaParams).
      * @returns {{Text: string, Url: (string|null)}|null} null when allowed, else the reason and (for another site) the
      * absolute url that may be opened in a new tab.
@@ -234,7 +275,7 @@
         const props = mp.Props;
         if (!props || typeof props !== "object")
             return null;
-        for (const name of ["Effect", "FontUrl"]) {
+        for (const name of ["Effect", "FontUrl", "Texture"]) {
             const v = props[name];
             if (v === null || typeof v === "undefined" || v === "")
                 continue;
@@ -681,15 +722,17 @@
             ups.push(add(_TF("Width", "Name of a media statistics value: the media width"), _TF("The width in pixels of the media", "Description of a media statistics value"), null, () => px(player.Width)));
             ups.push(add(_TF("Height", "Name of a media statistics value: the media height"), _TF("The height in pixels of the media", "Description of a media statistics value"), null, () => px(player.Height)));
         }
-        if (typeof props.StartAt !== "undefined") {
+        //  (an effect that plays a sound: the play window is the sound's)
+        const soundParams = SoundParams(player) || props;
+        if (typeof soundParams.StartAt !== "undefined") {
             ups.push(add(_TF("Trimmed time", "Name of a media statistics value: the position inside the trimmed part"), _TF("The current position in the trimmed period in seconds", "Description of a media statistics value"), "Adjust",
                 () => {
-                    const b = player.Params.StartAt;
+                    const b = soundParams.StartAt;
                     return b > 0 ? secs(player.GetPos() - b) : null;
                 }));
             ups.push(add(_TF("Trimmed duration", "Name of a media statistics value: the length of the trimmed part"), _TF("The duration of the trimmed period in seconds", "Description of a media statistics value"), "Adjust",
                 () => {
-                    const par = player.Params;
+                    const par = soundParams;
                     const b = par.StartAt;
                     const e = par.EndAt;
                     if (!((b > 0) || (e > b)))
@@ -857,7 +900,7 @@
         const clip = document.createElement("Media-AspectContainer");
         p.appendChild(clip);
 
-        const player = await MediaPlayer.Create(type, data, props);
+        const player = await MediaPlayer.Create(type, data, PlayerParams(type, props));
         if (!player) {
             const text = _T("No supported player found for type {0}", type, "Error when no media player exists for a media type. {0} is the type number");
             p.remove();
@@ -1262,7 +1305,7 @@
             let needApply = true;
             const mn = ev.detail.Member.Name;
             if (mn === "Volume") {
-                player.Params.Volume = props.Volume;
+                SoundParams(player).Volume = props.Volume;
                 await player.ResetVolume();
                 post("SetVolume", { Volume: props.Volume });
                 needApply = false;
@@ -1679,6 +1722,9 @@
                     });
                     switch (name) {
                         case "SetVolume":
+                            //  (an effect that plays a sound: the media volume is the sound's)
+                            if (player.Media && typeof m.Volume === "number")
+                                player.Media.Params.Volume = m.Volume;
                             player.ResetVolume();
                             break;
                         case "UpdateSize":
@@ -2091,11 +2137,15 @@
             timeS.E,
             el("div.media-bar-row", null,
                 playB.E, stopB.E, loopB.E,
-                player0.HaveAudio ? muteB.E : null, player0.HaveAudio ? volS.E : null,
+                muteB.E, volS.E,
                 timeE,
                 el("span.media-bar-gap"),
                 statsB ? statsB.E : null, openB.E, fullB.E, moreB.E));
-        const art = player0.HaveVisual ? null : el("div.media-audio-art", { attrs: { "aria-hidden": "true" } }, Sw.Icon("IconMediaPreviewVolLoud"));
+        //  The sound controls and the speaker of a media without a picture follow the current player (update): a rebuild in the editor
+        //  can add a picture (a sound with an effect) or a sound (an effect with a sound texture)
+        const art = el("div.media-audio-art", { attrs: { "aria-hidden": "true" } }, Sw.Icon("IconMediaPreviewVolLoud"));
+        art.hidden = !!player0.HaveVisual;
+        muteB.E.hidden = volS.E.hidden = !player0.HaveAudio;
         const chrome = el("div.media-chrome", null, art, skipE, bigPlay.E, top, panel, bar);
         view.append(chrome);
         if (!player0.CanPlay) {
@@ -2333,7 +2383,7 @@
                 case "Home":
                     if (onSlider)
                         return;
-                    seek((p.Params && p.Params.StartAt) || 0);
+                    seek((SoundParams(p) || {}).StartAt || 0);
                     break;
                 case "j":
                 case "l":
@@ -2404,6 +2454,11 @@
                         show();
                 });
                 put("loop", !!p.Looping, v => loopB.SetPressed(v));
+                put("visual", !!p.HaveVisual, v => {
+                    art.hidden = v;
+                    view.classList.toggle("MediaAudioOnly", !v);
+                });
+                put("audio", !!p.HaveAudio, v => muteB.E.hidden = volS.E.hidden = !v);
                 //  A rebuilt player (an editor change) gets the chosen speed again
                 if (rate !== 1 && typeof p.SetRate === "function" && p.SetRateFor !== rate) {
                     p.SetRateFor = rate;
@@ -2620,7 +2675,7 @@
             let fontError = null;
             FontNotice(target, err => fontError = fontError ?? err);
             await playerReady;
-            const player = await MediaPlayer.Create(mp.Type, mp.Data, mp.Props);
+            const player = await MediaPlayer.Create(mp.Type, mp.Data, PlayerParams(mp.Type, mp.Props));
             if (!player)
                 throw new Error(_T("No supported player found for type {0}", mp.Type, "Error when no media player exists for a media type. {0} is the type number"));
             const e = player.Element;
@@ -2746,6 +2801,8 @@
         ParamTypeName,
         FormatTime,
         InApp,
+        DefaultAudioEffect,
+        PlayerParams,
     };
 
     //  Legacy global names (external host pages)

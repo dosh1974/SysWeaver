@@ -117,6 +117,7 @@ See the header of mapView.js for all parameters. The key comes from the url or `
 | `GetTypeFromUrl(url)` | Media type from the extension, or -1 (legacy `mediaGetTypeFromUrl`). |
 | `CreatePlayer(target, type, data, props, noControls, before, noStats, fit, aspectX, aspectY, alignX, alignY)` | Player with preview box, stats and controls → `[player, controls, stats]` or undefined (legacy `mediaCreatePlayer`, same arguments). Adds `SetButtonState`, `UpdateSize`, `TopElement`, `Stats`, `Controls`, `MessageElement` to the player. |
 | `PlayWithPopup(player)` | Apply the preferences and start (legacy `mediaPlayWithPopup`). |
+| `DefaultAudioEffect`, `PlayerParams(type, props)` | The effect a sound plays with in the viewer / editor / preview when its `Effect` is null or missing (the constant at the top of media.js, `"audioEffects/Spectrum.glsl"`, relative to media.js; `""` there = no default); an `Effect` of `""` plays the sound without an effect, any other value is the effect. `PlayerParams` applies it (a copy) for `CreatePlayer` and `PreviewMain`. |
 | `RebuildPlayer(player, create)` | Rebuild in place keeping the playback state → the new player. |
 | `EditProps(target, playerRes, type, data, props, canEdit, saveFn, messagePrefix, extraButtons)` | Property editor (legacy `mediaEditProps`; loads the Edit service object editor on demand; returns true when an editor was added). |
 | `EditMain()`, `ViewMain()`, `PreviewMain()` | Page boots (legacy `mediaEditMain`, `mediaViewMain`, `mediaPreviewMain`). |

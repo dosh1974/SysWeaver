@@ -214,7 +214,7 @@
             case TVideo:
                 return { StartAt: 0, EndAt: 0, Volume: 100, Stream: 0, Transparent: false, Crop: null };
             case TAudio:
-                return { StartAt: 0, EndAt: 0, Volume: 100 };
+                return { StartAt: 0, EndAt: 0, Volume: 100, Effect: null, EffectParams: null };
             case TYouTube:
                 return {
                     Width: 1920, Height: 1920, StartAt: 0, EndAt: 0, Volume: 100, Stream: 0,
@@ -332,21 +332,35 @@
     }
 
     /**
-     * The effect settings of an image or a text (an effect drawn over it).
+     * The effect settings of an image, a text or a sound (an effect that draws it).
      * @param {object} ctx The context: EffectOptions(kind, current).
-     * @param {string} kind "image" or "collage" (the effect library to choose from).
+     * @param {string} kind "image", "collage" or "audio" (the effect library to choose from).
      * @returns {Array<object>} Definitions.
      */
     function OverlayEffectDefs(ctx, kind) {
         const g = G.Effect();
         const on = p => !!p.Effect;
+        const audio = kind === "audio";
+        const effect = {
+            Key: "Effect", Label: _TF("Effect", "Setting in the media editor: an effect drawn over the picture"), Type: "enum", Default: "", Group: g,
+            Options: ctx.EffectOptions(kind),
+            Desc: _TF("An animated effect that draws the picture (ex: an old TV, rain, a waving flag); the Effects button at the top chooses it too", "Description of a setting in the media editor"),
+            Get: p => p.Effect || "", Set: (p, v) => p.Effect = (v || "").trim() || null,
+        };
+        //  A sound: null = the default effect (MV.DefaultAudioEffect), "" = none, else the effect; it has no picture to take the size
+        //  from: all the settings of an effect (its EffectParams), as the Effect type has them
+        if (audio)
+            return [
+                Object.assign(effect, {
+                    Default: null,
+                    Desc: _TF("An animated effect that draws the sound (ex: its spectrum); Default is the viewer's own sound effect, No effect plays the sound only; the Effects button at the top chooses it too", "Description of a setting in the media editor"),
+                    Get: p => p.Effect ?? null,
+                    Set: (p, v) => p.Effect = (v === null || v === undefined) ? null : String(v).trim(),
+                }),
+                ...EffectSettingDefs(ctx, "EffectParams."),
+            ];
         return [
-            {
-                Key: "Effect", Label: _TF("Effect", "Setting in the media editor: an effect drawn over the picture"), Type: "enum", Default: "", Group: g,
-                Options: ctx.EffectOptions(kind),
-                Desc: _TF("An animated effect that draws the picture (ex: an old TV, rain, a waving flag); the Effects button at the top chooses it too", "Description of a setting in the media editor"),
-                Get: p => p.Effect || "", Set: (p, v) => p.Effect = (v || "").trim() || null,
-            },
+            effect,
             {
                 Key: "EffectSizeFromImage", Label: _TF("Size of the picture", "Setting in the media editor"), Type: "bool", Default: true, Group: g, Show: on,
                 Desc: _TF("On: the effect takes the size of the picture; off: the effect's own size", "Description of a setting in the media editor"),
@@ -360,6 +374,98 @@
                 Desc: _TF("Draws the effect once (a still picture) instead of animating it", "Description of a setting in the media editor"),
             },
         ];
+    }
+
+    /**
+     * A sound plays with an effect unless its Effect is "" (null = the default effect, MV.DefaultAudioEffect; none when that is empty).
+     * @param {object} p The props of the sound.
+     * @returns {boolean} True when the player is an effect.
+     */
+    function SoundHasEffect(p) {
+        const fx = p ? p.Effect : null;
+        return fx === null || fx === undefined ? !!MV.DefaultAudioEffect : fx !== "";
+    }
+
+    /**
+     * The settings of an effect (MediaPlayerParamsEffect): time, size, quality and, for the Effect type, its texture.
+     * @param {object} ctx The context: TextureMenu.
+     * @param {string} pre "" for the Effect type (the settings are the props), "EffectParams." for a sound with an effect: the keys
+     *   get the prefix, every setting shows only while an effect is chosen and the texture settings are left out (the sound is the
+     *   texture).
+     * @returns {Array<object>} Definitions.
+     */
+    function EffectSettingDefs(ctx, pre) {
+        const own = !pre;
+        /** @param {object} p The props. @returns {object} The effect settings. */
+        const fx = p => (own ? p : p.EffectParams) || {};
+        /** A Show rule that also needs an effect (a sound with an effect). @param {function(object):boolean} [f] @returns {function(object):boolean} */
+        const show = f => own ? f : (p => SoundHasEffect(p) && (!f || f(fx(p))));
+        const defs = [
+            {
+                Key: "Speed", Label: _TF("Speed", "Setting in the media editor: the speed of an effect"), Type: "float", Min: -4, Max: 4, Step: 0.05, Unit: "×", Default: 1, Group: G.Time(), Live: "Speed",
+                Desc: _TF("How fast the effect plays; 0 stops it, below 0 plays it backwards", "Description of a setting in the media editor"),
+            },
+            {
+                Key: "Offset", Label: _TF("Time offset", "Setting in the media editor"), Type: "float", Min: 0, Max: 600, Step: 0.1, Unit: "s", Default: 0, Group: G.Time(), Live: "Offset",
+                Desc: _TF("Starts the effect this many seconds in", "Description of a setting in the media editor"),
+            },
+            {
+                Key: "Static", Label: _TF("Still picture", "Setting in the media editor"), Type: "bool", Default: false, Group: G.Time(),
+                Desc: _TF("Draws the effect once (a still picture) instead of animating it", "Description of a setting in the media editor"),
+            },
+            {
+                Key: "AdaptiveSize", Label: _TF("Fill the box", "Setting in the media editor"), Type: "bool", Default: true, Group: G.Size(),
+                Desc: _TF("On: the effect is drawn at the size of its box; off: at the width and height below, scaled to fit", "Description of a setting in the media editor"),
+            },
+            {
+                Key: "LimitSize", Label: _TF("At most the size below", "Setting in the media editor"), Type: "bool", Default: false, Group: G.Size(), Show: p => p.AdaptiveSize !== false,
+                Desc: _TF("Never draws more pixels than the width and height below (saves power on big screens)", "Description of a setting in the media editor"),
+            },
+            {
+                Key: "Width", Label: _TF("Width", "Setting in the media editor"), Type: "int", Min: 144, Max: 7680, Step: 8, Unit: "px", Default: 1920, Group: G.Size(), Show: p => p.AdaptiveSize === false || !!p.LimitSize,
+            },
+            {
+                Key: "Height", Label: _TF("Height", "Setting in the media editor"), Type: "int", Min: 144, Max: 7680, Step: 8, Unit: "px", Default: 1080, Group: G.Size(), Show: p => p.AdaptiveSize === false || !!p.LimitSize,
+            },
+            {
+                Key: "Transparent", Label: _TF("Transparent", "Setting in the media editor"), Type: "bool", Default: false, Group: G.Size(),
+                Desc: _TF("The effect draws see-through parts: the page shows through them", "Description of a setting in the media editor"),
+            },
+            {
+                Key: "DpiScale", Label: _TF("Sharpness", "Setting in the media editor: the resolution of an effect"), Type: "float", Min: 0.1, Max: 1, Step: 0.05, Scale: 100, Unit: "%", Default: 1, Group: G.Quality(),
+                Desc: _TF("Draws fewer pixels below 100 % (faster on slow devices, a bit blurry)", "Description of a setting in the media editor"),
+            },
+            {
+                Key: "DpiAdjust", Label: _TF("Adjust to the device", "Setting in the media editor"), Type: "bool", Default: false, Group: G.Quality(),
+                Desc: _TF("Lowers the sharpness by itself when the device is too slow", "Description of a setting in the media editor"),
+            },
+            {
+                Key: "AntiAlias", Label: _TF("Smooth edges", "Setting in the media editor"), Type: "bool", Default: false, Group: G.Quality(),
+                Desc: _TF("Anti aliasing (MSAA): smoother edges, a bit slower", "Description of a setting in the media editor"),
+            },
+        ];
+        if (own)
+            defs.push(
+                {
+                    Key: "Texture", Label: _TF("Picture", "Setting in the media editor: the texture of an effect"), Type: "string", Default: "", Group: G.Texture(),
+                    Hint: _TF("an image or a sound file · empty = none", "Hint of a setting in the media editor; the parts are separated by ' · '"),
+                    Desc: _TF("A picture the effect can use (its texture), or a sound that plays with the effect (its spectrum and waveform are the texture, ShaderToy's audio input)", "Description of a setting in the media editor"),
+                    Get: p => p.Texture || "", Set: (p, v) => p.Texture = (v || "").trim() || null,
+                    Menu: () => ctx.TextureMenu(), MenuTitle: _TF("Choose a picture or a sound", "Tool tip of the menu button of the texture setting in the media editor"),
+                },
+                {
+                    Key: "WrapU", Label: _TF("Repeat across", "Setting in the media editor: repeat the texture horizontally"), Type: "bool", Default: false, Group: G.Texture(), Show: p => !!p.Texture,
+                },
+                {
+                    Key: "WrapY", Label: _TF("Repeat down", "Setting in the media editor: repeat the texture vertically"), Type: "bool", Default: false, Group: G.Texture(), Show: p => !!p.Texture,
+                },
+                {
+                    Key: "MipMap", Label: _TF("Smooth when small", "Setting in the media editor: mip maps of the texture"), Type: "bool", Default: false, Group: G.Texture(), Show: p => !!p.Texture,
+                });
+        if (own)
+            return defs;
+        //  A sound with an effect: the keys in EffectParams, shown while an effect is chosen
+        return defs.map(d => Object.assign({}, d, { Key: pre + d.Key, Show: show(d.Show) }));
     }
 
     /**
@@ -400,7 +506,7 @@
                     ...CropDefs(null),
                 ];
             case TAudio:
-                return PlaybackDefs(ctx, false);
+                return [...PlaybackDefs(ctx, false), ...OverlayEffectDefs(ctx, "audio")];
             case TYouTube:
                 return [
                     ...PlaybackDefs(ctx, true),
@@ -415,66 +521,7 @@
                     ...CropDefs(d.Crop),
                 ];
             case TEffect:
-                return [
-                    {
-                        Key: "Speed", Label: _TF("Speed", "Setting in the media editor: the speed of an effect"), Type: "float", Min: -4, Max: 4, Step: 0.05, Unit: "×", Default: 1, Group: G.Time(), Live: "Speed",
-                        Desc: _TF("How fast the effect plays; 0 stops it, below 0 plays it backwards", "Description of a setting in the media editor"),
-                    },
-                    {
-                        Key: "Offset", Label: _TF("Time offset", "Setting in the media editor"), Type: "float", Min: 0, Max: 600, Step: 0.1, Unit: "s", Default: 0, Group: G.Time(), Live: "Offset",
-                        Desc: _TF("Starts the effect this many seconds in", "Description of a setting in the media editor"),
-                    },
-                    {
-                        Key: "Static", Label: _TF("Still picture", "Setting in the media editor"), Type: "bool", Default: false, Group: G.Time(),
-                        Desc: _TF("Draws the effect once (a still picture) instead of animating it", "Description of a setting in the media editor"),
-                    },
-                    {
-                        Key: "AdaptiveSize", Label: _TF("Fill the box", "Setting in the media editor"), Type: "bool", Default: true, Group: G.Size(),
-                        Desc: _TF("On: the effect is drawn at the size of its box; off: at the width and height below, scaled to fit", "Description of a setting in the media editor"),
-                    },
-                    {
-                        Key: "LimitSize", Label: _TF("At most the size below", "Setting in the media editor"), Type: "bool", Default: false, Group: G.Size(), Show: p => p.AdaptiveSize !== false,
-                        Desc: _TF("Never draws more pixels than the width and height below (saves power on big screens)", "Description of a setting in the media editor"),
-                    },
-                    {
-                        Key: "Width", Label: _TF("Width", "Setting in the media editor"), Type: "int", Min: 144, Max: 7680, Step: 8, Unit: "px", Default: 1920, Group: G.Size(), Show: p => p.AdaptiveSize === false || !!p.LimitSize,
-                    },
-                    {
-                        Key: "Height", Label: _TF("Height", "Setting in the media editor"), Type: "int", Min: 144, Max: 7680, Step: 8, Unit: "px", Default: 1080, Group: G.Size(), Show: p => p.AdaptiveSize === false || !!p.LimitSize,
-                    },
-                    {
-                        Key: "Transparent", Label: _TF("Transparent", "Setting in the media editor"), Type: "bool", Default: false, Group: G.Size(),
-                        Desc: _TF("The effect draws see-through parts: the page shows through them", "Description of a setting in the media editor"),
-                    },
-                    {
-                        Key: "DpiScale", Label: _TF("Sharpness", "Setting in the media editor: the resolution of an effect"), Type: "float", Min: 0.1, Max: 1, Step: 0.05, Scale: 100, Unit: "%", Default: 1, Group: G.Quality(),
-                        Desc: _TF("Draws fewer pixels below 100 % (faster on slow devices, a bit blurry)", "Description of a setting in the media editor"),
-                    },
-                    {
-                        Key: "DpiAdjust", Label: _TF("Adjust to the device", "Setting in the media editor"), Type: "bool", Default: false, Group: G.Quality(),
-                        Desc: _TF("Lowers the sharpness by itself when the device is too slow", "Description of a setting in the media editor"),
-                    },
-                    {
-                        Key: "AntiAlias", Label: _TF("Smooth edges", "Setting in the media editor"), Type: "bool", Default: false, Group: G.Quality(),
-                        Desc: _TF("Anti aliasing (MSAA): smoother edges, a bit slower", "Description of a setting in the media editor"),
-                    },
-                    {
-                        Key: "Texture", Label: _TF("Picture", "Setting in the media editor: the texture of an effect"), Type: "string", Default: "", Group: G.Texture(),
-                        Hint: _TF("an image file · empty = none", "Hint of a setting in the media editor; the parts are separated by ' · '"),
-                        Desc: _TF("A picture the effect can use (its texture)", "Description of a setting in the media editor"),
-                        Get: p => p.Texture || "", Set: (p, v) => p.Texture = (v || "").trim() || null,
-                        Menu: () => ctx.TextureMenu(), MenuTitle: _TF("Choose a picture", "Tool tip of the menu button of the texture setting in the media editor"),
-                    },
-                    {
-                        Key: "WrapU", Label: _TF("Repeat across", "Setting in the media editor: repeat the texture horizontally"), Type: "bool", Default: false, Group: G.Texture(), Show: p => !!p.Texture,
-                    },
-                    {
-                        Key: "WrapY", Label: _TF("Repeat down", "Setting in the media editor: repeat the texture vertically"), Type: "bool", Default: false, Group: G.Texture(), Show: p => !!p.Texture,
-                    },
-                    {
-                        Key: "MipMap", Label: _TF("Smooth when small", "Setting in the media editor: mip maps of the texture"), Type: "bool", Default: false, Group: G.Texture(), Show: p => !!p.Texture,
-                    },
-                ];
+                return EffectSettingDefs(ctx, "");
             case TText: {
                 const font = k => ({ Get: p => parseFont(p.Font)[k], Set: (p, v) => { const f = parseFont(p.Font); f[k] = v; p.Font = makeFont(f); } });
                 const color = (key, label, def, group, desc) => ({
@@ -788,7 +835,7 @@
             t.Source.SetDisabled(host, _TF("The application decides the media", "Why the source box of the media editor is disabled"));
             t.OpenB.SetDisabled(host, _TF("The application decides the media", "Why the source box of the media editor is disabled"));
             t.FileB.SetDisabled(host, _TF("The application decides the media", "Why the source box of the media editor is disabled"));
-            t.LibB.E.hidden = host || !(none || t.Type === TEffect || t.Type === TImage || t.Type === TText);
+            t.LibB.E.hidden = host || !(none || t.Type === TEffect || t.Type === TImage || t.Type === TText || t.Type === TAudio);
             t.Source.Input.placeholder = t.Type === TText ? _TF("Type the text to show", "Placeholder of the source box of the media editor for a text media")
                 : t.Type === TYouTube ? _TF("Paste a YouTube link or a video code", "Placeholder of the source box of the media editor for a YouTube media")
                     : window.matchMedia("(max-width: 760px)").matches ? _TF("Paste a link", "Short placeholder of the source box of the media editor on a phone")
@@ -1019,7 +1066,7 @@
          */
         UpdateChromeForType(type) {
             const t = this;
-            t.LibB.E.hidden = !(type === TEffect || type === TImage || type === TText);
+            t.LibB.E.hidden = !(type === TEffect || type === TImage || type === TText || type === TAudio);
             t.Source.Input.placeholder = type === TText ? _TF("Type the text to show", "Placeholder of the source box of the media editor for a text media")
                 : type === TYouTube ? _TF("Paste a YouTube link or a video code", "Placeholder of the source box of the media editor for a YouTube media")
                     : _TF("Paste a link or a YouTube address (Enter opens it), or drop a file", "Placeholder of the source box of the media editor");
@@ -1729,7 +1776,8 @@
             switch (what) {
                 case "Volume":
                     if (p) {
-                        p.Params.Volume = pr.Volume;
+                        //  (an audio with an effect: the media volume is the sound's, the effect player's Params are the effect's)
+                        (p.Media || p).Params.Volume = pr.Volume;
                         p.ResetVolume();
                     }
                     t.Post("SetVolume", { Volume: pr.Volume });
@@ -2030,7 +2078,7 @@
         Share() {
             const t = this;
             const pos = t.Player ? t.Player.GetPos() : 0;
-            const visual = t.Type !== TAudio;
+            const visual = t.Type !== TAudio || SoundHasEffect(t.Props);
             const state = { Kind: "view", Controls: true, Stats: false, Muted: false, Loop: false, AtPos: false, Absolute: true, Width: "100%" };
             const out = new Sw.TextBox({ ReadOnly: true, Mono: true, Multiline: true, Rows: 4, AriaLabel: _TF("The link", "Accessible name of the result box of the share dialog of the media editor"), Copy: _TF("link", "What the copy button of the share dialog copies") });
             out.E.classList.add("me-share-out");
@@ -2158,7 +2206,7 @@
                 return rel;
             const esc = x => String(x).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
             //  The shape of the media (audio: a bar), the width as chosen (a plain number is pixels)
-            const audio = t.Type === TAudio;
+            const audio = t.Type === TAudio && !SoundHasEffect(t.Props);
             const p = t.Player;
             const ratio = p && p.Width > 0 && p.Height > 0 && !audio ? Math.round(p.Width) + " / " + Math.round(p.Height) : "16 / 9";
             let w = String(s.Width || "").trim() || "100%";
@@ -2277,9 +2325,15 @@
             const t = this;
             const L = t.FxLists || {};
             const groups = kind === "background" ? [["Background", "backgroundEffects/", _TF("Effect", "Kind of an effect in the effect picker of the media editor")]]
+                : kind === "audio" ? [["Audio", "audioEffects/", _TF("Sound effect", "Kind of an effect in the effect picker of the media editor")]]
                 : kind === "collage" ? [["Collage", "collageEffects/", _TF("Collage effect", "Kind of an effect in the effect picker of the media editor")], ["Image", "imageEffects/", _TF("Picture effect", "Kind of an effect in the effect picker of the media editor")]]
                     : [["Image", "imageEffects/", _TF("Picture effect", "Kind of an effect in the effect picker of the media editor")]];
             const out = kind === "background" ? [] : [{ Value: "", Label: _TF("No effect", "Choice of the effect of a picture in the media editor"), Icon: "close" }];
+            //  A sound: null = the default effect of the viewer (MV.DefaultAudioEffect), "" = none
+            if (kind === "audio" && MV.DefaultAudioEffect) {
+                const dn = Humanize(MediaName(TEffect, MV.DefaultAudioEffect).replace(/\.glsl$/i, ""));
+                out.unshift({ Value: null, Label: _T("Default ({0})", dn, "Choice of the effect of a sound in the media editor: the default effect, {0} is its name"), Icon: "sparkle" });
+            }
             for (const [g, folder, hint] of groups)
                 for (const n of L[g] || [])
                     if (n !== "None")
@@ -2297,15 +2351,15 @@
          */
         async PickEffect(anchor) {
             const t = this;
-            const overlay = t.Type === TImage || t.Type === TText;
-            const kind = !overlay ? "background" : t.Type === TText && t.Props.CollageSeparator ? "collage" : "image";
-            await Promise.all(["Background", "Image", "Collage"].map(k => t.EffectNames(k)));
+            const overlay = t.Type === TImage || t.Type === TText || t.Type === TAudio;
+            const kind = !overlay ? "background" : t.Type === TAudio ? "audio" : t.Type === TText && t.Props.CollageSeparator ? "collage" : "image";
+            await Promise.all(["Background", "Image", "Collage", "Audio"].map(k => t.EffectNames(k)));
             const opts = t.EffectOptions(kind);
             if (!opts.length) {
                 Sw.Toast(_TF("No effects found in the library", "Shown by the effects button of the media editor when the library is empty"), { Kind: "warning" });
                 return;
             }
-            const cur = overlay ? (t.Props.Effect || "") : (t.Type === TEffect ? t.Data : null);
+            const cur = t.Type === TAudio ? (t.Props.Effect ?? null) : overlay ? (t.Props.Effect || "") : (t.Type === TEffect ? t.Data : null);
             Sw.ListPicker(anchor, opts, cur, v => overlay ? t.Change("Effect", v, true, true) : t.Open(TEffect, v, { Undo: true }));
         }
 
@@ -2543,7 +2597,7 @@
             await MV.Ready;
             t.Layout();
             //  The effect library (the effect choices of the settings need it at once)
-            await Promise.all(["Background", "Image", "Collage"].map(k => t.EffectNames(k)));
+            await Promise.all(["Background", "Image", "Collage", "Audio"].map(k => t.EffectNames(k)));
             t.Prefix = await MV.MessagePrefix(location.href + "_" + Date.now() + "_" + Math.random());
             //  A popped out player asks for the settings
             Sw.InterOp.On("*", m => {

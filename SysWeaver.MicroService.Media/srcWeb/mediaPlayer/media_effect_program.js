@@ -473,12 +473,22 @@ class EffectProgramData {
         //  A built program is complete (version, extensions, precision, uniforms, main)
         if (t.Built)
             return;
-        if (haveDer && (!haveDerExt)) {
+        //  A ShaderToy shader is GLSL ES 3.00 (texture(), texelFetch, ...): with WebGL 2 it is compiled as one (#version 300 es, the
+        //  derivatives and lod are core, texture2D still works); without WebGL 2 texture() is mapped to texture2D (GLSL ES 1.00)
+        const mainImageOnly = (!haveMain) && haveMainImage;
+        const needsEs3 = mainImageOnly && EffectProgramData.NeedsEs3(src);
+        const es3 = needsEs3 && (typeof WebGL2RenderingContext !== "undefined") && (gl instanceof WebGL2RenderingContext);
+        t.Es3 = es3;
+        if (es3)
+            t.Prefix += "#version 300 es\nprecision highp float;\nprecision highp int;\n#define texture2D texture\n#define texture2DLod textureLod\n";
+        else if (needsEs3)
+            t.Prefix += "#define texture texture2D\n";
+        if (haveDer && (!haveDerExt) && !es3) {
             t.Prefix +=
                 `#extension GL_OES_standard_derivatives : enable
 `;
         }
-        if (haveLod) {
+        if (haveLod && !es3) {
             if (!haveLodExt) {
                 t.Prefix +=
                 `#extension GL_EXT_shader_texture_lod : enable
@@ -492,15 +502,23 @@ class EffectProgramData {
         
 
 
-        if (!havePrecision) {
+        if ((!havePrecision) && !es3) {
             t.Prefix +=
                 `#ifdef GL_ES
 precision highp float;
 #endif
 `;
         }
-        if ((!haveMain) && haveMainImage) {
-            t.Suffix += `
+        if (mainImageOnly) {
+            t.Suffix += es3 ? `
+out vec4 effectFragColor;
+void main(void)
+{
+    vec4 c = vec4(0.0, 0.0, 0.0, 1.0);
+    mainImage(c, gl_FragCoord.xy);
+    effectFragColor = c;
+}
+` : `
 void main(void)
 {
     mainImage(gl_FragColor, gl_FragCoord.xy);
@@ -515,6 +533,12 @@ uniform int iFrame;                // shader playback frame
 uniform vec4 iMouse;                // mouse pixel coords. xy: current (if MLB down), zw: click
 uniform vec4 iDate;                 // (year, month, day, time in seconds)
 `;
+            //  The ShaderToy channel inputs the shader uses (not declared by it): iChannel0 is the texture of the player (an image, or the
+            //  audio texture: 512 x 2, row 0 = spectrum, row 1 = waveform), the others are black
+            const code = src.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, " ");
+            for (const [name, decl] of EffectProgramData.ChannelUniforms)
+                if (new RegExp("\\b" + name + "\\b").test(code) && !new RegExp("\\buniform\\s+\\w+\\s+" + name + "\\b").test(code))
+                    t.Prefix += "uniform " + decl + ";\n";
         }
 
 
@@ -587,7 +611,8 @@ uniform vec4 iDate;                 // (year, month, day, time in seconds)
             fsSrc = "#define FRAGMENT\n" + src;
         }
         else {
-            vsSrc = defaultVS;
+            //  (a ShaderToy shader compiled as GLSL ES 3.00 needs a vertex shader of the same version)
+            vsSrc = t.Es3 ? "#version 300 es\nin vec2 position;void main(){gl_Position=vec4(position, 0, 1);}" : defaultVS;
             fsSrc = src;
         }
         const debug = window.ShaderDebug;
@@ -701,6 +726,20 @@ uniform vec4 iDate;                 // (year, month, day, time in seconds)
     static VertexMarker = "\n//@ew-vertex-shader\n";
 
     /**
+     * The ShaderToy channel uniforms a ShaderToy style shader (mainImage) may use without declaring them: [name, declaration].
+     * @type {Array<string[]>}
+     */
+    static ChannelUniforms = [
+        ["iChannel0", "sampler2D iChannel0"],
+        ["iChannel1", "sampler2D iChannel1"],
+        ["iChannel2", "sampler2D iChannel2"],
+        ["iChannel3", "sampler2D iChannel3"],
+        ["iChannelResolution", "vec3 iChannelResolution[4]"],
+        ["iChannelTime", "float iChannelTime[4]"],
+        ["iSampleRate", "float iSampleRate"],
+    ];
+
+    /**
      * Effect Weaver features in a source: calls of the Ew snippet library (Ew... functions, EW_... macros / constants), a vertex stage
      * (vertexMain) or iMouse control comments ("// iMouse.x = Name | Description | Default").
      * @type {RegExp[]}
@@ -710,6 +749,20 @@ uniform vec4 iDate;                 // (year, month, day, time in seconds)
         /\bvoid\s+vertexMain\s*\(/,
         /^\s*(?:\/\/+|\/\*+|\*+)?\s*iMouse\s*\.\s*[xyzw]\s*[=:]/mi,
     ];
+
+    /**
+     * Tests if a ShaderToy style source (mainImage only, no #version) uses GLSL ES 3.00 functions (texture(), texelFetch, ...): ShaderToy
+     * compiles as GLSL ES 3.00, so it is compiled as one with WebGL 2 (see the constructor, Es3).
+     * @param {string} src - GLSL source text of the effect.
+     * @returns {boolean} True if it needs GLSL ES 3.00.
+     */
+    static NeedsEs3(src) {
+        if (typeof src !== "string")
+            return false;
+        const code = src.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, " ");
+        return (!/^\s*#\s*version\b/m.test(code)) && /\bmainImage\b/.test(code) && (!/\bvoid\s+main\s*\(/.test(code))
+            && /\b(texture|textureLod|textureGrad|textureProj|texelFetch|textureSize)\s*\(/.test(code);
+    }
 
     /**
      * Tests if an effect source is in the Effect Weaver format and must be built by the server (MediaService.BuildEffect) the way

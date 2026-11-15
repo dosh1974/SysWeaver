@@ -89,7 +89,10 @@ namespace SysWeaver.MicroService.Media
         public bool WrapV = false;
 
         /// <summary>
-        /// Optional image file to use as a texture
+        /// Optional image or audio file to use as a texture (by its file extension).
+        /// A sound plays with the effect (on one time line, with the controls of an audio player) and is ShaderToy's audio texture:
+        /// 512 x 2, row 0 the spectrum, row 1 the waveform; r = mono, g = left, b = right (16 bit floats with WebGL 2).
+        /// The effect samples the texture as "tex" or "iChannel0".
         /// </summary>
         public String Texture = null;
 
