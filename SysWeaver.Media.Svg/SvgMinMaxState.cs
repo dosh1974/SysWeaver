@@ -19,9 +19,10 @@ namespace SysWeaver.Media
         public override string ToString() => IsEmpty ? "Empty" : String.Concat('[', F(MinX), ", ", F(MinY), "] - [", F(MaxX), ", ", F(MaxY), "] ", F(MaxX - MinX), 'x', F(MaxY - MinY));
 
         /// <summary>
-        /// True if no point has been added, or if an <see cref="Expand(double, double, double, double)"/> resulted in a width or height that is zero or less
+        /// True if the bounds are inverted (MaxX &lt; MinX or MaxY &lt; MinY), i.e. no point has been added and no bounds have been assigned, or an <see cref="Expand(double, double, double, double)"/> shrunk the bounds below zero size.
+        /// Computed from the min / max values, so bounds assigned directly (ex: using an object initializer) are valid.
         /// </summary>
-        public bool IsEmpty { get; private set; } = true;
+        public bool IsEmpty => (MaxX < MinX) || (MaxY < MinY);
 
         /// <summary>
         /// The width (MaxX - MinX), 0 if empty
@@ -51,7 +52,7 @@ namespace SysWeaver.Media
 
         /// <summary>
         /// Expand the bounds (negative values shrinks the bounds).
-        /// Note that the bounds of a single point (or a horizontal / vertical line) becomes empty when expanded by zero.
+        /// Shrinking the bounds below zero size makes them empty (<see cref="IsEmpty"/>).
         /// </summary>
         /// <param name="top">Subtracted from MinY</param>
         /// <param name="right">Added to MaxX</param>
@@ -64,7 +65,6 @@ namespace SysWeaver.Media
             MaxX += right;
             MaxY += bottom;
             MinX -= left;
-            IsEmpty = (MaxY <= MinY) || (MaxX <= MinX);
             return this;
         }
 
@@ -86,7 +86,7 @@ namespace SysWeaver.Media
             => Expand(d, d, d, d);
 
         /// <summary>
-        /// Add a point (x, y) to the bounds (clears <see cref="IsEmpty"/>), can be used as a callback, ex: for <see cref="SvgPath.Process"/>
+        /// Add a point (x, y) to the bounds (making it non-empty), can be used as a callback, ex: for <see cref="SvgPath.Process"/>
         /// </summary>
         public readonly Action<double, double> Update;
 
@@ -109,7 +109,6 @@ namespace SysWeaver.Media
                 MinY = y;
             if (y > MaxY)
                 MaxY = y;
-            IsEmpty = false;
         }
     }
 

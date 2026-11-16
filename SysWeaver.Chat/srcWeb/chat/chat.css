@@ -793,6 +793,17 @@ html:has(body.ChatMain), body.ChatMain {
     vertical-align: top;
 }
 
+    /* Own messages are right aligned, so a box grows to the left when it is made wider: its resize grip goes to the bottom left
+       (browsers put it there for a right-to-left box, dragging it to the left makes the box wider). Only the box is right-to-left,
+       its content is left-to-right again */
+    .chat-mine .chat-att {
+        direction: rtl;
+    }
+
+        .chat-mine .chat-att > * {
+            direction: ltr;
+        }
+
     .chat-att img {
         box-sizing: border-box;
         display: inline-block;

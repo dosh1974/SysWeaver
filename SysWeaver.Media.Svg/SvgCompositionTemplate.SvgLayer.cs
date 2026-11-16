@@ -22,10 +22,15 @@ namespace SysWeaver.Media
             public readonly SvgCanvasGravity GravX;
             public readonly SvgCanvasGravity GravY;
             public readonly SvgCanvasSizing Size;
+            /// <summary>
+            /// Optional svg files with the clip shape (the first that can be resolved is used), null for no clipping
+            /// </summary>
+            public readonly SvgFile[] Clip;
 
 
-            public SvgLayer(double x, double y, double width, double height, SvgFile[] files, TextTemplate color, SvgCanvasGravity gravX, SvgCanvasGravity gravY, SvgCanvasSizing size)
+            public SvgLayer(double x, double y, double width, double height, SvgFile[] files, TextTemplate color, SvgCanvasGravity gravX, SvgCanvasGravity gravY, SvgCanvasSizing size, SvgFile[] clip = null)
             {
+                Clip = clip;
 
                 X = x;
                 Y = y;

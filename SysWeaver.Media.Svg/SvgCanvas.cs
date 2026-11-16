@@ -1304,38 +1304,7 @@ namespace SysWeaver.Media
         /// <returns>The added group element</returns>
         public XElement EmbeddSvg(SvgCanvas other, double x, double y, double width, double height, bool moveDefsEtc = true, SvgCanvasSizing size = SvgCanvasSizing.Fit, SvgCanvasGravity gravityHorizontal = SvgCanvasGravity.Center, SvgCanvasGravity gravityVertical = SvgCanvasGravity.Center)
         {
-            var scaleX = width / other.Width;
-            var scaleY = height / other.Height;
-            switch (size)
-            {
-                case SvgCanvasSizing.Fit:
-                    if (scaleX < scaleY)
-                    {
-                        scaleY = scaleX;
-                        y += (height - other.Height * scaleY) * ((int)gravityVertical * 0.5);
-                    }
-                    else
-                    {
-                        scaleX = scaleY;
-                        x += (width - other.Width * scaleX) * ((int)gravityHorizontal * 0.5);
-                    }
-                    break;
-                case SvgCanvasSizing.Fill:
-                    if (scaleX > scaleY)
-                    {
-                        scaleY = scaleX;
-                        y += (height - other.Height * scaleY) * ((int)gravityVertical * 0.5);
-                    }
-                    else
-                    {
-                        scaleX = scaleY;
-                        x += (width - other.Width * scaleX) * ((int)gravityHorizontal * 0.5);
-                    }
-                    break;
-            }
-            //  The view box origin of the other document is placed at (x, y)
-            x -= scaleX * other.OX;
-            y -= scaleY * other.OY;
+            var transform = GetEmbedTransform(other, x, y, width, height, size, gravityHorizontal, gravityVertical);
             var o = other.Svg;
             var ignore = IgnoreAttributes;
             if (moveDefsEtc)
@@ -1367,9 +1336,208 @@ namespace SysWeaver.Media
             }
             var ce = CreateElement("g");
             var e = new XElement(SvgCanvasTools.Namespace + "g", o.Attributes().Where(x => !ignore.Contains(x.Name.LocalName)), o.Elements());
-            e.SetAttributeValue("transform", String.Concat("translate(", Value(x), ',', Value(y), ") scale(", Value(scaleX, "0.######"), ',', Value(scaleY, "0.######"), ')'));
+            e.SetAttributeValue("transform", transform);
             ce.Add(e);
             return AddElement(ce, null, null, 0);
+        }
+
+        /// <summary>
+        /// Get the transform that maps the view box of another svg document into a box, as used by <see cref="EmbeddSvg(SvgCanvas, double, double, double, double, bool, SvgCanvasSizing, SvgCanvasGravity, SvgCanvasGravity)"/>
+        /// </summary>
+        /// <param name="other">The document to place</param>
+        /// <param name="x">The left position of the box</param>
+        /// <param name="y">The top position of the box</param>
+        /// <param name="width">The width of the box</param>
+        /// <param name="height">The height of the box</param>
+        /// <param name="size">How to size the document in the box</param>
+        /// <param name="gravityHorizontal">The horizontal alignment in the box (Fit and Fill only)</param>
+        /// <param name="gravityVertical">The vertical alignment in the box (Fit and Fill only)</param>
+        /// <returns>The transform, "translate(x,y) scale(sx,sy)"</returns>
+        public String GetEmbedTransform(SvgCanvas other, double x, double y, double width, double height, SvgCanvasSizing size = SvgCanvasSizing.Fit, SvgCanvasGravity gravityHorizontal = SvgCanvasGravity.Center, SvgCanvasGravity gravityVertical = SvgCanvasGravity.Center)
+        {
+            GetEmbedPlacement(other, x, y, width, height, out var tx, out var ty, out var scaleX, out var scaleY, size, gravityHorizontal, gravityVertical);
+            return String.Concat("translate(", Value(tx), ',', Value(ty), ") scale(", Value(scaleX, "0.######"), ',', Value(scaleY, "0.######"), ')');
+        }
+
+        /// <summary>
+        /// Get the placement that maps the view box of another svg document into a box (a point p in the other document maps to (tx + p.x * scaleX, ty + p.y * scaleY)),
+        /// see <see cref="GetEmbedTransform"/>
+        /// </summary>
+        /// <param name="other">The document to place</param>
+        /// <param name="x">The left position of the box</param>
+        /// <param name="y">The top position of the box</param>
+        /// <param name="width">The width of the box</param>
+        /// <param name="height">The height of the box</param>
+        /// <param name="tx">The x translation</param>
+        /// <param name="ty">The y translation</param>
+        /// <param name="scaleX">The x scale</param>
+        /// <param name="scaleY">The y scale</param>
+        /// <param name="size">How to size the document in the box</param>
+        /// <param name="gravityHorizontal">The horizontal alignment in the box (Fit and Fill only)</param>
+        /// <param name="gravityVertical">The vertical alignment in the box (Fit and Fill only)</param>
+        public void GetEmbedPlacement(SvgCanvas other, double x, double y, double width, double height, out double tx, out double ty, out double scaleX, out double scaleY, SvgCanvasSizing size = SvgCanvasSizing.Fit, SvgCanvasGravity gravityHorizontal = SvgCanvasGravity.Center, SvgCanvasGravity gravityVertical = SvgCanvasGravity.Center)
+        {
+            scaleX = width / other.Width;
+            scaleY = height / other.Height;
+            switch (size)
+            {
+                case SvgCanvasSizing.Fit:
+                    if (scaleX < scaleY)
+                    {
+                        scaleY = scaleX;
+                        y += (height - other.Height * scaleY) * ((int)gravityVertical * 0.5);
+                    }
+                    else
+                    {
+                        scaleX = scaleY;
+                        x += (width - other.Width * scaleX) * ((int)gravityHorizontal * 0.5);
+                    }
+                    break;
+                case SvgCanvasSizing.Fill:
+                    if (scaleX > scaleY)
+                    {
+                        scaleY = scaleX;
+                        y += (height - other.Height * scaleY) * ((int)gravityVertical * 0.5);
+                    }
+                    else
+                    {
+                        scaleX = scaleY;
+                        x += (width - other.Width * scaleX) * ((int)gravityHorizontal * 0.5);
+                    }
+                    break;
+            }
+            //  The view box origin of the other document is placed at (x, y)
+            tx = x - scaleX * other.OX;
+            ty = y - scaleY * other.OY;
+        }
+
+        /// <summary>
+        /// Get the bounds of the shapes of this document (the ones used by <see cref="ClipPathDef(SvgCanvas, double, double, double, double, SvgCanvasSizing, SvgCanvasGravity, SvgCanvasGravity, string)"/>), in view box units.
+        /// Paths, rects, circles, ellipses, polygons, polylines and lines are measured, if any shape or group has a transform (not supported) the whole view box is returned.
+        /// </summary>
+        /// <returns>The bounds, the view box if there are no (measurable) shapes</returns>
+        public SvgMinMaxState GetShapeBounds()
+        {
+            var s = new SvgMinMaxState();
+            var ci = CultureInfo.InvariantCulture;
+            double A(XElement e, String name)
+                => double.TryParse(e.Attribute(name)?.Value, NumberStyles.Float, ci, out var v) ? v : 0;
+            bool Collect(XElement parent)
+            {
+                foreach (var e in parent.Elements())
+                {
+                    var name = e.Name.LocalName;
+                    if (ClipSkipContainers.Contains(name))
+                        continue;
+                    if (e.Attribute("transform") != null)
+                        return false;
+                    switch (name)
+                    {
+                        case "g":
+                            if (!Collect(e))
+                                return false;
+                            break;
+                        case "path":
+                            var d = e.Attribute("d")?.Value;
+                            if (!String.IsNullOrEmpty(d))
+                                SvgPath.UpdateMinMax(s, d);
+                            break;
+                        case "rect":
+                            s.Update(A(e, "x"), A(e, "y"));
+                            s.Update(A(e, "x") + A(e, "width"), A(e, "y") + A(e, "height"));
+                            break;
+                        case "circle":
+                            s.Update(A(e, "cx") - A(e, "r"), A(e, "cy") - A(e, "r"));
+                            s.Update(A(e, "cx") + A(e, "r"), A(e, "cy") + A(e, "r"));
+                            break;
+                        case "ellipse":
+                            s.Update(A(e, "cx") - A(e, "rx"), A(e, "cy") - A(e, "ry"));
+                            s.Update(A(e, "cx") + A(e, "rx"), A(e, "cy") + A(e, "ry"));
+                            break;
+                        case "line":
+                            s.Update(A(e, "x1"), A(e, "y1"));
+                            s.Update(A(e, "x2"), A(e, "y2"));
+                            break;
+                        case "polygon":
+                        case "polyline":
+                            var p = (e.Attribute("points")?.Value ?? "").Split([' ', ',', '\t', '\n', '\r'], StringSplitOptions.RemoveEmptyEntries);
+                            for (int i = 0; i + 1 < p.Length; i += 2)
+                                if (double.TryParse(p[i], NumberStyles.Float, ci, out var px) && double.TryParse(p[i + 1], NumberStyles.Float, ci, out var py))
+                                    s.Update(px, py);
+                            break;
+                    }
+                }
+                return true;
+            }
+            if ((Svg.Attribute("transform") == null) && Collect(Svg) && !s.IsEmpty && (s.Width > 0) && (s.Height > 0))
+                return s;
+            return new SvgMinMaxState { MinX = OX, MinY = OY, MaxX = OX + Width, MaxY = OY + Height };
+        }
+
+        static readonly IReadOnlySet<String> ClipShapeElements = ReadOnlyData.Set(StringComparer.Ordinal,
+            "path", "rect", "circle", "ellipse", "polygon", "polyline", "line"
+        );
+
+        static readonly IReadOnlySet<String> ClipSkipContainers = ReadOnlyData.Set(StringComparer.Ordinal,
+            "defs", "clipPath", "mask", "pattern", "symbol", "marker", "linearGradient", "radialGradient", "filter"
+        );
+
+        static readonly IReadOnlySet<String> ClipShapeAttributes = ReadOnlyData.Set(StringComparer.Ordinal,
+            "d", "x", "y", "width", "height", "rx", "ry", "cx", "cy", "r", "points", "x1", "y1", "x2", "y2", "clip-rule"
+        );
+
+        /// <summary>
+        /// Add a clip path definition made from the shapes of another svg document, placed in a box the same way as <see cref="EmbeddSvg(SvgCanvas, double, double, double, double, bool, SvgCanvasSizing, SvgCanvasGravity, SvgCanvasGravity)"/>.
+        /// The shapes (path, rect, circle, ellipse, polygon, polyline and line, not inside defs, masks etc) are flattened into the clip path with their transforms combined
+        /// (clip paths can't contain groups), a "fill-rule" is used as "clip-rule". Fills, strokes and styles are ignored.
+        /// The clip path uses user space units, so set it on an element that has no transform of its own (ex: the group returned by EmbeddSvg, or an image element).
+        /// </summary>
+        /// <param name="shape">The document with the clip shapes (it's not modified)</param>
+        /// <param name="x">The left position of the box</param>
+        /// <param name="y">The top position of the box</param>
+        /// <param name="width">The width of the box</param>
+        /// <param name="height">The height of the box</param>
+        /// <param name="size">How to size the shape in the box</param>
+        /// <param name="gravityHorizontal">The horizontal alignment in the box (Fit and Fill only)</param>
+        /// <param name="gravityVertical">The vertical alignment in the box (Fit and Fill only)</param>
+        /// <param name="id">The id of the clip path, null to generate one (<see cref="GenId"/>)</param>
+        /// <returns>The clip path reference "url(#id)", null if the document has no shapes</returns>
+        public String ClipPathDef(SvgCanvas shape, double x, double y, double width, double height, SvgCanvasSizing size = SvgCanvasSizing.Fit, SvgCanvasGravity gravityHorizontal = SvgCanvasGravity.Center, SvgCanvasGravity gravityVertical = SvgCanvasGravity.Center, String id = null)
+        {
+            var placement = GetEmbedTransform(shape, x, y, width, height, size, gravityHorizontal, gravityVertical);
+            var root = shape.Svg;
+            var rootTransform = root.Attribute("transform")?.Value;
+            if (!String.IsNullOrEmpty(rootTransform))
+                placement = String.Concat(placement, ' ', rootTransform);
+            List<XElement> shapes = new List<XElement>();
+            void Collect(XElement parent, String transform)
+            {
+                foreach (var e in parent.Elements())
+                {
+                    var name = e.Name.LocalName;
+                    if (ClipSkipContainers.Contains(name))
+                        continue;
+                    var own = e.Attribute("transform")?.Value;
+                    var t = String.IsNullOrEmpty(own) ? transform : String.Concat(transform, ' ', own);
+                    if (ClipShapeElements.Contains(name))
+                    {
+                        var c = CreateElement(name);
+                        foreach (var a in e.Attributes())
+                            if (ClipShapeAttributes.Contains(a.Name.LocalName))
+                                c.SetAttributeValue(a.Name.LocalName, a.Value);
+                        var fillRule = e.Attribute("fill-rule")?.Value;
+                        if ((fillRule != null) && (c.Attribute("clip-rule") == null))
+                            c.SetAttributeValue("clip-rule", fillRule);
+                        c.SetAttributeValue("transform", t);
+                        shapes.Add(c);
+                        continue;
+                    }
+                    if (name == "g")
+                        Collect(e, t);
+                }
+            }
+            Collect(root, placement);
+            return ClipPathDef(id, shapes.ToArray());
         }
 
         /// <summary>

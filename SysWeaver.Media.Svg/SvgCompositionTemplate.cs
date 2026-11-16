@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 using SysWeaver.Compression;
 
 namespace SysWeaver.Media
@@ -17,7 +18,9 @@ namespace SysWeaver.Media
     /// an optional first line "WxH" with the size (default 256x256), then one line per layer with '@' separated parts:
     /// "x,y,w,h" the layer box (default: the whole image), "#[var]" a color template (applied to the gray scale colors of the svg, see <see cref="SvgCompositionTemplateCache"/>),
     /// a 3 char sizing code ("GGS": horizontal and vertical gravity '-' start, '*' center, '+' end, then sizing '-' fit, '*' stretch, '+' fill)
-    /// and a comma separated list of file name templates ("[var]" is replaced by the variable value), the first file that can be resolved is used.
+    /// a comma separated list of file name templates ("[var]" is replaced by the variable value), the first file that can be resolved is used,
+    /// and an optional "clip: file1, file2.." list of svg file name templates (resolved the same way): the shapes of the first resolved clip file are fitted (centered) into the layer box and clip the layer,
+    /// and the layer content is placed (using the sizing and gravity) in the bounding box of those shapes instead of the layer box.
     /// File names starting with '$' are read using the alternative reader, other names are relative to the base path.
     /// </summary>
     public sealed partial class SvgCompositionTemplate
@@ -78,6 +81,7 @@ namespace SysWeaver.Media
                 TextTemplate color = null;
                 String[] files = null;
                 SvgFile[] bf = null;
+                SvgFile[] clip = null;
                 SvgCanvasGravity gravX = SvgCanvasGravity.Center;
                 SvgCanvasGravity gravY = SvgCanvasGravity.Center;
                 SvgCanvasSizing size = SvgCanvasSizing.Fit;
@@ -87,6 +91,16 @@ namespace SysWeaver.Media
                     if (f == '#')
                     {
                         color = new TextTemplate(part, "[", "]", true, false);
+                        continue;
+                    }
+                    if (part.StartsWith(ClipPrefix, StringComparison.OrdinalIgnoreCase))
+                    {
+                        clip = ParseFiles(part.Substring(ClipPrefix.Length), bme);
+                        if (clip.Length <= 0)
+                            throw new FormatException("Expected at least one clip file!");
+                        foreach (var cf in clip)
+                            if (cf.IsBitmap)
+                                throw new FormatException("Clip files must be svg files!");
                         continue;
                     }
                     if (GravDecode.TryGetValue(f, out var gh))
@@ -117,22 +131,59 @@ namespace SysWeaver.Media
                         h = double.Parse(p[3], ci);
                         continue;
                     }
-                    files = part.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-                    var fl = files.Length;
-                    bf = new SvgFile[fl];
-                    for (var fi = 0; fi < fl; ++fi)
-                    {
-                        var fn = files[fi].RemoveQuotes();
-                        var isBitMap = bme.Contains(Path.GetExtension(fn).FastToLower());
-                        var tt = new TextTemplate(fn, "[", "]", true, false);
-                        bf[fi] = new SvgFile(tt.Vars.Select(x => x.FastToLower()).ToArray(), tt, isBitMap);
-                    }
+                    bf = ParseFiles(part, bme);
                 }
                 if ((bf?.Length ?? 0) <= 0)
                     throw new FormatException("Expected at least one file!");
-                layers.Add(new SvgLayer(x, y, w, h, bf, color, gravX, gravY, size));
+                layers.Add(new SvgLayer(x, y, w, h, bf, color, gravX, gravY, size, clip));
             }
             return new SvgCompositionTemplate(width, height, layers.ToArray(), basePath);
+        }
+
+        const String ClipPrefix = "clip:";
+
+        static SvgFile[] ParseFiles(String part, IReadOnlySet<String> bitmapExtensions)
+        {
+            var files = part.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+            var fl = files.Length;
+            var bf = new SvgFile[fl];
+            for (var fi = 0; fi < fl; ++fi)
+            {
+                var fn = files[fi].RemoveQuotes();
+                var isBitMap = bitmapExtensions.Contains(Path.GetExtension(fn).FastToLower());
+                var tt = new TextTemplate(fn, "[", "]", true, false);
+                bf[fi] = new SvgFile(tt.Vars.Select(x => x.FastToLower()).ToArray(), tt, isBitMap);
+            }
+            return bf;
+        }
+
+        static bool HasAllVars(SvgFile f, IReadOnlyDictionary<String, String> vars)
+        {
+            foreach (var v in f.Vars)
+                if (!(vars.TryGetValue(v, out var vv) && !String.IsNullOrEmpty(vv)))
+                    return false;
+            return true;
+        }
+
+        /// <summary>
+        /// Load the first clip file of the layer that can be resolved
+        /// </summary>
+        /// <returns>The clip shape document, null if the layer has no clip files or none could be resolved</returns>
+        async Task<SvgCanvas> LoadClip(SvgLayer layer, IReadOnlyDictionary<String, String> vars, SvgTools.FileReader altReader, SvgCompositionTemplateCache cache)
+        {
+            var clip = layer.Clip;
+            if (clip == null)
+                return null;
+            foreach (var f in clip)
+            {
+                if (!HasAllVars(f, vars))
+                    continue;
+                var filename = f.NameTemplate.Get(k => vars.TryGetValue(k.FastToLower(), out var v) ? v : null);
+                var res = await cache.GetResolvedSvgFile(filename, vars, BasePath, altReader).ConfigureAwait(false);
+                if (res != null)
+                    return SvgCanvas.Create(res);
+            }
+            return null;
         }
 
         static readonly IReadOnlyDictionary<Char, SvgCanvasGravity> GravDecode = new Dictionary<Char, SvgCanvasGravity>()
@@ -215,23 +266,41 @@ namespace SysWeaver.Media
                 SvgFont.AddFontPath(fontPath);
                 foreach (var layer in Layers)
                 {
+                    //  With a clip shape, the shape is fitted (centered) into the layer box and the content is placed in the bounding box of the shape
+                    double lx = layer.X, ly = layer.Y, lw = layer.Width, lh = layer.Height;
+                    SvgCanvas clipShape = null;
+                    bool clipLoaded = false;
+                    async Task<String> PrepareClip()
+                    {
+                        if (!clipLoaded)
+                        {
+                            clipLoaded = true;
+                            clipShape = await LoadClip(layer, vars, altReader, cache).ConfigureAwait(false);
+                            if (clipShape != null)
+                            {
+                                svg.GetEmbedPlacement(clipShape, layer.X, layer.Y, layer.Width, layer.Height, out var tx, out var ty, out var sx, out var sy);
+                                var b = clipShape.GetShapeBounds();
+                                lx = tx + b.MinX * sx;
+                                ly = ty + b.MinY * sy;
+                                lw = b.Width * sx;
+                                lh = b.Height * sy;
+                            }
+                        }
+                        return clipShape == null ? null : svg.ClipPathDef(clipShape, layer.X, layer.Y, layer.Width, layer.Height);
+                    }
                     foreach (var f in layer.Files)
                     {
-                        bool ok = true;
-                        foreach (var v in f.Vars)
-                        {
-                            ok &= vars.TryGetValue(v, out var vv) && !String.IsNullOrEmpty(vv);
-                            if (!ok)
-                                break;
-                        }
-                        if (!ok)
+                        if (!HasAllVars(f, vars))
                             continue;
                         if (f.IsBitmap)
                         {
                             var res = await cache.GetBitmapFile(f.NameTemplate, vars, bp, altReader).ConfigureAwait(false);
                             if (res != null)
                             {
-                                svg.Image(res, layer.X, layer.Y, layer.Width, layer.Height, true, layer.Size, layer.GravX, layer.GravY);
+                                var clipRef = await PrepareClip().ConfigureAwait(false);
+                                var ie = svg.Image(res, lx, ly, lw, lh, true, layer.Size, layer.GravX, layer.GravY);
+                                if (clipRef != null)
+                                    ie.SetAttributeValue("clip-path", clipRef);
                                 break;
                             }
                         }
@@ -262,7 +331,10 @@ namespace SysWeaver.Media
                                     if (fp2 != null)
                                         SvgFont.RemoveFontPath(fp2);
                                 }
-                                svg.EmbeddSvg(other, layer.X, layer.Y, layer.Width, layer.Height, true, layer.Size, layer.GravX, layer.GravY);
+                                var clipRef = await PrepareClip().ConfigureAwait(false);
+                                var ee = svg.EmbeddSvg(other, lx, ly, lw, lh, true, layer.Size, layer.GravX, layer.GravY);
+                                if (clipRef != null)
+                                    ee.SetAttributeValue("clip-path", clipRef);
                                 /*                            try
                                                             {
                                                                 svg.EmbeddSvg(res, layer.X, layer.Y, layer.Width, layer.Height);
