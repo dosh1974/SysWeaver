@@ -458,8 +458,10 @@ namespace SysWeaver.MicroService
             }
             catch (Exception ex)
             {
+                //  Thrown, not returned as null: the caches (MemCaches, the callers' own caches, ex: TranslatorDbCacheService) never store an exception,
+                //  but would keep a null as the translation until it expires (and the callers would show nothing)
                 RemoteFails.OnException(ex);
-                return null;
+                throw;
             }
         }
 

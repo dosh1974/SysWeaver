@@ -4137,36 +4137,13 @@ namespace SysWeaver.Net
                 :
                 String.Concat("This is the english name of the language \"", name, "\" with the ISO code \"", iso, "\" and comment: ", com)
                 ;
-            var n = await tr.TranslateOne(new TranslateRequest
-            {
-                From = "en",
-                To = currentLang,
-                Text = name,
-                Context = context,
-                Effort = TranslationEffort.High,
-                Retention = TranslationCacheRetention.Long
-            }).ConfigureAwait(false);
-            var ln = await tr.TranslateOne(new TranslateRequest
-            {
-                From = "en",
-                To = iso,
-                Text = name,
-                Context = context,
-                Effort = TranslationEffort.High,
-                Retention = TranslationCacheRetention.Long
-            }).ConfigureAwait(false);
+            //  TranslateSafe: a translation that fails (ex: the translator is down) keeps the english text, so one failure never fails the whole list
+            var n = await tr.TranslateSafe(name, currentLang, "en", context, TranslationEffort.High, TranslationCacheRetention.Long).ConfigureAwait(false);
+            var ln = await tr.TranslateSafe(name, iso, "en", context, TranslationEffort.High, TranslationCacheRetention.Long).ConfigureAwait(false);
             if (!String.IsNullOrEmpty(com))
-            {
-                com = await tr.TranslateOne(new TranslateRequest
-                {
-                    From = "en",
-                    To = currentLang,
-                    Text = com,
-                    Context = String.Concat("This are the comments (remarks) for the language \"", name, "\" with the ISO code \"", iso, '"'),
-                    Effort = TranslationEffort.High,
-                    Retention = TranslationCacheRetention.Long
-                }).ConfigureAwait(false);
-            }
+                com = await tr.TranslateSafe(com, currentLang, "en",
+                    String.Concat("This are the comments (remarks) for the language \"", name, "\" with the ISO code \"", iso, '"'),
+                    TranslationEffort.High, TranslationCacheRetention.Long).ConfigureAwait(false);
             return new LanguageInfo(iso, name, n, ln, com);
         }
 

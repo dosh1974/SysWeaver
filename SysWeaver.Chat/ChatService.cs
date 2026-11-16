@@ -500,18 +500,61 @@ namespace SysWeaver.Chat
             if (m == null)
                 throw new ArgumentException("Unknown message id!", nameof(translateRequest.MessageId));
             var to = context.Language;
-            return await TranslationCache.GetOrUpdateValueAsync(String.Join('\n', mid, to), async key =>
+            try
             {
-                return await context.Translator.TranslateOne(new TranslateRequest
+                return await TranslationCache.GetOrUpdateValueAsync(String.Join('\n', mid, to), async key =>
                 {
-                    From = m.Lang,
-                    To = to,
-                    Text = m.Text,
-                    Context = TranslationContexts[(int)m.Format],
-                    Effort = TranslationEffort.Low,
-                    Retention = TranslationCacheRetention.Short,
-                }).ConfigureAwait(false);
-            });
+                    var translated = await context.Translator.TranslateOne(new TranslateRequest
+                    {
+                        From = m.Lang,
+                        To = to,
+                        Text = m.Text,
+                        Context = TranslationContexts[(int)m.Format],
+                        Effort = TranslationEffort.Low,
+                        Retention = TranslationCacheRetention.Short,
+                    }).ConfigureAwait(false);
+                    //  No translation is a failure, not a result: thrown so that it isn't cached (the cache never stores an exception) and the next try asks again
+                    if (translated == null)
+                        throw new HttpResponseException(502, "The translator returned no translation");
+                    return translated;
+                });
+            }
+            catch (Exception ex) when (TranslatorUnavailable(ex, out var status))
+            {
+                //  The translator (ex: a remote translation service) failed: its status (ex: a 401 for wrong service credentials) must not reach the
+                //  browser as is (a 401 reads as "you are not signed in"), the cause is logged for the admins instead
+                Manager?.AddMessage(MessageLevels.Warning, $"Chat: translating message {mid} to \"{to}\" failed, the translator is unavailable", ex);
+                throw new HttpResponseException(status, status == 503
+                    ? "The translation service is busy or can't be reached right now, try again in a while"
+                    : "The translation service isn't working right now, try again later");
+            }
+        }
+
+        /// <summary>
+        /// Test if an exception of the translator means that the translator itself is unavailable (not a mistake of the request, not a client that went away).
+        /// </summary>
+        /// <param name="ex">The exception</param>
+        /// <param name="status">The status to answer: 503 if the translator is busy (429 / 503), unreachable or timed out, else 502 (it failed or refused,
+        /// ex: rejected the credentials of this server)</param>
+        /// <returns>True if the translator is unavailable</returns>
+        static bool TranslatorUnavailable(Exception ex, out int status)
+        {
+            status = 502;
+            if (HttpServerBase.IsClientGone(ex))
+                return false;
+            switch (ex)
+            {
+                case HttpResponseException re:
+                    if ((re.ResponseCode == 429) || (re.ResponseCode == 503))
+                        status = 503;
+                    return true;
+                case System.Net.Http.HttpRequestException:
+                case TimeoutException:
+                case OperationCanceledException when ex.InnerException is TimeoutException:
+                    status = 503;
+                    return true;
+            }
+            return false;
         }
 
         const String TranslationSourceDisclaimer = "The source language is a guestimate, only use as a tie breaker.";

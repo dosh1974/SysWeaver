@@ -26939,8 +26939,17 @@ window.Sw.Sources["ui/overlay.js"] = "common/common.js";
         }
         if (!frame)
             return;
+        //  Styled inline, not only by .sw-frame-catch (overlays.css): the top window may load sw/ui.js without sw/ui.css (a page that
+        //  frames a Sw page, ex: a chat). Unstyled, the parts would be static blocks in the page's flow and push its layout apart.
         const host = el("div.sw-frame-catch-host", { attrs: { "aria-hidden": "true" } });
-        const parts = [0, 1, 2, 3].map(() => el("div.sw-frame-catch"));
+        host.style.display = "contents";
+        const parts = [0, 1, 2, 3].map(() => {
+            const p = el("div.sw-frame-catch");
+            p.style.position = "fixed";
+            p.style.zIndex = "1000";
+            p.style.touchAction = "none";
+            return p;
+        });
         host.append(...parts);
         const act = () => {
             try {
