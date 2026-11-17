@@ -17,7 +17,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<PackageReference Include="Fido2" Version="4.3.1" />
+		<PackageReference Include="Fido2" Version="4.3.3" />
 	</ItemGroup>
 
 	<ItemGroup>

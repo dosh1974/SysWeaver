@@ -394,7 +394,7 @@ namespace SysWeaver.AI
                     var sb = new StringBuilder();
                     var doneItems = new SortedDictionary<int, ResponseItem>();
                     String failed = null;
-                    await foreach (var u in client.CreateResponseStreamingAsync(options, cancel).ConfigureAwait(false))
+                    await foreach (var u in (await client.CreateResponseStreamingAsync(options, cancel).ConfigureAwait(false)).ConfigureAwait<StreamingResponseUpdate>(false))
                     {
                         switch (u)
                         {
