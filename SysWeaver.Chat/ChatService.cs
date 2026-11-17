@@ -28,7 +28,7 @@ namespace SysWeaver.Chat
     [OptionalDep<IChatProvider>]
     [OptionalDep<HttpServerBase>]
     [OptionalDep<IUserStorageService>]
-    [WebMenuEmbedded(null, "Debug/ChatTest", "Chat test", "chat/ChatTest.html", "Test the chat service: chat with the registered chat providers", "icons/chat.svg", 21, Roles.Dev)]
+    //[WebMenuEmbedded(null, "Debug/ChatTest", "Chat test", "chat/ChatTest.html", "Test the chat service: chat with the registered chat providers", "icons/chat.svg", 21, Roles.Dev)]
     [WebApiUrl("../chat")]
     [AiToolPrefix("")]
     public sealed class ChatService : IDisposable, IHttpServerModule, IHaveAiTools
