@@ -18087,14 +18087,14 @@ window.Sw.Sources["ui/editors.js"] = "sw/ui.js";
      *      the first definition of a group), NoSlider (number boxes only, for unbounded values),
      *      Multiline (strings: a text area, true = 2 rows or the number of rows), Hint (the hint line under the label; default for numbers: the range and unit, ex: "0 to 1 ms"; "" = none), Help (a help text under
      *      the value), ReadOnly (the value is shown as text: no input, nothing can change it; SetValues still updates it),
-     *      Map: { Min, Max, Unit, Format } (numbers: a normalized value, ex: a 0..1 controller, also shown in the units it stands for, mapped
+     *      Map: { Min, Max, Unit, Format, Decimals (optional: the decimals of the mapped value, default from Min / Max) } (numbers: a normalized value, ex: a 0..1 controller, also shown in the units it stands for, mapped
      *      linearly from the definition's Min..Max: "= 3000", "= 3000 lm"), Format (numbers: the display of the value, a template: "{0} BPM",
      *      "{0:1} %" = 1 decimal; shown after the value box instead of the Unit; see PropertyEditor.Display),
      *      Scale (numbers, default 1: the value is shown and typed × Scale, its range and step too; ex: 0.3 with Scale 100 and Unit "%"
      *      shows as 30 %, the value stays 0.3; see PropertyEditor.Scaled) }.
      * Units and mapped values sit in a slot of one width on every number row (FitSuffixes): the sliders and boxes line up.
      * Options: Defs, Values ({ key: value }, missing values show the defaults), OnInput(key, value) (continuous), OnChange(key, value) (committed),
-     *          Realtime (call OnInput while dragging, default true), ResetButtons (a reset to default button on the number rows, dimmed at the default),
+     *          Realtime (call OnInput while dragging, default true), ResetButtons (a reset to default button at the right end of every row, all types, dimmed at the default),
      *          Hints (default true: the hint lines), RowMenu(def) -> [Sw.Menu items] (a ⋯ button at the end of every row that isn't read only,
      *          for the row's own actions, ex: "Edit the definition…"; null / empty = no menu items). A definition's own Menu (items, or a
      *          function(def) returning them or a promise of them) and MenuTitle (the button's tool tip) give only that row a ⋯ menu (ex: "Choose an effect…").
@@ -18492,7 +18492,7 @@ window.Sw.Sources["ui/editors.js"] = "sw/ui.js";
                         const lo = d.Min ?? 0, hi = d.Max ?? 1;
                         const k = hi > lo ? (x - lo) / (hi - lo) : 0;
                         const mv = m.Min + (m.Max - m.Min) * k;
-                        mapped.textContent = _T("= {0}", PropertyEditor.Display(m, mv, PropertyEditor.Decimals(m.Min, m.Max)), "A normalized setting shown in the units it stands for, {0} the value");
+                        mapped.textContent = _T("= {0}", PropertyEditor.Display(m, mv, m.Decimals ?? PropertyEditor.Decimals(m.Min, m.Max)), "A normalized setting shown in the units it stands for, {0} the value");
                     };
                     const p = num((x, final) => {
                         showMap(x);
@@ -18521,19 +18521,22 @@ window.Sw.Sources["ui/editors.js"] = "sw/ui.js";
                         p.Set(x);
                         showMap(x);
                     };
-                    if (t.O.ResetButtons) {
-                        w.ResetBtn = new Sw.Button({
-                            Icon: "reset", Small: true, Kind: "ghost", Class: "sw-prop-reset",
-                            Title: _T("Set the default ({0})", String(PropertyEditor.Scaled(d, d.Default)) + (d.Unit ? " " + d.Unit : ""), "Tool tip of a button that resets a setting to its default value, {0} is the default value"),
-                            OnClick: () => {
-                                w.Set(d.Default);
-                                t.Emit(d, d.Default, true);
-                            },
-                        }).E;
-                        value.append(w.ResetBtn);
-                    }
                     break;
                 }
+            }
+            //  ResetButtons: a reset to the default at the end of every row (every type, before the ⋯), dimmed at the default; the css
+            //  puts it at the right end of the value column, so the reset buttons of all rows line up (ex: after a narrow color swatch)
+            if (t.O.ResetButtons) {
+                const shown = d.Type !== "enum" && typeof d.Default === "number" ? String(PropertyEditor.Scaled(d, d.Default)) + (d.Unit ? " " + d.Unit : "") : PropertyEditor.Text(d, d.Default);
+                w.ResetBtn = new Sw.Button({
+                    Icon: "reset", Small: true, Kind: "ghost", Class: "sw-prop-reset",
+                    Title: _T("Set the default ({0})", shown, "Tool tip of a button that resets a setting to its default value, {0} is the default value"),
+                    OnClick: () => {
+                        w.Set(d.Default);
+                        t.Emit(d, d.Default, true);
+                    },
+                }).E;
+                value.append(w.ResetBtn);
             }
             //  RowMenu(def) (every row) or the definition's own Menu (items or a function(def) returning them, only that row): the row's
             //  own actions (ex: "Edit…", "Choose from the library…") in a ⋯ menu at the end of the value

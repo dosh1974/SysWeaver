@@ -2243,8 +2243,14 @@ html.SwMobile .sw-number {
     font-size: var(--sw-text-xs);
 }
 
+/* ResetButtons: at the right end of every row (a narrow value, ex: a color swatch, a switch, leaves room: the auto margin takes it), the ⋯ right after it */
 .sw-prop-reset {
     flex: none;
+    margin-left: auto;
+}
+
+.sw-prop-reset + .sw-prop-menu {
+    margin-left: 0;
 }
 
 /* The ⋯ of a row (RowMenu): quiet until the row is hovered or it has the focus */
