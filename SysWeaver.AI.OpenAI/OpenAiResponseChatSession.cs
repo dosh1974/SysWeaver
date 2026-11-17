@@ -364,9 +364,8 @@ namespace SysWeaver.AI
                 options.StreamingEnabled = true;
                 using (var _ = await (ChatLock?.Lock() ?? AsyncLock.NoLock).ConfigureAwait(false))
                 {
-                    using var _b = Monitor?.Track(nameof(Client.CreateResponseStreaming));
-                    //                    await foreach (var sp in Client.CreateResponseStreamingAsync(options))
-                    foreach (var sp in client.CreateResponseStreaming(options))
+                    using var _b = Monitor?.Track(nameof(Client.CreateResponseStreamingAsync));
+                    await foreach (var sp in (await client.CreateResponseStreamingAsync(options).ConfigureAwait(false)).ConfigureAwait<StreamingResponseUpdate>(false))
                     {
                         switch (sp)
                         {

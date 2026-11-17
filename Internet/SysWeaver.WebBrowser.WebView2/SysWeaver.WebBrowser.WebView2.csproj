@@ -14,7 +14,7 @@
 
   <ItemGroup>
     <PackageReference Include="Nito.AsyncEx.Context" Version="5.1.2" />
-    <PackageReference Include="WebView2.Runtime.X64" Version="156.0.4314.50" />
+    <PackageReference Include="WebView2.Runtime.X64" Version="157.0.4341.60" />
   </ItemGroup>
 
   <ItemGroup>

@@ -13,7 +13,7 @@
 
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
-    <PackageReference Include="System.Memory.Data" Version="10.0.14" />
+    <PackageReference Include="System.Memory.Data" Version="11.0.0" />
   </ItemGroup>
 
   <ItemGroup>
