@@ -123,7 +123,7 @@ namespace SysWeaver.MicroService
         {
             var res = new MediaEffectMediaResponse();
             var kind = r?.Kind ?? "";
-            if (kind != "image" && kind != "audio" && kind != "collage")
+            if (kind != "image" && kind != "audio" && kind != "audio2" && kind != "collage")
                 return res;
             var refs = (r.Refs ?? []).Where(x => !String.IsNullOrWhiteSpace(x) && x.Length <= 2048).Take(MaxEffectMediaRefs).ToArray();
             foreach (var x in Manager.GetAll<IEffectMediaResolver>())

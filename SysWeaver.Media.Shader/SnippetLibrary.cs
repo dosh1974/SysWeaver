@@ -322,15 +322,16 @@ public sealed class SnippetLibrary
         return order;
     }
 
-    /// <summary>A function definition / prototype ("float EwHash2To1(", not "return EwHash2To1(") or an EW_ macro</summary>
-    static readonly Regex DefinedRx = new(@"^[ \t]*(?:(?:highp|mediump|lowp)[ \t]+)?(?!return\b|else\b)\w+[ \t]+(Ew[A-Z]\w*)[ \t]*\(|^[ \t]*#[ \t]*define[ \t]+(EW_\w+)", RegexOptions.Multiline | RegexOptions.Compiled);
+    /// <summary>A function definition / prototype ("float EwHash2To1(", not "return EwHash2To1("), an EW_ macro or a global Ew constant
+    /// ("const float EwAudioBassV = ...;")</summary>
+    static readonly Regex DefinedRx = new(@"^[ \t]*(?:(?:highp|mediump|lowp)[ \t]+)?(?!return\b|else\b|const\b)\w+[ \t]+(Ew[A-Z]\w*)[ \t]*\(|^[ \t]*#[ \t]*define[ \t]+(EW_\w+)|^const[ \t]+(?:(?:highp|mediump|lowp)[ \t]+)?\w+[ \t]+(Ew[A-Z]\w*)[ \t]*=", RegexOptions.Multiline | RegexOptions.Compiled);
 
-    /// <summary>The Ew functions / EW_ macros a source defines</summary>
+    /// <summary>The Ew functions / EW_ macros / Ew constants a source defines</summary>
     public static HashSet<string> DefinedIn(string source)
     {
         var set = new HashSet<string>(StringComparer.Ordinal);
         foreach (Match m in DefinedRx.Matches(source))
-            set.Add(m.Groups[1].Success ? m.Groups[1].Value : m.Groups[2].Value);
+            set.Add(m.Groups[1].Success ? m.Groups[1].Value : m.Groups[2].Success ? m.Groups[2].Value : m.Groups[3].Value);
         return set;
     }
 

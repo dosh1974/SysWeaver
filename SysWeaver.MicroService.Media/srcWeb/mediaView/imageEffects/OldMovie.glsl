@@ -1,4 +1,4 @@
-﻿uniform float time;
+uniform float time;
 uniform vec2 resolution;
 
 uniform sampler2D tex;
@@ -13,60 +13,88 @@ uniform sampler2D tex;
 // Copyright © 2013 Javier Meseguer
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions: The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-#define BLACK_AND_WHITE
-#define LINES_AND_FLICKER
-#define BLOTCHES
-#define GRAIN
+// Old Movie - turns the picture into a projected silent film: monochrome tinted print,
+// gate weave (frame jitter), a breathing lamp vignette with flicker, vertical scratches,
+// dust blotches and film grain. The defects change at a film-like frame rate.
+//
+//  iMouse.x = Flicker | Brightness flicker of the projector lamp | 0.4 | 0.0 .. 1.0
+//  iMouse.y = Grain | Strength of the film grain | 0.3 | 0.0 .. 0.5
+//  iMouse.z = Vignette | Darkening of the frame edges and corners | 0.4 | 0.0 .. 1.0
+//  iMouse.w = Monochrome | Black and white amount (0 = original colors) | 1.0 | 0.0 .. 1.0
 
-#define FREQUENCY 15.0
+#define Flicker       mix(0.0, 1.0, iMouse.x)
+#define GrainStrength mix(0.0, 0.5, iMouse.y)
+#define VignettePower mix(0.0, 1.0, iMouse.z)
+#define Monochrome    mix(0.0, 1.0, iMouse.w)
+
+// --- Film look ---
+const vec3 FilmTint = vec3(0.7, 0.7, 0.7); // var: { "type": "col", "name": "Film Tint", "desc": "Color and density of the monochrome print (darker = denser, try a warm sepia)" }
+const float FrameRate = 15.0; // var: { "min": 1.0, "max": 30.0, "step": 1.0, "name": "Defect Rate", "desc": "How often per second jitter, flicker, scratches and blotches change", "unit": "fps" }
+
+// --- Projector ---
+const float Jitter = 0.002; // var: { "min": 0.0, "max": 0.01, "step": 0.0005, "name": "Gate Weave", "desc": "How far the picture shakes from frame to frame (share of the view)", "scale": 100, "unit": "%" }
+const float LampPulse = 0.3; // var: { "min": 0.0, "max": 1.0, "step": 0.05, "name": "Lamp Pulse", "desc": "How much the bright center spot changes from frame to frame", "scale": 100, "unit": "%" }
+
+// --- Scratches ---
+const bool EnableScratches = true; // var: { "name": "Scratches", "desc": "Vertical scratch lines running through the frame" }
+const int MaxScratches = 8; // var: { "min": 0, "max": 8, "step": 1, "name": "Max Scratches", "desc": "Upper limit of scratches per frame (the actual count is random)" }
+const float ScratchStrength = 0.5; // var: { "min": 0.0, "max": 1.0, "step": 0.05, "name": "Scratch Strength", "desc": "Contrast of the scratches", "scale": 100, "unit": "%" }
+const float ScratchSoftness = 8.0; // var: { "min": 2.0, "max": 32.0, "step": 1.0, "name": "Scratch Softness", "desc": "Higher = wider, softer scratch halos; lower = thin crisp lines" }
+const float ScratchTilt = 0.01; // var: { "min": 0.0, "max": 0.1, "step": 0.005, "name": "Scratch Tilt", "desc": "Maximum slant of the scratches" }
+const float BrightScratchChance = 0.2; // var: { "min": 0.0, "max": 1.0, "step": 0.05, "name": "Bright Scratches", "desc": "Share of scratches that are bright instead of dark", "scale": 100, "unit": "%" }
+
+// --- Blotches ---
+const bool EnableBlotches = true; // var: { "name": "Blotches", "desc": "Dark dust and dirt spots" }
+const float BlotchDensity = 8.0; // var: { "min": 2.0, "max": 8.0, "step": 0.5, "name": "Blotch Density", "desc": "How many dust spots appear (up to 6 per frame)" }
+const float BlotchSize = 0.01; // var: { "min": 0.002, "max": 0.05, "step": 0.001, "name": "Blotch Size", "desc": "Maximum radius of a dust spot (share of the view height)" }
+const float BlotchCore = 0.2; // var: { "min": 0.0, "max": 1.0, "step": 0.05, "name": "Blotch Core", "desc": "Brightness inside the spots (0 = solid dark, 1 = only a soft halo)" }
+
+// --- Grain ---
+const bool EnableGrain = true; // var: { "name": "Grain", "desc": "Film grain noise" }
 
 vec2 uv;
 
+// Random value in [0, 1) from a float seed (sine hash on a 2D point).
 // No overloaded functions in effects: the shader minifier of the build (shader_minifier 1.6.0) renamed randomLine(float)
 // to the minified name of rand(float), two functions with the same signature, the built effect failed to compile.
-float rand2(vec2 co){
-    return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453);
-}
-
 float rand(float c){
-	return rand2(vec2(c,1.0));
+	return EwHashSin2To1(vec2(c,1.0));
 }
 
+// One random scratch: a nearly vertical line, darkening (or brightening) factor for this pixel.
 float randomLine(float seed)
 {
-	float b = 0.01 * rand(seed);
+	float b = ScratchTilt * rand(seed);
 	float a = rand(seed+1.0);
 	float c = rand(seed+2.0) - 0.5;
 	float mu = rand(seed+3.0);
 	
-	float l = 1.0;
+	float d = pow( abs(a * uv.x + b * uv.y + c), 1.0 / ScratchSoftness );
+	// most scratches are dark, some bright
+	float l = (mu > BrightScratchChance) ? d : 2.0 - d;
 	
-	if ( mu > 0.2)
-		l = pow(  abs(a * uv.x + b * uv.y + c ), 1.0/8.0 );
-	else
-		l = 2.0 - pow( abs(a * uv.x + b * uv.y + c), 1.0/8.0 );				
-	
-	return mix(0.5, 1.0, l);
+	return mix(1.0 - ScratchStrength, 1.0, l);
 }
 
-// Generate some blotches.
+// One random dust blotch: a wobbly dark disc with a soft halo, factor for this pixel.
 float randomBlotch(float seed)
 {
 	float x = rand(seed);
 	float y = rand(seed+1.0);
-	float s = 0.01 * rand(seed+2.0);
+	float s = BlotchSize * rand(seed+2.0);
 	
 	vec2 p = vec2(x,y) - uv;
 	p.x *= iResolution.x / iResolution.y;
 	float a = atan(p.y,p.x);
 	float v = 1.0;
-	float ss = s*s * (sin(6.2831*a*x)*0.1 + 1.0);
+	float ss = s*s * (sin(6.2831*a*x)*0.1 + 1.0);  // wobbly outline
 	
-	if ( dot(p,p) < ss ) v = 0.2;
+	if ( dot(p,p) < ss ) v = BlotchCore;
 	else
 		v = pow(dot(p,p) - ss, 1.0/16.0);
 	
-	return mix(0.3 + 0.2 * (1.0 - (s / 0.02)), 1.0, v);
+	// smaller blotches are darker
+	return mix(0.3 + 0.2 * (1.0 - (s / (2.0 * BlotchSize))), 1.0, v);
 }
 
 
@@ -74,70 +102,56 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
 {
 	uv = fragCoord.xy / iResolution.xy;
 	
-	// Set frequency of global effect to 15 variations per second
-	float t = float(int(iTime * FREQUENCY));
+	// Frame counter: all defects change FrameRate times per second
+	float t = float(int(iTime * FrameRate));
 		
-	// Get some image movement
-	vec2 suv = uv + 0.002 * vec2( rand(t), rand(t + 23.0));
+	// Gate weave: shake the picture a little per frame
+	vec2 suv = uv + Jitter * vec2( rand(t), rand(t + 23.0));
 		
-	// Get the image
-	vec4 image = texture( iChannel0, vec2(suv.x, suv.y) );
+	vec4 image = texture( iChannel0, suv );
 		
-	#ifdef BLACK_AND_WHITE
-	// Convert it to B/W
-	float luma = dot( vec3(0.2126, 0.7152, 0.0722), image.xyz );
-	vec4 oldImage = vec4(luma * vec3(0.7, 0.7, 0.7), image.w);
-	#else
-	vec4 oldImage = image;
-	#endif
+	// Monochrome print (tinted luminance)
+	float luma = EwLuminance( image.xyz );
+	vec4 oldImage = vec4(mix(image.xyz, luma * FilmTint, Monochrome), image.w);
 		
-	// Create a time-varying vignetting effect
-	float vI = 16.0 * (uv.x * (1.0-uv.x) * uv.y * (1.0-uv.y));
-	vI *= mix( 0.7, 1.0, rand(t + 0.5));
+	// Time-varying bright center spot of the lamp
+	float vig = 16.0 * (uv.x * (1.0-uv.x) * uv.y * (1.0-uv.y));
+	float vI = vig * mix( 1.0 - LampPulse, 1.0, rand(t + 0.5));
 		
-	// Add additive flicker
-	vI += 1.0 + 0.4 * rand(t+8.);
+	// Additive flicker
+	vI += 1.0 + Flicker * rand(t+8.);
 		
-	// Add a fixed vignetting (independent of the flicker)
-	vI *= pow(16.0 * uv.x * (1.0-uv.x) * uv.y * (1.0-uv.y), 0.4);
+	// Fixed vignetting (independent of the flicker)
+	vI *= pow(vig, VignettePower);
 		
-	// Add some random lines (and some multiplicative flicker. Oh well.)
-	#ifdef LINES_AND_FLICKER
-	int l = int(8.0 * rand(t+7.0));
+	// Random scratches (count random per frame)
+	if (EnableScratches) {
+		int l = int(float(MaxScratches) * rand(t+7.0));
+		for (int i = 0; i < 8; i++) {
+			if (i >= l) break;
+			vI *= randomLine( t+6.0+17.* float(i));
+		}
+	}
 		
-	if ( 0 < l ) vI *= randomLine( t+6.0+17.* float(0));
-	if ( 1 < l ) vI *= randomLine( t+6.0+17.* float(1));
-	if ( 2 < l ) vI *= randomLine( t+6.0+17.* float(2));		
-	if ( 3 < l ) vI *= randomLine( t+6.0+17.* float(3));
-	if ( 4 < l ) vI *= randomLine( t+6.0+17.* float(4));
-	if ( 5 < l ) vI *= randomLine( t+6.0+17.* float(5));
-	if ( 6 < l ) vI *= randomLine( t+6.0+17.* float(6));
-	if ( 7 < l ) vI *= randomLine( t+6.0+17.* float(7));
-		
-	#endif
-		
-	// Add some random blotches.
-	#ifdef BLOTCHES
-	int s = int( max(8.0 * rand(t+18.0) -2.0, 0.0 ));
-
-	if ( 0 < s ) vI *= randomBlotch( t+6.0+19.* float(0));
-	if ( 1 < s ) vI *= randomBlotch( t+6.0+19.* float(1));
-	if ( 2 < s ) vI *= randomBlotch( t+6.0+19.* float(2));
-	if ( 3 < s ) vI *= randomBlotch( t+6.0+19.* float(3));
-	if ( 4 < s ) vI *= randomBlotch( t+6.0+19.* float(4));
-	if ( 5 < s ) vI *= randomBlotch( t+6.0+19.* float(5));
-	
-	#endif
+	// Random dust blotches (0..5 per frame)
+	if (EnableBlotches) {
+		int s = int( max(BlotchDensity * rand(t+18.0) -2.0, 0.0 ));
+		for (int i = 0; i < 6; i++) {
+			if (i >= s) break;
+			vI *= randomBlotch( t+6.0+19.* float(i));
+		}
+	}
 	
 	// Show the image modulated by the defects
 	oldImage.xyz *= vI;
     fragColor = oldImage;
 		
-	// Add some grain (thanks, Jose!)
-	#ifdef GRAIN
-    fragColor.xyz *= (1.0+(rand2(uv+t*.01)-.2)*.15);		
-    #endif		
+	// Film grain (thanks, Jose!)
+	if (EnableGrain) {
+		fragColor.xyz *= (1.0+(EwHashSin2To1(uv+t*.01)-.2)*GrainStrength);
+	}
 		
+	// premultiplied alpha for transparent pictures
 	fragColor.xyz *= fragColor.w;
 
 }

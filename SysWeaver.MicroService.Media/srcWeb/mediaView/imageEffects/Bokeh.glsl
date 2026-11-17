@@ -1,97 +1,86 @@
-﻿
+//  Bokeh - waves of lens blur sweep across the picture
+//
+//  Soft diagonal waves travel over the image. At each crest the picture melts
+//  into a bright bokeh blur (the brightest of a disc of samples, so highlights
+//  bloom into round discs); between the crests it stays crisp.
+//
+//  iMouse.x = Blur Size | Bokeh radius at the wave crests | 0.5 | 0.0 .. 0.8
+//  iMouse.y = Wave Sharpness | Higher = narrower blur bands, more sharp picture between them | 0.5 | 1.0 .. 15.0
+//  iMouse.z = Wave Density | How many blur bands cross the screen (0 = whole picture pulses) | 0.5 | 0.0 .. 0.002
+//  iMouse.w = Grain | Animated film grain amount | 0.25 | 0.0 .. 0.4
 
 uniform float time;
 uniform vec2 resolution;
 
 uniform sampler2D tex;
 
+// --- Live controls ---
+#define BlurSize mix(0.0, 0.8, iMouse.x)
+#define WaveSharpness mix(1.0, 15.0, iMouse.y)
+#define WaveDensity mix(0.0, 0.002, iMouse.z)
+#define GrainAmount mix(0.0, 0.4, iMouse.w)
 
-// Post processing parameters
+// --- Wave motion ---
+const float Speed = 1.0; // var: { "min": 0.0, "max": 5.0, "step": 0.05, "name": "Speed", "desc": "How fast the blur waves travel across the picture", "unit": "x" }
+const float DirX = -1.0; // var: { "min": -5.0, "max": 5.0, "step": 0.1, "name": "Direction X", "desc": "Horizontal part of the wave direction (larger magnitude = denser bands horizontally)" }
+const float DirY = 1.0; // var: { "min": -5.0, "max": 5.0, "step": 0.1, "name": "Direction Y", "desc": "Vertical part of the wave direction (larger magnitude = denser bands vertically)" }
 
-const float NoiseInt = 0.1; 	//	var: { "min": 0, "max": 1.0, "step": 0.05, "desc": "The amount of noise, set to 0 to disable"}
+// --- Quality ---
+const int Samples = 50; // var: { "min": 8, "max": 100, "step": 1, "name": "Samples", "desc": "Bokeh samples per pixel: more = larger, fuller discs, but slower" }
 
-const float VingetteIntensity = 0.0;	//	var: { "min": 0, "max": 1, "step": 0.05, "name": "Vignette intensity", "desc": "The intesity of the vignette effect, set to zero to disable vignetting"}
-const float VingetteSpread = 16.0;	//	var: { "min": 10, "max": 1000, "step": 10, "name": "Vignette spread", "desc": "The spread of the vignette effect"}
-const float VingettePow = 0.5;	//	var: { "min": 0.1, "max": 10, "step": 0.1, "name": "Vignette power", "desc": "The curve of the vignetting"}
+// --- Vignette ---
+const float VingetteIntensity = 0.0; // var: { "min": 0.0, "max": 1.0, "step": 0.05, "name": "Vignette Intensity", "desc": "Darkening towards the screen edges, 0 = off" }
+const float VingetteSpread = 16.0; // var: { "min": 10.0, "max": 1000.0, "step": 10.0, "name": "Vignette Spread", "desc": "Higher = the darkening is pushed further out to the edges" }
+const float VingettePow = 0.5; // var: { "min": 0.1, "max": 10.0, "step": 0.1, "name": "Vignette Power", "desc": "Falloff curve: lower = flatter center and sharper edge" }
 
-const float TopLeftO = 1.0;	//var:	{ "min": 0, "max": 1, "step": 0.05, "name": "Top left opacity", "desc": "The opacity of the output in the top left corner"}
-const float TopRightO = 1.0;//var:{ "min": 0, "max": 1, "step": 0.05, "name": "Top right opacity", "desc": "The opacity of the output in the top right corner"}
-const float BottomRightO = 1.0;//var:{ "min": 0, "max": 1, "step": 0.05, "name": "Bottom right opacity", "desc": "The opacity of the output in the bottom right corner"}
-const float BottomLeftO = 1.0;//var:{ "min": 0, "max": 1, "step": 0.05, "name": "Bottom left opacity", "desc": "The opacity of the output in the bottom left corner"}
+// --- Corner opacity ---
+const float TopLeftO = 1.0; // var: { "min": 0.0, "max": 1.0, "step": 0.05, "name": "Top Left Opacity", "desc": "Opacity of the output in the top left corner" }
+const float TopRightO = 1.0; // var: { "min": 0.0, "max": 1.0, "step": 0.05, "name": "Top Right Opacity", "desc": "Opacity of the output in the top right corner" }
+const float BottomRightO = 1.0; // var: { "min": 0.0, "max": 1.0, "step": 0.05, "name": "Bottom Right Opacity", "desc": "Opacity of the output in the bottom right corner" }
+const float BottomLeftO = 1.0; // var: { "min": 0.0, "max": 1.0, "step": 0.05, "name": "Bottom Left Opacity", "desc": "Opacity of the output in the bottom left corner" }
 
-
-float PpRand(vec2 n) { 
-	return fract(sin(dot(n, vec2(12.9898, 4.1414))) * 43758.5453);
-}
-
-float PpNoise(vec2 n) {
-	vec2 b = floor(n), f = smoothstep(vec2(0.0), vec2(1.0), fract(n));
-	return mix(mix(PpRand(b), PpRand(b + vec2(1.0, 0.0)), f.x), mix(PpRand(b + vec2(0.0, 1.0)), PpRand(b + 1.0), f.x), f.y);
-}
-	
-float PpVingette(vec2 uv)
+// Grain, vignette and corner fades on the premultiplied color
+vec4 PostProcess(vec4 color, vec2 fragCoord, vec2 uv)
 {
-    vec2 suv = -uv * uv.yx + uv;   // MAD
-    float vig = suv.x * suv.y * VingetteSpread; //
-	if (VingettePow == 0.5)
-		return sqrt(vig) * VingetteIntensity + (1.0 - VingetteIntensity);
-	if (VingettePow == 1.0)
-		return vig * VingetteIntensity + (1.0 - VingetteIntensity);
-	if (VingettePow == 2.0)
-		return vig * vig * VingetteIntensity + (1.0 - VingetteIntensity);
-	return pow(vig, VingettePow) * VingetteIntensity + (1.0 - VingetteIntensity);
+    // Wrapped time keeps the grain hash precise in long sessions
+    color.rgb *= EwFilmGrain(fragCoord * vec2(-13.0, 17.0), mod(iTime, 64.0), 1.0, GrainAmount);
+    if (VingetteIntensity > 0.0)
+        color *= EwVignette(uv, VingetteSpread, VingettePow, VingetteIntensity);
+    color *= EwCornerOpacity(uv, vec4(BottomLeftO, BottomRightO, TopLeftO, TopRightO));
+    color.rgb = clamp(color.rgb, 0.0, color.a);
+    return color;
 }
 
-vec4 PostProcess(vec4 color, vec2 uv)
-{
-	if (NoiseInt > 0.0)
-		color.rgb *= (PpNoise(vec2(gl_FragCoord) * vec2(-13.0, 17.0) + (iTime * vec2(121.12, 1445.23))) * NoiseInt + (1.0 - NoiseInt * 0.5));
-	if (VingetteIntensity > 0.0)
-		color *= PpVingette(uv);
-	if ((TopLeftO < 1.0) || (TopRightO < 1.0) || (BottomRightO < 1.0) || (BottomLeftO < 1.0))
-		color *= clamp(mix(mix(BottomLeftO, BottomRightO, uv.x), mix(TopLeftO, TopRightO, uv.x), uv.y), 0.0, 1.0);
-	return color;
-}
-
-
-
-
-const float DirX = -1.0;//	var: {}
-const float DirY = 1.0;//	var: {}
-const float Speed = 1.0;//	var: {}
-
-const float Frequency = 0.001;//	var: {}
-const float Size = 0.4;//	var: {}
-const float Exponent = 8.0;//	var: {}
-
-const int Samples = 50;//	var: {}
-
-void mainImage( out vec4 O, vec2 I)
+// Travelling blur wave: gather a spiral disc of samples, keep the brightest
+void mainImage(out vec4 O, vec2 I)
 {
     vec2 r = iResolution.xy;
-	float rr = r.x + r.y;
-	float ii = dot(I, vec2(DirX, DirY));
-	float size = Size * rr;
-	float x = cos(iTime * Speed + ii * Frequency) * -0.5 + 0.5;
-	x = pow(x, Exponent);
-	//O = vec4(x, x, x, 1.0);
-	//return;
+    vec2 uv = I / r;
 
-	float dof = x * size;
-	
-	
-	
-	vec2 i = vec2(0.0,11.0);      // cos( t + i ) ~ vec2(cos,sin)
-	O = vec4(0.0);
-    for(int j = 0; j < Samples; ++ j)
-	{
-		vec2 dP = sin(i+i.x*1.4)/6e2 *sqrt(i.x);  // disc sampling
-		i += 1.0;
-		vec2 suv = (I+dof * dP) / r;
-        vec4 C = texture2D(tex, suv);		// Bokeh sampling of the image
-        O = max(O, C);                            // L_infinity norm
+    // Wave along the direction: 0 = sharp, 1 = full blur at the crest
+    float phase = mod(iTime * Speed, EW_TAU) + dot(I, vec2(DirX, DirY)) * WaveDensity;
+    float wave = pow(0.5 - 0.5 * cos(phase), WaveSharpness);
+    float dof = wave * BlurSize * (r.x + r.y);  // blur scale, relative to the view size
+
+    // Largest disc offset in pixels; when tiny, one fetch gives the same result
+    float maxOffset = dof * sqrt(float(Samples - 1)) / 600.0;
+    if (maxOffset < 0.002)
+    {
+        O = texture(tex, uv);
     }
-	
-    O = PostProcess(O, I / iResolution.xy);
-	
+    else
+    {
+        O = vec4(0.0);
+        vec2 i = vec2(0.0, 11.0);  // sin(i + a) = (sin a, ~cos a): a direction per sample
+        for (int j = 0; j < Samples; ++j)
+        {
+            vec2 dP = sin(i + i.x * 1.4) / 6e2 * sqrt(i.x);  // spiral disc, radius grows with sqrt
+            i += 1.0;
+            // Brightest sample (L-infinity): highlights spread into bokeh discs
+            O = max(O, texture(tex, (I + dof * dP) / r));
+        }
+    }
+
+    O.rgb *= O.a;  // straight alpha picture -> premultiplied output
+    O = PostProcess(O, I, uv);
 }

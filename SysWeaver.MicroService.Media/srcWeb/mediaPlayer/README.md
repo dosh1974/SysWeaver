@@ -39,7 +39,8 @@ The scripts are served as `mediaPlayer/*.js`. The pages in `mediaView/` include 
 | [`media_player_effect.js`](media_player_effect.js) | `MediaPlayerEffect` (renders a GLSL effect, optionally over an image texture) and `MediaPlayerImageTexture` |
 | [`media_player_image.js`](media_player_image.js) | `MediaPlayerImage` and its parameters |
 | [`media_player_video.js`](media_player_video.js) | `MediaPlayerVideo` and its parameters |
-| [`media_player_audio.js`](media_player_audio.js) | `MediaPlayerAudio` and its parameters, `MediaAudioAnalyser` and `MediaPlayerAudioTexture` (the sound as an effect texture) |
+| [`media_player_audio.js`](media_player_audio.js) | `MediaPlayerAudio` and its parameters, `MediaAudioAnalyser` and `MediaPlayerAudioTexture` (the sound as an effect texture: ShaderToy's 512 x 2, or audio2) |
+| [`media_audio2.js`](media_audio2.js) | No dependencies, shared with Effect Weaver's editor and the web pages it exports (embedded as it is). `MediaLiveAudio`: a live input (getUserMedia: microphone / line-in), ShaderToy's texture (`FillShaderToy`) and the raw analysis of audio2 (`Analyze2`). `MediaAudio2Engine`: the rich audio2 texture (the media line `//  media: audio2`), 512 x 64 RGB floats at 60 analysis steps per second of sound time (log spectrum 512 .. 1 bands, energies, pulses, level, tempo, beat phase, waveform 512 .. 1 segments, rows 32 .. 63 smoothed: see the class comment) from decoded samples (`{ Rate, Ch }`, deterministic) or a live input. Effect Weaver's server has a C# port (AudioTrack2.cs) kept identical. |
 | [`media_player_youtube.js`](media_player_youtube.js) | `MediaPlayerYoutube`: YouTube clip playback |
 | [`media_player_text.js`](media_player_text.js) | `MediaPlayerText` / `MediaPlayerTextTexture`: stylised text (single or collage), optionally with an effect |
 | [`canvasTools.js`](canvasTools.js) | `TextStyle`, `TextLinearGradient`, `TextGradientStop` and `CanvasTools`: draws styled text to a canvas |

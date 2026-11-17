@@ -643,14 +643,25 @@
             let ok = false;
             //  execCommand edits the focused element: a hidden editor (ex: of an inactive tab) can't take the focus, it is changed directly (not undoable)
             if (t.Undoable()) {
+                //  A program's edit (ex: an assistant writing the code) doesn't take the keyboard from another text field the user types in:
+                //  the focus goes back there (a textarea / input keeps its caret); from a button it stays in the editor, as before
+                const prev = document.activeElement;
+                const back = prev && prev !== ta && prev.isConnected && (prev.isContentEditable || prev.tagName === "TEXTAREA" ||
+                    (prev.tagName === "INPUT" && /^(text|search|url|email|tel|password|number|)$/i.test(prev.type || ""))) ? prev : null;
                 ta.focus({ preventScroll: true });
-                ta.setSelectionRange(start, end);
-                try {
-                    ok = text.length > 0 ? document.execCommand("insertText", false, text) : (start === end || document.execCommand("delete", false));
+                //  execCommand types into whatever has the focus: only when the editor really got it (a modal dialog's focus trap keeps it,
+                //  the text would land in the dialog's field), else the editor is changed directly (not undoable)
+                if (document.activeElement === ta) {
+                    ta.setSelectionRange(start, end);
+                    try {
+                        ok = text.length > 0 ? document.execCommand("insertText", false, text) : (start === end || document.execCommand("delete", false));
+                    }
+                    catch {
+                        ok = false;
+                    }
                 }
-                catch {
-                    ok = false;
-                }
+                if (back && document.activeElement !== back)
+                    back.focus({ preventScroll: true });
             }
             if (!ok) {
                 ta.setRangeText(text, start, end, "end");

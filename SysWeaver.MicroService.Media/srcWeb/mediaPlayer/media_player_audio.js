@@ -6,7 +6,8 @@
  * Loading: included by MediaPlayer.Init (when window.MediaLoadAll is set) or lazily by MediaPlayer.Create
  * (MediaTypes.Audio).
  * Globals defined: MediaPlayerParamsAudio, MediaPlayerAudio, MediaAudioAnalyser (the spectrum / waveform of the sound), MediaAudioSamples (its offline analysis) and
- * MediaPlayerAudioTexture (the sound as a texture of MediaPlayerEffect, ShaderToy's audio input).
+ * MediaPlayerAudioTexture (the sound as a texture of MediaPlayerEffect: ShaderToy's audio input, or the rich audio2 texture of
+ * media_audio2.js).
  * Dependencies: MediaPlayerElement and MediaPlayerTools (media_player_tools.js: the play window, volume and transport shared with
  * MediaPlayerVideo, InitBase, OnCacheComplete, waitEvent2, delay; no SysWeaver core needed).
  */
@@ -511,28 +512,42 @@ class MediaPlayerAudioTexture {
     /**
      * @param {WebGLRenderingContext|WebGL2RenderingContext} gl - Effect context.
      * @param {MediaPlayerAudio} media - The player of the sound.
+     * @param {boolean} [audio2] - The rich audio2 texture (512 x 64, MediaAudio2Engine of media_audio2.js: computed from the decoded sound
+     * at the play position, the same as Effect Weaver's editor), else ShaderToy's 512 x 2.
      */
-    constructor(gl, media) {
+    constructor(gl, media, audio2) {
         const t = this;
         t.GL = gl;
         t.Media = media;
         t.Texture = gl.createTexture();
+        t.Audio2 = !!audio2 && typeof MediaAudio2Engine !== "undefined";
         t.Width = MediaAudioAnalyser.Width;
-        t.Height = 2;
+        t.Height = t.Audio2 ? MediaAudio2Engine.H : 2;
         t.Gl2 = (typeof WebGL2RenderingContext !== "undefined") && (gl instanceof WebGL2RenderingContext);
         const size = t.Width * t.Height * 3;
         t.Data = t.Gl2 ? new Float32Array(size) : new Uint8ClampedArray(size);
+        //  (the analyser also routes the sound's volume)
         t.Analyser = media.GetAnalyser();
+        if (t.Audio2) {
+            //  The decoded sound (one per player, shared by the textures of lost / remade contexts), the engine computes from its samples
+            t.Floats = t.Gl2 ? t.Data : new Float32Array(size);
+            media.Audio2Ready = media.Audio2Ready || MediaAudioSamples.Load(media.Url).then(s => media.Audio2Engine = new MediaAudio2Engine(s), e => {
+                console.warn("Media: no audio2 analysis, " + (e && e.message ? e.message : e));
+                return null;
+            });
+            t.Step = null;
+        }
     }
 
     /** @returns {number} The sample rate of the sound (iSampleRate). */
     get SampleRate() {
-        return this.Analyser.SampleRate;
+        const e = this.Audio2 && this.Media.Audio2Engine;
+        return e ? e.Rate : this.Analyser.SampleRate;
     }
 
     /** @returns {boolean} The last upload was silence (see MediaAudioAnalyser.Quiet; MediaPlayerEffect.RenderTail). */
     get Quiet() {
-        return this.Analyser.Quiet;
+        return this.Audio2 ? false : this.Analyser.Quiet;
     }
 
     /**
@@ -542,9 +557,11 @@ class MediaPlayerAudioTexture {
     async Cache() {
         const t = this;
         const gl = t.GL;
-        //  Offline analysis: the sound is decoded first (the first frames already show it)
+        //  Offline analysis / audio2: the sound is decoded first (the first frames already show it)
         if (t.Analyser.Ready)
             await t.Analyser.Ready;
+        if (t.Audio2)
+            await t.Media.Audio2Ready;
         gl.bindTexture(gl.TEXTURE_2D, t.Texture);
         t.Upload(true);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -563,7 +580,22 @@ class MediaPlayerAudioTexture {
         const t = this;
         const gl = t.GL;
         const gl2 = t.Gl2;
-        t.Analyser.Read(t.Data, gl2 ? 1 : 255);
+        if (t.Audio2) {
+            //  audio2: one analysis step per 1/60 s of the play position (only a new step is computed / uploaded)
+            const e = t.Media.Audio2Engine;
+            const n = e ? Math.floor(Math.max(0, t.Media.GetPos() || 0) * MediaAudio2Engine.Steps) : null;
+            if (!create && n === t.Step)
+                return;
+            t.Step = n;
+            if (e) {
+                e.Fill(t.Floats, n);
+                if (!gl2)
+                    for (let i = 0; i < t.Data.length; ++i)
+                        t.Data[i] = t.Floats[i] * 255;
+            }
+        }
+        else
+            t.Analyser.Read(t.Data, gl2 ? 1 : 255);
         gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
         gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
         const type = gl2 ? gl.FLOAT : gl.UNSIGNED_BYTE;
@@ -585,7 +617,7 @@ class MediaPlayerAudioTexture {
     }
 
     /**
-     * Binds the texture; texUv = (1, 1, 0, 0) (no flip), texSize = 512 x 2.
+     * Binds the texture; texUv = (1, 1, 0, 0) (no flip), texSize = 512 x 2 (audio2: 512 x 64).
      * @param {WebGLUniformLocation|null} uvScaleAndOffset - texUv uniform.
      * @param {WebGLUniformLocation|null} texSize - texSize uniform.
      * @returns {void}

@@ -1,3 +1,13 @@
+//	Scroll - a row of the user's pictures gliding along the top edge of the screen,
+//	with a soft drop shadow and a rippling, tinted water reflection below.
+//	Transparent output: made as an overlay / web page header over other content.
+//
+//	Live controls:
+//  iMouse.x = Reflection | Brightness of the water reflection | 0.2 | 0.0 .. 1.0 | {0:2}
+//  iMouse.y = Ripples | Strength of the reflection / shadow ripples | 0.25 | 0.0 .. 4.0 | {0:2}x
+//  iMouse.z = Size | Picture size (zoom of the strip) | 0.25 | 0.5 .. 2.5 | {0:2}x
+//  iMouse.w = Spacing | Gap between the pictures (share of a picture width) | 0.2 | 0.0 .. 1.0 | {0:2}
+
 precision highp float;
 
 uniform sampler2D tex;
@@ -7,8 +17,9 @@ uniform float time;
 uniform vec2 resolution;
 uniform vec2 mouse;
 uniform vec4 scroll;
+uniform vec4 iMouse;	// live parameters (each 0..1)
 
-//	Texture props
+//	Texture props (atlas layout, written by the editor from the user's pictures)
 const float TileCountX = 6.0;         //var:
 const float TileCountY = 9.0;         //var:
 const float TileWidth = 168.0;        //var:
@@ -16,46 +27,51 @@ const float TileHeight = 98.0;        //var:
 const float ImageWidth = 160.0;        //var:
 const float ImageHeight = 90.0;        //var:
 
-//	Effect
-const float ReflectionStretch = 1.25; //var:
-const float ScrollSpeed = 0.5;        //var:
-const float ReflectionIntensity = 0.2; //var:
-const float Size = 1.0;  // var:
-const float Spacing = 0.2; 	// var:
+// --- Live controls ---
+#define ReflectionIntensity mix(0.0, 1.0, iMouse.x)
+#define WaveAmplitude mix(0.0, 4.0, iMouse.y)
+#define Size mix(0.5, 2.5, iMouse.z)
+#define Spacing mix(0.0, 1.0, iMouse.w)
 
-const float ShadowIntTop = 0.01; // var:
-const float ShadowIntBottom = 0.25; // var:
+// --- Colors ---
+const vec3 ReflectionTint = vec3(0.8, 0.9, 1.0); // var: { "type": "col", "name": "Reflection Tint", "desc": "Color filter of the water reflection (cool blue by default)" }
+const vec3 ShadowColor = vec3(0.01, 0.02, 0.03); // var: { "type": "col", "name": "Shadow Color", "desc": "Color of the drop shadow behind the pictures" }
 
-//	Animation (wave)
-const float WaveAmplitude = 1.0;// var:
-const float WaveSpeed = 1.0;// var:
-const float WaveFrequency = 1.0; // var:
-const float WaveHeight = 1.0; // var:
+// --- Motion ---
+const float ScrollSpeed = 0.5; // var: { "min": -2.0, "max": 2.0, "step": 0.05, "name": "Scroll Speed", "desc": "Pictures per second the strip slides (negative: to the right)", "unit": "pic/s" }
 
-//	Animation (scroll)
-const float MouseSpeedX = 0.0; //var:
-const float MouseSpeedY = 0.0; //var:
+// --- Reflection & shadow ---
+const float ReflectionStretch = 1.25; // var: { "min": 0.25, "max": 3.0, "step": 0.05, "name": "Reflection Length", "desc": "Height of the reflection relative to a picture", "unit": "x" }
+const float ShadowIntBottom = 0.25; // var: { "min": 0.0, "max": 1.0, "step": 0.01, "name": "Shadow Bottom", "desc": "Shadow opacity at the lower edge of the pictures" }
+const float ShadowIntTop = 0.01; // var: { "min": 0.0, "max": 0.1, "step": 0.005, "name": "Shadow Top", "desc": "Shadow opacity in the middle of the pictures" }
 
-const float ScrollSpeedX = 0.0; //var:
-const float ScrollSpeedY = 0.0; //var:
+// --- Ripples ---
+const float WaveSpeed = 1.0; // var: { "min": 0.0, "max": 5.0, "step": 0.05, "name": "Ripple Speed", "desc": "How fast the ripples move", "unit": "x" }
+const float WaveFrequency = 1.0; // var: { "min": 0.1, "max": 5.0, "step": 0.05, "name": "Ripple Frequency", "desc": "Number of ripples down the reflection", "unit": "x" }
+const float WaveHeight = 1.0; // var: { "min": 0.0, "max": 5.0, "step": 0.05, "name": "Ripple Detail", "desc": "Horizontal variation of the ripples (0 = straight bands)", "unit": "x" }
 
-const float ScrollSpeedRX = 0.0; //var:
-const float ScrollSpeedRY = 0.0; //var:
+// --- Vignette ---
+const float VingetteInt = 20.0; // var: { "min": 0.0, "max": 100.0, "step": 1.0, "name": "Edge Fade", "desc": "Fade toward the left / right screen edges (0 = off, higher = sharper edges)" }
+const float VingettePow = 1.0; // var: { "min": 0.25, "max": 4.0, "step": 0.05, "name": "Edge Fade Curve", "desc": "Shape of the edge fade (higher = softer, wider)" }
 
-//	Post processing
-const float VingetteInt = 20.0; // var:
-const float VingettePow = 1.0; // var:
-
+// --- Page scroll / pointer coupling ---
+const float MouseSpeedX = 0.0; // var: { "min": -1.0, "max": 1.0, "step": 0.01, "name": "Pointer X Shift", "desc": "Strip follows the horizontal pointer position" }
+const float MouseSpeedY = 0.0; // var: { "min": -1.0, "max": 1.0, "step": 0.01, "name": "Pointer Y Shift", "desc": "Strip follows the vertical pointer position" }
+const float ScrollSpeedX = 0.0; // var: { "min": -1.0, "max": 1.0, "step": 0.01, "name": "Page Scroll X", "desc": "Strip moves with the horizontal page scroll" }
+const float ScrollSpeedY = 0.0; // var: { "min": -1.0, "max": 1.0, "step": 0.01, "name": "Page Scroll Y", "desc": "Strip moves with the vertical page scroll" }
+const float ScrollSpeedRX = 0.0; // var: { "min": -1.0, "max": 1.0, "step": 0.01, "name": "Relative Scroll X", "desc": "Strip moves with the relative horizontal page scroll" }
+const float ScrollSpeedRY = 0.0; // var: { "min": -1.0, "max": 1.0, "step": 0.01, "name": "Relative Scroll Y", "desc": "Strip moves with the relative vertical page scroll" }
 
 //	Computed
-const float SpaceScale = 1.0 + max(0.0, Spacing);
-const float SpacedScaledHeight = TileHeight / SpaceScale;
-const float SizeScale = 1.0 / (Size * SpaceScale);
+#define SpaceScale (1.0 + max(0.0, Spacing))
+#define SpacedScaledHeight (TileHeight / SpaceScale)
+#define SizeScale (1.0 / (Size * SpaceScale))
 
+//	Horizontal edge fade: 0 at the screen edges, u in [0, 1] across the screen
 float Vingette(float u)
 {
 	u = -u * u + u;
-    float vig = u * u * VingetteInt; //
+    float vig = u * u * VingetteInt;
 	if (VingettePow == 0.5)
 		return sqrt(vig);
 	if (VingettePow == 1.0)
@@ -65,11 +81,13 @@ float Vingette(float u)
 	return pow(vig, VingettePow);
 }
 
+//	Premultiplied atlas sample: integer part of imageIndex = picture, fraction = u inside it
+//	(stretched by the spacing so the gap reads the transparent border), dv = v (0 top)
 vec4 SampleImage(float imageIndex, float dv)
 {
 	float du = fract(imageIndex);
 	if (SpaceScale > 1.0)
-		du = clamp(0.0, 1.0, du * SpaceScale);
+		du = clamp(du * SpaceScale, 0.0, 1.0);
 	imageIndex = floor(imageIndex);
 	float imageU = (mod(imageIndex, TileCountX) + du) / TileCountX;
 	float imageV = fract((floor(imageIndex / TileCountX)+ dv) / -TileCountY);
@@ -81,9 +99,10 @@ vec4 SampleImage(float imageIndex, float dv)
 
 void main(void)
 {
+	//	Strip space: pixels scaled by size and spacing, y measured down from the top edge
     vec2 fragCoord = gl_FragCoord.xy * SizeScale;
     float y = resolution.y * SizeScale - fragCoord.y;
-	//	Animation (scroll)
+	//	Animation (scroll): position along the strip in pictures
     float imageIndex = fragCoord.x * (1.0 / TileWidth); 
 	if (ScrollSpeed != 0.0)
 		imageIndex += time * (ScrollSpeed);
@@ -101,12 +120,14 @@ void main(void)
 		imageIndex += scroll.w * ScrollSpeedRY;
 
 
-	float dx = gl_FragCoord.x / resolution.x;
+	float dx = gl_FragCoord.x / resolution.x;	// 0..1 across the screen (edge fade, shadow skew)
 
     vec4 color = vec4(0.0, 0.0, 0.0, 0.0);
     if (y < SpacedScaledHeight)
     {
+		//	Picture row at the top, with a skewed, rippled drop shadow in its lower half
         float dv = y / SpacedScaledHeight;
+		color = SampleImage(imageIndex, dv);
 		color = SampleImage(imageIndex, dv);
 		
 		if ((ShadowIntBottom > 0.0) || (ShadowIntTop > 0.0))
@@ -115,7 +136,7 @@ void main(void)
 			{
 				float shadowShift = dx * 1.0 + 0.25;
 				imageIndex += dv * shadowShift - shadowShift;
-				dv = clamp(0.0, 1.0, dv * 2.0 - 1.0);
+				dv = clamp(dv * 2.0 - 1.0, 0.0, 1.0);
 				
 				if (WaveAmplitude > 0.0)
 				{
@@ -128,7 +149,7 @@ void main(void)
 				}
 				vec4 shadow = SampleImage(imageIndex, dv);
 				shadow *= mix(ShadowIntTop, ShadowIntBottom, dv);
-				shadow.rgb = vec3(0.01, 0.02, 0.03) * shadow.a;
+				shadow.rgb = ShadowColor * shadow.a;	// premultiplied shadow color
 				color += (shadow * -color.a + shadow);
 			}
 		}
@@ -150,8 +171,8 @@ void main(void)
 			}
 			dv = 1.0 - dv;
 			color = SampleImage(imageIndex, dv);
-            color *= vec4(0.8 * ReflectionIntensity, 0.9 * ReflectionIntensity, 1.0 * ReflectionIntensity, ReflectionIntensity);
-            color *= dv;
+            color *= vec4(ReflectionTint * ReflectionIntensity, ReflectionIntensity);	// tinted, faded mirror image
+            color *= dv;	// fade out away from the pictures
 
 
         }
@@ -161,4 +182,3 @@ void main(void)
     
 	gl_FragColor = color;
 }
-

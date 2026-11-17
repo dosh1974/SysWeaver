@@ -1,4 +1,4 @@
-﻿uniform float time;
+uniform float time;
 uniform vec2 resolution;
 
 uniform sampler2D tex;
@@ -8,15 +8,41 @@ uniform sampler2D tex;
 #define iChannel0 tex
 #define texture texture2D
 
+// =============================================================================
+//  Distorted TV - a picture on a failing analog television
+// =============================================================================
+//  Shows the chosen image as a badly tuned CRT signal: sideways wobble per row,
+//  red / blue color fringes, scanlines, sparse white static specks and a picture
+//  that now and then rolls or jumps vertically.
+//
+//  Live controls:
+//  iMouse.x = RGB Split | Sideways shift of the red / blue fringes | 0.5 | 0.0 .. 0.02
+//  iMouse.y = Static | Strength of the white static specks | 0.5 | 0.0 .. 2.0 | x
+//  iMouse.z = Wobble | Sideways row fuzz / wave distortion | 0.5 | 0.0 .. 2.0 | x
+//  iMouse.w = Scanlines | Darkness of the scanline rows | 0.5 | 0.0 .. 0.08
+// =============================================================================
 
-// change these values to 0.0 to turn off individual effects
-float vertJerkOpt = 1.0;
-float vertMovementOpt = 1.0;
-float bottomStaticOpt = 1.0;
-float scalinesOpt = 1.0;
-float rgbOffsetOpt = 1.0;
-float horzFuzzOpt = 1.0;
+#define RgbSplit         mix(0.0, 0.02, iMouse.x)
+#define StaticAmount     mix(0.0, 2.0, iMouse.y)
+#define HorzFuzz         mix(0.0, 2.0, iMouse.z)
+#define ScanlineStrength mix(0.0, 0.08, iMouse.w)
 
+// --- Motion ---
+const float Speed = 1.0; // var: { "min": 0.0, "max": 3.0, "step": 0.05, "name": "Speed", "desc": "Speed of all glitches (wobble, rolls, static)", "unit": "x" }
+const float VertRoll = 1.0; // var: { "min": 0.0, "max": 1.0, "step": 0.05, "name": "Vertical Roll", "desc": "Amount of the occasional rolling scroll (0 = off)", "scale": 100, "unit": "%" }
+const float VertJerk = 1.0; // var: { "min": 0.0, "max": 1.0, "step": 0.05, "name": "Vertical Jumps", "desc": "Amount of short vertical jumps (0 = off)", "scale": 100, "unit": "%" }
+const float RollDistance = 4.0; // var: { "min": 0.0, "max": 8.0, "step": 0.1, "name": "Roll Distance", "desc": "How far the picture scrolls during a roll", "unit": "screens" }
+const float JerkDistance = 0.3; // var: { "min": 0.0, "max": 1.0, "step": 0.01, "name": "Jump Distance", "desc": "Height of a vertical jump", "scale": 100, "unit": "% screen" }
+
+// --- Static ---
+const float StaticCutoff = 0.3; // var: { "min": 0.0, "max": 0.8, "step": 0.01, "name": "Static Sparsity", "desc": "Higher = fewer static specks, lower = denser snow" }
+
+// --- Scanlines ---
+const float ScanlineDensity = 800.0; // var: { "min": 200.0, "max": 2000.0, "step": 10.0, "name": "Scanline Density", "desc": "Frequency of the scanline rows (higher = finer lines)" }
+
+// --- Wobble detail ---
+const float FuzzFineScale = 80.0; // var: { "min": 10.0, "max": 200.0, "step": 1.0, "name": "Fine Fuzz Scale", "desc": "Row density of the fast fine jitter" }
+const float FuzzWideScale = 25.0; // var: { "min": 2.0, "max": 80.0, "step": 1.0, "name": "Wide Wave Scale", "desc": "Row density of the slow wide waves" }
 // Noise generation functions borrowed from: 
 // https://github.com/ashima/webgl-noise/blob/master/src/noise2D.glsl
 
@@ -83,52 +109,55 @@ float snoise(vec2 v)
   return 130.0 * dot(m, g);
 }
 
-float staticV(vec2 uv) {
-    float staticHeight = snoise(vec2(9.0,iTime*1.2+3.0))*0.3+5.0;
-    float staticAmount = snoise(vec2(1.0,iTime*1.2-6.0))*0.1+0.3;
-    float staticStrength = snoise(vec2(-9.75,iTime*0.6-3.0))*2.0+2.0;
-	return (1.0-step(snoise(vec2(5.0*pow(iTime,2.0)+pow(uv.x*7.0,1.2),pow((mod(iTime,100.0)+100.0)*uv.y*0.3+3.0,staticHeight))),staticAmount))*staticStrength;
+// Bright static specks of one row: a noise band that drifts through the picture,
+// thresholded to sparse white flecks; height, coverage and strength wander over time.
+float staticV(vec2 uv, float t) {
+    float staticHeight = snoise(vec2(9.0, t * 1.2 + 3.0)) * 0.3 + 5.0;
+    float staticAmount = snoise(vec2(1.0, t * 1.2 - 6.0)) * 0.1 + StaticCutoff;
+    float staticStrength = snoise(vec2(-9.75, t * 0.6 - 3.0)) * 2.0 + 2.0;
+    // pow(t, 2.0) as in the original (t >= 0); the band position grows with t * t
+    return (1.0 - step(snoise(vec2(5.0 * pow(t, 2.0) + pow(uv.x * 7.0, 1.2),
+                                   pow((mod(t, 100.0) + 100.0) * uv.y * 0.3 + 3.0, staticHeight))),
+                       staticAmount)) * staticStrength;
 }
 
 
 void mainImage( out vec4 fragColor, in vec2 fragCoord )
 {
+    vec2 uv = fragCoord.xy / iResolution.xy;
+    float t = iTime * Speed;
 
-	vec2 uv =  fragCoord.xy/iResolution.xy;
-	
-	float jerkOffset = (1.0-step(snoise(vec2(iTime*1.3,5.0)),0.8))*0.05;
-	
-	float fuzzOffset = snoise(vec2(iTime*15.0,uv.y*80.0))*0.003;
-	float largeFuzzOffset = snoise(vec2(iTime*1.0,uv.y*25.0))*0.004;
-    
-    float vertMovementOn = (1.0-step(snoise(vec2(iTime*0.2,8.0)),0.4))*vertMovementOpt;
-    float vertJerk = (1.0-step(snoise(vec2(iTime*1.5,5.0)),0.6))*vertJerkOpt;
-    float vertJerk2 = (1.0-step(snoise(vec2(iTime*5.5,5.0)),0.2))*vertJerkOpt;
-    float yOffset = abs(sin(iTime)*4.0)*vertMovementOn+vertJerk*vertJerk2*0.3;
-    float y = mod(uv.y+yOffset,1.0);
-    
-	
-	float xOffset = (fuzzOffset + largeFuzzOffset) * horzFuzzOpt;
-    
+    // Horizontal wobble: fast fine fuzz + slower wide waves, per picture row
+    float fuzzOffset = snoise(vec2(t * 15.0, uv.y * FuzzFineScale)) * 0.003;
+    float largeFuzzOffset = snoise(vec2(t * 1.0, uv.y * FuzzWideScale)) * 0.004;
+    float xOffset = (fuzzOffset + largeFuzzOffset) * HorzFuzz;
+
+    // Vertical roll: random noise gates switch a rolling scroll and short jumps on / off
+    float vertMovementOn = (1.0 - step(snoise(vec2(t * 0.2, 8.0)), 0.4)) * VertRoll;
+    float vertJerk = (1.0 - step(snoise(vec2(t * 1.5, 5.0)), 0.6)) * VertJerk;
+    float vertJerk2 = (1.0 - step(snoise(vec2(t * 5.5, 5.0)), 0.2)) * VertJerk;
+    float yOffset = abs(sin(t) * RollDistance) * vertMovementOn + vertJerk * vertJerk2 * JerkDistance;
+    float y = mod(uv.y + yOffset, 1.0);
+
+    // Static: 3 rows blended with a tent weight for slightly soft streaks
     float staticVal = 0.0;
-   
-    for (float y = -1.0; y <= 1.0; y += 1.0) {
-        float maxDist = 5.0/200.0;
-        float dist = y/200.0;
-    	staticVal += staticV(vec2(uv.x,uv.y+dist))*(maxDist-abs(dist))*1.5;
+    for (float sy = -1.0; sy <= 1.0; sy += 1.0) {
+        float maxDist = 5.0 / 200.0;
+        float dist = sy / 200.0;
+        staticVal += staticV(vec2(uv.x, uv.y + dist), t) * (maxDist - abs(dist)) * 1.5;
     }
-        
-    staticVal *= bottomStaticOpt;
-	
-    vec4 image = texture(	iChannel0, 	vec2(uv.x + xOffset,	  y));
-	float red 	=   texture(	iChannel0, 	vec2(uv.x + xOffset -0.01*rgbOffsetOpt,y)).r+staticVal;
-	float green = 	image.g+staticVal;
-	float blue 	=	texture(	iChannel0, 	vec2(uv.x + xOffset +0.01*rgbOffsetOpt,y)).b+staticVal;
-	
-	vec3 color = vec3(red,green,blue);
-	float scanline = sin(uv.y*800.0)*0.04*scalinesOpt;
-	color -= scanline;
-	
+    staticVal *= StaticAmount;
 
-	fragColor = vec4(color * image.w, image.w);
+    // Picture with red / blue fringes shifted sideways (chromatic split)
+    vec4 image = texture(iChannel0, vec2(uv.x + xOffset, y));
+    float red   = texture(iChannel0, vec2(uv.x + xOffset - RgbSplit, y)).r + staticVal;
+    float green = image.g + staticVal;
+    float blue  = texture(iChannel0, vec2(uv.x + xOffset + RgbSplit, y)).b + staticVal;
+
+    // Scanlines darken / brighten fixed rows
+    vec3 color = vec3(red, green, blue);
+    color -= sin(uv.y * ScanlineDensity) * ScanlineStrength;
+
+    // Premultiplied alpha (transparent pictures stay transparent)
+    fragColor = vec4(color * image.w, image.w);
 }

@@ -89,7 +89,7 @@ class MediaPlayer {
     static #Needs = {
         0: { Files: ["media_player_image.js"], Classes: ["MediaPlayerImage"] },
         1: { Files: ["media_player_video.js"], Classes: ["MediaPlayerVideo"] },
-        2: { Files: ["media_player_audio.js"], Classes: ["MediaPlayerAudio"] },
+        2: { Files: ["media_audio2.js", "media_player_audio.js"], Classes: ["MediaPlayerAudio"] },
         3: { Files: ["media_player_youtube.js"], Classes: ["MediaPlayerYoutube"] },
         4: { Files: ["media_player_effect.js", "media_effect_program.js"], Classes: ["MediaPlayerEffect", "EffectProgramData"] },
         5: { Files: ["media_player_text.js"], Classes: ["MediaPlayerText"] },
@@ -97,7 +97,7 @@ class MediaPlayer {
         "0Fx": { Files: ["media_player_effect.js", "media_effect_program.js", "media_player_image.js"], Classes: ["MediaPlayerEffect", "EffectProgramData", "MediaPlayerImage"] },
         "5Fx": { Files: ["media_player_effect.js", "media_effect_program.js", "media_player_text.js"], Classes: ["MediaPlayerEffect", "EffectProgramData", "MediaPlayerText"] },
         //  A sound with an effect, or an effect with a sound as its texture (MediaPlayerAudioTexture)
-        "2Fx": { Files: ["media_player_effect.js", "media_effect_program.js", "media_player_audio.js"], Classes: ["MediaPlayerEffect", "EffectProgramData", "MediaPlayerAudio"] },
+        "2Fx": { Files: ["media_player_effect.js", "media_effect_program.js", "media_audio2.js", "media_player_audio.js"], Classes: ["MediaPlayerEffect", "EffectProgramData", "MediaPlayerAudio"] },
     };
 
     /**
@@ -122,10 +122,10 @@ class MediaPlayer {
     /**
      * The media line of an effect (Effect Weaver's media effects, a comment line in the shader): "//  media: image stock:a.png",
      * "//  media: audio https://example.com/song.mp3", "//  media: collage stock:a.png my:b.jpg"; a line without references uses the
-     * defaults of its kind (the server's).
+     * defaults of its kind (the server's). "audio2": a sound with the rich 512 x 64 audio texture (MediaAudio2Engine, media_audio2.js).
      * @type {RegExp}
      */
-    static MediaLineRx = /^[ \t]*\/\/[ \t]*media[ \t]*:[ \t]*(image|audio|collage)\b([^\r\n]*)$/im;
+    static MediaLineRx = /^[ \t]*\/\/[ \t]*media[ \t]*:[ \t]*(image|audio2|audio|collage)\b([^\r\n]*)$/im;
 
     /**
      * The media line of an effect source.
@@ -180,7 +180,9 @@ class MediaPlayer {
             return mediaParams;
         const p = mediaParams || {};
         Object.defineProperty(p, "LineTexture", { value: urls[0], enumerable: false, configurable: true, writable: true });
-        Object.defineProperty(p, "LineTextureAudio", { value: line.Kind === "audio", enumerable: false, configurable: true, writable: true });
+        Object.defineProperty(p, "LineTextureAudio", { value: line.Kind === "audio" || line.Kind === "audio2", enumerable: false, configurable: true, writable: true });
+        //  (audio2: the rich 512 x 64 audio texture, MediaAudio2Engine)
+        Object.defineProperty(p, "LineTextureAudio2", { value: line.Kind === "audio2", enumerable: false, configurable: true, writable: true });
         return p;
     }
 
@@ -194,7 +196,7 @@ class MediaPlayer {
             return null;
         if (mediaParams.Texture)
             return { Url: mediaParams.Texture, Audio: MediaPlayer.IsAudioUrl(mediaParams.Texture) };
-        return mediaParams.LineTexture ? { Url: mediaParams.LineTexture, Audio: !!mediaParams.LineTextureAudio || MediaPlayer.IsAudioUrl(mediaParams.LineTexture) } : null;
+        return mediaParams.LineTexture ? { Url: mediaParams.LineTexture, Audio: !!mediaParams.LineTextureAudio || MediaPlayer.IsAudioUrl(mediaParams.LineTexture), Audio2: !!mediaParams.LineTextureAudio2 } : null;
     }
 
     /**
@@ -264,6 +266,7 @@ class MediaPlayer {
             await MediaPlayer.IncludeAll([
                 "media_effect_program.js",
                 "media_player_image.js",
+                "media_audio2.js",
                 "media_player_audio.js",
                 "media_player_video.js",
                 "media_player_youtube.js",
@@ -326,7 +329,7 @@ class MediaPlayer {
                 const tex = MediaPlayer.#TextureOf(mediaParams);
                 const tx = tex ? tex.Url : null;
                 if (tex && tex.Audio)
-                    return MediaPlayer.#WithSound(data, mediaParams, tx, null);
+                    return MediaPlayer.#WithSound(data, mediaParams, tx, null, !!tex.Audio2);
                 if (tx)
                     return new MediaPlayerEffect(data, mediaParams, gl => new MediaPlayerImageTexture(gl, { EffectSizeFromImage: false, EffectParams: mediaParams }, tx));
                 return new MediaPlayerEffect(data, mediaParams);
@@ -361,9 +364,9 @@ class MediaPlayer {
      * @param {object|null} soundParams The audio params (MediaPlayerParamsAudio: Volume, StartAt, EndAt), null = defaults.
      * @returns {MediaPlayerEffect} The player.
      */
-    static #WithSound(effect, effectParams, sound, soundParams) {
+    static #WithSound(effect, effectParams, sound, soundParams, audio2) {
         const media = new MediaPlayerAudio(sound, soundParams);
-        return new MediaPlayerEffect(effect, effectParams, gl => new MediaPlayerAudioTexture(gl, media), media);
+        return new MediaPlayerEffect(effect, effectParams, gl => new MediaPlayerAudioTexture(gl, media, !!audio2), media);
     }
 
     /**

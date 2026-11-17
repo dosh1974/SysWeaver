@@ -424,10 +424,11 @@ Media-View.MediaChrome,
     transition: opacity var(--sw-dur-2, 200ms) ease;
 }
 
+    /* (keyboard focus keeps a bar, like the auto hide's mustStay: a button the mouse clicked, ex: Full screen, keeps the focus but not the bar) */
     .MediaChromeOn .media-chrome-part,
     .MediaPaused:not(.MediaChromeFresh):not(.MediaPointerOut) .media-chrome-part,
     .MediaAudioOnly .media-chrome-part,
-    .media-chrome-part:focus-within {
+    .media-chrome-part:has(:focus-visible) {
         opacity: 1;
         pointer-events: auto;
     }

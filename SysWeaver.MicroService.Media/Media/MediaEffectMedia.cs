@@ -6,7 +6,8 @@ namespace SysWeaver.MicroService.Media
 {
     /// <summary>
     /// The media line of an effect (Effect Weaver's media effects): <c>//  media: &lt;kind&gt; &lt;refs&gt;</c> in the shader, kind "image" (a picture),
-    /// "audio" (a sound: it plays with the effect and is its audio texture) or "collage" (several pictures). The media player reads it when
+    /// "audio" (a sound: it plays with the effect and is its audio texture), "audio2" (the same with the rich 512 x 64 audio texture,
+    /// mediaPlayer/media_audio2.js) or "collage" (several pictures). The media player reads it when
     /// the effect's settings name no Texture; references that aren't urls (ex: Effect Weaver's "stock:file", "my:file") and a line without
     /// references (the defaults of the kind) are resolved by the server (<see cref="MediaService.ResolveEffectMedia"/>).
     /// </summary>
