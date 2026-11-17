@@ -4,6 +4,43 @@
         <name>SysWeaver.FolderSync</name>
     </assembly>
     <members>
+        <member name="T:SysWeaver.FolderSync.FolderSyncer">
+            <summary>
+            Synchronizes a local folder with a folder on a server (pushes to a managed folder, or pulls a shared folder)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.FolderSync.FolderSyncer.#ctor(SysWeaver.FolderSync.FolderSyncerParams)">
+            <summary>
+            Create a syncer that connects to a server
+            </summary>
+            <param name="p">The server, credentials and other settings</param>
+        </member>
+        <member name="F:SysWeaver.FolderSync.FolderSyncer.TimeFmt">
+            <summary>
+            The format of the time stamp that is added to the name of a backup folder
+            </summary>
+        </member>
+        <member name="M:SysWeaver.FolderSync.FolderSyncer.GetBakName(System.String)">
+            <summary>
+            Get the name to use for a backup of a folder
+            </summary>
+            <param name="folder">The folder to back up</param>
+            <returns>The folder name followed by "_" and the last write time (UTC, formatted using <see cref="F:SysWeaver.FolderSync.FolderSyncer.TimeFmt"/>)</returns>
+        </member>
+        <member name="M:SysWeaver.FolderSync.FolderSyncer.ComputeCombinedHash(System.Collections.Generic.IList{System.String},System.Collections.Generic.IList{System.String})">
+            <summary>
+            Compute a combined hash (the version) of the files of a folder.
+            The manifest file is ignored, the lists are compacted in place (the ignored entries are overwritten).
+            </summary>
+            <param name="fileNames">The file names (modified: ignored entries are removed by moving the later entries up, the list is not shortened)</param>
+            <param name="hashStrings">The hash string of each file (modified in the same way as the file names)</param>
+            <returns>The hash as a hex string, "Empty" if there are no files</returns>
+        </member>
+        <member name="P:SysWeaver.FolderSync.FolderSyncer.RemoteConnection">
+            <summary>
+            The remote api connection to the server
+            </summary>
+        </member>
         <member name="P:SysWeaver.FolderSync.FolderSyncer.Client">
             <summary>
             The http client (with credentials) used to make requests
@@ -58,24 +95,39 @@
             <returns>Sync results</returns>
             <exception cref="T:System.Exception"></exception>
         </member>
+        <member name="M:SysWeaver.FolderSync.FolderSyncer.Dispose">
+            <inheritdoc />
+        </member>
+        <member name="T:SysWeaver.FolderSync.FolderSyncerParams">
+            <summary>
+            Parameters for the <see cref="T:SysWeaver.FolderSync.FolderSyncer"/>
+            </summary>
+        </member>
         <member name="F:SysWeaver.FolderSync.FolderSyncerParams.Server">
             <summary>
-            Server address
+            Server address (base url)
             </summary>
         </member>
         <member name="F:SysWeaver.FolderSync.FolderSyncerParams.IgnoreCertErrors">
             <summary>
             If true, any bad server certificates are accepted.. NOT RECOMMENDED!
+            Defaults to false.
             </summary>
         </member>
         <member name="F:SysWeaver.FolderSync.FolderSyncerParams.MaxConcurrency">
             <summary>
-            The maximum concurrency to use, zero or negative is based on the number of hardware threads
+            The maximum concurrency to use, zero or negative is relative to the number of hardware threads (ex: -1 is one less than the number of processors, at least 1).
+            Defaults to -1.
             </summary>
         </member>
         <member name="F:SysWeaver.FolderSync.FolderSyncerParams.Comment">
             <summary>
             An optional comment
+            </summary>
+        </member>
+        <member name="T:SysWeaver.FolderSync.FolderSyncEvents">
+            <summary>
+            The events that are reported while a folder is synchronized
             </summary>
         </member>
         <member name="F:SysWeaver.FolderSync.FolderSyncEvents.Hashed">
@@ -98,6 +150,14 @@
             Called when a file have been uploaded
             </summary>
         </member>
+        <member name="T:SysWeaver.FolderSync.FolderSyncFile">
+            <summary>
+            Information about a file of a folder that is synchronized
+            </summary>
+        </member>
+        <member name="M:SysWeaver.FolderSync.FolderSyncFile.ToString">
+            <inheritdoc />
+        </member>
         <member name="F:SysWeaver.FolderSync.FolderSyncFile.Name">
             <summary>
             Name of the file (locally within the source folder)
@@ -110,7 +170,12 @@
         </member>
         <member name="F:SysWeaver.FolderSync.FolderSyncFile.LastModified">
             <summary>
-            Numer of milliseconds since the Unix epoch
+            When the file was last modified
+            </summary>
+        </member>
+        <member name="T:SysWeaver.FolderSync.FolderSyncOperation">
+            <summary>
+            Identifies a folder that an operation (ex: activating a version) is done on
             </summary>
         </member>
         <member name="F:SysWeaver.FolderSync.FolderSyncOperation.Folder">
@@ -121,6 +186,11 @@
         <member name="F:SysWeaver.FolderSync.FolderSyncOperation.DiscFolder">
             <summary>
             The name of the folder on disc
+            </summary>
+        </member>
+        <member name="T:SysWeaver.FolderSync.FolderSyncRequestAudit">
+            <summary>
+            The audit information of a request to sync a managed folder
             </summary>
         </member>
         <member name="F:SysWeaver.FolderSync.FolderSyncRequestAudit.Folder">
@@ -148,6 +218,11 @@
             An optional comment
             </summary>
         </member>
+        <member name="T:SysWeaver.FolderSync.FolderSyncResponseAudit">
+            <summary>
+            The audit information of the response to a request to sync a managed folder
+            </summary>
+        </member>
         <member name="F:SysWeaver.FolderSync.FolderSyncResponseAudit.FolderCode">
             <summary>
             The code to use when uploading files
@@ -161,6 +236,11 @@
         <member name="F:SysWeaver.FolderSync.FolderSyncResponseAudit.Cdc">
             <summary>
             If non-null and the CdcProps.Default.Key matches this string, prefer to use Cdc for upload
+            </summary>
+        </member>
+        <member name="T:SysWeaver.FolderSync.FolderSyncResult">
+            <summary>
+            The result of a folder synchronization
             </summary>
         </member>
         <member name="F:SysWeaver.FolderSync.FolderSyncResult.SourceFiles">
@@ -208,9 +288,19 @@
             List of errors
             </summary>
         </member>
+        <member name="T:SysWeaver.FolderSync.FolderPullSyncResult">
+            <summary>
+            The result of pulling (downloading) a shared folder
+            </summary>
+        </member>
         <member name="F:SysWeaver.FolderSync.FolderPullSyncResult.Version">
             <summary>
             Version string
+            </summary>
+        </member>
+        <member name="T:SysWeaver.FolderSync.IFolderSyncApi">
+            <summary>
+            The json api of the folder sync server
             </summary>
         </member>
         <member name="M:SysWeaver.FolderSync.IFolderSyncApi.CheckManagedFolder(SysWeaver.FolderSync.ManagedFolderSyncRequest)">
@@ -260,6 +350,11 @@
             <param name="chunkHashes">Array of hashes that we want the data for</param>
             <returns>Data for the compressed chunks</returns>
         </member>
+        <member name="T:SysWeaver.FolderSync.LocalFolderInfo">
+            <summary>
+            The files of a local folder (sent when checking for updates of a shared folder)
+            </summary>
+        </member>
         <member name="F:SysWeaver.FolderSync.LocalFolderInfo.Folder">
             <summary>
             The folder
@@ -275,6 +370,11 @@
             Populate with CdcProps.Default.Key if Cdc is requested
             </summary>
         </member>
+        <member name="T:SysWeaver.FolderSync.ManagedFolderDiff">
+            <summary>
+            The changes required to sync a managed folder
+            </summary>
+        </member>
         <member name="F:SysWeaver.FolderSync.ManagedFolderDiff.FolderCode">
             <summary>
             The code to use when uploading files
@@ -288,6 +388,11 @@
         <member name="F:SysWeaver.FolderSync.ManagedFolderDiff.Cdc">
             <summary>
             If non-null and the CdcProps.Default.Key matches this string, prefer to use Cdc for upload
+            </summary>
+        </member>
+        <member name="T:SysWeaver.FolderSync.ManagedFolderSyncRequest">
+            <summary>
+            A request to check what is required to sync a managed folder
             </summary>
         </member>
         <member name="F:SysWeaver.FolderSync.ManagedFolderSyncRequest.Folder">
@@ -320,6 +425,11 @@
             An optional comment
             </summary>
         </member>
+        <member name="T:SysWeaver.FolderSync.SharedFileChunksRequest">
+            <summary>
+            A request for the chunk hashes of a file in a shared folder
+            </summary>
+        </member>
         <member name="F:SysWeaver.FolderSync.SharedFileChunksRequest.Folder">
             <summary>
             The folder
@@ -332,7 +442,12 @@
         </member>
         <member name="F:SysWeaver.FolderSync.SharedFileChunksRequest.Version">
             <summary>
-            The folder
+            The version of the shared folder
+            </summary>
+        </member>
+        <member name="T:SysWeaver.FolderSync.SharedFolderDiff">
+            <summary>
+            The changes required to sync a local folder with a shared folder
             </summary>
         </member>
         <member name="F:SysWeaver.FolderSync.SharedFolderDiff.Download">
@@ -347,12 +462,17 @@
         </member>
         <member name="F:SysWeaver.FolderSync.SharedFolderDiff.Cdc">
             <summary>
-            If non-null and the CdcProps.Default.Key matches this string, prefer to use Cdc for upload
+            If non-null and the CdcProps.Default.Key matches this string, prefer to use Cdc for download
             </summary>
         </member>
         <member name="F:SysWeaver.FolderSync.SharedFolderDiff.Version">
             <summary>
             The version of the remote repository
+            </summary>
+        </member>
+        <member name="T:SysWeaver.FolderSync.SharedFolderSyncRequest">
+            <summary>
+            Identifies a version of a shared folder
             </summary>
         </member>
         <member name="F:SysWeaver.FolderSync.SharedFolderSyncRequest.Folder">

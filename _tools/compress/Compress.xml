@@ -73,6 +73,7 @@
             a comment, each on its own line with its comment (comment continuation lines are joined, "var: {...}" annotations are compacted).
             The candidates are found with the parser's rules (mirrored here), names defined more than once are no candidates.</item>
             <item>The iMouse channel comments ("// iMouse.x = Name | Description | Default"), as compact lines at the top.</item>
+            <item>The media line of an image / audio / audio2 / collage effect ("//  media: kind refs"), compact, at the top (also without the variables).</item>
             <item>The entry points (main, mainImage and vertexMain, the optional vertex stage).</item>
             </list>
             <para>
@@ -221,6 +222,12 @@
             <summary>
             Find the variable candidates like the parser does
             </summary>
+        </member>
+        <member name="F:SysWeaver.CompressProgram.MediaLineRx">
+            <summary>The media line of an effect ("//  media: kind refs", Effect Weaver's EffectMedia.LineRx), keep in sync with it</summary>
+        </member>
+        <member name="M:SysWeaver.CompressProgram.GetMediaLine(System.String[])">
+            <summary>The first media line of a shader as a compact comment ("//media:audio2 stock:a.flac"), null if none</summary>
         </member>
         <member name="M:SysWeaver.CompressProgram.GetMouseComments(System.String[])">
             <summary>
