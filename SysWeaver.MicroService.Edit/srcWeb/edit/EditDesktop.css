@@ -93,3 +93,22 @@
         opacity: 1;
     }
 }
+
+/* A numbered value of a list in a form (EditTypeCollection, ExpandObjects): a narrow muted number instead of a label column
+   (.sw-edit-body twice: above the app rules that give the label column of every form one width) */
+.sw-edit-desktop .sw-edit-child.sw-edit-numbered > .sw-edit-body.sw-edit-body {
+    grid-template-columns: 2.25em auto minmax(0, 1fr);
+}
+
+.sw-edit-desktop .sw-edit-numbered .sw-edit-label {
+    min-width: 0;
+    text-align: end;
+    padding-inline-end: 0.5em;
+    color: var(--sw-text-2);
+    font-variant-numeric: tabular-nums;
+}
+
+    .sw-edit-desktop .sw-edit-numbered .sw-edit-label + .sw-edit-split,
+    .sw-edit-desktop .sw-edit-numbered .sw-edit-value > .sw-edit-split {
+        display: none;
+    }

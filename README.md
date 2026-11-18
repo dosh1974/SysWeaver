@@ -497,6 +497,7 @@ flowchart LR
 | [SysWeaver.Chat](SysWeaver.Chat/README.md) | A chat framework: rooms/sessions with pluggable providers (simple in-memory rooms, MySQL-persisted rooms, AI assistants), real-time delivery, translation, file and link sharing and a web chat UI. |
 | [SysWeaver.Chat.MySql](SysWeaver.Chat.MySql/README.md) | Chat provider whose rooms and messages are persisted in MySQL. |
 | [SysWeaver.Translation.Google](SysWeaver.Translation.Google/README.md) | A translation back-end that uses Google's public translation web page. |
+| [SysWeaver.Translation.Mock](SysWeaver.Translation.Mock/README.md) | A translator for tests: the text with the language in front, offline and free. |
 | [SysWeaver.MicroService.Translation](SysWeaver.MicroService.Translation/README.md) | Translation as a web API, and translation *from* another server: exposes the process's translator over HTTP and provides a remote translator client with memory caching. |
 | [SysWeaver.MicroService.TranslationDbCache](SysWeaver.MicroService.TranslationDbCache/README.md) | The caching front of the translation pipeline: an `ITranslator` that serves translations from memory and MySQL and asks an internal translator only for new texts. Includes a translation editor. |
 | [SysWeaver.FileTranslation](SysWeaver.FileTranslation/README.md) | Translation of web files: extracts translatable text from HTML and JavaScript, translates it and rebuilds the file. |

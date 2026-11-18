@@ -46,6 +46,8 @@ class MediaPlayerParamsEffect {
     DpiAdjust = false;
     /** @type {number} Fixed backing-store scale factor applied on top of the device pixel ratio. Default 1. */
     DpiScale = 1;
+    /** @type {number} Pixel scale of a built (Effect Weaver) effect: the effect is drawn as on a canvas with 1 / PixelScale of the pixels, so its sizes in pixels are PixelScale times larger on the canvas while it stays as sharp as the backing store (ex: a frame effect on a 4K screen with the sizes it has on a 1080p one). Ignored by an effect that is not built by the server. Default 1. */
+    PixelScale = 1;
     /** @type {boolean} Render a single frame (re-rendered on resize / dark-mode change) instead of animating. Default false. */
     Static = false;
     /** @type {boolean} Create the context with alpha and clear to transparent instead of opaque green (0,0.5,0,1). Default false. */
@@ -932,6 +934,22 @@ class MediaPlayerEffect {
 
 
     /**
+     * The properties a compile depends on, as a text: Params.EffectProps without the live controls ("iMouseX" .. "iMouseW", see
+     * EffectProgramData.ControlKeys), which the running effect reads from its uniforms.
+     * @returns {string} The signature.
+     */
+    CompileSignature() {
+        const ep = this.Params.EffectProps;
+        if (!ep || (typeof ep !== "object"))
+            return "";
+        const keys = EffectProgramData.ControlKeys;
+        return JSON.stringify(ep, (k, v) => keys.includes(k) ? undefined : v);
+    }
+
+    /** @type {number} How many times the shader was compiled (Compile calls), for tests and diagnostics. */
+    CompileCount = 0;
+
+    /**
      * Debounced recompile for live parameter edits (after Params.EffectProps changed). If a compile is running
      * only CompileAgain is flagged; otherwise after 50 ms runs Compile(() => CompileAgain) in a loop until no new
      * request arrived during the compile (the running compile is aborted when a new request arrives).
@@ -939,6 +957,11 @@ class MediaPlayerEffect {
      */
     LazyCompile() {
         const t = this;
+        //  Only live controls changed (the properties "iMouseX" .. "iMouseW" are read while the effect runs): no compile, a new frame
+        if ((!t.Compiling) && t.Program && (t.CompiledSignature === t.CompileSignature())) {
+            t.GetRender()();
+            return;
+        }
         if (t.Compiling) {
             t.CompileAgain = true;
             return;
@@ -1097,11 +1120,43 @@ class MediaPlayerEffect {
         const c = t.Params.Controls;
         const d = t.Built?.Controls;
         const r = [0.5, 0.5, 0.5, 0.5];
+        const ep = t.Params.EffectProps;
+        const keys = EffectProgramData.ControlKeys;
         for (let i = 0; i < 4; ++i) {
-            const v = Array.isArray(c) ? c[i] : undefined;
+            //  (a control that is a property of the effect is read from the properties: edited, saved and loaded with the variables)
+            const pv = ep ? ep[keys[i]] : undefined;
+            const v = ((typeof pv === "number") && isFinite(pv)) ? pv : (Array.isArray(c) ? c[i] : undefined);
             r[i] = ((typeof v === "number") && isFinite(v)) ? Math.min(1, Math.max(0, v)) : (d?.[i] ?? 0.5);
         }
         return r;
+    }
+
+    /**
+     * The stored live controls (params.Controls, up to 4 values in [0, 1]) as properties of the effect: a control that is a property
+     * (effectProps has "iMouseX" .. "iMouseW") and that the stored FxProps do not set, gets the stored control value.
+     * @param {object} params - The effect params (Controls, FxProps: object or JSON text).
+     * @param {object} effectProps - The validated properties (changed in place).
+     * @returns {object} effectProps.
+     */
+    static ControlsToProps(params, effectProps) {
+        const c = params ? params.Controls : null;
+        if (!effectProps || !Array.isArray(c))
+            return effectProps;
+        let raw = null;
+        try {
+            raw = params.FxProps ? (typeof params.FxProps === "string" ? JSON.parse(params.FxProps) : params.FxProps) : null;
+        }
+        catch {
+        }
+        const keys = EffectProgramData.ControlKeys;
+        for (let i = 0; i < 4; ++i) {
+            const k = keys[i];
+            if (!(k in effectProps) || (raw && (typeof raw[k] === "number")))
+                continue;
+            if ((typeof c[i] === "number") && isFinite(c[i]))
+                effectProps[k] = Math.min(1, Math.max(0, c[i]));
+        }
+        return effectProps;
     }
 
     /**
@@ -1112,6 +1167,18 @@ class MediaPlayerEffect {
     SetControls(controls) {
         const t = this;
         t.Params.Controls = controls;
+        //  (the controls that are properties of the effect follow: null = their defaults)
+        const ep = t.Params.EffectProps;
+        if (ep) {
+            const keys = EffectProgramData.ControlKeys;
+            const d = t.Built?.Controls;
+            for (let i = 0; i < 4; ++i) {
+                if (!(keys[i] in ep))
+                    continue;
+                const v = Array.isArray(controls) ? controls[i] : undefined;
+                ep[keys[i]] = ((typeof v === "number") && isFinite(v)) ? Math.min(1, Math.max(0, v)) : (d?.[i] ?? 0.5);
+            }
+        }
         t.GetRender()();
     }
 
@@ -1140,6 +1207,9 @@ class MediaPlayerEffect {
     async Compile(abortCheckFn) {
         const t = this;
         t.CompilationTime = -1;
+        ++t.CompileCount;
+        const signature = t.CompileSignature();
+        t.CompiledSignature = null;
         const program = await t.ProgramData.Compile(t.Params.EffectProps, "attribute vec2 position;void main(){gl_Position=vec4(position, 0, 1);}", abortCheckFn);
         if (!program) {
             t.CompilationTime = -3;
@@ -1185,6 +1255,17 @@ class MediaPlayerEffect {
         if (pr3)
             /** Sets iResolution (vec3, z = 0, 1 for a built program); takes precedence over resolution. @param {number} w - Width. @param {number} h - Height. */
             t.UniformResolution = (w, h) => gl.uniform3f(pr3, w, h, prz);
+        //  The pixel scale of a built program (Params.PixelScale, see ShaderParser: effectSaverPixelScale): the effect sees a canvas of 1 / scale of the pixels
+        const pps = built ? gl.getUniformLocation(p, "effectSaverPixelScale") : null;
+        if (pps) {
+            const setRes = t.UniformResolution;
+            t.UniformResolution = (w, h) => {
+                const s = +t.Params.PixelScale;
+                const ps = (s > 0) && isFinite(s) ? s : 1;
+                gl.uniform1f(pps, ps);
+                setRes(w / ps, h / ps);
+            };
+        }
         //  Frame rate
         const pfr = gl.getUniformLocation(p, "iFrameRate");
         /** Sets iTimeDelta and iFrameRate from the seconds since the previous frame; no-op when absent. @type {function(number):void} */
@@ -1264,6 +1345,7 @@ class MediaPlayerEffect {
         if (t.Program)
             t.Program.Dispose();
         t.Program = program;
+        t.CompiledSignature = signature;
         t.CompilationTime = program.CompilationTime;
         if (abortCheckFn)
             t.GetRender()();
@@ -1306,7 +1388,7 @@ class MediaPlayerEffect {
 
         const built = ew ? await MediaPlayerEffect.BuildEffect(t.Src, c, (typeof WebGL2RenderingContext !== "undefined") && (gl instanceof WebGL2RenderingContext), !!props.Transparent) : null;
         t.Built = built;
-        const programData = new EffectProgramData(gl, built ? built.Program : t.Src, c, !!built);
+        const programData = new EffectProgramData(gl, built ? built.Program : t.Src, c, built || false);
         const p = t.Params;
         t.ProgramData = programData;
 
@@ -1355,6 +1437,9 @@ class MediaPlayerEffect {
         fxProps = programData.ValidateVars(fxProps);
         if (fxProps) {
             props.EffectProps = JSON.parse(fxProps);
+            //  The live controls are properties too ("iMouseX" .. "iMouseW", see EffectProgramData): a stored Params.Controls value is used
+            //  for a control that FxProps does not set (media saved before the controls were properties)
+            MediaPlayerEffect.ControlsToProps(props, props.EffectProps);
             t.ScriptMember = programData.ScriptMember;
             t.ScriptTypeInfo = programData.ScriptTypeInfo;
         }
@@ -1378,7 +1463,7 @@ class MediaPlayerEffect {
             if ((!built1) || (built1.Program === built.Program))
                 return false;
             t.Built = built1;
-            t.ProgramData = new EffectProgramData(gl, built1.Program, c, true);
+            t.ProgramData = new EffectProgramData(gl, built1.Program, c, built1);
             return !!(await t.Compile());
         };
         const poster = posterLoad ? await posterLoad : null;
@@ -1680,7 +1765,8 @@ class MediaPlayerEffect {
             //t.CurrentPosition = 0;
             //time = 0;
         }
-        t.Rendered = true;
+        //  (an invisible element draws nothing: a Static effect is only marked rendered once a frame was drawn while visible,
+        //  else a still drawn while the page fades in from opacity 0 stays blank)
         if (!t.Element.checkVisibility(
             {
                 opacityProperty: true,
@@ -1688,6 +1774,7 @@ class MediaPlayerEffect {
             })) {
             return;
         }
+        t.Rendered = true;
         //console.log("Render: " + t.Url + " @ " + time);
 
         const gl = t.GL;

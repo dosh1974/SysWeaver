@@ -207,7 +207,11 @@
                 this.InitStyle();
             e.addEventListener("keydown", ev => this.OnKey(ev));
             e.addEventListener("focusin", () => Edit.LastEdit = this);
-            Edit.LastEdit = this;
+            //  (a new editor is the last used one unless one on the page is in use: an editor rebuilt after a change elsewhere (its
+            //  rows are made again) must not take the undo keys from the editor that was changed)
+            const last = Edit.LastEdit;
+            if (!last || !last.Element.isConnected)
+                Edit.LastEdit = this;
             Edit.AddGlobalListener();
         }
 
@@ -1179,6 +1183,9 @@
          * @returns {Promise<void>}
          */
         async Invoke(doChange, doReverse, title, name, tracking) {
+            //  (the page wide Ctrl+Z goes to the editor changed last: a menu (Paste) or a dialog leaves the focus outside it, and a page
+            //  with many editors made later ones the last used)
+            Edit.LastEdit = this;
             let n = this.GetObjectName();
             if (!Edit.IsPrimitive(this.Type) && name)
                 n += "." + name;

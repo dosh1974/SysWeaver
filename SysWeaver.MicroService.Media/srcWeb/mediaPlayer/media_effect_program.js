@@ -89,6 +89,10 @@ class EffectProgramData {
      * @param {string} [fileName] - Source name/URL used in log messages and the editor summary ("[String]" if missing).
      * @param {boolean} [built] - src is a program built by the server (MediaService.BuildEffect, an Effect Weaver effect): complete (no
      * prefix / suffix is added), with the vertex shader after the EffectProgramData.VertexMarker line when the effect has a vertex stage.
+     * The build response itself can be passed (an object): its ControlDefs (the live controls of the effect, iMouse x, y, z and w, from
+     * its "// iMouse.x = Name | Description | Default | Min .. Max | Unit" comments) are then added to the variables as the properties
+     * "iMouseX" .. "iMouseW" (a slider 0 .. 1 named by the control): edited, saved and loaded with the others (FxProps), read by the
+     * player while it runs (MediaPlayerEffect.GetControls, no re-compile of the shader source is needed for them).
      */
     constructor(gl, src, fileName, built) {
         const t = this;
@@ -401,6 +405,45 @@ class EffectProgramData {
             }
             catch (e) {
                 console.warn(c + "(" + (i + 1) + "): Failed to parse variable, error: " + e);
+            }
+        }
+        //  The live controls of a built effect (iMouse x, y, z, w) as properties, after the variables: the described ones the code reads
+        const controlDefs = built && (typeof built === "object") && Array.isArray(built.ControlDefs) ? built.ControlDefs : null;
+        if (controlDefs) {
+            const fm = typeMap.get("float").member;
+            for (let i = 0; (i < 4) && (i < controlDefs.length); ++i) {
+                const cd = controlDefs[i];
+                //  (null / no name: the effect doesn't describe the channel)
+                if (!cd || !cd.Name || (cd.Used === false))
+                    continue;
+                const key = EffectProgramData.ControlKeys[i];
+                if (Object.hasOwn(scriptProps, key))
+                    continue;
+                const def = (typeof cd.Default === "number") && isFinite(cd.Default) ? Math.min(1, Math.max(0, cd.Default)) : 0.5;
+                scriptProps[key] = def;
+                const member = Object.assign({}, fm);
+                member.Name = key;
+                member.DisplayName = cd.Name || ("iMouse." + "xyzw".charAt(i));
+                member.Min = "0";
+                member.Max = "1";
+                member.Flags |= 8;
+                member.EditParams = "0.01";
+                member.Default = JSON.stringify(def);
+                //  (what the 0 .. 1 value drives: "8 .. 128 px")
+                let range = "";
+                const map = cd.Map;
+                if (map && (typeof map.Min === "number") && (typeof map.Max === "number")) {
+                    const fmt = v => map.Format ? String(map.Format).replace("{0}", "" + v) : (map.Unit ? v + " " + map.Unit : "" + v);
+                    range = " (" + fmt(map.Min) + " .. " + fmt(map.Max) + ")";
+                }
+                const sum = ((cd.Desc || "") + range).trim();
+                if (sum)
+                    member.Summary = sum;
+                member.Control = i;
+                members.push(member);
+                if (dynTypeName.length > 0)
+                    dynTypeName += "_";
+                dynTypeName += "float_" + key;
             }
         }
         if (members.length > 0) {
@@ -718,6 +761,12 @@ uniform vec4 iDate;                 // (year, month, day, time in seconds)
 
     /** @type {boolean} The source is a program built by the server (see the constructor), no prefix / suffix. */
     Built = false;
+
+    /**
+     * The property names of the live controls of a built effect (iMouse x, y, z, w) among its variables (FxProps / EffectProps).
+     * @type {string[]}
+     */
+    static ControlKeys = ["iMouseX", "iMouseY", "iMouseZ", "iMouseW"];
 
     /**
      * Separates the fragment shader (first) and the vertex shader in a built program (Effect Weaver's ShaderStages.Marker).

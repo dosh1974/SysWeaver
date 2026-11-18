@@ -194,6 +194,23 @@
             const data = editContext.CreateData();
             data.classList.add("DataRow");
             const row = editContext.Row || editContext.PrevRow;
+            //  A list of values in a form for people (ExpandObjects): the values are numbered and the hint of a value is shown once, on the list
+            const numbered = !!options.ExpandObjects && indexed && isPrimitive;
+            const listName = member.DisplayName || member.Name;
+            if (numbered && proto && proto.Members && proto.Members[0] && options.TypeHints !== false) {
+                const eh = E.MemberHint(proto.Members[0], options);
+                const lab = row && row.querySelector(":scope > .sw-edit-label");
+                if (eh && lab) {
+                    const each = _T("each {0}", eh, "Part of the hint line of a list in a form: the limits of every value of the list, ex: each 1 to 256 characters.{0} is the hint of a value");
+                    const he = lab.querySelector(".sw-edit-typehint");
+                    if (he) {
+                        he.append(" · ", Sw.el("span.sw-edit-hintpart", { text: each }));
+                        he.title = (he.title ? he.title + " · " : "") + each;
+                    }
+                    else
+                        lab.append(E.HintElement(each));
+                }
+            }
             const info = Sw.el("span.sw-edit-info");
             const expBtn = new Sw.Button({ Kind: "ghost", Small: true, Icon: "right", Class: "sw-edit-expand" });
             let expanded = false;
@@ -548,18 +565,20 @@
              */
             const addItemEditor = async key => {
                 const kn = C.getKeyName(key);
-                //  ExpandObjects (forms for people): an array item reads "Item 3", not "[2]"
-                const label = (options.ExpandObjects && indexed && isPrimitive) ? _T("Item {0}", (+key) + 1, "Label of an item of a list in a form, {0} is its number (1 based)") : kn;
+                //  ExpandObjects (forms for people): a value of a list is numbered ("3" in a narrow column; not "[2]", nor a repeated
+                //  "Item 3" label with the same hint on every row), its control is named "<list name> 3" for assistive technology and the
+                //  per value hint is shown once, on the list ("each 1 to 256 characters", see numbered above)
+                const label = numbered ? String((+key) + 1) : kn;
                 const t = await EditTypeCollection.ItemType(member, label);
                 const o = new E.Options();
-                o.KeyName = label;
+                o.KeyName = numbered ? _T("{0} {1}", listName, label, "Accessible name of a value in a list of a form.{0} is the name of the list, {1} the number of the value (1 based)") : label;
                 o.Name = mn;
                 o.Title = !isPrimitive;
                 o.Dev = options.Dev;
                 o.ReadOnly = itemsReadOnly;
                 o.ExpandAllCollections = options.ExpandAllCollections;
                 o.MenuIcon = options.MenuIcon;
-                o.TypeHints = options.TypeHints;
+                o.TypeHints = numbered ? false : options.TypeHints;
                 o.PlainHints = options.PlainHints;
                 o.ExpandObjects = options.ExpandObjects;
                 //  Object items: a one line summary in the title row; long lists start collapsed (the item just added / moved is open)
@@ -598,6 +617,12 @@
                 ie.KeyName = kn;
                 ie.AddMenuItems = items => EditTypeCollection.ItemMenu(items, ie, { C, fixed, readOnly, indexed, lim, count, removeItem, insertItem, moveItem, duplicateItem });
                 await ie.SetObject(C.getVal(obj[mn], key));
+                if (numbered) {
+                    ie.Element.classList.add("sw-edit-numbered");
+                    for (const c of ie.Body.querySelectorAll("input, select, textarea, [role=slider], [role=combobox], [role=switch]"))
+                        if ((c.getAttribute("aria-label") || "") === label)
+                            c.setAttribute("aria-label", o.KeyName);
+                }
                 if (isPrimitive) {
                     const ic = ie.Body.querySelector(".sw-edit-icon");
                     if (ic)
