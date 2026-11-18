@@ -83,7 +83,7 @@ class MediaPlayer {
 
     /**
      * The scripts each media type needs, and the global classes that must exist after loading them (checked by CreateSync).
-     * Key = MediaTypes id; "<id>Fx" = an image / text with an effect. Text also needs canvasTools.js (loaded by Init).
+     * Key = MediaTypes id; "<id>Fx" = an image / a video / a sound / a text with an effect. Text also needs canvasTools.js (loaded by Init).
      * @type {Object<string, {Files: string[], Classes: string[]}>}
      */
     static #Needs = {
@@ -98,7 +98,26 @@ class MediaPlayer {
         "5Fx": { Files: ["media_player_effect.js", "media_effect_program.js", "media_player_text.js"], Classes: ["MediaPlayerEffect", "EffectProgramData", "MediaPlayerText"] },
         //  A sound with an effect, or an effect with a sound as its texture (MediaPlayerAudioTexture)
         "2Fx": { Files: ["media_player_effect.js", "media_effect_program.js", "media_audio2.js", "media_player_audio.js"], Classes: ["MediaPlayerEffect", "EffectProgramData", "MediaPlayerAudio"] },
+        //  A video with an effect (the video is the texture: MediaPlayerVideoTexture, the effect follows its time line)
+        "1Fx": { Files: ["media_player_effect.js", "media_effect_program.js", "media_player_video.js"], Classes: ["MediaPlayerEffect", "EffectProgramData", "MediaPlayerVideo", "MediaPlayerVideoTexture"] },
+        //  An effect with a video as its texture (its media line "video", or a Texture setting that is a video file)
+        "4Vid": { Files: ["media_player_effect.js", "media_effect_program.js", "media_player_video.js"], Classes: ["MediaPlayerEffect", "EffectProgramData", "MediaPlayerVideo", "MediaPlayerVideoTexture"] },
     };
+
+    /**
+     * Video file extensions (an effect's Texture with one of them is a video).
+     * @type {RegExp}
+     */
+    static VideoExtRx = /\.(mp4|m4v|webm|mov|ogv)$/i;
+
+    /**
+     * Check if a url is a video by its file extension (the query and fragment are ignored).
+     * @param {string} url The url.
+     * @returns {boolean} True for a video file.
+     */
+    static IsVideoUrl(url) {
+        return (typeof url === "string") && MediaPlayer.VideoExtRx.test(url.split(/[?#]/)[0]);
+    }
 
     /**
      * Audio file extensions (an effect's Texture with one of them is a sound); keep in sync with the Audio extensions of the core
@@ -122,10 +141,11 @@ class MediaPlayer {
     /**
      * The media line of an effect (Effect Weaver's media effects, a comment line in the shader): "//  media: image stock:a.png",
      * "//  media: audio https://example.com/song.mp3", "//  media: collage stock:a.png my:b.jpg"; a line without references uses the
-     * defaults of its kind (the server's). "audio2": a sound with the rich 512 x 64 audio texture (MediaAudio2Engine, media_audio2.js).
+     * defaults of its kind (the server's). "audio2": a sound with the rich 512 x 64 audio texture (MediaAudio2Engine, media_audio2.js);
+     * "video": a video whose frames are the texture (MediaPlayerVideoTexture, the effect follows its time line).
      * @type {RegExp}
      */
-    static MediaLineRx = /^[ \t]*\/\/[ \t]*media[ \t]*:[ \t]*(image|audio2|audio|collage)\b([^\r\n]*)$/im;
+    static MediaLineRx = /^[ \t]*\/\/[ \t]*media[ \t]*:[ \t]*(image|video|audio2|audio|collage)\b([^\r\n]*)$/im;
 
     /**
      * The media line of an effect source.
@@ -147,19 +167,14 @@ class MediaPlayer {
      * @returns {Promise<object|null>} The params (the same object), with the texture of the line when it has one.
      */
     static async #LineMedia(url, mediaParams) {
-        if (mediaParams && mediaParams.Texture)
-            return mediaParams;
-        let line = null;
-        try {
-            const res = await fetch(url, { credentials: "same-origin" });
-            if (res.ok)
-                line = MediaPlayer.MediaLine(await res.text());
-        }
-        catch {
-            line = null;
-        }
+        const line = await MediaPlayer.#ReadLine(url);
         if (!line)
             return mediaParams;
+        //  A Texture setting wins, but the line still says which texture a sound gets (audio2: the rich one)
+        if (mediaParams && mediaParams.Texture) {
+            Object.defineProperty(mediaParams, "LineTextureAudio2", { value: line.Kind === "audio2", enumerable: false, configurable: true, writable: true });
+            return mediaParams;
+        }
         let urls = line.Refs.length && line.Refs.every(x => /^https?:/i.test(x)) ? line.Refs : null;
         if (!urls) {
             try {
@@ -183,20 +198,41 @@ class MediaPlayer {
         Object.defineProperty(p, "LineTextureAudio", { value: line.Kind === "audio" || line.Kind === "audio2", enumerable: false, configurable: true, writable: true });
         //  (audio2: the rich 512 x 64 audio texture, MediaAudio2Engine)
         Object.defineProperty(p, "LineTextureAudio2", { value: line.Kind === "audio2", enumerable: false, configurable: true, writable: true });
+        //  (video: its frames are the texture, MediaPlayerVideoTexture)
+        Object.defineProperty(p, "LineTextureVideo", { value: line.Kind === "video", enumerable: false, configurable: true, writable: true });
         return p;
+    }
+
+    /**
+     * The media line of an effect file (fetched).
+     * @param {string} url The url of the effect.
+     * @returns {Promise<{Kind:string, Refs:string[]}|null>} The line, null without one (or when the file can't be read).
+     */
+    static async #ReadLine(url) {
+        try {
+            const res = await fetch(url, { credentials: "same-origin" });
+            return res.ok ? MediaPlayer.MediaLine(await res.text()) : null;
+        }
+        catch {
+            return null;
+        }
     }
 
     /**
      * The texture of an effect: its Texture setting, else the texture of its media line (#LineMedia).
      * @param {object} mediaParams The effect params.
-     * @returns {{Url:string, Audio:boolean}|null} The url and whether it is a sound, null for none.
+     * @returns {{Url:string, Audio:boolean, Audio2:boolean, Video:boolean}|null} The url, whether it is a sound, whether the sound gets the
+     *   audio2 texture (the media line's kind) and whether it is a video (by its extension, or the line's kind), null for none.
      */
     static #TextureOf(mediaParams) {
         if (!mediaParams)
             return null;
         if (mediaParams.Texture)
-            return { Url: mediaParams.Texture, Audio: MediaPlayer.IsAudioUrl(mediaParams.Texture) };
-        return mediaParams.LineTexture ? { Url: mediaParams.LineTexture, Audio: !!mediaParams.LineTextureAudio || MediaPlayer.IsAudioUrl(mediaParams.LineTexture), Audio2: !!mediaParams.LineTextureAudio2 } : null;
+            return { Url: mediaParams.Texture, Audio: MediaPlayer.IsAudioUrl(mediaParams.Texture), Audio2: !!mediaParams.LineTextureAudio2, Video: MediaPlayer.IsVideoUrl(mediaParams.Texture) || !!mediaParams.LineTextureVideo };
+        return mediaParams.LineTexture ? {
+            Url: mediaParams.LineTexture, Audio: !!mediaParams.LineTextureAudio || MediaPlayer.IsAudioUrl(mediaParams.LineTexture), Audio2: !!mediaParams.LineTextureAudio2,
+            Video: !!mediaParams.LineTextureVideo || MediaPlayer.IsVideoUrl(mediaParams.LineTexture),
+        } : null;
     }
 
     /**
@@ -286,7 +322,9 @@ class MediaPlayer {
     static #NeedKey(type, mediaParams) {
         if ((type === MediaTypes.Effect) && MediaPlayer.#TextureOf(mediaParams)?.Audio)
             return "2Fx";
-        const fx = (type === MediaTypes.Image || type === MediaTypes.Text || type === MediaTypes.Audio) && mediaParams && mediaParams.Effect;
+        if ((type === MediaTypes.Effect) && MediaPlayer.#TextureOf(mediaParams)?.Video)
+            return "4Vid";
+        const fx = (type === MediaTypes.Image || type === MediaTypes.Text || type === MediaTypes.Audio || type === MediaTypes.Video) && mediaParams && mediaParams.Effect;
         return fx ? (type + "Fx") : ("" + type);
     }
 
@@ -316,10 +354,14 @@ class MediaPlayer {
                     return new MediaPlayerEffect(mediaParams.Effect, mediaParams.EffectParams, gl => new MediaPlayerImageTexture(gl, mediaParams, data));
                 return new MediaPlayerImage(data, mediaParams);
             case MediaTypes.Video:
+                //  (with an effect: the effect draws the video, it plays on the video's time line, see #WithVideo)
+                if (fx)
+                    return MediaPlayer.#WithVideo(mediaParams.Effect, mediaParams.EffectParams, data, mediaParams);
                 return new MediaPlayerVideo(data, mediaParams);
             case MediaTypes.Audio:
+                //  (the effect's media line "audio2": the rich 512 x 64 texture, see Create)
                 if (fx)
-                    return MediaPlayer.#WithSound(mediaParams.Effect, mediaParams.EffectParams, data, mediaParams);
+                    return MediaPlayer.#WithSound(mediaParams.Effect, mediaParams.EffectParams, data, mediaParams, !!mediaParams.EffectAudio2);
                 return new MediaPlayerAudio(data, mediaParams);
             case MediaTypes.YouTube:
                 return new MediaPlayerYoutube(data, mediaParams);
@@ -330,6 +372,9 @@ class MediaPlayer {
                 const tx = tex ? tex.Url : null;
                 if (tex && tex.Audio)
                     return MediaPlayer.#WithSound(data, mediaParams, tx, null, !!tex.Audio2);
+                //  A video: its frames, on its time line (the effect keeps its own size: it isn't a video with an effect)
+                if (tex && tex.Video)
+                    return MediaPlayer.#WithVideo(data, mediaParams, tx, { EffectSizeFromImage: false });
                 if (tx)
                     return new MediaPlayerEffect(data, mediaParams, gl => new MediaPlayerImageTexture(gl, { EffectSizeFromImage: false, EffectParams: mediaParams }, tx));
                 return new MediaPlayerEffect(data, mediaParams);
@@ -362,11 +407,27 @@ class MediaPlayer {
      * @param {object} effectParams The effect params.
      * @param {string} sound Url of the sound.
      * @param {object|null} soundParams The audio params (MediaPlayerParamsAudio: Volume, StartAt, EndAt), null = defaults.
+     * @param {boolean} [audio2] The rich 512 x 64 audio2 texture (the effect's media line), else ShaderToy's 512 x 2.
      * @returns {MediaPlayerEffect} The player.
      */
     static #WithSound(effect, effectParams, sound, soundParams, audio2) {
         const media = new MediaPlayerAudio(sound, soundParams);
         return new MediaPlayerEffect(effect, effectParams, gl => new MediaPlayerAudioTexture(gl, media, !!audio2), media);
+    }
+
+    /**
+     * An effect that draws a video: the video is its texture (MediaPlayerVideoTexture: the current frame), and it plays on the video's time
+     * line with the video's controls and sound (MediaPlayerEffect.FollowMedia, as an effect with a sound). The video params (play window,
+     * volume, Stream, Crop of the texture, EffectSizeFromImage) are the video's, EffectParams the effect's.
+     * @param {string} effect Url of the .glsl effect.
+     * @param {object} effectParams The effect params.
+     * @param {string} video Url of the video.
+     * @param {object} videoParams The video params (MediaPlayerParamsVideo).
+     * @returns {MediaPlayerEffect} The player.
+     */
+    static #WithVideo(effect, effectParams, video, videoParams) {
+        const media = new MediaPlayerVideo(video, videoParams);
+        return new MediaPlayerEffect(effect, effectParams, gl => new MediaPlayerVideoTexture(gl, videoParams, media), media);
     }
 
     /**
@@ -381,6 +442,12 @@ class MediaPlayer {
         //  An effect without a Texture setting: the media its shader names (its media line)
         if (type === MediaTypes.Effect && typeof data === "string")
             mediaParams = await MediaPlayer.#LineMedia(data, mediaParams);
+        //  A sound with an effect: the effect's media line says which audio texture it reads ("audio2": the rich 512 x 64 one, else
+        //  ShaderToy's 512 x 2); a hidden param, so the settings stay as they are
+        if (type === MediaTypes.Audio && mediaParams && typeof mediaParams.Effect === "string" && mediaParams.Effect) {
+            const line = await MediaPlayer.#ReadLine(mediaParams.Effect);
+            Object.defineProperty(mediaParams, "EffectAudio2", { value: !!line && line.Kind === "audio2", enumerable: false, configurable: true, writable: true });
+        }
         const need = MediaPlayer.#Needs[MediaPlayer.#NeedKey(type, mediaParams)];
         if (!need)
             return null;

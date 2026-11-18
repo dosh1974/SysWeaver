@@ -391,6 +391,8 @@ class MediaAudioSamples {
         const n = MediaAudioSamples.#N;
         t.Rate = buffer.sampleRate;
         t.Duration = buffer.duration;
+        //  (the statistics show it: 1 = mono, 2 = stereo ...)
+        t.Channels = buffer.numberOfChannels;
         const l = buffer.getChannelData(0);
         const r = buffer.numberOfChannels > 1 ? buffer.getChannelData(1) : l;
         const m = new Float32Array(l.length);

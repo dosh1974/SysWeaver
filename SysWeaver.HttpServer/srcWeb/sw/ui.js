@@ -9335,6 +9335,20 @@ window.Sw.Sources["ui/overlay.js"] = "sw/ui.js";
     }
 
     /**
+     * The element pop-ups, menus, dialogs, toasts and hints are added to: the element shown full screen (the Fullscreen api only
+     * renders it and what is inside it, a pop-up in the body would show behind it after full screen ends), else the body.
+     * An element that can't hold children (a video, a canvas, a frame ...) or the whole page in full screen: the body.
+     * @returns {HTMLElement} The parent.
+     */
+    function overlayRoot() {
+        const f = document.fullscreenElement || document.webkitFullscreenElement;
+        if (f && f !== document.documentElement && f !== document.body && f.isConnected
+            && !/^(video|audio|canvas|iframe|frame|img|object|embed|svg|select|input|textarea)$/i.test(f.tagName))
+            return f;
+        return document.body;
+    }
+
+    /**
      * Bring the background in line with the overlay stack (called on every stack change):
      * - while a dialog is open everything else in this document is inert (the shell chrome too: the shell is this document or does it
      *   for its content frame; a framed page that frames a dialog page makes its own content inert except the frame);
@@ -9427,7 +9441,7 @@ window.Sw.Sources["ui/overlay.js"] = "sw/ui.js";
         }
         //  Toasts and the live region inside the top dialog
         const td = topDialogEntry();
-        const host = td && !td.Closed ? td.Box : b;
+        const host = td && !td.Closed ? td.Box : overlayRoot();
         if (toastHost && toastHost.isConnected && toastHost.parentNode !== host)
             host.append(toastHost);
         const live = document.querySelector(".sw-page-live");
@@ -9704,8 +9718,8 @@ window.Sw.Sources["ui/overlay.js"] = "sw/ui.js";
                 }, { passive: true });
             }
             if (layer)
-                (o.Host || document.body).append(layer);
-            (o.Host || document.body).append(box);
+                (o.Host || overlayRoot()).append(layer);
+            (o.Host || overlayRoot()).append(box);
             p.DimLayer = !!o.Dim;
             pushStack(p);
             p.Place = () => Place(box, anchor, o);
@@ -9991,7 +10005,7 @@ window.Sw.Sources["ui/overlay.js"] = "sw/ui.js";
             //  All levels live in one host (display: contents); inside a dialog's focus trap the menu traps the focus in its host, so
             //  its items (and cascading submenus) can take the keyboard focus
             root.Host = el("div.sw-menu-host", { style: { display: "contents" } });
-            document.body.append(root.Host);
+            overlayRoot().append(root.Host);
             let trapped = false;
             if (!Focus.Allowed(root.Host)) {
                 Focus.Trap(root.Host);
@@ -12594,7 +12608,7 @@ window.Sw.Sources["ui/overlay.js"] = "sw/ui.js";
             //  No scrolling of the page behind (UX-POP-10)
             layer.addEventListener("wheel", e => e.preventDefault(), { passive: false });
             layer.addEventListener("touchmove", e => e.preventDefault(), { passive: false });
-            document.body.append(layer, box);
+            overlayRoot().append(layer, box);
             //  after its entrance the box has no animation of its own (the end of a rejection pulse must not replay the entrance)
             box.addEventListener("animationend", e => {
                 if (e.target === box && !box.classList.contains("sw-reject-pulse"))
@@ -15941,7 +15955,7 @@ window.Sw.Sources["ui/overlay.js"] = "sw/ui.js";
         if (!toastHost || !toastHost.isConnected) {
             toastHost = el("div.sw-toasts.sw-root", { attrs: { role: "region", "aria-label": _TF("Notifications", "Accessible name of the area where short messages (toasts) are shown") } });
             const td = topDialogEntry();
-            (td ? td.Box : document.body).append(toastHost);
+            (td ? td.Box : overlayRoot()).append(toastHost);
             fresh = true;
             //  toasts never cover actions (FBK-8): the generic geometry check watches them in developer mode
             //  (no free place: the stack took the place that covers the fewest, P3-A-10; not the caller's mistake, no developer warning)
@@ -15951,6 +15965,9 @@ window.Sw.Sources["ui/overlay.js"] = "sw/ui.js";
             if (reg)
                 reg.Place = placeToasts;
         }
+        else if (!topDialogEntry() && toastHost.parentNode !== overlayRoot())
+            //  full screen started or ended since the host was made: the toasts go where they can be seen
+            overlayRoot().append(toastHost);
         if (!toastResizeBound) {
             toastResizeBound = true;
             window.addEventListener("resize", () => {
@@ -16260,7 +16277,7 @@ window.Sw.Sources["ui/overlay.js"] = "sw/ui.js";
             if (!text)
                 return;
             const b = el("div.sw-hint.sw-root", { text, attrs: { role: "tooltip" } });
-            document.body.append(b);
+            overlayRoot().append(b);
             Place(b, e, { Side: "below", Align: "center", Gap: 6 });
             let timer = 0;
             const h = {
@@ -16611,6 +16628,11 @@ window.Sw.Sources["ui/overlay.js"] = "sw/ui.js";
          * @returns {boolean} True if document.fullscreenElement is set.
          */
         Is: () => !!(document.fullscreenElement || document.webkitFullscreenElement),
+        /**
+         * The element Sw pop-ups, menus, dialogs, toasts and hints are added to: the element shown full screen (only it is rendered), else the body.
+         * @returns {HTMLElement} The parent.
+         */
+        OverlayRoot: () => overlayRoot(),
         /**
          * Enter full screen.
          * @param {Element} [element] The element (default the whole page).

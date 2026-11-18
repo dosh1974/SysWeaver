@@ -1,9 +1,11 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using EffectWeaver.Shaders;
 using SysWeaver.MicroService.Media;
@@ -123,7 +125,7 @@ namespace SysWeaver.MicroService
         {
             var res = new MediaEffectMediaResponse();
             var kind = r?.Kind ?? "";
-            if (kind != "image" && kind != "audio" && kind != "audio2" && kind != "collage")
+            if (kind != "image" && kind != "video" && kind != "audio" && kind != "audio2" && kind != "collage")
                 return res;
             var refs = (r.Refs ?? []).Where(x => !String.IsNullOrWhiteSpace(x) && x.Length <= 2048).Take(MaxEffectMediaRefs).ToArray();
             foreach (var x in Manager.GetAll<IEffectMediaResolver>())
@@ -141,7 +143,7 @@ namespace SysWeaver.MicroService
                 {
                     Manager.AddMessage("Effect media " + kind + " " + String.Join(" ", refs) + ": " + ex.Message, MessageLevels.Warning);
                 }
-            }
+            } 
             return res;
         }
 
@@ -191,6 +193,7 @@ namespace SysWeaver.MicroService
                     Vertex = vertex != null,
                     Controls = fx.MouseDefault,
                     ControlNames = fx.Mouse.Select(x => x.Known ? x.Name : "").ToArray(),
+                    ControlDefs = fx.Mouse.Select(ControlOf).ToArray(),
                 };
                 if (cache.Count >= MaxBuildCache)
                     cache.Clear();
@@ -202,6 +205,46 @@ namespace SysWeaver.MicroService
                 Manager.AddMessage("Failed to build the effect " + (r.Name ?? "").ToQuoted() + ": " + ex.Message, MessageLevels.Warning);
                 return null;
             }
+        }
+
+
+        /// <summary>
+        /// A range in a control's description ("Tempo, 60 .. 200 BPM"), a known unit right after it is taken too (as Effect Weaver's EwShader.MouseMap)
+        /// </summary>
+        static readonly Regex ControlRangeRx = new(@"(-?\d+(?:\.\d+)?)\s*\.\.\s*(-?\d+(?:\.\d+)?)(?:\s*(BPM|Hz|%|°|deg|ms|s|px)\b)?", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+        /// <summary>
+        /// A control of an effect for the player (see <see cref="MediaEffectBuildResponse.ControlDefs"/>), null if the effect doesn't describe it.
+        /// The value it stands for: its "Min .. Max | Unit" parts, else a range in its description ("0 .. 1" says nothing: none), as Effect Weaver shows it.
+        /// </summary>
+        static MediaEffectControl ControlOf(MouseChannel c)
+        {
+            if (!c.Known)
+                return null;
+            MediaEffectControlMap map = null;
+            if (c.Min is double lo && c.Max is double hi && lo != hi)
+                map = new MediaEffectControlMap { Min = lo, Max = hi, Unit = String.IsNullOrEmpty(c.Unit) ? null : c.Unit, Format = String.IsNullOrEmpty(c.Format) ? null : c.Format };
+            else
+            {
+                var m = ControlRangeRx.Match(c.Desc ?? "");
+                if (m.Success
+                    && double.TryParse(m.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var a)
+                    && double.TryParse(m.Groups[2].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var b)
+                    && a != b && !(a == 0 && b == 1))
+                {
+                    var u = m.Groups[3].Success ? m.Groups[3].Value : null;
+                    if (u != null && (u.Equals("bpm", StringComparison.OrdinalIgnoreCase) || u.Equals("hz", StringComparison.OrdinalIgnoreCase)))
+                        u = u.Length == 3 ? "BPM" : "Hz";
+                    map = new MediaEffectControlMap
+                    {
+                        Min = a,
+                        Max = b,
+                        Unit = String.IsNullOrEmpty(c.Unit) ? u : c.Unit,
+                        Format = String.IsNullOrEmpty(c.Format) ? null : c.Format,
+                    };
+                }
+            }
+            return new MediaEffectControl { Name = c.Name, Desc = c.Desc ?? "", Default = c.Default, Used = c.Used, Map = map };
         }
 
 

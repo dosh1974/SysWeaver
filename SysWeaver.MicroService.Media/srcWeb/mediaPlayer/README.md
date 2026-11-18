@@ -38,8 +38,8 @@ The scripts are served as `mediaPlayer/*.js`. The pages in `mediaView/` include 
 | [`media_effect_program.js`](media_effect_program.js) | `EffectProgram` / `EffectProgramData`: WebGL shader compilation, linking, and parsing of `//var:` parameter annotations |
 | [`media_player_effect.js`](media_player_effect.js) | `MediaPlayerEffect` (renders a GLSL effect, optionally over an image texture) and `MediaPlayerImageTexture` |
 | [`media_player_image.js`](media_player_image.js) | `MediaPlayerImage` and its parameters |
-| [`media_player_video.js`](media_player_video.js) | `MediaPlayerVideo` and its parameters |
-| [`media_player_audio.js`](media_player_audio.js) | `MediaPlayerAudio` and its parameters, `MediaAudioAnalyser` and `MediaPlayerAudioTexture` (the sound as an effect texture: ShaderToy's 512 x 2, or audio2) |
+| [`media_player_video.js`](media_player_video.js) | `MediaPlayerVideo` and its parameters, `MediaPlayerVideoTexture` (a video as the texture of an effect) |
+| [`media_player_audio.js`](media_player_audio.js) | `MediaPlayerAudio` and its parameters, `MediaAudioAnalyser` and `MediaPlayerAudioTexture` (the sound as an effect texture: ShaderToy's 512 x 2, or audio2 when the effect's media line says `audio2`: `MediaPlayer.Create` reads the line of a sound's `Effect` and of an effect with a `Texture` setting; `CreateSync` can't, it uses 512 x 2) |
 | [`media_audio2.js`](media_audio2.js) | No dependencies, shared with Effect Weaver's editor and the web pages it exports (embedded as it is). `MediaLiveAudio`: a live input (getUserMedia: microphone / line-in), ShaderToy's texture (`FillShaderToy`) and the raw analysis of audio2 (`Analyze2`). `MediaAudio2Engine`: the rich audio2 texture (the media line `//  media: audio2`), 512 x 64 RGB floats at 60 analysis steps per second of sound time (log spectrum 512 .. 1 bands, energies, pulses, level, tempo, beat phase, waveform 512 .. 1 segments, rows 32 .. 63 smoothed: see the class comment) from decoded samples (`{ Rate, Ch }`, deterministic) or a live input. Effect Weaver's server has a C# port (AudioTrack2.cs) kept identical. |
 | [`media_player_youtube.js`](media_player_youtube.js) | `MediaPlayerYoutube`: YouTube clip playback |
 | [`media_player_text.js`](media_player_text.js) | `MediaPlayerText` / `MediaPlayerTextTexture`: stylised text (single or collage), optionally with an effect |
@@ -378,6 +378,11 @@ Created by `MediaPlayer.Create(MediaTypes.Image, url, params)` when no effect is
 ### `media_player_video.js`
 
 HTML5 video player. Loaded by `MediaPlayer.Init` (`MediaLoadAll`) or lazily by `MediaPlayer.Create`. Defines globals `MediaPlayerParamsVideo` and `MediaPlayerVideo`. Uses `MediaPlayerTools.waitEvent2` and `delay`.
+
+**Looping media with an effect** (a sound or a video the effect follows): the time line (`GetPos`, `Duration`) is the media's, but the effect's clock (`iTime`) runs on over the loops: when the media goes back by itself (not a `Seek` / `Stop`) `LoopOffset` takes the effect's clock of the last frame, so the effect doesn't start again with the media. A seek moves the effect with the media, `Stop` starts the clock again; `iChannelTime` stays the media time. `EffectClock` is the clock of the last frame (the statistics show it as "Effect time").
+
+**A video with an effect** (`MediaPlayer.Create(MediaTypes.Video, url, { Effect, EffectParams, EffectSizeFromImage, ... })`, key `"1Fx"`): a `MediaPlayerEffect` that follows a `MediaPlayerVideo` (`FollowMedia`, like a sound with an effect: the effect plays on the video's time line with its controls, and its sound when it has one), with a `MediaPlayerVideoTexture`: the frame the video shows now, uploaded before every frame the effect draws while the video plays and after a seek while it is paused (`seeked` / `loadeddata` draw the paused effect again). The video element isn't shown (`playsInline`), the effect draws it. The texture is flipped like a picture, uses the video's `Crop`, makes mipmaps for every frame when the shader reads levels; `EffectSizeFromImage` (default true): the effect takes the size of the video. Image effects work on videos (they read `iChannel0` the same way).
+
 
 #### Globals
 | Name | Kind | Description |

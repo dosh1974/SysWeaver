@@ -740,12 +740,13 @@ uniform vec4 iDate;                 // (year, month, day, time in seconds)
     ];
 
     /**
-     * Effect Weaver features in a source: calls of the Ew snippet library (Ew... functions, EW_... macros / constants), a vertex stage
+     * Effect Weaver features in a source: names of the Ew snippet library (Ew... functions and constants, ex: EwAudioBassV of EwAudio2,
+     * EW_... macros; the server's SnippetLibrary inserts them, an effect that defines them itself builds there the same), a vertex stage
      * (vertexMain) or iMouse control comments ("// iMouse.x = Name | Description | Default").
      * @type {RegExp[]}
      */
     static EffectWeaverRx = [
-        /\bEw[A-Z]\w*\s*\(|\bEW_[A-Z]\w*/,
+        /\bEw[A-Z]\w*|\bEW_[A-Z]\w*/,
         /\bvoid\s+vertexMain\s*\(/,
         /^\s*(?:\/\/+|\/\*+|\*+)?\s*iMouse\s*\.\s*[xyzw]\s*[=:]/mi,
     ];

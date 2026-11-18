@@ -212,7 +212,7 @@
             case TImage:
                 return { Crop: null, Duration: 10, Effect: null, EffectParams: null, EffectSizeFromImage: true, Transparent: false, AdaptiveSize: String(data || "").endsWith(".svg") };
             case TVideo:
-                return { StartAt: 0, EndAt: 0, Volume: 100, Stream: 0, Transparent: false, Crop: null };
+                return { StartAt: 0, EndAt: 0, Volume: 100, Stream: 0, Transparent: false, Crop: null, Effect: null, EffectParams: null, EffectSizeFromImage: true };
             case TAudio:
                 return { StartAt: 0, EndAt: 0, Volume: 100, Effect: null, EffectParams: null };
             case TYouTube:
@@ -504,6 +504,7 @@
                         Desc: _TF("The video has see-through parts: no border is drawn around it", "Description of a setting in the media editor"),
                     },
                     ...CropDefs(null),
+                    ...OverlayEffectDefs(ctx, "image"),
                 ];
             case TAudio:
                 return [...PlaybackDefs(ctx, false), ...OverlayEffectDefs(ctx, "audio")];
@@ -835,7 +836,7 @@
             t.Source.SetDisabled(host, _TF("The application decides the media", "Why the source box of the media editor is disabled"));
             t.OpenB.SetDisabled(host, _TF("The application decides the media", "Why the source box of the media editor is disabled"));
             t.FileB.SetDisabled(host, _TF("The application decides the media", "Why the source box of the media editor is disabled"));
-            t.LibB.E.hidden = host || !(none || t.Type === TEffect || t.Type === TImage || t.Type === TText || t.Type === TAudio);
+            t.LibB.E.hidden = host || !(none || t.Type === TEffect || t.Type === TImage || t.Type === TVideo || t.Type === TText || t.Type === TAudio);
             t.Source.Input.placeholder = t.Type === TText ? _TF("Type the text to show", "Placeholder of the source box of the media editor for a text media")
                 : t.Type === TYouTube ? _TF("Paste a YouTube link or a video code", "Placeholder of the source box of the media editor for a YouTube media")
                     : window.matchMedia("(max-width: 760px)").matches ? _TF("Paste a link", "Short placeholder of the source box of the media editor on a phone")
@@ -1066,7 +1067,7 @@
          */
         UpdateChromeForType(type) {
             const t = this;
-            t.LibB.E.hidden = !(type === TEffect || type === TImage || type === TText || type === TAudio);
+            t.LibB.E.hidden = !(type === TEffect || type === TImage || type === TVideo || type === TText || type === TAudio);
             t.Source.Input.placeholder = type === TText ? _TF("Type the text to show", "Placeholder of the source box of the media editor for a text media")
                 : type === TYouTube ? _TF("Paste a YouTube link or a video code", "Placeholder of the source box of the media editor for a YouTube media")
                     : _TF("Paste a link or a YouTube address (Enter opens it), or drop a file", "Placeholder of the source box of the media editor");
@@ -1810,14 +1811,14 @@
         }
 
         /**
-         * A picture / text with an effect and a crop: the effect draws the picture, and not every effect crops it, so a dashed frame
+         * A picture / video / text with an effect and a crop: the effect draws the picture, and not every effect crops it, so a dashed frame
          * over the player shows what the crop keeps (the rest dimmed), whatever the effect does (editor only).
          */
         UpdateCropFrame() {
             const t = this;
             const p = t.Player;
             const c = t.Props.Crop;
-            if (!(p && p.Element && c && t.Props.Effect && t.View && t.View.isConnected && (t.Type === TImage || t.Type === TText))) {
+            if (!(p && p.Element && c && t.Props.Effect && t.View && t.View.isConnected && (t.Type === TImage || t.Type === TVideo || t.Type === TText))) {
                 if (t.CropFrame)
                     t.CropFrame.remove();
                 t.CropFrame = null;
@@ -2331,13 +2332,13 @@
             const out = kind === "background" ? [] : [{ Value: "", Label: _TF("No effect", "Choice of the effect of a picture in the media editor"), Icon: "close" }];
             //  A sound: null = the default effect of the viewer (MV.DefaultAudioEffect), "" = none
             if (kind === "audio" && MV.DefaultAudioEffect) {
-                const dn = Humanize(MediaName(TEffect, MV.DefaultAudioEffect).replace(/\.glsl$/i, ""));
+                const dn = Sw.Format.BeautifyName(MediaName(TEffect, MV.DefaultAudioEffect).replace(/\.glsl$/i, ""));
                 out.unshift({ Value: null, Label: _T("Default ({0})", dn, "Choice of the effect of a sound in the media editor: the default effect, {0} is its name"), Icon: "sparkle" });
             }
             for (const [g, folder, hint] of groups)
                 for (const n of L[g] || [])
                     if (n !== "None")
-                        out.push({ Value: folder + n + ".glsl", Label: Humanize(n), Hint: groups.length > 1 ? hint : undefined, Icon: "sparkle" });
+                        out.push({ Value: folder + n + ".glsl", Label: Sw.Format.BeautifyName(n), Hint: groups.length > 1 ? hint : undefined, Icon: "sparkle" });
             const cur = kind === "background" ? (t.Type === TEffect ? t.Data : "") : (t.Props.Effect || "");
             if (cur && !out.some(o => o.Value === cur))
                 out.push({ Value: cur, Label: MediaName(TEffect, cur), Hint: _TF("Own file", "Kind of an effect in the effect picker of the media editor"), Icon: "file" });
@@ -2351,7 +2352,8 @@
          */
         async PickEffect(anchor) {
             const t = this;
-            const overlay = t.Type === TImage || t.Type === TText || t.Type === TAudio;
+            //  (a video: the effect draws its frames, like a picture: the image effects)
+            const overlay = t.Type === TImage || t.Type === TVideo || t.Type === TText || t.Type === TAudio;
             const kind = !overlay ? "background" : t.Type === TAudio ? "audio" : t.Type === TText && t.Props.CollageSeparator ? "collage" : "image";
             await Promise.all(["Background", "Image", "Collage", "Audio"].map(k => t.EffectNames(k)));
             const opts = t.EffectOptions(kind);

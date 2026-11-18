@@ -1195,6 +1195,38 @@
         },
 
         /**
+         * A display name from a file name or an id (an effect, a logo ...): "veil2_aurora_fjord" => "Veil 2 Aurora Fjord", "goldenLion" =>
+         * "Golden Lion", "Copper_Spectrum" => "Copper Spectrum". "_", "-", "." and spaces separate words, a lower case letter followed by an
+         * upper case one and a letter / digit change start a new word, every word starts with a capital. The same as the server's
+         * ShaderParser.BeautifyName (SysWeaver.Media.Shader), so names made here and there match.
+         * @param {string} id - The file name (without its extension) or id.
+         * @returns {string} The name.
+         */
+        BeautifyName(id) {
+            const s = String(id ?? "");
+            const sep = /[_\-. ]/;
+            const upper = c => c !== c.toLowerCase() && c === c.toUpperCase();
+            const lower = c => c !== c.toUpperCase() && c === c.toLowerCase();
+            const digit = c => c >= "0" && c <= "9";
+            const letter = c => upper(c) || lower(c);
+            let out = "";
+            let prev = " ";
+            for (const c of s) {
+                if (sep.test(c)) {
+                    if (prev !== " ")
+                        out += " ";
+                    prev = " ";
+                    continue;
+                }
+                if ((upper(c) && lower(prev)) || (digit(c) && letter(prev)) || (letter(c) && digit(prev)))
+                    out += " ";
+                out += prev === " " ? c.toUpperCase() : c;
+                prev = c;
+            }
+            return out.trim();
+        },
+
+        /**
          * Split text at the first separator into a trimmed [key, value] pair ([text, ""] if missing).
          * @param {string} text - Text.
          * @param {string} split - Separator.

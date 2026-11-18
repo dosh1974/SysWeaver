@@ -955,7 +955,10 @@ back (`IsShown()` is false meanwhile) or a block of another kind comes. Shown au
 
 ### FullScreen
 `Sw.FullScreen.IsFull()` (also an installed app running standalone), `Is()`, `await Enter(element)`, `await Exit()`, `await Toggle(element)`,
-`OnChange(fn)`, `OnTouch(element, {AnyPointer})`, `OnCorner(element, {Corner, Size, Area, OnToggle})`. Alias `Sw.Fullscreen`.
+`OnChange(fn)`, `OnTouch(element, {AnyPointer})`, `OnCorner(element, {Corner, Size, Area, OnToggle})`, `OverlayRoot()`. Alias `Sw.Fullscreen`.
+While an element is full screen (the Fullscreen api renders only it and what is inside it) pop-ups, menus, dialogs, toasts and hints are
+added to that element instead of the body (`OverlayRoot()`; not for an element that can't hold children: a video, a canvas, a frame ...),
+so they show over it. A page whose full screen element handles clicks or keys itself skips events from them (ex: the media player).
 
 ### Tabs
 `new Sw.Tabs({ Closable, OnSelect(tab, previous), OnClose(tab), OnAdd(), AddTitle, Small, Label, Fill, Class })`

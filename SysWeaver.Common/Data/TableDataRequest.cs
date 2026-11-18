@@ -185,5 +185,12 @@ namespace SysWeaver.Data
     }
 
 
+    public class CurrencyTableDataRequest : TableDataRequest
+    {
+        /// <summary>
+        /// The currency to use
+        /// </summary>
+        public String Currency;
+    }
 
 }

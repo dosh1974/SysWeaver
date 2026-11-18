@@ -80,7 +80,76 @@
         },
         /** @param {string} v The stage background. */
         SetBackground: v => Sw.Storage.Set(Prefs.BackgroundKey, v || Prefs.DefaultBackground),
+        /**
+         * The effect the viewer's menu chose last for a media type (EffectKind: a sound's visualization, an image's effect), used for a
+         * media of that type whose settings name no effect.
+         * @param {number} type The media type.
+         * @returns {?string} The effect ("audioEffects/X.glsl", "" = none), null: none chosen (a sound: the default effect).
+         */
+        Effect: type => {
+            const k = EffectKind(type);
+            const v = k ? Sw.Storage.Get(k.Key) : null;
+            //  (only a built in effect of the kind, or none)
+            return typeof v === "string" && (v === "" || (v.startsWith(k.Folder) && /^[\w\-. ]+\.glsl$/i.test(v.substring(k.Folder.length)))) ? v : null;
+        },
+        /**
+         * Remember the effect chosen for a media type.
+         * @param {number} type The media type.
+         * @param {?string} v The effect ("" = none, null = forget).
+         */
+        SetEffect: (type, v) => {
+            const k = EffectKind(type);
+            if (!k)
+                return;
+            if (v === null || v === undefined)
+                Sw.Storage.Remove(k.Key);
+            else
+                Sw.Storage.Set(k.Key, v);
+        },
     };
+
+    /**
+     * The params of a media with the effect the viewer chose (its effects menu, the remembered choice): an image's or a video's effect gets the
+     * size of the view, not the picture's (EffectSizeFromImage = false: an effect is drawn at the player's size, like an effect of its own). The given
+     * params are not changed.
+     * @param {number} type The media type.
+     * @param {?object} props The media params.
+     * @param {string} fx The effect ("" = none).
+     * @returns {object} New params.
+     */
+    function WithViewerEffect(type, props, fx) {
+        const np = Object.assign({}, props || {}, { Effect: fx });
+        if (fx && (type === MediaTypes.Image || type === MediaTypes.Video))
+            np.EffectSizeFromImage = false;
+        return np;
+    }
+
+    /**
+     * The effects the viewer's menu picks for a media type (CreateChrome option Effects): the list of the built in effects (Api), their
+     * folder (relative to this script), the storage key of the last choice (Prefs.Effect), the effect when the settings name none and no
+     * choice was made (a sound: DefaultAudioEffect), and the name of the menu item.
+     * @param {number} type The media type.
+     * @returns {?{Api:string, Folder:string, Key:string, Default:string, Text:function():string}} The kind, null: no effect choice (a video ...).
+     */
+    function EffectKind(type) {
+        if (type === MediaTypes.Audio)
+            return {
+                Api: "Api/GetAudioEffects", Folder: "audioEffects/", Key: "SysWeaver.Media.AudioEffect", Default: DefaultAudioEffect,
+                Text: () => _TF("Visualization", "Menu item of the media viewer with the effects that visualize a sound (a sub menu: none and the built in audio effects)"),
+            };
+        if (type === MediaTypes.Image)
+            return {
+                Api: "Api/GetImageEffects", Folder: "imageEffects/", Key: "SysWeaver.Media.ImageEffect", Default: "",
+                Text: () => _TF("Effects", "Menu item of the media viewer with the effects of an image (a sub menu: none and the built in image effects)"),
+            };
+        //  (a video with an effect: the effect draws its frames, like a picture: the image effects)
+        if (type === MediaTypes.Video)
+            return {
+                Api: "Api/GetImageEffects", Folder: "imageEffects/", Key: "SysWeaver.Media.VideoEffect", Default: "",
+                Text: () => _TF("Effects", "Menu item of the media viewer with the effects of a video (a sub menu: none and the built in image effects)"),
+            };
+        return null;
+    }
 
     /**
      * The stages behind a media (the player chrome's background menu: what shows through the transparent parts of an effect, an image
@@ -641,158 +710,812 @@
     // ------------------------------------------------------------------ stats
 
     /**
-     * Create the `<Media-Stats>` block of a player: live stat chips (updated every frame while attached).
-     * A chip copies "name: text (value)" on click / Enter / Space; its description shows as tooltip, on long press and focus.
+     * The MIME types of the file extensions the viewer plays (the type a server would send; the real one comes from the resource timing
+     * when the browser has it, see CreateStats).
+     * @type {Object<string, string>}
+     */
+    const MimeOfExt = {
+        png: "image/png", apng: "image/apng", jpg: "image/jpeg", jpeg: "image/jpeg", jfif: "image/jpeg", gif: "image/gif", webp: "image/webp",
+        avif: "image/avif", svg: "image/svg+xml", bmp: "image/bmp", ico: "image/x-icon", cur: "image/x-icon", tif: "image/tiff", tiff: "image/tiff",
+        jxl: "image/jxl", heic: "image/heic", heif: "image/heif", psd: "image/vnd.adobe.photoshop",
+        mp4: "video/mp4", m4v: "video/mp4", webm: "video/webm", mkv: "video/x-matroska", mov: "video/quicktime", ogv: "video/ogg",
+        avi: "video/x-msvideo", wmv: "video/x-ms-wmv", "3gp": "video/3gpp", ts: "video/mp2t", ivf: "video/x-ivf",
+        mp3: "audio/mpeg", wav: "audio/wav", ogg: "audio/ogg", oga: "audio/ogg", opus: "audio/opus", flac: "audio/flac", aac: "audio/aac",
+        adts: "audio/aac", m4a: "audio/mp4", weba: "audio/webm", mid: "audio/midi", midi: "audio/midi", wma: "audio/x-ms-wma",
+        glsl: "text/x-glsl",
+    };
+
+    /** @type {?{Renderer:string, Vendor:string, MaxTexture:number}} The GPU of WebGL (read once, see CreateStats). */
+    let GpuInfo = null;
+
+    /**
+     * The GPU that renders the effects (WebGL's renderer and vendor, the largest texture). Firefox and Safari name it in RENDERER; Chrome
+     * only through WEBGL_debug_renderer_info (asked only when RENDERER is the generic "WebKit WebGL": Firefox warns that it is deprecated).
+     * @param {WebGLRenderingContext} gl A context.
+     * @returns {{Renderer:string, Vendor:string, MaxTexture:number}} The GPU.
+     */
+    function GetGpuInfo(gl) {
+        if (GpuInfo)
+            return GpuInfo;
+        let r = String(gl.getParameter(gl.RENDERER) || "");
+        let v = String(gl.getParameter(gl.VENDOR) || "");
+        if (/^WebKit/i.test(r)) {
+            const ext = gl.getExtension("WEBGL_debug_renderer_info");
+            if (ext) {
+                r = String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) || r);
+                v = String(gl.getParameter(ext.UNMASKED_VENDOR_WEBGL) || v);
+            }
+        }
+        GpuInfo = { Renderer: r, Vendor: v, MaxTexture: gl.getParameter(gl.MAX_TEXTURE_SIZE) || 0 };
+        return GpuInfo;
+    }
+
+    /**
+     * Create the `<Media-Stats>` block of a player: the technical details of the media in groups (the file, the picture, the video, the
+     * sound, the effect), each a `<Media-Stat>` row with a name and a value. A click (or Enter / Space) on the name copies the name, on the
+     * value the value; the description shows as tooltip, on long press and focus.
+     * Only what the browser already has is shown (no extra download, no decoding): the resource timing of the file (size, transfer, MIME
+     * type, protocol), the element (natural size, frame counters, buffered time), the decoded sound when the player has one (an effect with
+     * the audio2 texture, the offline analysis), the effect's counters. The values are refreshed 4 times a second while the block is shown.
      * @param {object} player The player.
      * @param {object} props The media params.
+     * @param {number} [type] The media type (MediaTypes).
+     * @param {string} [data] The url (or the text / the YouTube code).
      * @returns {HTMLElement} The `<Media-Stats>` element.
      */
-    function CreateStats(player, props) {
+    function CreateStats(player, props, type, data) {
         const root = document.createElement("Media-Stats");
-        const copyHint = _TF("Select to copy the value to the clipboard.", "Tool tip suffix of a media statistics value");
+        const copyName = _TF("Select to copy the name.", "Tool tip suffix of the name of a media statistics value");
+        const copyValue = _TF("Select to copy the value.", "Tool tip suffix of a media statistics value");
 
         /**
-         * Add a stat chip.
+         * A copy target: the name or the value of a row (click / Enter / Space copies its text).
+         * @param {string} tag The element name.
+         * @param {string} title The tool tip.
+         * @returns {HTMLElement} The element.
+         */
+        function target(tag, title) {
+            const e = document.createElement(tag);
+            e.title = title;
+            e.tabIndex = 0;
+            e.setAttribute("role", "button");
+            e.addEventListener("click", ev => {
+                if (Sw.BadClick(ev))
+                    return;
+                ev.stopPropagation();
+                Sw.Clipboard.Copy(e.textContent);
+            });
+            Sw.KeyClick(e);
+            if (Sw.Hint)
+                Sw.Hint.Attach(e, title);
+            return e;
+        }
+
+        /**
+         * A part of the statistics panel: a section (a header that collapses it, "Image", "Effect" ...) or a group in a section (a small label).
+         * A header without a shown row is hidden. The chips under the media show neither.
+         * @typedef {{G:HTMLElement, Rows:HTMLElement[]}} StatPart
+         */
+        /** @type {?StatPart} The section the next rows belong to. */
+        let sectionP = null;
+        /** @type {?StatPart} The group (in a section of mixed media) the next rows belong to. */
+        let groupP = null;
+        /** @type {StatPart[]} The sections and groups. */
+        const parts = [];
+        /** @type {Set<string>} The ids of the collapsed sections (remembered: StatsFoldedKey). */
+        const folded = (() => {
+            try {
+                const a = JSON.parse(Sw.Storage.Get(StatsFoldedKey) || "[]");
+                return new Set(Array.isArray(a) ? a.filter(x => typeof x === "string") : []);
+            }
+            catch {
+                return new Set();
+            }
+        })();
+
+        /**
+         * Start a section (a header that collapses / expands its rows, remembered by its id).
+         * @param {string} id The id of the section (the same in every language: "Image", "Effect" ...).
+         * @param {string} name The header.
+         */
+        function section(id, name) {
+            const h = document.createElement("Media-StatSection");
+            h.textContent = name;
+            h.tabIndex = 0;
+            h.setAttribute("role", "button");
+            const p = { G: h, Rows: [], Id: id };
+            parts.push(p);
+            sectionP = p;
+            groupP = null;
+            const apply = () => {
+                const on = folded.has(id);
+                h.classList.toggle("Folded", on);
+                h.setAttribute("aria-expanded", String(!on));
+                h.title = on ? _TF("Show this part of the statistics", "Tool tip of a collapsed section header of the media statistics") : _TF("Hide this part of the statistics", "Tool tip of an expanded section header of the media statistics");
+                for (const r of p.Rows)
+                    r.classList.toggle("Fold", on);
+            };
+            p.Apply = apply;
+            h.addEventListener("click", ev => {
+                if (Sw.BadClick(ev))
+                    return;
+                ev.stopPropagation();
+                if (folded.has(id))
+                    folded.delete(id);
+                else
+                    folded.add(id);
+                Sw.Storage.Set(StatsFoldedKey, JSON.stringify([...folded]));
+                apply();
+            });
+            Sw.KeyClick(h);
+            root.appendChild(h);
+        }
+
+        /**
+         * Start a group of rows: in a section of mixed media (an image / a sound with an effect) a label in the section, else a section of its own.
+         * @param {string} id The id (the same in every language).
+         * @param {string} name The name of the group.
+         */
+        function group(id, name) {
+            if (!mixed) {
+                section(id, name);
+                return;
+            }
+            const g = document.createElement("Media-StatGroup");
+            g.textContent = name;
+            root.appendChild(g);
+            groupP = { G: g, Rows: [] };
+            parts.push(groupP);
+            sectionP.Rows.push(g);
+        }
+
+        /** @type {Array<function():void>} The updates of the rows. */
+        const ups = [];
+
+        /**
+         * Add a row.
          * @param {string} name Display name.
          * @param {string} title Description.
          * @param {string} [cls] Category class: "Adjust" (trim), "Clip" (crop) or "Actual" (render size).
-         * @param {function():(Array|null)} get Returns [text, value] or null to hide the chip.
-         * @returns {function():void} Updates the chip.
+         * @param {function():(Array|null)} get Returns [text, value] or null to hide the row.
          */
         function add(name, title, cls, get) {
             const statE = document.createElement("Media-Stat");
-            statE.title = title + "\n\n" + copyHint;
-            statE.tabIndex = 0;
-            statE.setAttribute("role", "button");
             if (cls)
                 statE.classList.add(cls);
-            const nameE = document.createElement("Media-StatName");
-            nameE.textContent = name + ":";
-            const val = document.createElement("Media-StatValue");
+            const nameE = target("Media-StatName", title + "\n\n" + copyName);
+            nameE.textContent = name;
+            const val = target("Media-StatValue", title + "\n\n" + copyValue);
             val.textContent = "-";
             statE.append(nameE, val);
             root.appendChild(statE);
+            if (sectionP)
+                sectionP.Rows.push(statE);
+            if (groupP)
+                groupP.Rows.push(statE);
             let text = "-";
-            let value = "-";
-            const copy = ev => {
-                if (Sw.BadClick(ev))
-                    return;
-                Sw.Clipboard.Copy(name + ": " + text + " (" + value + ")");
-            };
-            statE.addEventListener("click", copy);
-            Sw.KeyClick(statE);
-            if (Sw.Hint)
-                Sw.Hint.Attach(statE, statE.title);
-            return () => {
+            /** @type {boolean} The row had a value once: without one now it stays, dimmed with "-" (Idle), so the rows below don't jump. */
+            let had = false;
+            ups.push(() => {
                 let r = null;
                 try {
                     r = get();
                 }
                 catch {
+                    r = null;
+                }
+                if (!r || r[0] === null || r[0] === undefined || r[0] === "") {
+                    //  (a value that was never there: no row; one that went away, ex: the frame time while paused: "-", dimmed)
+                    if (!had) {
+                        statE.classList.add("Hide");
+                        return;
+                    }
+                    statE.classList.add("Idle");
+                    if (text !== "-") {
+                        text = "-";
+                        val.textContent = text;
+                    }
                     return;
                 }
-                if (!r) {
-                    statE.classList.add("Hide");
+                had = true;
+                statE.classList.remove("Hide", "Idle");
+                const tx = String(r[0]);
+                if (tx === text)
                     return;
-                }
-                statE.classList.remove("Hide");
-                if (r[0] === text)
-                    return;
-                text = r[0];
-                value = r.length > 1 ? r[1] : r[0];
-                val.textContent = text;
-            };
+                text = tx;
+                val.textContent = tx;
+            });
         }
 
+        const n = (v, d) => Sw.Format.Number(v, d);
         /** @param {number} v Seconds. @returns {Array} [text, value]. */
-        const secs = v => [_T("{0} s", Sw.Format.Number(v, 2), "A media statistics value in seconds (s is the unit), {0} is the number"), v];
+        const secs = v => [_T("{0} s", n(v, 2), "A media statistics value in seconds (s is the unit), {0} is the number"), v];
+        /** @param {number} v Milliseconds. @returns {Array} [text, value]. */
+        const msv = (v, d) => [_T("{0} ms", n(v, d ?? 1), "A media statistics value in milliseconds (ms is the unit), {0} is the number"), v];
         /** @param {number} v Pixels. @returns {Array} [text, value]. */
         const px = v => [v + " px", v];
-        const ups = [];
+        /** @param {number} w Width. @param {number} h Height. @returns {?Array} "w × h" in pixels, null without a size. */
+        const size = (w, h) => w > 0 && h > 0 ? [_T("{0} × {1} px", w, h, "A media statistics value: a size in pixels, {0} the width, {1} the height"), w + "x" + h] : null;
+        /** @param {number} v Bytes. @returns {?Array} The size ("12.3 KB"). */
+        const bytes = v => v > 0 ? [Sw.Format.Bytes(v, 1), v] : null;
+        /** @param {number} v Bits per second. @returns {?Array} The rate ("1.2 Mbit/s"). */
+        const bitrate = v => {
+            if (!(v > 0) || !isFinite(v))
+                return null;
+            return v >= 1e6 ? [_T("{0} Mbit/s", n(v / 1e6, 2), "A media statistics value: a bit rate in megabits per second"), v]
+                : [_T("{0} kbit/s", n(v / 1e3, 0), "A media statistics value: a bit rate in kilobits per second"), v];
+        };
+        /** @param {boolean} v A switch. @returns {Array} yes / no. */
+        const yesNo = v => [v ? _TF("yes", "A media statistics value: a switch that is on") : _TF("no", "A media statistics value: a switch that is off"), !!v];
+        /**
+         * The aspect ratio of a size: reduced ("16:9") and as a number.
+         * @param {number} w Width. @param {number} h Height. @returns {?Array} The ratio, null without a size.
+         */
+        const aspect = (w, h) => {
+            if (!(w > 0 && h > 0))
+                return null;
+            const gcd = (a, b) => b ? gcd(b, a % b) : a;
+            const g = gcd(Math.round(w), Math.round(h));
+            const a = w / h;
+            const rw = Math.round(w) / g, rh = Math.round(h) / g;
+            return [(rw <= 64 && rh <= 64 ? rw + ":" + rh + " · " : "") + n(a, 3), a];
+        };
+
         const visual = player.HaveVisual;
+        const fx = typeof player.CompilationTime !== "undefined";
+        /** @type {?object} The player of the sound (an effect that plays a sound: its sound's). */
+        const soundPlayer = player.Media || (player.HaveAudio && !fx ? player : null);
+        /** @type {?HTMLMediaElement} The element of a video or a sound. */
+        const mediaE = player.Element instanceof HTMLMediaElement ? player.Element : (soundPlayer && soundPlayer.Element instanceof HTMLMediaElement ? soundPlayer.Element : null);
+        const videoE = mediaE instanceof HTMLVideoElement ? mediaE : null;
+        const imgE = player.Element instanceof HTMLImageElement ? player.Element : null;
+        const isText = type === MediaTypes.Text;
+        const isYouTube = type === MediaTypes.YouTube;
+        /** @type {?object} The picture texture of an effect (an image with an effect, an effect with a picture), null if none. */
+        const texImg = fx && player.Texture && player.Texture.Image instanceof HTMLImageElement ? player.Texture : null;
+        /**
+         * Mixed media: an image, a sound or a text with an effect (or an effect with a sound / a picture): its own values first in a section
+         * "Image" / "Audio" / "Text", then the effect's in a section "Effect". null: one media, a section per group.
+         * @type {?string}
+         */
+        const baseKind = !fx ? null
+            : player.Media ? (player.Media.Element instanceof HTMLVideoElement ? "Video" : "Audio")
+                : (type === MediaTypes.Image || texImg) ? "Image"
+                    : isText ? "Text" : null;
+        const mixed = !!baseKind;
+        /** @param {?string} u A url. @returns {?string} It absolute, null if none / not a url. */
+        const abs = u => {
+            try {
+                return u ? new URL(u, document.baseURI).href : null;
+            }
+            catch {
+                return null;
+            }
+        };
+        /** @type {?string} The file of the media (absolute url; mixed: the image / the sound, not the effect), null for a text / YouTube. */
+        const fileUrl = isYouTube || (isText && !texImg) ? null
+            : (baseKind === "Audio" || baseKind === "Video") ? abs(player.Media.Url)
+                : baseKind === "Image" ? abs(type === MediaTypes.Image ? data : texImg.Url)
+                    : abs(player.Source || player.Url || data);
+        /** @type {?string} The effect file of mixed media (absolute url), null otherwise. */
+        const fxUrl = mixed && typeof player.Url === "string" ? abs(player.Url) : null;
+
+        /**
+         * The resource timing of a file (its size, transfer, MIME type ...): what the browser recorded when it loaded it, no request.
+         * Looked up until found (a media element loads in parts), at most 40 times. Cross origin files without Timing-Allow-Origin have
+         * no sizes (0).
+         * @param {?string} url The file.
+         * @returns {function():?PerformanceResourceTiming} Returns the timing, null when the browser has none.
+         */
+        const timingOf = url => {
+            let timing;
+            let tries = 0;
+            return () => {
+                if (timing || !url || /^(blob|data):/i.test(url) || tries > 40)
+                    return timing || null;
+                ++tries;
+                try {
+                    const e = performance.getEntriesByName(url, "resource");
+                    timing = e.length ? e[e.length - 1] : undefined;
+                }
+                catch {
+                    timing = null;
+                }
+                return timing || null;
+            };
+        };
+        const getTiming = timingOf(fileUrl);
+        const getFxTiming = timingOf(fxUrl);
+        /** @returns {number} The size of the file in bytes (as sent: compressed, else decoded), 0 if unknown. */
+        const fileSize = () => {
+            const t = getTiming();
+            return t ? (t.encodedBodySize || t.decodedBodySize || 0) : 0;
+        };
+        /** @returns {string} The extension of the file (lower case), "" if none. */
+        const ext = (() => {
+            const m = /\.([a-z0-9]+)$/i.exec((fileUrl || "").split(/[?#]/)[0]);
+            return m ? m[1].toLowerCase() : "";
+        })();
+        /**
+         * The size of the picture of the media: an image with an effect: the image (not the effect's canvas), else the player's.
+         * @returns {number[]} [width, height] (0 when unknown).
+         */
+        const pic = () => {
+            if (baseKind === "Image") {
+                const t = player.Texture;
+                const im = t && t.Image;
+                return [(im && im.naturalWidth) || (t && t.Width) || 0, (im && im.naturalHeight) || (t && t.Height) || 0];
+            }
+            if (baseKind === "Video")
+                return [player.Media.Element.videoWidth || 0, player.Media.Element.videoHeight || 0];
+            //  (an effect: the canvas it draws, it follows the player size, full screen ...)
+            if (fx && player.Element instanceof HTMLCanvasElement)
+                return [player.Element.width || 0, player.Element.height || 0];
+            return [player.Width || 0, player.Height || 0];
+        };
+
+        // ---- the media (mixed media: first a section of the image / sound / text itself, then one of the effect)
+        if (mixed)
+            section(baseKind, baseKind === "Audio" ? _TF("Audio", "Header of the section of the media statistics with the values of the sound of a sound with an effect")
+                : baseKind === "Video" ? _TF("Video", "Header of the section of the media statistics with the values of the video of a video with an effect")
+                    : baseKind === "Image" ? _TF("Image", "Header of the section of the media statistics with the values of the picture of an image with an effect")
+                        : _TF("Text", "Header of the section of the media statistics with the values of the text of a text with an effect"));
+        group("Media", _TF("Media", "Header of a group of the media statistics: the play position, duration and volume"));
+        add(_TF("Type", "Name of a media statistics value: the media type (Image, Video ...)"), _TF("The type of the media", "Description of a media statistics value"), null,
+            () => typeof type === "number" ? [(MediaTypes.Names && MediaTypes.Names[type]) || type, type] : null);
         //  Every player shows its play position and duration, also a still image (its slideshow timeline), as before the rewrite
-        {
-            ups.push(add(_TF("Time", "Name of a media statistics value: the current play position"), _TF("The current position in seconds", "Description of a media statistics value"), null,
-                () => secs(player.GetPos())));
-            ups.push(add(_TF("Duration", "Name of a media statistics value: the length of the media"), _TF("The duration of the media in seconds, less than zero means unknown or infinity", "Description of a media statistics value"), null,
+        add(_TF("Time", "Name of a media statistics value: the current play position"), _TF("The current position in seconds", "Description of a media statistics value"), null,
+            () => secs(player.GetPos()));
+        add(_TF("Duration", "Name of a media statistics value: the length of the media"), _TF("The duration of the media in seconds, less than zero means unknown or infinity", "Description of a media statistics value"), null,
+            () => {
+                const v = player.Duration;
+                return v < 0 || !isFinite(v) ? ["∞", v] : secs(v);
+            });
+        if (player.HaveAudio)
+            add(_TF("Volume", "Name of a media statistics value: the audio volume"), _TF("The current audio volume of the media as a percentage", "Description of a media statistics value"), null,
                 () => {
-                    const v = player.Duration;
-                    return v < 0 ? ["?", v] : secs(v);
-                }));
+                    const v = player.GetTrueVolume();
+                    return [_T("{0} %", n(v * 100, 1), "A media statistics value as a percentage, {0} is the number"), v];
+                });
+        if (mediaE)
+            add(_TF("Speed", "Name of a media statistics value: the play speed"), _TF("The play speed (1 = normal)", "Description of a media statistics value"), null,
+                () => mediaE.playbackRate !== 1 ? [n(mediaE.playbackRate * 100, 0) + " %", mediaE.playbackRate] : null);
+        //  (an effect that plays a sound: the play window is the sound's)
+        const soundParams = SoundParams(player) || props || {};
+        if (typeof soundParams.StartAt !== "undefined") {
+            add(_TF("Trimmed time", "Name of a media statistics value: the position inside the trimmed part"), _TF("The current position in the trimmed period in seconds", "Description of a media statistics value"), "Adjust",
+                () => {
+                    const b = soundParams.StartAt;
+                    return b > 0 ? secs(player.GetPos() - b) : null;
+                });
+            add(_TF("Trimmed duration", "Name of a media statistics value: the length of the trimmed part"), _TF("The duration of the trimmed period in seconds", "Description of a media statistics value"), "Adjust",
+                () => {
+                    const b = soundParams.StartAt;
+                    const e = soundParams.EndAt;
+                    if (!((b > 0) || (e > b)))
+                        return null;
+                    return secs((e > b ? e : player.Duration) - b);
+                });
         }
-        if ((typeof player.AvgDrawTimeMs !== "undefined") && (typeof player.Query !== "undefined"))
-            ups.push(add(_TF("GPU time", "Name of a media statistics value: time spent on the graphics card"), _TF("The GPU time spent rendering the effect in ms", "Description of a media statistics value"), null,
+
+        // ---- the file (what the browser recorded when it loaded it)
+        if (fileUrl) {
+            group("File", _TF("File", "Header of a group of the media statistics: the file (name, type, size, transfer)"));
+            add(_TF("Name", "Name of a media statistics value: the file name"), _TF("The name of the file", "Description of a media statistics value"), null,
                 () => {
-                    let v = player.AvgDrawTimeMs;
-                    if (v <= 0)
-                        v = player.TotalTime / Math.max(1, player.MeasureCount);
-                    return [_T("{0} ms", Sw.Format.Number(v, 3), "A media statistics value in milliseconds (ms is the unit), {0} is the number"), v];
-                }));
-        if (typeof player.CompilationTime !== "undefined")
-            ups.push(add(_TF("Build", "Name of a media statistics value: the shader compilation time"), _TF("The duration of the compilation step of this effect in ms", "Description of a media statistics value"), null,
+                    const f = Sw.Url.FileName(fileUrl.split(/[?#]/)[0]);
+                    return f ? [decodeURIComponent(f), f] : null;
+                });
+            add(_TF("MIME type", "Name of a media statistics value: the content type of the file, ex: image/png"), _TF("The content type the server sent (else the one of the file extension)", "Description of a media statistics value"), null,
+                () => {
+                    const t = getTiming();
+                    const ct = t && t.contentType;
+                    return ct ? [ct, ct] : MimeOfExt[ext] ? [MimeOfExt[ext] + " (." + ext + ")", MimeOfExt[ext]] : ext ? ["." + ext, ext] : null;
+                });
+            add(_TF("Size", "Name of a media statistics value: the file size"), _TF("The size of the file as sent by the server (known when the browser may measure it)", "Description of a media statistics value"), null,
+                () => bytes(fileSize()));
+            add(_TF("Decoded size", "Name of a media statistics value: the file size after the transfer compression was removed"), _TF("The size of the file after the transfer compression (gzip, br) was removed", "Description of a media statistics value"), null,
+                () => {
+                    const t = getTiming();
+                    return t && t.decodedBodySize && t.decodedBodySize !== t.encodedBodySize ? bytes(t.decodedBodySize) : null;
+                });
+            add(_TF("Transferred", "Name of a media statistics value: the bytes that went over the network"), _TF("The bytes that went over the network (headers included); from the cache means nothing was downloaded", "Description of a media statistics value"), null,
+                () => {
+                    const t = getTiming();
+                    if (!t || !(t.encodedBodySize > 0))
+                        return null;
+                    return t.transferSize === 0 ? [_TF("from the cache", "A media statistics value: the file was not downloaded, the browser had it"), 0] : bytes(t.transferSize);
+                });
+            add(_TF("Load time", "Name of a media statistics value: the time the file took to load"), _TF("From the request to the last byte of the file in ms", "Description of a media statistics value"), null,
+                () => {
+                    const t = getTiming();
+                    return t && t.duration > 0 ? msv(t.duration, 0) : null;
+                });
+            add(_TF("Protocol", "Name of a media statistics value: the network protocol, ex: h2"), _TF("The network protocol of the transfer (h2 = HTTP/2, h3 = HTTP/3)", "Description of a media statistics value"), null,
+                () => {
+                    const t = getTiming();
+                    return t && t.nextHopProtocol ? [t.nextHopProtocol, t.nextHopProtocol] : null;
+                });
+            add(_TF("Status", "Name of a media statistics value: the HTTP status of the response"), _TF("The HTTP status code of the response", "Description of a media statistics value"), null,
+                () => {
+                    const t = getTiming();
+                    return t && t.responseStatus ? [t.responseStatus, t.responseStatus] : null;
+                });
+            if (mediaE || player.Duration > 0)
+                add(_TF("Average bit rate", "Name of a media statistics value: the file size divided by the duration"), _TF("The size of the file divided by its duration", "Description of a media statistics value"), null,
+                    () => {
+                        const d = (mediaE && mediaE.duration) || player.Duration;
+                        return d > 0 && isFinite(d) ? bitrate(fileSize() * 8 / d) : null;
+                    });
+        }
+
+        // ---- the picture: of the media itself (an image with an effect: the image, not the effect's canvas); how it is shown (its size on
+        //  the page, the crop) goes to the effect's section of mixed media
+        /** Add the rows of how the media is shown: its size on the page and scale, the device pixel ratio, the crop. */
+        const addShown = () => {
+            add(_TF("Shown at", "Name of a media statistics value: the size the media is shown at on the page"), _TF("The size the media is shown at on the page in CSS pixels, and its scale (100 % = one pixel of the media on one pixel of the screen)", "Description of a media statistics value"), null,
+                () => {
+                    const e = player.Element;
+                    //  (the pixels of the media: an effect's canvas, else the picture; read every time: a resize, full screen change them)
+                    const mw = e instanceof HTMLCanvasElement ? e.width : player.Width;
+                    if (!e || !e.getBoundingClientRect || !(mw > 0))
+                        return null;
+                    const r = e.getBoundingClientRect();
+                    if (!(r.width > 0))
+                        return null;
+                    const scale = r.width * (window.devicePixelRatio || 1) / mw;
+                    return [_T("{0} × {1} px ({2} %)", Math.round(r.width), Math.round(r.height), n(scale * 100, 0), "A media statistics value: the shown size of the media in CSS pixels ({0} the width, {1} the height) and its scale in percent ({2})"), scale];
+                });
+            add(_TF("Device pixel ratio", "Name of a media statistics value: screen pixels per CSS pixel"), _TF("The screen pixels per CSS pixel (the zoom and the display scaling)", "Description of a media statistics value"), null,
+                () => [n(window.devicePixelRatio || 1, 2), window.devicePixelRatio || 1]);
+            if (props && (typeof props.Crop !== "undefined")) {
+                /** @returns {boolean} True if something is cropped. */
+                const cropped = () => (player.ClipWidth !== player.Width) || (player.ClipHeight !== player.Height) || (player.ClipX !== 0) || (player.ClipY !== 0);
+                add(_TF("Cropped width", "Name of a media statistics value"), _TF("The cropped width in pixels", "Description of a media statistics value"), "Clip", () => cropped() ? px(player.ClipWidth) : null);
+                add(_TF("Cropped height", "Name of a media statistics value"), _TF("The cropped height in pixels", "Description of a media statistics value"), "Clip", () => cropped() ? px(player.ClipHeight) : null);
+                add(_TF("Cropped left", "Name of a media statistics value"), _TF("The number of cropped pixels on the left", "Description of a media statistics value"), "Clip", () => cropped() ? px(player.ClipX) : null);
+                add(_TF("Cropped top", "Name of a media statistics value"), _TF("The number of cropped pixels on the top", "Description of a media statistics value"), "Clip", () => cropped() ? px(player.ClipY) : null);
+            }
+        };
+        if (visual && (!mixed || baseKind === "Image" || baseKind === "Video")) {
+            group("Picture", _TF("Picture", "Header of a group of the media statistics: the size of the picture"));
+            add(_TF("Width", "Name of a media statistics value: the media width"), _TF("The width in pixels of the media", "Description of a media statistics value"), null, () => pic()[0] > 0 ? px(pic()[0]) : null);
+            add(_TF("Height", "Name of a media statistics value: the media height"), _TF("The height in pixels of the media", "Description of a media statistics value"), null, () => pic()[1] > 0 ? px(pic()[1]) : null);
+            add(_TF("Megapixels", "Name of a media statistics value: the number of pixels in millions"), _TF("The number of pixels in millions", "Description of a media statistics value"), null,
+                () => {
+                    const [w, h] = pic();
+                    return w > 0 && h > 0 ? [n(w * h / 1e6, 2) + " MP", w * h] : null;
+                });
+            add(_TF("Aspect ratio", "Name of a media statistics value: width / height"), _TF("The width divided by the height", "Description of a media statistics value"), null,
+                () => aspect(...pic()));
+            if (!mixed)
+                addShown();
+            if (imgE || baseKind === "Image") {
+                add(_TF("Memory", "Name of a media statistics value: the memory the decoded picture takes"), _TF("The memory the decoded picture takes (4 bytes per pixel, an estimate)", "Description of a media statistics value"), null,
+                    () => {
+                        const [w, h] = pic();
+                        return ext === "svg" ? null : bytes(w * h * 4);
+                    });
+                add(_TF("Bits per pixel", "Name of a media statistics value: the file size in bits divided by the number of pixels"), _TF("The size of the file in bits divided by the number of pixels (24 = uncompressed colors)", "Description of a media statistics value"), null,
+                    () => {
+                        const s = fileSize();
+                        const [w, h] = pic();
+                        return s > 0 && w > 0 && h > 0 && ext !== "svg" ? [n(s * 8 / (w * h), 2), s * 8 / (w * h)] : null;
+                    });
+                /**
+                 * The bytes per pixel of the uncompressed picture: 3 (rgb) for a format without an alpha channel (jpeg), else 4 (rgba; a file
+                 * of such a format may still have no alpha, that isn't known without reading the file).
+                 * @returns {number} 3 or 4.
+                 */
+                const rawBpp = () => {
+                    const t = getTiming();
+                    const ct = (t && t.contentType) || MimeOfExt[ext] || "";
+                    return /^image\/(jpeg|pjpeg)$/i.test(ct) || /^(jpe?g|jfif|jpe)$/.test(ext) ? 3 : 4;
+                };
+                add(_TF("Compression", "Name of a media statistics value: how many times smaller the file is than the decoded picture"), _TF("How many times smaller the file is than the uncompressed picture (3 bytes per pixel for a format without transparency, ex: jpeg, else 4)", "Description of a media statistics value"), null,
+                    () => {
+                        const s = fileSize();
+                        const [w, h] = pic();
+                        const b = rawBpp();
+                        return s > 0 && w > 0 && h > 0 && ext !== "svg" ? [n(w * h * b / s, 1) + " : 1", w * h * b / s] : null;
+                    });
+                add(_TF("Vector", "Name of a media statistics value: the picture is a vector graphic (svg)"), _TF("A vector graphic: it is drawn sharp at any size", "Description of a media statistics value"), null,
+                    () => ext === "svg" ? yesNo(true) : null);
+            }
+        }
+
+        // ---- the video (the element's counters; the frame rate from requestVideoFrameCallback while the statistics are shown)
+        /** @type {{Rate:number, F:number, T:number}} The measured frame rate of the video (frames presented per second of video). */
+        const vfps = { Rate: 0, F: -1, T: 0 };
+        if (videoE) {
+            group("Video", _TF("Video", "Header of a group of the media statistics: the video stream"));
+            add(_TF("Frame rate", "Name of a media statistics value: the frames per second of the video"), _TF("The frames per second of the video, measured while it plays", "Description of a media statistics value"), null,
+                () => vfps.Rate > 0 ? [_T("{0} fps", n(vfps.Rate, 2), "A media statistics value: frames per second"), vfps.Rate] : null);
+            /** @returns {?VideoPlaybackQuality} The frame counters of the video. */
+            const q = () => typeof videoE.getVideoPlaybackQuality === "function" ? videoE.getVideoPlaybackQuality() : null;
+            add(_TF("Frames shown", "Name of a media statistics value: the number of video frames shown"), _TF("The number of video frames the browser decoded and shown", "Description of a media statistics value"), null,
+                () => {
+                    const v = q();
+                    return v ? [n(v.totalVideoFrames, 0), v.totalVideoFrames] : null;
+                });
+            add(_TF("Dropped frames", "Name of a media statistics value: the video frames that were skipped"), _TF("The video frames that were skipped (the computer was too slow), with the share of all frames", "Description of a media statistics value"), null,
+                () => {
+                    const v = q();
+                    return v && v.totalVideoFrames > 0 ? [n(v.droppedVideoFrames, 0) + " (" + n(v.droppedVideoFrames * 100 / v.totalVideoFrames, 1) + " %)", v.droppedVideoFrames] : null;
+                });
+            add(_TF("Corrupted frames", "Name of a media statistics value: the video frames that were damaged"), _TF("The video frames that were damaged", "Description of a media statistics value"), null,
+                () => {
+                    const v = q();
+                    return v && v.corruptedVideoFrames > 0 ? [n(v.corruptedVideoFrames, 0), v.corruptedVideoFrames] : null;
+                });
+            add(_TF("Video data rate", "Name of a media statistics value: the bit rate of the decoded video data"), _TF("The video data the browser decoded per second of play time (Chrome and Edge)", "Description of a media statistics value"), null,
+                () => typeof videoE.webkitVideoDecodedByteCount === "number" && videoE.currentTime > 1 ? bitrate(videoE.webkitVideoDecodedByteCount * 8 / videoE.currentTime) : null);
+            add(_TF("Has sound", "Name of a media statistics value: the video has a sound track"), _TF("The video has a sound track", "Description of a media statistics value"), null,
+                () => {
+                    if (videoE.audioTracks)
+                        return yesNo(videoE.audioTracks.length > 0);
+                    if (typeof videoE.mozHasAudio === "boolean")
+                        return yesNo(videoE.mozHasAudio);
+                    if (typeof videoE.webkitAudioDecodedByteCount === "number" && videoE.currentTime > 1)
+                        return yesNo(videoE.webkitAudioDecodedByteCount > 0);
+                    return null;
+                });
+            //  The frame rate: requestVideoFrameCallback reports the frames presented and their media time (only while the statistics show)
+            if (typeof videoE.requestVideoFrameCallback === "function") {
+                const onFrame = (now, md) => {
+                    if (!root.isConnected)
+                        return;
+                    if (vfps.F >= 0 && md.presentedFrames > vfps.F && md.mediaTime > vfps.T) {
+                        const df = md.presentedFrames - vfps.F;
+                        const dt = md.mediaTime - vfps.T;
+                        //  (a second of video at least, seeks and pauses are skipped: frames presented in a row only)
+                        if (dt >= 1 && df / dt < 1000) {
+                            vfps.Rate = df / dt;
+                            vfps.F = md.presentedFrames;
+                            vfps.T = md.mediaTime;
+                        }
+                        else if (dt > 3) {
+                            vfps.F = -1;
+                        }
+                    }
+                    else {
+                        vfps.F = md.presentedFrames;
+                        vfps.T = md.mediaTime;
+                    }
+                    videoE.requestVideoFrameCallback(onFrame);
+                };
+                videoE.requestVideoFrameCallback(onFrame);
+            }
+        }
+
+        // ---- the sound (the decoded sound when the player has one: an effect with the audio2 texture, the offline analysis)
+        if (soundPlayer) {
+            /** @returns {?object} The decoded sound ({Rate, Channels}), null when the player didn't decode it. */
+            const decoded = () => soundPlayer.Analyser?.Samples || soundPlayer.Audio2Engine?.Src || null;
+            /** @type {number} 0 = not known, 1 = the two channels differed (stereo). */
+            let stereoSeen = 0;
+            group("Sound", _TF("Sound", "Header of a group of the media statistics: the sound (channels, sample rate)"));
+            add(_TF("Channels", "Name of a media statistics value: mono, stereo ..."), _TF("The channels of the sound (from the decoded sound; else seen in the effect's sound texture: the left and the right channel differ)", "Description of a media statistics value"), null,
+                () => {
+                    const d = decoded();
+                    const c = d && d.Channels;
+                    if (c > 0)
+                        return [c === 1 ? _TF("mono", "A media statistics value: a sound with one channel") : c === 2 ? _TF("stereo", "A media statistics value: a sound with two channels") : _T("{0} channels", c, "A media statistics value: the number of channels of a sound"), c];
+                    //  The effect's sound texture (r = mono, g = left, b = right): the first row (the spectrum) of the left and right differ
+                    const tx = player.Texture && player.Texture.Data;
+                    if (!stereoSeen && tx && tx.length >= 512 * 3)
+                        for (let i = 0; i < 512; ++i)
+                            if (Math.abs(tx[i * 3 + 1] - tx[i * 3 + 2]) > 1e-3) {
+                                stereoSeen = 1;
+                                break;
+                            }
+                    return stereoSeen ? [_TF("stereo", "A media statistics value: a sound with two channels"), 2] : null;
+                });
+            add(_TF("Sample rate", "Name of a media statistics value: the samples per second of the sound"), _TF("The samples per second of the sound file (else the one it is played at)", "Description of a media statistics value"), null,
+                () => {
+                    const d = decoded();
+                    if (d && d.Rate)
+                        return [_T("{0} Hz", n(d.Rate, 0), "A media statistics value: a frequency in hertz"), d.Rate];
+                    const ctx = soundPlayer.Analyser && soundPlayer.Analyser.Ctx;
+                    return ctx ? [_T("{0} Hz (played at)", n(ctx.sampleRate, 0), "A media statistics value: the sample rate of the audio output in hertz"), ctx.sampleRate] : null;
+                });
+            if (mediaE)
+                add(_TF("Sound data rate", "Name of a media statistics value: the bit rate of the decoded sound data"), _TF("The sound data the browser decoded per second of play time (Chrome and Edge)", "Description of a media statistics value"), null,
+                    () => !videoE && typeof mediaE.webkitAudioDecodedByteCount === "number" && mediaE.currentTime > 1 ? bitrate(mediaE.webkitAudioDecodedByteCount * 8 / mediaE.currentTime) : null);
+        }
+
+        // ---- loading (the element's state)
+        if (mediaE) {
+            group("Loading", _TF("Loading", "Header of a group of the media statistics: the loading state of a video or sound"));
+            const states = [
+                _TF("nothing", "A media statistics value: the ready state of a video / sound, no data yet"),
+                _TF("metadata", "A media statistics value: the ready state of a video / sound, the size and duration are known"),
+                _TF("current frame", "A media statistics value: the ready state of a video / sound, the current position can be shown"),
+                _TF("some ahead", "A media statistics value: the ready state of a video / sound, a little ahead is loaded"),
+                _TF("enough", "A media statistics value: the ready state of a video / sound, enough is loaded to play on"),
+            ];
+            add(_TF("Ready state", "Name of a media statistics value: how much of the media the browser has"), _TF("How much of the media the browser has at the current position", "Description of a media statistics value"), null,
+                () => [states[mediaE.readyState] || mediaE.readyState, mediaE.readyState]);
+            add(_TF("Buffered ahead", "Name of a media statistics value: the seconds loaded after the current position"), _TF("The seconds loaded after the current position", "Description of a media statistics value"), null,
+                () => {
+                    const b = mediaE.buffered;
+                    const p = mediaE.currentTime;
+                    for (let i = 0; i < b.length; ++i)
+                        if (b.start(i) <= p + 0.01 && b.end(i) >= p)
+                            return secs(b.end(i) - p);
+                    return null;
+                });
+            add(_TF("Buffered", "Name of a media statistics value: the share of the media that is loaded"), _TF("The share of the media that is loaded", "Description of a media statistics value"), null,
+                () => {
+                    const b = mediaE.buffered;
+                    const d = mediaE.duration;
+                    if (!(d > 0) || !isFinite(d))
+                        return null;
+                    let s = 0;
+                    for (let i = 0; i < b.length; ++i)
+                        s += b.end(i) - b.start(i);
+                    return [n(Math.min(100, s * 100 / d), 0) + " %", s / d];
+                });
+        }
+
+        // ---- the effect (its build, the GPU, the frame rate)
+        /** @type {{Rate:number, F:number, T:number}} The measured frame rate of the effect (frames drawn per second). */
+        const efps = { Rate: 0, F: -1, T: 0 };
+        if (fx) {
+            //  Mixed media: a section of its own, with the effect file, the render values and how the effect is shown
+            if (mixed)
+                section("Effect", _TF("Effect", "Header of the section of the media statistics with the values of the effect of an image / a sound with an effect"));
+            /** Mixed media: the effect file and how the effect is shown, after its render values. */
+            const addFxExtras = () => {
+                if (fxUrl) {
+                    group("EffectFile", _TF("File", "Header of a group of the media statistics: the file (name, type, size, transfer)"));
+                    add(_TF("Name", "Name of a media statistics value: the file name"), _TF("The name of the effect file", "Description of a media statistics value"), null,
+                        () => {
+                            const f = Sw.Url.FileName(fxUrl.split(/[?#]/)[0]);
+                            return f ? [decodeURIComponent(f), f] : null;
+                        });
+                    add(_TF("Size", "Name of a media statistics value: the file size"), _TF("The size of the effect file as sent by the server (known when the browser may measure it)", "Description of a media statistics value"), null,
+                        () => {
+                            const t = getFxTiming();
+                            return t ? bytes(t.encodedBodySize || t.decodedBodySize || 0) : null;
+                        });
+                    add(_TF("Transferred", "Name of a media statistics value: the bytes that went over the network"), _TF("The bytes that went over the network (headers included); from the cache means nothing was downloaded", "Description of a media statistics value"), null,
+                        () => {
+                            const t = getFxTiming();
+                            if (!t || !(t.encodedBodySize > 0))
+                                return null;
+                            return t.transferSize === 0 ? [_TF("from the cache", "A media statistics value: the file was not downloaded, the browser had it"), 0] : bytes(t.transferSize);
+                        });
+                    add(_TF("Load time", "Name of a media statistics value: the time the file took to load"), _TF("From the request to the last byte of the file in ms", "Description of a media statistics value"), null,
+                        () => {
+                            const t = getFxTiming();
+                            return t && t.duration > 0 ? msv(t.duration, 0) : null;
+                        });
+                }
+                group("EffectPicture", _TF("Picture", "Header of a group of the media statistics: the size of the picture"));
+                add(_TF("Size", "Name of a media statistics value: the size of the effect's picture"), _TF("The size of the effect's picture in pixels", "Description of a media statistics value"), null,
+                    () => player.Element instanceof HTMLCanvasElement ? size(player.Element.width, player.Element.height) : size(player.Width, player.Height));
+                add(_TF("Aspect ratio", "Name of a media statistics value: width / height"), _TF("The width divided by the height", "Description of a media statistics value"), null,
+                    () => player.Element instanceof HTMLCanvasElement ? aspect(player.Element.width, player.Element.height) : aspect(player.Width, player.Height));
+                addShown();
+            };
+            group("Effect", mixed ? _TF("Render", "Header of a group of the media statistics: how the effect is rendered (frame rate, GPU, build)") : _TF("Effect", "Header of a group of the media statistics: the effect (shader) build and render times"));
+            add(_TF("Frame rate", "Name of a media statistics value: the frames per second of the effect"), _TF("The frames the effect draws per second (0 while it doesn't animate)", "Description of a media statistics value"), null,
+                () => {
+                    const f = player.Frames;
+                    if (typeof f !== "number")
+                        return null;
+                    const now = performance.now();
+                    if (efps.F < 0 || f < efps.F) {
+                        efps.F = f;
+                        efps.T = now;
+                    }
+                    else if (now - efps.T >= 1000) {
+                        efps.Rate = (f - efps.F) * 1000 / (now - efps.T);
+                        efps.F = f;
+                        efps.T = now;
+                    }
+                    return efps.T > 0 && efps.Rate >= 0 ? [_T("{0} fps", n(efps.Rate, 1), "A media statistics value: frames per second"), efps.Rate] : null;
+                });
+            add(_TF("Frame time", "Name of a media statistics value: the time between two frames of the effect"), _TF("The time between two frames in ms (1000 / the frame rate)", "Description of a media statistics value"), null,
+                () => efps.Rate > 0 ? msv(1000 / efps.Rate, 1) : null);
+            //  (an effect with a sound / video: its own clock runs on when the media loops, the time line is the media's)
+            if (player.Media)
+                add(_TF("Effect time", "Name of a media statistics value: the effect's own clock (it runs on when its sound / video loops)"), _TF("The effect's own clock in seconds: the media time, plus the time of the loops before when the sound / video loops (the effect doesn't start again with it)", "Description of a media statistics value"), null,
+                    () => typeof player.EffectClock === "number" ? secs(player.EffectClock) : null);
+            if (typeof player.AvgDrawTimeMs !== "undefined")
+                add(_TF("GPU time", "Name of a media statistics value: time spent on the graphics card"), _TF("The time the graphics card spends on a frame of the effect in ms (the shortest of the last frames; measured by the GPU when it can, else the frame time)", "Description of a media statistics value"), null,
+                    () => {
+                        let v = player.AvgDrawTimeMs;
+                        if (!(v > 0) && player.MeasureCount > 0 && player.TotalTime < 1e10)
+                            v = player.TotalTime;
+                        return v > 0 ? msv(v, 3) : null;
+                    });
+            add(_TF("GPU timer", "Name of a media statistics value: the GPU time is measured by the GPU"), _TF("The graphics card measures the GPU time (EXT_disjoint_timer_query), else it is the frame time", "Description of a media statistics value"), null,
+                () => player.GL ? yesNo(!!player.Query) : null);
+            add(_TF("Build", "Name of a media statistics value: the shader compilation time"), _TF("The duration of the compilation step of this effect in ms", "Description of a media statistics value"), null,
                 () => {
                     const v = player.CompilationTime;
                     if (v === -3)
                         return [_TF("error", "Media statistics value: the effect failed to compile")];
                     if (v < 0)
                         return [_TF("compiling", "Media statistics value: the effect is being compiled")];
-                    return [_T("{0} ms", Sw.Format.Number(v, 1), "A media statistics value in milliseconds (ms is the unit), {0} is the number"), v];
-                }));
-        if (player.HaveAudio)
-            ups.push(add(_TF("Volume", "Name of a media statistics value: the audio volume"), _TF("The current audio volume of the media as a percentage", "Description of a media statistics value"), null,
+                    return msv(v, 1);
+                });
+            add(_TF("Effect Weaver build", "Name of a media statistics value: the effect was built by the server (Ew snippets, a vertex stage, controls)"), _TF("The server built the effect the way Effect Weaver does (it uses Ew snippets, a vertex stage or live controls)", "Description of a media statistics value"), null,
+                () => player.GL ? yesNo(!!player.Built) : null);
+            add(_TF("Vertex stage", "Name of a media statistics value: the effect has its own vertex shader"), _TF("The effect has its own vertex shader (vertexMain)", "Description of a media statistics value"), null,
+                () => player.Built ? yesNo(!!player.Built.Vertex) : null);
+            add(_TF("GLSL", "Name of a media statistics value: the shading language version, ex: ES 3.00"), _TF("The version of the shading language the effect is compiled as", "Description of a media statistics value"), null,
                 () => {
-                    const v = player.GetTrueVolume();
-                    return [_T("{0} %", Sw.Format.Number(v * 100, 1), "A media statistics value as a percentage, {0} is the number"), v];
-                }));
-        if (visual) {
-            ups.push(add(_TF("Width", "Name of a media statistics value: the media width"), _TF("The width in pixels of the media", "Description of a media statistics value"), null, () => px(player.Width)));
-            ups.push(add(_TF("Height", "Name of a media statistics value: the media height"), _TF("The height in pixels of the media", "Description of a media statistics value"), null, () => px(player.Height)));
-        }
-        //  (an effect that plays a sound: the play window is the sound's)
-        const soundParams = SoundParams(player) || props;
-        if (typeof soundParams.StartAt !== "undefined") {
-            ups.push(add(_TF("Trimmed time", "Name of a media statistics value: the position inside the trimmed part"), _TF("The current position in the trimmed period in seconds", "Description of a media statistics value"), "Adjust",
-                () => {
-                    const b = soundParams.StartAt;
-                    return b > 0 ? secs(player.GetPos() - b) : null;
-                }));
-            ups.push(add(_TF("Trimmed duration", "Name of a media statistics value: the length of the trimmed part"), _TF("The duration of the trimmed period in seconds", "Description of a media statistics value"), "Adjust",
-                () => {
-                    const par = soundParams;
-                    const b = par.StartAt;
-                    const e = par.EndAt;
-                    if (!((b > 0) || (e > b)))
+                    if (!player.GL)
                         return null;
-                    return secs((e > b ? e : player.Duration) - b);
-                }));
+                    const es3 = player.Built ? !!player.Built.Es3 : !!(player.ProgramData && player.ProgramData.Es3) || /^\s*#version\s+300/m.test(player.Src || "");
+                    return ["ES " + (es3 ? "3.00" : "1.00"), es3 ? 300 : 100];
+                });
+            add(_TF("Source", "Name of a media statistics value: the size of the effect source"), _TF("The lines and characters of the effect source", "Description of a media statistics value"), null,
+                () => typeof player.Src === "string" && player.Src.length ? [_T("{0} lines, {1} characters", n(player.Src.split("\n").length, 0), n(player.Src.length, 0), "A media statistics value: the size of a source text"), player.Src.length] : null);
+            add(_TF("Canvas", "Name of a media statistics value: the pixel size the effect is drawn at"), _TF("The pixel size the effect is drawn at", "Description of a media statistics value"), "Actual",
+                () => player.Element ? size(player.Element.width, player.Element.height) : null);
+            add(_TF("Texture", "Name of a media statistics value: the size of the effect's texture (its picture or sound)"), _TF("The size of the effect's texture (its picture, text or sound as a texture)", "Description of a media statistics value"), null,
+                () => {
+                    const tx = player.Texture;
+                    if (!tx || !(tx.Width > 0) || !(tx.Height > 0))
+                        return null;
+                    const kind = tx.Audio2 ? " (audio2)" : typeof tx.Quiet === "boolean" ? " (" + _TF("sound", "A media statistics value: the texture of the effect is a sound") + ")" : "";
+                    return [size(tx.Width, tx.Height)[0] + kind, tx.Width + "x" + tx.Height];
+                });
+            add(_TF("Transparent", "Name of a media statistics value: the effect draws with transparency"), _TF("The effect draws see-through pixels", "Description of a media statistics value"), null,
+                () => player.Params && player.GL ? yesNo(!!player.Params.Transparent) : null);
+            add(_TF("WebGL", "Name of a media statistics value: the WebGL version"), _TF("The WebGL version the effect is drawn with", "Description of a media statistics value"), null,
+                () => {
+                    const gl = player.GL;
+                    if (!gl)
+                        return null;
+                    const v2 = typeof WebGL2RenderingContext !== "undefined" && gl instanceof WebGL2RenderingContext;
+                    return [v2 ? "2.0" : "1.0", v2 ? 2 : 1];
+                });
+            add(_TF("GPU", "Name of a media statistics value: the graphics card"), _TF("The graphics card (as the browser names it)", "Description of a media statistics value"), null,
+                () => player.GL ? [GetGpuInfo(player.GL).Renderer, GetGpuInfo(player.GL).Renderer] : null);
+            add(_TF("Max texture size", "Name of a media statistics value: the largest texture the graphics card takes"), _TF("The largest texture the graphics card takes", "Description of a media statistics value"), null,
+                () => player.GL && GetGpuInfo(player.GL).MaxTexture > 0 ? px(GetGpuInfo(player.GL).MaxTexture) : null);
+            if (mixed)
+                addFxExtras();
         }
-        if (visual && (typeof props.Crop !== "undefined")) {
-            /** @returns {boolean} True if something is cropped. */
-            const cropped = () => (player.ClipWidth !== player.Width) || (player.ClipHeight !== player.Height) || (player.ClipX !== 0) || (player.ClipY !== 0);
-            ups.push(add(_TF("Cropped width", "Name of a media statistics value"), _TF("The cropped width in pixels", "Description of a media statistics value"), "Clip", () => cropped() ? px(player.ClipWidth) : null));
-            ups.push(add(_TF("Cropped height", "Name of a media statistics value"), _TF("The cropped height in pixels", "Description of a media statistics value"), "Clip", () => cropped() ? px(player.ClipHeight) : null));
-            ups.push(add(_TF("Cropped left", "Name of a media statistics value"), _TF("The number of cropped pixels on the left", "Description of a media statistics value"), "Clip", () => cropped() ? px(player.ClipX) : null));
-            ups.push(add(_TF("Cropped top", "Name of a media statistics value"), _TF("The number of cropped pixels on the top", "Description of a media statistics value"), "Clip", () => cropped() ? px(player.ClipY) : null));
-        }
-        if (visual && (typeof props.AdaptiveSize !== "undefined")) {
-            ups.push(add(_TF("Render width", "Name of a media statistics value: the canvas pixel width"), _TF("The actual rendered width in pixels", "Description of a media statistics value"), "Actual",
-                () => player.Params.AdaptiveSize ? px(player.Element.width) : null));
-            ups.push(add(_TF("Render height", "Name of a media statistics value: the canvas pixel height"), _TF("The actual rendered height in pixels", "Description of a media statistics value"), "Actual",
-                () => player.Params.AdaptiveSize ? px(player.Element.height) : null));
+        if (visual && props && (typeof props.AdaptiveSize !== "undefined") && !fx) {
+            add(_TF("Render width", "Name of a media statistics value: the canvas pixel width"), _TF("The actual rendered width in pixels", "Description of a media statistics value"), "Actual",
+                () => player.Params.AdaptiveSize && player.Element ? px(player.Element.width) : null);
+            add(_TF("Render height", "Name of a media statistics value: the canvas pixel height"), _TF("The actual rendered height in pixels", "Description of a media statistics value"), "Actual",
+                () => player.Params.AdaptiveSize && player.Element ? px(player.Element.height) : null);
         }
 
         /**
-         * Frame loop: refresh every chip; stops once the block left the document (after the first frame).
-         * @param {number} [time] rAF time stamp (undefined on the first, direct call).
+         * Refresh the rows 4 times a second while the block is shown (none while it is hidden: a closed panel costs nothing); stops once
+         * the block left the document (after the first refresh).
+         * @param {boolean} [first] The first call.
          */
-        function update(time) {
-            if ((typeof time !== "undefined") && !root.isConnected)
+        function update(first) {
+            if (!first && !root.isConnected)
                 return;
+            const shown = first || (typeof root.checkVisibility === "function" ? root.checkVisibility() : root.offsetParent !== null);
+            if (shown) {
+                for (const u of ups)
+                    u();
+                //  (a section or group without a shown value: no header)
+                for (const p of parts)
+                    p.G.classList.toggle("Hide", p.Rows.every(r => r.tagName !== "MEDIA-STAT" || r.classList.contains("Hide")));
+            }
+            setTimeout(update, shown ? 250 : 500);
+        }
+        for (const p of parts)
+            if (p.Apply)
+                p.Apply();
+        update(true);
+        //  (read the values now, also while hidden: "Copy information to clipboard" copies them)
+        root.SwRefresh = () => {
             for (const u of ups)
                 u();
-            requestAnimationFrame(update);
-        }
-        update();
+        };
         return root;
     }
 
@@ -974,7 +1697,7 @@
 
         //  The stats follow the player's params (as the original, whose layout step read props = player.Params first): an image or
         //  text with an effect gets the render size of its effect too
-        const stats = noStats ? null : CreateStats(player, player.Params || props);
+        const stats = noStats ? null : CreateStats(player, player.Params || props, type, data);
         player.SetButtonState = () => { };
         const controls = noControls ? null : CreateControls(player);
         if (stats)
@@ -1678,8 +2401,119 @@
                 Sw.Page.Navigate("MediaPreview.html?full&back&pos=" + pl.GetPos() + "&type=" + type + "&link=" + encodeURIComponent(data) + "&props=" + encodeURIComponent(JSON.stringify(pl.Params)), "_self");
             }
 
-            let player = (await create(null))[0];
+            //  A sound or an image (not linked to an editor, it owns the settings): the menu picks its effect (a sound's visualization), a
+            //  built in effect or none; the choice is remembered (Prefs.Effect) and used for the next sound / image whose settings name none
+            const fxKind = messagePrefix ? null : EffectKind(type);
+            /** @type {?string[]} The names of the built in effects of the kind (filled when the list arrives), null: no effect choice. */
+            let fxNames = null;
+            /** @type {boolean} The remembered effect was used (the media's settings named none). */
+            let fxFromPrefs = false;
+            if (fxKind) {
+                fxNames = [];
+                Sw.Net.Get(fxKind.Api).then(x => fxNames = Array.isArray(x) ? x.filter(n => n && n !== "None") : []).catch(() => { });
+                const fx0 = mediaProps ? mediaProps.Effect : null;
+                const pref = Prefs.Effect(type);
+                if ((fx0 === null || fx0 === undefined) && pref !== null) {
+                    mediaProps = WithViewerEffect(type, mediaProps, pref);
+                    fxFromPrefs = true;
+                }
+            }
+
+            let player;
+            try {
+                player = (await create(null))[0];
+            }
+            catch (e) {
+                //  A remembered effect that can't be used (ex: it was removed) doesn't stop the media: without it, and it is forgotten
+                if (!fxFromPrefs)
+                    throw e;
+                console.warn("Media: the remembered effect " + mediaProps.Effect + " can't be used: " + FailReason(e));
+                Prefs.SetEffect(type, null);
+                mediaProps = props;
+                fxFromPrefs = false;
+                player = (await create(null))[0];
+            }
             props = player.Params;
+
+            /** @returns {string} The effect the media shows ("" = none; a missing Effect is the default of the kind). */
+            const curFx = () => {
+                const fx = mediaProps ? mediaProps.Effect : null;
+                return fx === null || fx === undefined ? (fxKind && fxKind.Default ? fxKind.Default : "") : fx;
+            };
+            /** @returns {boolean} True when the effect addresses a and b are the same file. */
+            const sameFx = (a, b) => {
+                if (!a || !b)
+                    return a === b;
+                try {
+                    return new URL(a, ScriptBase).href === new URL(b, ScriptBase).href;
+                }
+                catch {
+                    return a === b;
+                }
+            };
+            let fxBusy = false;
+            /**
+             * Show the media with another effect (a rebuild keeps the position, the play state and the volume); the page address keeps the
+             * choice, a built in effect or none is remembered for the next media of the kind.
+             * @param {string} fx The effect ("" = none).
+             * @param {boolean} remember Remember it (Prefs.SetEffect).
+             */
+            const setFx = async (fx, remember) => {
+                if (fxBusy)
+                    return;
+                if (sameFx(curFx(), fx)) {
+                    if (remember)
+                        Prefs.SetEffect(type, fx);
+                    return;
+                }
+                fxBusy = true;
+                const old = mediaProps;
+                try {
+                    const np = WithViewerEffect(type, mediaProps, fx);
+                    //  The shader values of the old effect don't belong to the new one (its other settings, ex: the speed, stay)
+                    if (np.EffectParams) {
+                        np.EffectParams = Object.assign({}, np.EffectParams);
+                        delete np.EffectParams.FxProps;
+                        delete np.EffectParams.EffectProps;
+                    }
+                    mediaProps = np;
+                    player = await RebuildPlayer(player, create);
+                    props = player.Params;
+                    if (remember)
+                        Prefs.SetEffect(type, fx);
+                    const u = new URL(window.location.href);
+                    u.searchParams.set("props", JSON.stringify(mediaProps));
+                    history.replaceState(history.state, "", u.href);
+                }
+                catch (e) {
+                    mediaProps = old;
+                    Sw.Toast(_T("The effect can't be shown: {0}", FailReason(e), "Error of the media viewer when a sound or an image could not be shown with the chosen effect (a sound's visualization), {0} the reason"), { Kind: "error" });
+                }
+                finally {
+                    fxBusy = false;
+                }
+            };
+            /** @returns {?Array<object>} The items of the effects menu, null: none (not a sound or an image). */
+            const fxItems = () => {
+                if (!fxNames)
+                    return null;
+                const cur = curFx();
+                const items = [{ Text: _TF("None", "Menu item of the effects menu of the media viewer (a sound's visualization, an image's effect): the media is shown without an effect"), Radio: true, Checked: !cur, OnClick: () => setFx("", true) }];
+                let found = !cur;
+                for (const n of fxNames) {
+                    const v = fxKind.Folder + n + ".glsl";
+                    const on = sameFx(cur, v);
+                    found = found || on;
+                    items.push({ Text: Sw.Format.BeautifyName(n), Radio: true, Checked: on, OnClick: () => setFx(v, true) });
+                }
+                //  An effect of its own (not a built in one, never remembered): listed too, so the choice can go back to it
+                if (!found) {
+                    const own = cur;
+                    items.push("-", { Text: Sw.Format.BeautifyName(Sw.Url.FileName(own.split(/[?#]/)[0]).replace(/\.glsl$/i, "")) || own, Radio: true, Checked: true, OnClick: () => setFx(own, false) });
+                }
+                return items;
+            };
+
             if (controls)
                 CreateChrome(mview, () => player, {
                     Stats: stats,
@@ -1694,7 +2528,10 @@
                             : type === MediaTypes.Text ? null : new URL(data, window.location.href).href,
                     }),
                     Load: m => ShowLink(m),
-                    Download: canDownload ? () => Sw.Net.Download(player.Source || data, downloadName) : null,
+                    Effects: fxNames ? fxItems : null,
+                    EffectsText: fxKind ? fxKind.Text() : null,
+                    //  (the media file: with an effect the player's Source is the effect, the file is the sound / video it follows or the link)
+                    Download: canDownload ? () => Sw.Net.Download((player.Media && player.Media.Url) || (typeof player.CompilationTime !== "undefined" ? data : player.Source) || data, downloadName) : null,
                     //  "Edit": this media with its settings in MediaEdit.html (edit=false hides it; not for a player linked to an editor)
                     Edit: messagePrefix || /^(false|0|no)$/i.test(U.Get("edit") ?? "") ? null : () => {
                         const q = new URLSearchParams();
@@ -1804,6 +2641,46 @@
     /** @type {string} Storage key: "true" = the stats panel of the viewer is open. */
     const StatsKey = "SysWeaver.Media.ShowStats";
 
+    /** @type {string} Storage key: the statistics panel of the viewer, JSON { X, Y (0..1 of the free room, null = the default place), Collapsed }. */
+    const StatsPanelKey = "SysWeaver.Media.StatsPanel";
+
+    /** @type {string} Storage key: the collapsed sections of the statistics, JSON array of their ids ("Image", "Effect", "File" ...). */
+    const StatsFoldedKey = "SysWeaver.Media.StatsFolded";
+
+    /** @type {string} Storage key: "true" = the controls panel of the viewer is wanted (it shows for an effect with controls). */
+    const ControlsKey = "SysWeaver.Media.ShowControls";
+
+    /** @type {string} Storage key: the controls panel of the viewer, JSON { X, Y, Collapsed } (as StatsPanelKey). */
+    const ControlsPanelKey = "SysWeaver.Media.ControlsPanel";
+
+    /**
+     * The live controls an effect describes (its "// iMouse.x = Name | Description | Default | Min .. Max | Unit" comments, from the
+     * server build: MediaService.BuildEffect ControlDefs), the channels it doesn't describe left out.
+     * @param {?object} p A player (an effect player, also one with an image / video / sound / text).
+     * @returns {Array<{Index:number, Name:string, Desc:string, Default:number, Used:boolean, Map:?object}>} 0 to 4 controls.
+     */
+    function ControlDefsOf(p) {
+        const b = p && typeof p.SetControls === "function" ? p.Built : null;
+        if (!b)
+            return [];
+        const defs = Array.isArray(b.ControlDefs) ? b.ControlDefs
+            : (b.ControlNames || []).map((n, i) => n ? { Name: n, Desc: "", Default: (b.Controls || [])[i] ?? 0.5, Used: true } : null);
+        const r = [];
+        for (let i = 0; i < 4; ++i) {
+            const d = defs[i];
+            if (d && d.Name)
+                r.push({ Index: i, Name: d.Name, Desc: d.Desc || "", Default: typeof d.Default === "number" ? d.Default : 0.5, Used: d.Used !== false, Map: d.Map || null });
+        }
+        return r;
+    }
+
+    /**
+     * The Sw pop-ups (menus, dialogs, toasts, hints): in full screen they are inside the player (Sw.FullScreen.OverlayRoot), so the
+     * player's own clicks and keys skip them and the controls stay while one is open.
+     * @type {string}
+     */
+    const SwOverlays = ".sw-menu-host, .sw-popup, .sw-layer, .sw-dialog, .sw-toasts, .sw-hint";
+
     /** @type {number} Milliseconds without pointer / key activity before the controls of a playing media hide. */
     const ChromeHideMs = 2500;
 
@@ -1831,6 +2708,151 @@
     }
 
     /**
+     * A floating window over the media of the viewer (the statistics, the effect's controls): a title bar (drag it to move the panel, the
+     * arrow keys on it too, a double click / Enter collapses it), Collapse and Close. The position and the collapsed state are remembered
+     * (o.StateKey, JSON { X, Y (0..1 of the free room, null = the default place), Collapsed }); the position is kept as a share of the free
+     * room, so the panel stays in the same corner when the player is resized (full screen).
+     * @param {HTMLElement} view The `<Media-View>` (the panel is placed in it).
+     * @param {object} o Options.
+     * @param {string} o.Title The title.
+     * @param {string} o.Label The accessible name of the panel.
+     * @param {string} o.MoveLabel The accessible name of the title bar (the drag handle).
+     * @param {string} o.CollapseTitle The tool tip of the Collapse button while expanded.
+     * @param {string} o.ExpandTitle The tool tip of the Collapse button while collapsed.
+     * @param {string} o.CloseTitle The tool tip of the Close button.
+     * @param {function():void} o.OnClose Called by the Close button.
+     * @param {string} o.StateKey The storage key of the position and the collapsed state.
+     * @param {number} [o.DefaultX] The default place: 0 = left .. 1 = right (default 1).
+     * @param {string} [o.Class] An extra class of the panel.
+     * @returns {{E:HTMLElement, Body:HTMLElement, Place:function():void, Show:function(boolean):void}} The panel (hidden at first), its
+     *   body (the content goes there), Place (after the content changed size) and Show.
+     */
+    function FloatingPanel(view, o) {
+        const el = Sw.el;
+        const panel = el("div.media-stats-panel" + (o.Class ? "." + o.Class : ""), { attrs: { role: "dialog", "aria-modal": "false", "aria-label": o.Label } });
+        panel.hidden = true;
+        const body = el("div.media-stats-body");
+        /** @type {{X:?number, Y:?number, Collapsed:boolean}} The remembered state. */
+        const state = (() => {
+            let s = null;
+            try {
+                s = JSON.parse(Sw.Storage.Get(o.StateKey) || "null");
+            }
+            catch {
+                s = null;
+            }
+            const f = v => typeof v === "number" && isFinite(v) ? Math.max(0, Math.min(1, v)) : null;
+            return { X: f(s && s.X), Y: f(s && s.Y), Collapsed: !!(s && s.Collapsed) };
+        })();
+        const save = () => Sw.Storage.Set(o.StateKey, JSON.stringify(state));
+        /** The margin (px) the panel keeps from the edges of the player. */
+        const margin = 8;
+        /** @returns {number[]} The free room [width, height] the panel can move in (0 when it is as large as the player). */
+        const room = () => [
+            Math.max(0, view.clientWidth - panel.offsetWidth - 2 * margin),
+            Math.max(0, view.clientHeight - panel.offsetHeight - 2 * margin),
+        ];
+        /** Place the panel (the remembered share of the free room; by default at the top, below the title bar). */
+        const place = () => {
+            if (panel.hidden)
+                return;
+            const [w, h] = room();
+            const x = state.X ?? (o.DefaultX ?? 1);
+            const y = state.Y ?? (h > 0 ? Math.min(1, 44 / h) : 0);
+            panel.style.left = Math.round(margin + x * w) + "px";
+            panel.style.top = Math.round(margin + y * h) + "px";
+        };
+        /**
+         * Move the panel (px from the player's top left, clamped into the player).
+         * @param {number} left The left edge.
+         * @param {number} top The top edge.
+         */
+        const move = (left, top) => {
+            const [w, h] = room();
+            state.X = w > 0 ? Math.max(0, Math.min(1, (left - margin) / w)) : 0;
+            state.Y = h > 0 ? Math.max(0, Math.min(1, (top - margin) / h)) : 0;
+            place();
+        };
+        const collapseB = new Sw.Button({ Icon: "up", Kind: "ghost", Small: true, Class: "media-stats-button", OnClick: () => setCollapsed(!state.Collapsed) });
+        /** @param {boolean} on Collapse the panel (only its title bar shows). */
+        const setCollapsed = on => {
+            state.Collapsed = on;
+            body.hidden = on;
+            panel.classList.toggle("media-stats-collapsed", on);
+            collapseB.SetIcon(on ? "down" : "up");
+            collapseB.SetTitle(on ? o.ExpandTitle : o.CollapseTitle);
+            collapseB.E.setAttribute("aria-expanded", String(!on));
+            save();
+            place();
+        };
+        const handle = el("div.media-stats-title", { text: o.Title, attrs: { tabindex: "0", role: "button", "aria-label": o.MoveLabel } });
+        handle.title = _TF("Drag to move the panel (or the arrow keys)", "Tool tip of the title bar of a floating panel of the media viewer (the statistics, the controls)");
+        const closeB = new Sw.Button({ Icon: "close", Kind: "ghost", Small: true, Class: "media-stats-button", Title: o.CloseTitle, OnClick: () => o.OnClose() });
+        const head = el("div.media-stats-head", null, handle, collapseB.E, closeB.E);
+        panel.append(head, body);
+        //  Dragging by the title bar (pointer capture: the move follows outside the panel); a double click collapses / expands
+        let drag = null;
+        head.addEventListener("pointerdown", ev => {
+            if (ev.button !== 0 || ev.target.closest(".media-stats-button"))
+                return;
+            const r = panel.getBoundingClientRect();
+            const v = view.getBoundingClientRect();
+            drag = { Id: ev.pointerId, Dx: ev.clientX - r.left, Dy: ev.clientY - r.top, V: v };
+            head.setPointerCapture(ev.pointerId);
+            panel.classList.add("media-stats-dragging");
+            ev.preventDefault();
+        });
+        head.addEventListener("pointermove", ev => {
+            if (!drag || ev.pointerId !== drag.Id)
+                return;
+            move(ev.clientX - drag.V.left - drag.Dx, ev.clientY - drag.V.top - drag.Dy);
+        });
+        const endDrag = ev => {
+            if (!drag || ev.pointerId !== drag.Id)
+                return;
+            drag = null;
+            panel.classList.remove("media-stats-dragging");
+            save();
+        };
+        head.addEventListener("pointerup", endDrag);
+        head.addEventListener("pointercancel", endDrag);
+        head.addEventListener("dblclick", ev => {
+            if (!ev.target.closest(".media-stats-button"))
+                setCollapsed(!state.Collapsed);
+        });
+        //  The arrow keys on the title bar move the panel (Shift: in large steps); the player doesn't get them (no seeking)
+        handle.addEventListener("keydown", ev => {
+            const d = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[ev.key];
+            if (ev.key === "Enter" || ev.key === " ") {
+                ev.preventDefault();
+                ev.stopPropagation();
+                setCollapsed(!state.Collapsed);
+                return;
+            }
+            if (!d || ev.ctrlKey || ev.altKey || ev.metaKey)
+                return;
+            ev.preventDefault();
+            ev.stopPropagation();
+            const step = ev.shiftKey ? 50 : 10;
+            move(panel.offsetLeft + d[0] * step, panel.offsetTop + d[1] * step);
+            save();
+        });
+        //  (the player resized, full screen: the same share of the free room)
+        if (typeof ResizeObserver !== "undefined")
+            new ResizeObserver(() => place()).observe(view);
+        setCollapsed(state.Collapsed);
+        return {
+            E: panel,
+            Body: body,
+            Place: place,
+            Show: on => {
+                panel.hidden = !on;
+                place();
+            },
+        };
+    }
+
+    /**
      * The media player controls of MediaView.html, on top of the media (like a video player): a bottom bar with the time line,
      * Play / Pause, Stop, Loop, the volume (Mute + a slider), the time, Stats, Open file and Full screen, a title bar with the
      * file name, a big Play button while paused and the stats panel (`<Media-Stats>` of the player, opened with Stats or "i",
@@ -1839,15 +2861,21 @@
      * paused, while the pointer is on them, while a control has the keyboard focus and for audio only media.
      * Mouse: a click on the media plays / pauses, a double click toggles full screen. Touch: a tap shows / hides the controls.
      * Keys (the player has the focus): Space / K play / pause, Left / Right -5 / +5 s, Home the start, Up / Down the volume,
-     * M mute, F full screen, I stats.
+     * M mute, F full screen, I stats, C controls.
+     * The controls panel (o.Controls): the live controls an effect describes (ControlDefsOf: up to 4 named sliders, also shown in the
+     * value they stand for), a floating window like the statistics; a media without controls has the button and menu item disabled.
      * A media without a known end (Duration <= 0: an effect) gets a time line that grows in steps of 5 minutes and "∞" as its length.
      * The state is read from the player every frame, so a rebuilt player (getPlayer returns the new one) is followed.
      * @param {HTMLElement} view The `<Media-View>`.
      * @param {function():?object} getPlayer Returns the current player.
      * @param {object} o Options.
      * @param {boolean} o.Stats True: a Stats button and panel (the player's `Stats` element is moved into it).
+     * @param {boolean} [o.Controls] False: no controls button and panel (the host has its own, ex: an editor). Default true.
      * @param {function():void} o.FullPage Called when the browser has no full screen for the element (opens the full page preview).
      * @param {?function():void} [o.Edit] Opens the media in the editor: an "Edit" menu item and the E key (none: no edit).
+     * @param {?function():?Array<object>} [o.Effects] The items of an effects sub menu (the effect of an image, the visualization of a sound:
+     *   none and the built in effects), null / none: no such menu item.
+     * @param {?string} [o.EffectsText] The name of that menu item (default "Effects").
      * @param {?function():void} [o.Download] Saves the media file: a "Download" menu item (none: the media is no file, ex: a YouTube video or a text).
      * @param {function():boolean} [o.Transparent] True when the media is transparent (its settings; the player's own Params.Transparent
      *   counts too, an image / text with an effect has the effect's params): class MediaTransparent (the stage is the page background anyway, see o.Background).
@@ -2056,7 +3084,9 @@
             //  The stat chips (the render size, the GPU time, the crop ... as shown)
             //  (a name already written above, ex: Duration, is not repeated)
             const have = new Set(lines.map(l => l.split(": ")[0]));
-            const chips = p.Stats ? [...p.Stats.querySelectorAll("Media-Stat:not(.Hide)")] : [];
+            if (p.Stats && typeof p.Stats.SwRefresh === "function")
+                p.Stats.SwRefresh();
+            const chips = p.Stats ? [...p.Stats.querySelectorAll("Media-Stat:not(.Hide):not(.Idle)")] : [];
             for (const c of chips) {
                 const n = c.querySelector("Media-StatName");
                 const v = c.querySelector("Media-StatValue");
@@ -2121,9 +3151,15 @@
                 items.push({ Text: _TF("Mute", "Tool tip of the mute button of the media viewer"), Checked: !!p.Muted, Hint: "M", OnClick: toggleMute });
             if (p.HaveVisual)
                 items.push({ Text: _TF("Background", "Menu item of the media viewer with the stages behind the media (a sub menu: checkerboard, colors)"), Icon: "layers", Items: bgItems() });
+            const fx = o.Effects ? o.Effects() : null;
+            if (fx)
+                items.push({ Text: o.EffectsText || _TF("Effects", "Menu item of the media viewer with the effects of an image (a sub menu: none and the built in image effects)"), Icon: "sparkle", Items: fx });
             items.push("-");
             if (panel)
                 items.push({ Text: _TF("Show the statistics", "Menu item of the media viewer that shows / hides the statistics panel"), Checked: !panel.hidden, Hint: "I", OnClick: () => setStats(panel.hidden) });
+            if (ctl)
+                items.push({ Text: _TF("Show the controls", "Menu item of the media viewer that shows / hides the controls panel (the live controls of an effect, sliders)"), Icon: "sliders", Checked: !ctl.E.hidden, Hint: "C",
+                    Disabled: !ctlDefs.length, Desc: ctlDefs.length ? undefined : _TF("The media has no controls", "Why the Show the controls menu item of the media viewer is disabled"), OnClick: () => setControls(ctl.E.hidden) });
             items.push({ Text: Sw.FullScreen.Is() ? _TF("Leave full screen", "Tool tip of the full screen button of the media viewer in full screen") : _TF("Full screen", "Tool tip of the full screen button of the media viewer"), Icon: Sw.FullScreen.Is() ? "fullscreenExit" : "fullscreen", Hint: "F", OnClick: toggleFull });
             if (links)
                 items.push("-",
@@ -2137,16 +3173,103 @@
             return items;
         };
 
-        //  The panel with the stats chips of the player (moved here from below the media)
-        const panel = o.Stats ? el("div.media-stats-panel", { attrs: { role: "region", "aria-label": _TF("Media statistics", "Accessible name of the statistics panel of the media viewer") } }) : null;
-        if (panel && player0.Stats)
-            panel.append(player0.Stats);
+        //  The statistics panel (the player's stats moved here from below the media): a floating window over the media (FloatingPanel),
+        //  open / collapsed / position remembered (StatsKey, StatsPanelKey)
+        const stats = o.Stats ? FloatingPanel(view, {
+            Title: _TF("Statistics", "Title of the statistics panel of the media viewer"),
+            Label: _TF("Media statistics", "Accessible name of the statistics panel of the media viewer"),
+            MoveLabel: _TF("Move the statistics panel (drag, or the arrow keys)", "Accessible name of the title bar of the statistics panel of the media viewer"),
+            CollapseTitle: _TF("Collapse the statistics (only the title bar stays)", "Tool tip of the button of the statistics panel of the media viewer that hides its values"),
+            ExpandTitle: _TF("Expand the statistics", "Tool tip of the button of the statistics panel of the media viewer that shows its values again"),
+            CloseTitle: _TF("Close the statistics (I)", "Tool tip of the close button of the statistics panel of the media viewer"),
+            OnClose: () => setStats(false),
+            StateKey: StatsPanelKey,
+        }) : null;
+        const panel = stats ? stats.E : null;
+        if (stats && player0.Stats)
+            stats.Body.append(player0.Stats);
         const setStats = on => {
-            if (!panel)
+            if (!stats)
                 return;
-            panel.hidden = !on;
+            stats.Show(on);
             statsB.SetPressed(on);
             Sw.Storage.Set(StatsKey, on ? "true" : "false");
+        };
+
+        //  The controls panel: the live controls the effect describes (its named iMouse channels: sliders in [0, 1], also shown in the
+        //  value they stand for), a floating window like the statistics; none: the panel, its button and menu item are disabled. Open /
+        //  collapsed / position remembered (ControlsKey, ControlsPanelKey)
+        const ctl = o.Controls !== false ? FloatingPanel(view, {
+            Title: _TF("Controls", "Title of the controls panel of the media viewer: the live controls of an effect (sliders)"),
+            Label: _TF("Effect controls", "Accessible name of the controls panel of the media viewer"),
+            MoveLabel: _TF("Move the controls panel (drag, or the arrow keys)", "Accessible name of the title bar of the controls panel of the media viewer"),
+            CollapseTitle: _TF("Collapse the controls (only the title bar stays)", "Tool tip of the button of the controls panel of the media viewer that hides its sliders"),
+            ExpandTitle: _TF("Expand the controls", "Tool tip of the button of the controls panel of the media viewer that shows its sliders again"),
+            CloseTitle: _TF("Close the controls (C)", "Tool tip of the close button of the controls panel of the media viewer"),
+            OnClose: () => setControls(false),
+            StateKey: ControlsPanelKey,
+            DefaultX: 0,
+            Class: "media-controls-panel",
+        }) : null;
+        /** @type {boolean} The controls panel is wanted (shown when the effect has controls). */
+        let ctlOn = Sw.Storage.Get(ControlsKey) === "true";
+        /** @type {Array<object>} The controls of the current effect ({ Index (the iMouse channel), Name, Desc, Default, Used, Map }). */
+        let ctlDefs = [];
+        /** @type {?object} The property editor of the controls panel. */
+        let ctlEditor = null;
+        /** Show / hide the controls panel and its button state (shown only when wanted and the effect has controls). */
+        const showControls = () => {
+            if (!ctl)
+                return;
+            const has = ctlDefs.length > 0;
+            ctl.Show(ctlOn && has);
+            ctlB.SetPressed(ctlOn && has);
+            ctlB.SetDisabled(!has, has ? "" : _TF("The media has no controls (an effect can describe up to 4)", "Why the controls button of the media viewer is disabled"));
+        };
+        const setControls = on => {
+            if (!ctl || (on && !ctlDefs.length))
+                return;
+            ctlOn = on;
+            Sw.Storage.Set(ControlsKey, on ? "true" : "false");
+            showControls();
+        };
+        /**
+         * The controls of a player (rebuilt when the player or its effect build changes, see update).
+         * @param {?object} p The player.
+         */
+        const buildControls = p => {
+            ctlDefs = ControlDefsOf(p);
+            ctlEditor = null;
+            ctl.Body.replaceChildren();
+            if (ctlDefs.length) {
+                const values = typeof p.GetControls === "function" ? p.GetControls() : [];
+                ctlEditor = new Sw.PropertyEditor({
+                    Defs: ctlDefs.map(d => ({ Key: "c" + d.Index, Label: d.Name, Type: "float", Min: 0, Max: 1, Step: 0.001, Default: d.Default, Map: d.Map || undefined, Desc: d.Desc || undefined })),
+                    Values: Object.fromEntries(ctlDefs.map(d => ["c" + d.Index, values[d.Index] ?? d.Default])),
+                    ResetButtons: true,
+                    OnInput: (k, v) => setControl(+k.slice(1), v),
+                    OnChange: (k, v) => setControl(+k.slice(1), v),
+                });
+                //  (a control the effect's code doesn't read: dimmed)
+                for (const d of ctlDefs)
+                    if (d.Used === false)
+                        ctlEditor.SetEnabled("c" + d.Index, false);
+                ctl.Body.append(ctlEditor.E);
+            }
+            showControls();
+        };
+        /**
+         * Set a control of the current player.
+         * @param {number} i The channel (0..3).
+         * @param {number} v The value in [0, 1].
+         */
+        const setControl = (i, v) => {
+            const p = getPlayer();
+            if (!p || typeof p.SetControls !== "function")
+                return;
+            const c = p.GetControls();
+            c[i] = v;
+            p.SetControls(c);
         };
 
         const playB = b("play", _TF("Play", "Tool tip of the play button of the media viewer"), togglePlay, { Shortcut: "Space" });
@@ -2167,6 +3290,8 @@
         timeS.E.classList.add("media-timeline");
         const timeE = el("span.media-time", { attrs: { "aria-hidden": "true" } });
         const statsB = panel ? b("info", _TF("Statistics: the size, the time and the render details", "Tool tip of the statistics switch of the media viewer"), () => setStats(panel.hidden), { Pressable: true, AutoToggle: false, Shortcut: "I" }) : null;
+        const ctlB = b("sliders", _TF("Controls: the live controls of the effect", "Tool tip of the controls switch of the media viewer (sliders that change an effect while it plays)"), () => setControls(ctl.E.hidden), { Pressable: true, AutoToggle: false, Shortcut: "C" });
+        ctlB.E.hidden = !ctl;
         const openB = b("external", _TF("Open the original file in a new tab (or in its editor, when there is one)", "Media player button tool tip of the button that opens the original media file"),
             () => Sw.Page.EditOrOpen(getPlayer().Source));
         const fullB = b("fullscreen", _TF("Full screen", "Tool tip of the full screen button of the media viewer"), toggleFull, { Shortcut: "F" });
@@ -2198,13 +3323,13 @@
                 muteB.E, volS.E,
                 timeE,
                 el("span.media-bar-gap"),
-                statsB ? statsB.E : null, bgB.E, openB.E, fullB.E, moreB.E));
+                ctlB.E, statsB ? statsB.E : null, bgB.E, openB.E, fullB.E, moreB.E));
         //  The sound controls and the speaker of a media without a picture follow the current player (update): a rebuild in the editor
         //  can add a picture (a sound with an effect) or a sound (an effect with a sound texture)
         const art = el("div.media-audio-art", { attrs: { "aria-hidden": "true" } }, Sw.Icon("IconMediaPreviewVolLoud"));
         art.hidden = !!player0.HaveVisual;
         muteB.E.hidden = volS.E.hidden = !player0.HaveAudio;
-        const chrome = el("div.media-chrome", null, art, skipE, bigPlay.E, top, panel, bar);
+        const chrome = el("div.media-chrome", null, art, skipE, bigPlay.E, top, ctl ? ctl.E : null, panel, bar);
         view.append(chrome);
         if (!player0.CanPlay) {
             for (const c of [playB, stopB, loopB, bigPlay])
@@ -2217,10 +3342,10 @@
         // ---- auto hide
 
         let hideTimer = 0;
-        const parts = [top, bar, panel].filter(x => x);
+        const parts = [top, bar, panel, ctl ? ctl.E : null].filter(x => x);
         /** @returns {boolean} True when the controls must stay (pointer on them, a focused control, a drag). */
         const mustStay = () => parts.some(x => x.matches(":hover")) || timeS.Dragging || volS.Dragging || !!chrome.querySelector(":focus-visible")
-            || moreB.E.getAttribute("aria-expanded") === "true";
+            || moreB.E.getAttribute("aria-expanded") === "true" || !!view.querySelector(".sw-menu-host, .sw-popup, .sw-dialog");
         function hide() {
             clearTimeout(hideTimer);
             if (mustStay()) {
@@ -2298,7 +3423,7 @@
 
         //  The media itself: a click plays / pauses (a tap shows / hides the controls); a double click / tap on the left or right third
         //  jumps 15 s back / forward (more taps in a row jump again), in the middle it toggles full screen
-        const onMedia = ev => !ev.target.closest(".media-chrome-part, .media-stats-panel, .media-bigplay");
+        const onMedia = ev => !ev.target.closest(".media-chrome-part, .media-stats-panel, .media-bigplay, " + SwOverlays);
         /** @returns {number} -1 = the left third, 1 = the right third, 0 = the middle. */
         const sideOf = ev => {
             const r = view.getBoundingClientRect();
@@ -2414,6 +3539,9 @@
             if (ev.ctrlKey || ev.altKey || ev.metaKey)
                 return;
             const t = ev.target;
+            //  A menu, dialog ... inside the player (full screen): its keys are its own
+            if (t.closest && t.closest(SwOverlays))
+                return;
             const onSlider = t.closest && t.closest(".sw-slider");
             const onButton = t.closest && t.closest("button, [role=button]");
             const p = getPlayer();
@@ -2464,6 +3592,11 @@
                     break;
                 case "f":
                     toggleFull();
+                    break;
+                case "c":
+                    if (!ctl || !ctlDefs.length)
+                        return;
+                    setControls(ctl.E.hidden);
                     break;
                 case "i":
                     if (panel)
@@ -2522,6 +3655,11 @@
                     view.classList.toggle("MediaAudioOnly", !v);
                 });
                 put("audio", !!p.HaveAudio, v => muteB.E.hidden = volS.E.hidden = !v);
+                //  The controls of the effect: rebuilt for another player or another build of its effect (the editor rebuilds it)
+                if (ctl) {
+                    put("ctlPlayer", p, () => buildControls(p));
+                    put("ctlBuilt", p.Built, () => buildControls(p));
+                }
                 //  A rebuilt player (an editor change) gets the chosen speed again
                 if (rate !== 1 && typeof p.SetRate === "function" && p.SetRateFor !== rate) {
                     p.SetRateFor = rate;

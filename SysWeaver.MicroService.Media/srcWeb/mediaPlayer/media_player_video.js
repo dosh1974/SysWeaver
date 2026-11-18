@@ -4,9 +4,9 @@
  *
  * Loading: included by MediaPlayer.Init (when window.MediaLoadAll is set) or lazily by MediaPlayer.Create
  * (MediaTypes.Video).
- * Globals defined: MediaPlayerParamsVideo, MediaPlayerVideo.
- * Dependencies: MediaPlayerElement and MediaPlayerTools (media_player_tools.js: the play window, volume and transport shared with
- * MediaPlayerAudio, InitBase, ApplyClip default, OnCacheComplete, waitEvent2, delay).
+ * Globals defined: MediaPlayerParamsVideo, MediaPlayerVideo, MediaPlayerVideoTexture (a video as the texture of an effect).
+ * Dependencies: MediaPlayerElement, MediaPlayerTexture and MediaPlayerTools (media_player_tools.js: the play window, volume and transport
+ * shared with MediaPlayerAudio, InitBase, ApplyClip default, OnCacheComplete, waitEvent2, delay; the texture base).
  */
 
 /**
@@ -42,6 +42,21 @@ class MediaPlayerParamsVideo {
      * @type {boolean}
      */
     Transparent = false;
+    /**
+     * An effect that draws the video (url of a .glsl, the video is its texture: MediaPlayerVideoTexture), null / "" = none.
+     * @type {?string}
+     */
+    Effect = null;
+    /**
+     * The params of the effect (MediaPlayerParamsEffect), null = its defaults.
+     * @type {?object}
+     */
+    EffectParams = null;
+    /**
+     * With an effect: true = the effect takes the size of the video, false = its own size (the size of the view).
+     * @type {boolean}
+     */
+    EffectSizeFromImage = true;
 }
 
 /**
@@ -110,6 +125,96 @@ class MediaPlayerVideo extends MediaPlayerElement {
     }
 }
 
+/**
+ * A video as the texture of an effect (a video with an effect: MediaPlayer.Create, MediaPlayerEffect.FollowMedia): the frame the video shows
+ * now, uploaded before every frame the effect draws while the video plays, and after a seek / the first frame while it is paused. The video
+ * plays from its own element (not shown: the effect draws it), on the effect's time line (the effect follows the video, like a sound).
+ * Like a picture (MediaPlayerTexture): flipped (uv (0, 0) = bottom left), the crop of the video's params, mipmaps when the shader reads
+ * levels (made again for every frame) or EffectParams.MipMap; EffectSizeFromImage: the effect takes the size of the video.
+ * Texture provider interface of MediaPlayerEffect: Cache(haveLod), Update() (before every frame), Apply(uv, size), ApplyClip(p), Dispose().
+ */
+class MediaPlayerVideoTexture extends MediaPlayerTexture {
+    /**
+     * @param {WebGLRenderingContext|WebGL2RenderingContext} gl - Effect context.
+     * @param {MediaPlayerParamsVideo|object} params - The video params (Crop, EffectSizeFromImage, EffectParams ...).
+     * @param {MediaPlayerVideo} media - The player of the video (loaded by the effect before its texture: MediaPlayerEffect.Cache).
+     */
+    constructor(gl, params, media) {
+        super(gl, Object.assign(new MediaPlayerParamsVideo(), params || {}), media.Url);
+        const t = this;
+        t.Media = media;
+        /** @type {boolean} A new frame must be uploaded (a seek, the first frame), also while paused. */
+        t.Dirty = true;
+        /** @type {number} The video time of the uploaded frame (-1 = none). */
+        t.LastTime = -1;
+        t.HaveLod = false;
+        t.Created = false;
+    }
+
+    /**
+     * Uploads the first frame (the video is loaded: the effect loads its media first).
+     * @param {boolean} haveLod - The effect reads texture levels (mipmaps for every frame).
+     * @returns {Promise<Array<number>|null|false>} [w,h] of the video when Params.EffectSizeFromImage, null otherwise, false without a picture.
+     */
+    async Cache(haveLod) {
+        const t = this;
+        t.HaveLod = !!haveLod;
+        const e = t.Media.Element;
+        if (!(e.videoWidth > 0))
+            return false;
+        t.UploadFrame();
+        return t.Params.EffectSizeFromImage ? [e.videoWidth, e.videoHeight] : null;
+    }
+
+    /**
+     * Uploads the frame the video shows now into the (bound) texture (the first upload sets the wrapping, filtering and size).
+     * @returns {boolean} True when a frame was uploaded (false: the video has no frame yet).
+     */
+    UploadFrame() {
+        const t = this;
+        const gl = t.GL;
+        const e = t.Media.Element;
+        //  (HAVE_CURRENT_DATA: a frame to show)
+        if (!gl || e.readyState < 2 || !(e.videoWidth > 0))
+            return false;
+        t.Width = e.videoWidth;
+        t.Height = e.videoHeight;
+        gl.bindTexture(gl.TEXTURE_2D, t.Texture);
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, e);
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+        const ep = t.Params.EffectParams;
+        //  (WebGL 1 has mipmaps for power-of-two sizes only)
+        const pow2 = v => v && !(v & (v - 1));
+        const mips = (t.HaveLod || (ep && ep.MipMap)) && ((gl instanceof WebGL2RenderingContext) || (pow2(t.Width) && pow2(t.Height)));
+        if (mips)
+            gl.generateMipmap(gl.TEXTURE_2D);
+        if (!t.Created) {
+            t.Created = true;
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, mips ? gl.LINEAR_MIPMAP_LINEAR : gl.LINEAR);
+        }
+        t.LastTime = e.currentTime;
+        t.Dirty = false;
+        return true;
+    }
+
+    /**
+     * Before every frame of the effect (texture unit 0 active): a new frame while the video plays, or when its time changed (a seek) or a
+     * frame is due (Dirty); a paused video at the same time isn't uploaded again.
+     * @returns {void}
+     */
+    Update() {
+        const t = this;
+        const e = t.Media.Element;
+        if (e.paused && !t.Dirty && e.currentTime === t.LastTime)
+            return;
+        t.UploadFrame();
+    }
+}
+
 /** Publish the classes of this file under the new namespace Sw.Media (the global class names stay the public legacy API). */
 (function () {
     "use strict";
@@ -117,4 +222,5 @@ class MediaPlayerVideo extends MediaPlayerElement {
     const m = Sw.Media = Sw.Media || {};
     m.MediaPlayerParamsVideo = MediaPlayerParamsVideo;
     m.MediaPlayerVideo = MediaPlayerVideo;
+    m.MediaPlayerVideoTexture = MediaPlayerVideoTexture;
 })();

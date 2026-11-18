@@ -181,7 +181,14 @@ Media-Stats {
     padding: 0 0.5em;
 }
 
-/* <Media-Stat>: one stat chip (click / Enter / Space copies it). Colors: Adjust = trim (green), Clip = crop (blue), Actual = render size (magenta). */
+/* <Media-StatSection> (a header that collapses its values: "Image", "Effect", "File" ...) and <Media-StatGroup> (a label in a section of
+   mixed media): only in the statistics panel (below) */
+Media-StatSection,
+Media-StatGroup {
+    display: none;
+}
+
+/* <Media-Stat>: one stat chip (a click / Enter / Space on its name copies the name, on its value the value). Colors: Adjust = trim (green), Clip = crop (blue), Actual = render size (magenta). */
 Media-Stat {
     --stat: color-mix(in srgb, var(--sw-fg) 50%, transparent);
     display: inline-flex;
@@ -223,6 +230,12 @@ Media-Stat {
         display: none;
     }
 
+    /* A value that is gone for now (ex: the frame time while paused): "-" and dimmed, the row stays so the others don't move */
+    Media-Stat.Idle Media-StatName,
+    Media-Stat.Idle Media-StatValue {
+        opacity: 0.45;
+    }
+
 @media (hover: hover) {
     Media-Stat:hover {
         border-color: currentColor;
@@ -237,14 +250,30 @@ Media-Stat {
 Media-StatName {
     display: inline-block;
     margin-right: 0.75em;
+    outline: none;
 }
+
+    Media-StatName::after {
+        content: ":";
+    }
+
+    .media-stats-body Media-StatName::after {
+        content: none;
+    }
 
 /* Right aligned value, min 5em to limit jitter. */
 Media-StatValue {
     display: inline-block;
     text-align: right;
     min-width: 5em;
+    outline: none;
 }
+
+    Media-StatName:focus-visible,
+    Media-StatValue:focus-visible {
+        box-shadow: 0 0 0 2px var(--sw-focus, var(--ThemeAcc1));
+        border-radius: var(--sw-radius-sm, 4px);
+    }
 
 
 /* ===== Controls ===== */
@@ -608,40 +637,219 @@ Media-View.MediaChrome.MediaDropping {
     box-shadow: inset 0 0 0 4px var(--sw-accent1);
 }
 
-/* The stats panel (top right; Media-Stats as a list of chips), stays while the bars hide */
+/*
+ * The statistics panel: a floating window over the media (media.js CreateChrome places it with left / top; drag its title bar),
+ * stays while the bars hide. Head: the title (the drag handle), Collapse, Close; body: Media-Stats as rows of name and value in groups.
+ */
 .media-stats-panel {
     position: absolute;
+    left: 8px;
     top: 52px;
-    right: max(12px, env(safe-area-inset-right));
-    width: min(24em, calc(100% - 24px));
-    max-height: calc(100% - 140px);
-    overflow: auto;
+    display: flex;
+    flex-direction: column;
+    width: min(26em, calc(100% - 16px));
+    max-height: calc(100% - 16px);
     box-sizing: border-box;
-    padding: var(--sw-space-2, 8px);
+    border: 1px solid var(--sw-border);
     border-radius: var(--sw-radius-lg, 10px);
-    background: color-mix(in srgb, var(--sw-surface) 92%, transparent);
+    background: color-mix(in srgb, var(--sw-surface-raised, var(--sw-surface)) 94%, transparent);
+    box-shadow: var(--sw-elev-2, var(--sw-elev-1));
     color: var(--sw-text);
     pointer-events: auto;
+    overflow: hidden;
 }
 
     .media-stats-panel[hidden] {
         display: none;
     }
 
-    .media-stats-panel Media-Stats {
-        flex-direction: column;
-        align-items: stretch;
-        flex-wrap: nowrap;
-        gap: 4px;
+    /* The controls panel (the same floating window): the sliders of the effect's live controls need a little more room */
+    .media-controls-panel {
+        width: min(30em, calc(100% - 16px));
+    }
+
+/* The title bar: the drag handle (the title), Collapse and Close */
+.media-stats-head {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex: none;
+    padding: 2px 2px 2px 0;
+    border-bottom: 1px solid var(--sw-border);
+    touch-action: none;
+    user-select: none;
+}
+
+    .media-stats-collapsed .media-stats-head {
+        border-bottom: none;
+    }
+
+.media-stats-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 6px 10px;
+    font-weight: 600;
+    cursor: grab;
+    outline: none;
+}
+
+    .media-stats-title:focus-visible {
+        box-shadow: inset 0 0 0 2px var(--sw-focus, var(--sw-accent1));
+        border-radius: var(--sw-radius, 6px);
+    }
+
+    .media-stats-dragging .media-stats-title {
+        cursor: grabbing;
+    }
+
+.media-stats-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    overscroll-behavior: contain;
+    padding: 4px 8px 8px 8px;
+}
+
+    .media-stats-body[hidden] {
+        display: none;
+    }
+
+    /* The values as a two column list: the names left, the values right (each one copies itself) */
+    .media-stats-body Media-Stats {
+        display: grid;
+        grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+        column-gap: 12px;
+        row-gap: 0;
+        align-items: baseline;
         margin: 0;
         padding: 0;
     }
 
-    .media-stats-panel Media-Stat {
-        justify-content: space-between;
-        min-height: 0;
-        border-width: 1px;
+    /* A section header: click / Enter / Space collapses or expands its values (a chevron shows the state) */
+    .media-stats-body Media-StatSection {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        grid-column: 1 / -1;
+        margin: 8px 0 2px 0;
+        padding: 4px 4px;
+        border-radius: var(--sw-radius-sm, 4px);
+        color: var(--sw-text);
+        font-size: 0.85em;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        cursor: pointer;
+        outline: none;
+        user-select: none;
     }
+
+        .media-stats-body Media-StatSection::before {
+            content: "";
+            flex: none;
+            width: 0.45em;
+            height: 0.45em;
+            border-right: 2px solid currentColor;
+            border-bottom: 2px solid currentColor;
+            transform: translateY(-0.12em) rotate(45deg);
+            transition: transform var(--sw-dur-1) var(--sw-ease);
+        }
+
+        .media-stats-body Media-StatSection.Folded::before {
+            transform: rotate(-45deg);
+        }
+
+        .media-stats-body Media-StatSection:first-child {
+            margin-top: 2px;
+        }
+
+        .media-stats-body Media-StatSection:focus-visible {
+            box-shadow: 0 0 0 2px var(--sw-focus, var(--sw-accent1));
+        }
+
+    /* A group label in a section of mixed media ("File", "Picture", "Render" in the "Effect" section) */
+    .media-stats-body Media-StatGroup {
+        display: block;
+        grid-column: 1 / -1;
+        margin: 6px 0 0 4px;
+        color: var(--sw-text-3, var(--sw-text-2));
+        font-size: 0.78em;
+        font-weight: 600;
+    }
+
+    .media-stats-body Media-StatSection.Hide,
+    .media-stats-body Media-StatGroup.Hide,
+    .media-stats-body Media-StatGroup.Fold,
+    .media-stats-body Media-Stat.Fold {
+        display: none;
+    }
+
+@media (hover: hover) {
+    .media-stats-body Media-StatSection:hover {
+        background: var(--sw-hover, color-mix(in srgb, var(--sw-text) 8%, transparent));
+    }
+}
+
+    .media-stats-body Media-Stat {
+        display: contents;
+    }
+
+        .media-stats-body Media-Stat.Hide {
+            display: none;
+        }
+
+    .media-stats-body Media-StatName,
+    .media-stats-body Media-StatValue {
+        min-width: 0;
+        margin: 0;
+        padding: 2px 4px;
+        border-radius: var(--sw-radius-sm, 4px);
+        font-size: max(calc(13px * var(--sw-scale, 1)), calc(var(--sw-text-md, 15px) * 0.88));
+        font-variant-numeric: tabular-nums;
+        cursor: pointer;
+        outline: none;
+        overflow-wrap: anywhere;
+    }
+
+    .media-stats-body Media-StatName {
+        color: var(--sw-text-2);
+    }
+
+    .media-stats-body Media-StatValue {
+        text-align: right;
+        color: var(--sw-text);
+    }
+
+    .media-stats-body Media-Stat.Adjust Media-StatValue {
+        color: var(--sw-chart-3);
+    }
+
+    .media-stats-body Media-Stat.Clip Media-StatValue {
+        color: var(--sw-chart-2);
+    }
+
+    .media-stats-body Media-Stat.Actual Media-StatValue {
+        color: var(--sw-chart-4);
+    }
+
+    .media-stats-body Media-StatName:focus-visible,
+    .media-stats-body Media-StatValue:focus-visible {
+        box-shadow: 0 0 0 2px var(--sw-focus, var(--sw-accent1));
+    }
+
+@media (hover: hover) {
+    .media-stats-body Media-StatName:hover,
+    .media-stats-body Media-StatValue:hover {
+        background: var(--sw-hover, color-mix(in srgb, var(--sw-text) 8%, transparent));
+    }
+}
+
+/* Touch layouts: the rows are a touch target high */
+.SwMobile .media-stats-body Media-StatName,
+.SwMobile .media-stats-body Media-StatValue {
+    padding-top: 8px;
+    padding-bottom: 8px;
+}
 
 /*
  * "Text from the link" with a text media from the url inside the app shell (media.js AddTextCaption, MediaView and

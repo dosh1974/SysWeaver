@@ -1,4 +1,4 @@
-//  media: audio stock:YuE2_00004.flac
+//  media: audio2 stock:YuE2_00004.flac
 
 // Copper Spectrum: polished copper rods driven by the music spectrum, standing on a glossy white tile floor.
 //  iMouse.x = Rod Height | Height gain of the spectrum rods | 0.5 | 0.2 .. 1.8 | x
@@ -16,7 +16,7 @@ const vec3 CopperColor = vec3(0.95, 0.5, 0.3); // var: { "type": "col", "name": 
 const float Anisotropy = 0.9; // var: { "min": 0.0, "max": 0.95, "step": 0.01, "name": "Anisotropy", "desc": "Brushed look: stretches the highlights along the rods", "scale": 100, "unit": "%" }
 const float Tarnish = 0.35; // var: { "min": 0.0, "max": 1.0, "step": 0.01, "name": "Tarnish", "desc": "Blotchy darker, rougher patches on the copper", "scale": 100, "unit": "%" }
 const float MaxHeight = 1.5; // var: { "min": 0.5, "max": 4.0, "step": 0.05, "name": "Max Height", "desc": "Rod height at full spectrum level" }
-const float Smoothing = 0.6; // var: { "min": 0.0, "max": 1.0, "step": 0.01, "name": "Smoothing", "desc": "Calmer rods: averages wider frequency bands and neighbouring rods (less jitter, less detail)", "scale": 100, "unit": "%" }
+const float Smoothing = 0.6; // var: { "min": 0.0, "max": 1.0, "step": 0.01, "name": "Smoothing", "desc": "Calmer rods: blends each band with its time smoothed value and its neighbours (less jitter, less punch)", "scale": 100, "unit": "%" }
 const float RodRadius = 0.08; // var: { "min": 0.02, "max": 0.085, "step": 0.005, "name": "Rod Radius", "desc": "Thickness of the rods" }
 // Floor
 const vec3 FloorColor = vec3(0.93, 0.92, 0.9); // var: { "type": "col", "name": "Tile Color", "desc": "Color of the glazed tiles" }
@@ -46,8 +46,9 @@ const float WaveWidth = 0.02; // var: { "min": 0.004, "max": 0.05, "step": 0.001
 // Quality
 const int AA = 2; // var: { "min": 1, "max": 3, "step": 1, "name": "Anti-Aliasing", "desc": "Samples per pixel axis: 1 fast (jagged), 2 smooth edges (4x cost), 3 very smooth (9x cost)", "format": "{0}x{0}" }
 
-#define NR 36
-const float Spacing = 0.18;
+// one rod per band of the 32 band audio2 spectrum
+#define NR 32
+const float Spacing = 0.2;
 
 float gH[NR];
 float gMaxH = 0.0;
@@ -213,7 +214,7 @@ vec4 wooferLayer(vec3 ro, vec3 rd, float tMax, float pix) {
     return vec4(mix(colr, bgColor(rd), fogAt(t)), a);
 }
 
-float waveAt(float u) { return texture(iChannel0, vec2(u, 0.75)).r * 2.0 - 1.0; }
+float waveAt(float u) { return texture(iChannel0, vec2(u, EwAudioWave512v)).r * 2.0 - 1.0; }
 
 // mono waveform as a floating translucent curve line (straight alpha)
 vec4 waveLayer(vec3 ro, vec3 rd, float tMax, float pix) {
@@ -345,39 +346,34 @@ vec3 render(vec3 ro, vec3 rd, float pix) {
 void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     float tm = mod(iTime, 1000.0);
 
-    // spectrum -> rod levels (pow mapping gives the bass more rods)
-    // each rod averages 7 taps over its own band, widened by Smoothing
+    // spectrum -> rod levels: the 32 log bands of audio2, one band per rod (bass on the left)
+    // Smoothing blends the raw band with its time smoothed value
     float lvl[NR];
     for (int i = 0; i < NR; i++) {
-        float f = (float(i) + 0.5) / float(NR);
-        float x = 0.003 + pow(f, 1.7) * 0.42;
-        float bw = max(1.7 * pow(f, 0.7) * 0.42 / float(NR), 3.0 / 512.0) * (1.0 + 2.0 * Smoothing);
-        float s = 0.0, ws = 0.0;
-        for (int k = -3; k <= 3; k++) {
-            float u = float(k) / 3.0;
-            float w = 1.0 - 0.6 * u * u;
-            s += texture(iChannel0, vec2(max(x + u * bw * 0.5, 0.0), 0.25)).r * w;
-            ws += w;
-        }
-        lvl[i] = s / ws;
+        float u = EwAudioGet32u(i);
+        float raw = texture(iChannel0, vec2(u, EwAudioFrequency32v)).r;
+        float calm = texture(iChannel0, vec2(u, EwAudioFrequency32v + EwAudioDiffuseAddV)).r;
+        lvl[i] = mix(raw, calm, Smoothing);
     }
-    // smooth across neighbouring rods (frame-to-frame noise of single bands averages out)
+    // light smoothing across neighbouring rods (keeps each band readable)
     for (int i = 0; i < NR; i++) {
         float l = lvl[max(i - 1, 0)], r = lvl[min(i + 1, NR - 1)];
-        float l2 = lvl[max(i - 2, 0)], r2 = lvl[min(i + 2, NR - 1)];
-        float nb = (l + r) * 0.3 + (l2 + r2) * 0.1 + lvl[i] * 0.2;
-        float lv = mix(lvl[i], nb, Smoothing);
-        // gentler response curve: less amplification of small level flicker
-        lv = clamp((lv - 0.2) / 0.75, 0.0, 1.0);
-        lv = mix(lv, lv * lv * (3.0 - 2.0 * lv), 0.5) * (0.9 + 0.2 * float(i) / float(NR));
+        float nb = (l + r) * 0.25 + lvl[i] * 0.5;
+        float lv = mix(lvl[i], nb, Smoothing * 0.5);
+        // response curve with a spectral tilt (music is loud in the bass, quiet in the highs):
+        // the floor drops from the bass to the treble so all 32 bands get room to move
+        float f = float(i) / float(NR - 1);
+        float fl = mix(0.42, 0.08, sqrt(f));
+        lv = clamp((lv - fl) / 0.6, 0.0, 1.0);
+        lv = mix(lv, lv * lv * (3.0 - 2.0 * lv), 0.5);
         float idle = 0.05 * (0.5 + 0.5 * sin(tm * 1.3 + float(i) * 0.45));
         float h = 2.0 * RodRadius + 0.05 + idle + lv * MaxHeight * HeightGain;
         gH[i] = h;
         gMaxH = max(gMaxH, h);
     }
-    // bass for the woofers: kick / sub bins, thresholded
-    float bass = (texture(iChannel0, vec2(0.003, 0.25)).r + texture(iChannel0, vec2(0.006, 0.25)).r
-                + texture(iChannel0, vec2(0.009, 0.25)).r + texture(iChannel0, vec2(0.013, 0.25)).r) * 0.25;
+    // bass for the woofers: audio2 bass energy (20 .. 150 Hz), thresholded
+    float bass = EwAudioGetBassEnergy(iChannel0);
+    gBass = smoothstep(BassThreshold, BassThreshold + 0.5, bass * BassGain);
     gBass = smoothstep(BassThreshold, BassThreshold + 0.5, bass * BassGain);
     gTime = tm;
 

@@ -30,13 +30,24 @@ This library turns such a source into a complete WebGL program, the same code fo
 |---|---|
 | `ShaderParser.cs` | `Parse` (variables, `// var:` annotations, iMouse channels, features) and `BuildSource` / `BuildParts` (snippets inserted, ShaderToy uniforms + `main()`, GLSL ES 3.00 or 1.00, the vertex shader after `ShaderStages.Marker`) |
 | `SnippetExpander.cs` | Inserts the snippets a source uses (and their dependencies) before the first declaration using them; `#line` keeps the line numbers |
-| `SnippetLibrary.cs` | The snippet library: `Builtin` (embedded, see below) or `Load(folder)` (the editor) |
+| `SnippetLibrary.cs` | The snippet library: `Builtin` (embedded, see below), `WithFolder(folder)` (the built in one with a folder's snippets on top: the Effect Weaver editor, where admins save), `Load(folder)` (a folder only) |
 | `ShaderStages.cs` | The vertex stage: splits a source into the two stages, rewrites the varyings, `main()` of the vertex shader, `Marker` / `SplitProgram` |
-| `srcData/` | The built in snippets (`<folder>/<Id>.glsl`), compressed by the build to `data/<folder>/<Id>.glsl.br` (brotli, `..\_tools\compress\Compress.exe -OptimizeShaders False`: stored as is, never stripped or minified) and embedded as `snippets/<folder>/<Id>.glsl.br`; decompressed when the library loads |
+| `srcData/` | **The source of the snippet library**: `<folder>/<Id>.glsl` + `<Id>.md` and `README.md` (the library docs, the summary table with the number of places). Every file is compressed by the build to `data/<path>.br` (brotli, `..\_tools\compress\Compress.exe -OptimizeShaders False`: stored as is, never stripped or minified) and embedded as `snippets/<path>.br` |
 
 ## The snippets
 
-The source of the snippets is Effect Weaver's `_snippets` folder (edited and documented there, `D:\EffectWeaver\_snippets`). `srcData/` is a copy: when the Effect Weaver repository is next to this one the build copies its `.glsl` files here first (`SyncEwSnippets` in the csproj), so the copy stays in sync and a checkout without Effect Weaver builds the same library. Snippets removed from `_snippets` must be removed here by hand (and their `.br` from `data/`, or clean it: it is generated and not in git).
+`srcData/` is the library (its [README](srcData/README.md) documents the snippets and the conventions). It used to be Effect Weaver's `_snippets`; the Effect Weaver editor's snippet folder is this folder in development (an admin's save is the source, embedded by the next build), its scanner (`_snippets/tools/SnippetScan` there) writes the summary table and the "Found in effects" sections here.
+
+The embedded library (`SnippetLibrary`):
+
+| Member | |
+|---|---|
+| `Builtin` | All embedded snippets with their code, description (`Md`, `Summary`, `Signature`), dependencies and number of places; made when first used, then shared (`Snippet.IsBuiltin`) |
+| `BuiltinFiles` | The embedded files as library paths: `<folder>/<Id>.glsl`, `<folder>/<Id>.md`, `README.md` |
+| `ReadBuiltinFile(path)` | The text of an embedded file (decoded once, cached), null if there is none |
+| `WithFolder(folder, log)` | `Builtin` with the snippets of a folder on top: a folder snippet replaces the built in one with the same id (`Snippet.OverridesBuiltin`), new ones are added; no folder: `Builtin` |
+
+A removed snippet must also go from `data/` (generated, not in git: clean it). The unit tests of SysWeaver.Tests (`EffectSnippetTests`) check that every effect of the media viewer and every snippet only call snippets that exist.
 
 ## Notes
 

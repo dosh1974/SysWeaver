@@ -416,13 +416,17 @@ class MediaPlayerEffect {
         const createTextureFn = t.CreateTextureFn;
         if (createTextureFn)
             t.Texture = createTextureFn(gl);
-        const ext = gl.getExtension("EXT_disjoint_timer_query");
+        //  The GPU timer: WebGL 2 has its own extension (EXT_disjoint_timer_query is WebGL 1 only: a WebGL 2 context, ex: every Effect Weaver
+        //  build, had no GPU time but the frame time), with the context's query objects
+        const gl2 = (typeof WebGL2RenderingContext !== "undefined") && (gl instanceof WebGL2RenderingContext);
+        const ext = gl2 ? gl.getExtension("EXT_disjoint_timer_query_webgl2") : gl.getExtension("EXT_disjoint_timer_query");
         if (ext) {
             t.Query =
             {
                 E: ext,
-                Q: ext.createQueryEXT(),
+                Q: gl2 ? gl.createQuery() : ext.createQueryEXT(),
                 IsQ: false,
+                Gl2: gl2,
             };
         }
     }
@@ -503,25 +507,55 @@ class MediaPlayerEffect {
             t.FollowMedia(media);
     }
 
-    /** @type {MediaPlayerAudio|null} The sound that plays with the effect (FollowMedia), null when none. */
+    /** @type {MediaPlayerAudio|MediaPlayerVideo|null} The sound / video that plays with the effect (FollowMedia), null when none. */
     Media = null;
 
     /**
-     * Plays a sound with the effect, on one time line: the effect time is the sound's position, and the player's controls are the sound's
-     * (play, pause, stop, seek, speed, loop / once, mute, volume), so the effect has the controls of an audio player. Its end ends the effect.
-     * A sound of another site is loaded with cors (else its analysis is silence).
-     * @param {MediaPlayerAudio} media - The (not yet loaded) audio player.
+     * @type {number} With a media (FollowMedia): seconds added to the media time for the effect's clock (iTime), the time of the loops
+     * before, so the effect runs on when its media loops (render; reset by Stop). The time line (GetPos, Duration) stays the media's.
+     */
+    LoopOffset = 0;
+
+    /** @type {boolean} The media was moved on purpose (Seek / Stop): its next position change is no loop (render). */
+    MediaSeeked = false;
+
+    /** @type {number|undefined} The effect's clock of the last frame (iTime before Speed / Offset; the media time + LoopOffset). */
+    EffectClock = undefined;
+
+    /**
+     * Plays a sound or a video with the effect, on one time line: the effect time is the media's position, and the player's controls are the
+     * media's (play, pause, stop, seek, speed, loop / once, mute, volume), so the effect has the controls of an audio / video player. Its end
+     * ends the effect. A media of another site is loaded with cors (else its analysis is silence / WebGL refuses its frames).
+     * A video (MediaPlayerVideoTexture): its sound when it has one (Stream), it plays inline, and a paused effect draws again when the video
+     * has the frame of a seek (the frame arrives after the seek call).
+     * @param {MediaPlayerAudio|MediaPlayerVideo} media - The (not yet loaded) player.
      * @returns {void}
      */
     FollowMedia(media) {
         const t = this;
         t.Media = media;
-        t.HaveAudio = true;
+        t.HaveAudio = media.HaveAudio !== false;
         try {
             if (new URL(media.Url, location.href).origin !== location.origin)
                 media.Element.crossOrigin = "anonymous";
         }
         catch {
+        }
+        if (media.Element instanceof HTMLVideoElement) {
+            const ve = media.Element;
+            //  (iOS: not full screen on play; the element isn't shown, the effect draws its frames)
+            ve.playsInline = true;
+            ve.setAttribute("playsinline", "");
+            const redraw = () => {
+                if ((!t.Paused) || (!t.GL))
+                    return;
+                if (t.Texture)
+                    t.Texture.Dirty = true;
+                t.Rendered = false;
+                MediaPlayerEffect.render(t);
+            };
+            ve.addEventListener("seeked", redraw);
+            ve.addEventListener("loadeddata", redraw);
         }
         //  The state is the sound's
         for (const k of ["Volume", "Muted", "Looping", "Duration", "AtEnd", "Rate", "MaxRate"])
@@ -548,12 +582,16 @@ class MediaPlayerEffect {
             await proto.Pause.call(t);
             t.RenderTail();
         };
+        //  (a seek / stop moves the media on purpose: not a loop, the effect's clock follows it; a stop starts the clock again)
         t.Stop = async () => {
+            t.MediaSeeked = true;
+            t.LoopOffset = 0;
             await media.Stop();
             await proto.Stop.call(t);
             t.RenderTail();
         };
         t.Seek = async time => {
+            t.MediaSeeked = true;
             await media.Seek(time);
             t.Rendered = false;
             if (t.Paused) {
@@ -845,6 +883,18 @@ class MediaPlayerEffect {
         if (t.Pos)
             gl.deleteBuffer(t.Pos);
         t.Pos = null;
+        const q = t.Query;
+        t.Query = null;
+        if (q && !gl.isContextLost())
+            try {
+                if (q.Gl2)
+                    gl.deleteQuery(q.Q);
+                else
+                    q.E.deleteQueryEXT(q.Q);
+            }
+            catch {
+                //  (the context is going anyway)
+            }
     }
 
     /**
@@ -1406,10 +1456,10 @@ class MediaPlayerEffect {
     async Cache(keepHidden) {
         const t = this;
         const c = t.Url;
-        //  The sound of the effect (FollowMedia) first: its texture reads its analyser
+        //  The sound / video of the effect (FollowMedia) first: its texture reads its analyser / its frames
         const media = t.Media;
         if (media && (!media.Cached) && (!await media.Cache(true))) {
-            console.warn("Failed to load the sound \"" + media.Url + "\" of effect \"" + c + "\"");
+            console.warn("Failed to load the media \"" + media.Url + "\" of effect \"" + c + "\"");
             return false;
         }
         const r = new Request(c, {
@@ -1501,6 +1551,8 @@ class MediaPlayerEffect {
 
     /** @type {HTMLElement|null} Element whose scroll position feeds the scroll uniform (set by Create). */
     ScrollElement = null;
+    /** @type {number} The number of frames drawn (the statistics compute the frame rate from it). */
+    Frames = 0;
     /** @type {{Program:string, Es3:boolean, Vertex:boolean, Controls:number[], ControlNames:string[]}|null} The server build of an Effect Weaver effect (set by Create), null for other effects. */
     Built = null;
     /** @type {object|null} The GL objects of the still shown while the effect compiles (InitPoster), null when none / after the cross-fade. */
@@ -1550,11 +1602,17 @@ class MediaPlayerEffect {
         const pq = isRunning ? t.Query : null;
         const media = t.Media;
         if (media) {
-            //  The time of the sound; between its (coarse) position updates it runs on with the frame clock (at most 0.25 s: a stalled
-            //  sound stops the effect too)
+            //  The time of the sound / video; between its (coarse) position updates it runs on with the frame clock (at most 0.25 s: a
+            //  stalled media stops the effect too)
             const mp = media.GetPos();
             const now = isRunning ? animTime : performance.now();
             if (mp !== t.MediaPos) {
+                //  A loop (the media went back by itself, not a seek / stop): the effect's clock runs on from where it was (LoopOffset), so the
+                //  effect doesn't jump back to its start with the media; the time line stays the media's
+                if (t.MediaSeeked)
+                    t.MediaSeeked = false;
+                else if (media.Looping && (typeof t.MediaPos === "number") && (mp < t.MediaPos - 0.05) && (typeof t.EffectClock === "number"))
+                    t.LoopOffset = t.EffectClock - mp;
                 t.MediaPos = mp;
                 t.MediaAt = now;
             }
@@ -1566,6 +1624,9 @@ class MediaPlayerEffect {
             time = (animTime - t.RenderTime) * 0.001 * (t.Rate || 1) + t.ResumeTime;
         }
         t.CurrentPosition = time;
+        //  The effect's own clock (iTime): the media time plus the time of the loops before (a sound / video that loops), else the time
+        const clock = media ? time + t.LoopOffset : time;
+        t.EffectClock = clock;
 
         const e = t.Element;
         const p = t.Params;
@@ -1608,6 +1669,9 @@ class MediaPlayerEffect {
             e.width = w;
             e.height = h;
             t.Rendered = false;
+            //  Another size takes another time: a new measurement (the published one stays until the next is ready)
+            t.MeasureCount = 0;
+            t.TotalTime = 100000000000.0;
         }
         if (p.Static) {
             if (t.Rendered)
@@ -1632,7 +1696,8 @@ class MediaPlayerEffect {
             t.DrawPoster(1, w, h);
             return;
         }
-        const fxTime = time * p.Speed + p.Offset;
+        //  (iTime: the effect's clock, it runs on over the loops of its media; iChannelTime below stays the media time)
+        const fxTime = clock * p.Speed + p.Offset;
         t.UniformTime(fxTime);
         //  The effect time since the previous frame (a frame at 60 fps for the first one / a jump back)
         const prevFxTime = t.PrevFxTime;
@@ -1689,7 +1754,8 @@ class MediaPlayerEffect {
          */
         const draw = () => {
             gl.drawArrays(gl.TRIANGLES, 0, 3);
-
+            //  (the statistics compute the frame rate from it)
+            ++t.Frames;
         };
 
         const onr = t.OnRender;
@@ -1699,19 +1765,29 @@ class MediaPlayerEffect {
             const ext = pq.E;
             const query = pq.Q;
             if (!pq.IsQ) {
-            //  New perf query 
-                ext.beginQueryEXT(ext.TIME_ELAPSED_EXT, query);
+                //  New perf query (WebGL 2: the context's queries, WebGL 1: the extension's)
+                if (pq.Gl2)
+                    gl.beginQuery(ext.TIME_ELAPSED_EXT, query);
+                else
+                    ext.beginQueryEXT(ext.TIME_ELAPSED_EXT, query);
                 draw();
-                ext.endQueryEXT(ext.TIME_ELAPSED_EXT);
+                if (pq.Gl2)
+                    gl.endQuery(ext.TIME_ELAPSED_EXT);
+                else
+                    ext.endQueryEXT(ext.TIME_ELAPSED_EXT);
                 pq.IsQ = true;
             } else {
                 //  Waiting for previous result to be available
                 draw();
-                const available = ext.getQueryObjectEXT(query, ext.QUERY_RESULT_AVAILABLE_EXT);
+                const available = pq.Gl2 ? gl.getQueryParameter(query, gl.QUERY_RESULT_AVAILABLE) : ext.getQueryObjectEXT(query, ext.QUERY_RESULT_AVAILABLE_EXT);
                 const disjoint = gl.getParameter(ext.GPU_DISJOINT_EXT);
-                if (available && !disjoint) {
-                    const timeElapsed = ext.getQueryObjectEXT(query, ext.QUERY_RESULT_EXT) / 1000000;
-                    t.AccTime(timeElapsed, 12, 2);
+                if (available) {
+                    //  A disjoint result (the GPU changed clocks / power state, ex: going full screen) is dropped, the next query starts (it
+                    //  waited forever before: the GPU time froze)
+                    if (!disjoint) {
+                        const ns = pq.Gl2 ? gl.getQueryParameter(query, gl.QUERY_RESULT) : ext.getQueryObjectEXT(query, ext.QUERY_RESULT_EXT);
+                        t.AccTime(ns / 1000000, 12, 2);
+                    }
                     pq.IsQ = false;
                 }
             }

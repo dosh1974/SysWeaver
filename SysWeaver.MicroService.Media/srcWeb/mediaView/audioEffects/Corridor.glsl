@@ -1,17 +1,19 @@
-// Corridor: a hazy corridor drawn by the sound (ShaderToy style: the audio texture is iChannel0, 512 x 2 texels,
-// row 0 (y = 0.25) the spectrum, row 1 (y = 0.75) the waveform; r = mono, g = left, b = right).
-//  - the left / right walls are LED spectrum meters of the left / right channel (bass near the camera, treble far away)
-//  - the floor is glossy: a rough (diffuse) reflection of the room, lit by the lamps, the walls and the TV
-//  - the far wall is a retro TV: noise, scan lines, a rolling bar and the waveform on top
-//  - the ceiling is two rows of colored lamps that flash on the bass drum
-//  - haze: fog and light shafts under the lamps
+// Corridor: a hazy corridor drawn by the sound (ShaderToy style, the audio2 texture is iChannel0: spectrum, waveform,
+// kick / snare / hi-hat pulses, bass energy and the beat; r = mono, g = left, b = right).
+//  - the left / right walls are LED spectrum meters of the left / right channel (bass near the camera, treble far away),
+//    with floating peak caps and top cells that sparkle on the hi-hat
+//  - the floor is glossy: a rough (diffuse) reflection of the room, lit by the lamps, the walls and the TV;
+//    each kick sends a shock wave of light along it
+//  - the far wall is a retro TV: noise (brighter on the hi-hat), scan lines, a rolling bar, the waveform on top, torn by the snare
+//  - the ceiling is two rows of colored lamps that flash on the kick, flash white on the snare, and a light chases down them on the beat
+//  - haze: fog and light shafts under the lamps, tinted and thickened by the bass; the camera ducks / zooms on the kick
 // The camera looks around and sways sideways / up and down, it never moves along the corridor.
-//  media: audio stock:YuE2_00056.flac
+//  media: audio2 stock:YuE2_00056.flac
 
 //  Live controls:
 //  iMouse.x = Haze | Fog and light shafts | 0.06 | 0.0 .. 0.3
 //  iMouse.y = Floor gloss | Strength of the floor reflection | 1.0 | 0.0 .. 1.5
-//  iMouse.z = Bass threshold | Bass level where the lamps start to flash | 0.55 | 0.0 .. 1.0
+//  iMouse.z = Bass threshold | Bass level where the lamps also glow with the sustained bass (kicks always flash) | 0.55 | 0.0 .. 1.0
 //  iMouse.w = Camera motion | How much the camera looks and sways | 0.25 | 0.0 .. 2.0
 #define Haze mix(0.0, 0.3, iMouse.x)
 #define Gloss mix(0.0, 1.5, iMouse.y)
@@ -25,8 +27,14 @@ const float LampHueSpeed = 0.02;				// var: { "min": 0, "max": 0.2, "step": 0.00
 const float LampIdle = 0.06;					// var: { "min": 0, "max": 0.5, "step": 0.01, "name": "Lamp idle glow", "desc": "Lamp brightness without bass" }
 const float Roughness = 0.12;					// var: { "min": 0, "max": 0.5, "step": 0.01, "name": "Floor roughness", "desc": "How blurry (diffuse) the floor reflection is" }
 
+// --- Music reactions ---
+const vec3 BassColor = vec3(1.0, 0.2, 0.55);	// var: { "type": "col", "name": "Bass color", "desc": "The color of the kick shock wave and the bass tint of the fog" }
+const float ShockRing = 1.0;					// var: { "min": 0, "max": 3, "step": 0.05, "name": "Kick shock wave", "desc": "Strength of the light wave running along the floor on each kick", "scale": 100, "unit": "%" }
+const float KickPunch = 0.0;					// var: { "min": 0, "max": 3, "step": 0.05, "name": "Kick punch", "desc": "How much the camera ducks and zooms on the kick", "scale": 100, "unit": "%" }
+const float BeatChase = 1.0;					// var: { "min": 0, "max": 2, "step": 0.05, "name": "Beat chase", "desc": "Strength of the light running down the lamps on each beat", "scale": 100, "unit": "%" }
+
 // --- Structure and fine tuning ---
-const float Bars = 32.0;						// var: { "min": 8, "max": 96, "step": 1, "name": "Bars", "desc": "The number of spectrum bars on each wall" }
+const float Bars = 32.0;						// var: { "min": 32, "max": 64, "step": 32, "name": "Bars", "desc": "The number of spectrum bars on each wall: 32 or 64, each bar shows one band of the spectrum (20 Hz .. 20 kHz, log)" }
 const float StaticRate = 24.0;					// var: { "min": 0, "max": 60, "step": 1, "name": "TV static rate", "desc": "How often the TV noise changes", "unit": "fps" }
 const float VignetteAmount = 0.55;				// var: { "min": 0, "max": 1, "step": 0.01, "name": "Vignette", "desc": "Darkening of the corners" }
 const float Grain = 0.018;						// var: { "min": 0, "max": 0.1, "step": 0.002, "name": "Grain", "desc": "Film grain strength" }
@@ -57,31 +65,27 @@ vec3 hsv(float h, float s, float v)
 	return v * mix(vec3(1.0), k, s);
 }
 
-//  The spectrum (0..1) at u (0 = bass .. 1 = treble, a log like scale up to ~9 kHz), r = mono, g = left, b = right
+//  The spectrum (0..1) of the bar at u (0 = bass .. 1 = treble): one bar = exactly one band of the audio2 spectrum row
+//  with Bars bands (32 or 64, the log axis 20 Hz .. 20 kHz), read at its center (no blending); r = mono, g = left, b = right;
+//  sm = 1: the smoothed row (calm motion, peak caps)
 //  (textureLod: the texture has no mip levels, and without screen derivatives the callers can really branch)
-vec3 spectrum(float u)
+const float SpecRowV = Bars > 48.0 ? EwAudioFrequency64v : EwAudioFrequency32v;
+vec3 spectrum(float u, float sm)
 {
-	float x = 0.004 + pow(clamp(u, 0.0, 1.0), 1.7) * 0.4;
-	return textureLod(iChannel0, vec2(x, 0.25), 0.0).rgb;
+	float x = (min(floor(clamp(u, 0.0, 1.0) * Bars), Bars - 1.0) + 0.5) / Bars;
+	return textureLod(iChannel0, vec2(x, SpecRowV + sm * EwAudioDiffuseAddV), 0.0).rgb;
+}
+
+//  One mono value of the audio2 texture (u, v: the snippet's constants)
+float audioValue(float u, float v)
+{
+	return textureLod(iChannel0, vec2(u, v), 0.0).r;
 }
 
 //  The mono waveform at x (0..1): -1..1
 float wave(float x)
 {
-	return textureLod(iChannel0, vec2(clamp(x, 0.0, 1.0), 0.75), 0.0).r * 2.0 - 1.0;
-}
-
-//  The bass drum: the lowest bins (~45..170 Hz at 48 kHz), 0..1 past the threshold
-float kick()
-{
-	float b = 0.0;
-	b += texture(iChannel0, vec2(0.003, 0.25)).r;
-	b += texture(iChannel0, vec2(0.005, 0.25)).r;
-	b += texture(iChannel0, vec2(0.007, 0.25)).r;
-	b += texture(iChannel0, vec2(0.009, 0.25)).r;
-	b *= 0.25;
-	float k = smoothstep(BassFrom, 1.0, b);
-	return k * k * (3.0 - 2.0 * k);
+	return textureLod(iChannel0, vec2(clamp(x, 0.0, 1.0), EwAudioWave512v), 0.0).r * 2.0 - 1.0;
 }
 
 //  Lamp i (0..15): two rows along the ceiling, lamp i = row k = i / 2, left (even i, x = -LampX) or right (x = LampX),
@@ -90,13 +94,16 @@ const float LampY = H - 0.03;
 const float LampDz = D / LampRows;
 
 //  From the vertex stage (the same for every pixel, but the ray)
-flat varying vec4 vCam;			// xyz the camera position, w the kick
+flat varying vec4 vCam;			// xyz the camera position, w the kick (pulse or bass over the threshold)
+flat varying vec4 vAudio;		// x kick pulse, y snare pulse, z hi-hat pulse, w smoothed bass energy
 varying vec3 vRay;				// the ray direction, not normalized
 flat varying vec4 vLamp[8];		// rgb the color of the left lamp of row k (= of the right lamp of row k - 4), a its power
 flat varying vec4 vLampR[2];	// the powers of the right lamps
-//  color * power of the left / right lamp of a row (set in mainImage)
+//  color * power of the left / right lamp of a row, the snare / hi-hat pulses (set in mainImage)
 vec3 gLampL[8];
 vec3 gLampR[8];
+float gSnare = 0.0;
+float gHat = 0.0;
 
 vec3 lampColor(float i)
 {
@@ -105,12 +112,15 @@ vec3 lampColor(float i)
 	return hsv(fract(k / LampRows + row * 0.5 + iTime * LampHueSpeed), 0.75, 1.0);
 }
 
-//  The brightness of lamp i: a glow, flashing on the kick (each lamp a bit differently, a wave running along the corridor)
-float lampPower(float i, float kk)
+//  The brightness of lamp i: a glow, flashing on the kick (each lamp a bit differently, a wave running along the corridor),
+//  a light chasing down the corridor on the beat, a flash on the snare
+float lampPower(float i, float kk, float phase, float conf, float sp)
 {
 	float k = floor(i * 0.5);
 	float w = 0.5 + 0.5 * sin(iTime * 2.1 - k * 0.9 + mod(i, 2.0) * 1.7);
-	return LampIdle + kk * (0.5 + 2.2 * w * w);
+	float d = fract((k + 0.5) / LampRows - phase + 0.5) - 0.5;
+	float chase = exp(-d * d * 60.0) * conf;
+	return LampIdle + kk * (0.5 + 2.2 * w * w) + chase * 1.6 + sp * 0.6;
 }
 
 //  The nearest surface from inside the room: (t, id) id 0 = left wall, 1 = right wall, 2 = floor, 3 = ceiling, 4 = TV wall, 5 = the wall behind
@@ -132,8 +142,11 @@ vec3 meterWall(vec3 p, float id, float blur)
 	float u = clamp((p.z - MeterZ0) * (1.0 / (MeterZ1 - MeterZ0)), 0.0, 1.0);
 	float bx = u * Bars;
 	float bar = (floor(bx) + 0.5) / Bars;
-	vec3 sp = spectrum(bar);
+	vec3 sp = spectrum(bar, 0.0);
+	vec3 spS = spectrum(bar, 1.0);
 	float level = clamp((id < 0.5 ? sp.g : sp.b) * 1.1, 0.0, 1.0);
+	//  The peak cap: the slower smoothed level, it floats above the bar and falls back slowly
+	float peak = max(level, clamp((id < 0.5 ? spS.g : spS.b) * 1.1, 0.0, 1.0));
 	const float Segs = 22.0;
 	float yv = (p.y - 0.15) / (H - 0.45);
 	float sy = yv * Segs;
@@ -147,9 +160,11 @@ vec3 meterWall(vec3 p, float id, float blur)
 	float lit = mix(step(seg, level), smoothstep(level + 0.05, level - 0.05, yv), blur);
 	vec3 col = mix(vec3(0.1, 1.0, 0.25), vec3(1.0, 0.85, 0.1), smoothstep(0.35, 0.65, yv));
 	col = mix(col, vec3(1.0, 0.12, 0.08), smoothstep(0.7, 0.9, yv));
-	//  The top lit cell of a bar burns brighter
+	//  The top lit cell of a bar burns brighter (sparkles on the hi-hat)
 	float top = smoothstep(0.9, 1.0, 1.0 - abs(seg - level) * (Segs * 0.5)) * step(seg, level);
-	vec3 e = col * led * inside * (0.035 + lit * (1.6 + top * 1.5));
+	float pc = (floor(peak * Segs - 0.5) + 0.5) / Segs;
+	float cap = (1.0 - step(0.5 / Segs, abs(seg - pc))) * step(level + 1.0 / Segs, peak) * (1.0 - blur);
+	vec3 e = col * led * inside * (0.035 + lit * (1.6 + top * (1.5 + 2.5 * gHat))) + vec3(1.0, 0.95, 0.9) * (led * inside * cap * 1.4);
 	//  The dark metal panel around the LEDs
 	vec3 panel = vec3(0.018, 0.02, 0.026) * (0.8 + 0.2 * step(0.5, fract(p.z * 0.5)));
 	//  A metal frame around the meter (its start reads as the end of a display, not a cut), lit a bit by the nearest bars
@@ -184,12 +199,14 @@ vec3 tvWall(vec3 p, float blur)
 	if (inScreen > 0.0)
 	{
 		vec2 uv = g * 0.5 + 0.5;
-		//  Static, a rolling bar, scan lines
+		//  The snare tears the picture: lines shift sideways
+		uv.x += gSnare * 0.07 * (hash(vec2(floor(uv.y * 14.0), floor(mod(iTime, 100.0) * 30.0))) - 0.5);
+		//  Static (brighter on the hi-hat), a rolling bar, scan lines
 		float n = hash(floor(uv * vec2(220.0, 160.0)) + floor(iTime * StaticRate) * vec2(17.3, 3.7));
 		n = mix(n, 0.5, blur);
 		float roll = smoothstep(0.0, 0.08, abs(fract(uv.y * 0.6 - iTime * 0.13) - 0.5));
 		float scan = mix(0.72 + 0.28 * sin(uv.y * 160.0 * 3.14159), 0.86, blur);
-		vec3 tv = vec3(0.3, 0.33, 0.4) * (0.3 + 0.7 * n) * (0.7 + 0.3 * roll);
+		vec3 tv = vec3(0.3, 0.33, 0.4) * (0.3 + 0.7 * n) * (0.7 + 0.3 * roll) * (1.0 + 1.2 * gHat);
 		//  The waveform (mono), a glowing phosphor line
 		float w = wave(uv.x) * 0.8;
 		float dy = abs(g.y - w);
@@ -245,7 +262,7 @@ vec3 floorLight(vec3 p)
 	}
 	//  The meters light the floor next to them (the level of the bars around this z)
 	float u = clamp((p.z - MeterZ0) * (1.0 / (MeterZ1 - MeterZ0)), 0.0, 1.0);
-	vec3 sp = spectrum(u);
+	vec3 sp = spectrum(u, 1.0);
 	vec3 meter = vec3(0.4, 0.9, 0.3);
 	l += meter * (0.5 * (sp.g * exp(-(p.x + W) * 1.6) + sp.b * exp(-(W - p.x) * 1.6)));
 	//  The TV
@@ -278,7 +295,7 @@ float lampGlow(vec3 o, vec3 rd, float s)
 }
 
 //  The haze along a ray: the fog and the light shafts of the lamps (in-scattering, stronger right under a lamp)
-vec3 haze(vec3 ro, vec3 rd, float t, float kk, vec3 col)
+vec3 haze(vec3 ro, vec3 rd, float t, float kk, float bass, vec3 col)
 {
 	vec3 glow = vec3(0.0);
 	float roRd = dot(ro, rd);
@@ -292,34 +309,46 @@ vec3 haze(vec3 ro, vec3 rd, float t, float kk, vec3 col)
 		glow += gLampR[k] * lampGlow(vec3(o.x - LampX, o.yz), rd, clamp(s + sx, 0.0, t));
 	}
 	float fog = 1.0 - exp(-t * Haze);
-	vec3 fogCol = vec3(0.03, 0.035, 0.05) + kk * 0.03;
-	return mix(col, fogCol, fog) + glow * Haze * 1.6;
+	//  (the bass tints the fog and thickens the light shafts)
+	vec3 fogCol = vec3(0.03, 0.035, 0.05) + kk * 0.03 + BassColor * (bass * bass * 0.06);
+	return mix(col, fogCol, fog) + glow * Haze * 1.6 * (1.0 + 0.6 * bass);
 }
 
-//  Per frame work (runs for 3 vertices instead of per pixel): the camera, the kick, the lamp colors and powers
+//  Per frame work (runs for 3 vertices instead of per pixel): the music, the camera, the lamp colors and powers
 void vertexMain(vec2 fragCoord)
 {
 	float tm = iTime;
-	float kk = kick();
-	//  The camera: sways sideways and up / down and looks around (its depth stays)
-	vec3 ro = vec3(0.55 * sin(tm * 0.23) * Motion, 1.45 + 0.22 * sin(tm * 0.31 + 1.0) * Motion, CamZ);
+	//  The music (audio2): pulses for the hits, smoothed energies for flowing motion
+	float kp = audioValue(EwAudioKickPulseU, EwAudioKickPulseV);
+	float sp = audioValue(EwAudioSnarePulseU, EwAudioSnarePulseV);
+	float hp = audioValue(EwAudioHiHatPulseU, EwAudioHiHatPulseV);
+	float bass = audioValue(EwAudioBassU, EwAudioBassV + EwAudioDiffuseAddV);
+	float b = smoothstep(BassFrom, 1.0, audioValue(EwAudioBassU, EwAudioBassV));
+	float kk = max(kp, b * b * (3.0 - 2.0 * b));
+	//  The beat: a light runs down the corridor once per beat (only when the tempo is sure)
+	float phase = audioValue(EwAudioBeatPhaseU, EwAudioBeatPhaseV);
+	float conf = smoothstep(0.1, 0.3, audioValue(EwAudioTempoConfidenceU, EwAudioTempoConfidenceV)) * BeatChase;
+	//  The camera: sways sideways and up / down and looks around (its depth stays), ducks and zooms a bit on the kick
+	vec3 ro = vec3(0.55 * sin(tm * 0.23) * Motion, 1.45 + 0.22 * sin(tm * 0.31 + 1.0) * Motion - 0.05 * kp * KickPunch, CamZ);
 	float yaw = (0.26 * sin(tm * 0.17) + 0.08 * sin(tm * 0.43)) * Motion * YawAmount;
-	float pitch = (0.07 * sin(tm * 0.13 + 2.0) + 0.03 * sin(tm * 0.37)) * Motion - 0.02;
+	float pitch = (0.07 * sin(tm * 0.13 + 2.0) + 0.03 * sin(tm * 0.37)) * Motion - 0.02 + 0.012 * kp * KickPunch;
 	float roll = 0.02 * sin(tm * 0.21) * Motion;
 	vec2 q = (fragCoord - 0.5 * iResolution.xy) / iResolution.y;
 	//  (not normalized: affine in fragCoord, the rotations are linear)
-	vec3 rd = vec3(q, 1.3);
+	vec3 rd = vec3(q, 1.3 + 0.12 * kp * KickPunch);
 	rd.xy = mat2(cos(roll), -sin(roll), sin(roll), cos(roll)) * rd.xy;
 	rd.yz = mat2(cos(pitch), -sin(pitch), sin(pitch), cos(pitch)) * rd.yz;
 	rd.xz = mat2(cos(yaw), sin(yaw), -sin(yaw), cos(yaw)) * rd.xz;
 	vCam = vec4(ro, kk);
 	vRay = rd;
+	vAudio = vec4(kp, sp, hp, bass);
 	float pr[8];
 	for (int k = 0; k < 8; k++)
 	{
 		float i = float(k) * 2.0;
-		vLamp[k] = vec4(lampColor(i), lampPower(i, kk));
-		pr[k] = lampPower(i + 1.0, kk);
+		//  (the snare flashes the lamps white)
+		vLamp[k] = vec4(mix(lampColor(i), vec3(1.0), sp * 0.6), lampPower(i, kk, phase, conf, sp));
+		pr[k] = lampPower(i + 1.0, kk, phase, conf, sp);
 	}
 	vLampR[0] = vec4(pr[0], pr[1], pr[2], pr[3]);
 	vLampR[1] = vec4(pr[4], pr[5], pr[6], pr[7]);
@@ -328,6 +357,8 @@ void vertexMain(vec2 fragCoord)
 void mainImage(out vec4 fragColor, in vec2 fragCoord)
 {
 	float kk = vCam.w;
+	gSnare = vAudio.y;
+	gHat = vAudio.z;
 	vec3 ro = vCam.xyz;
 	vec3 rd = normalize(vRay);
 	//  The lamps: color * power (the right lamp of row k has the color of the left lamp 4 rows on)
@@ -354,6 +385,11 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord)
 		grout = mix(grout, 0.07, smoothstep(0.08, 0.35, fw));
 		vec3 base = vec3(0.05, 0.05, 0.055) * (1.0 - 0.5 * grout) * (0.9 + 0.1 * hash(floor(p.xz)));
 		col = base * floorLight(p);
+		//  The kick's shock wave: a band of light running along the floor away from the camera, the grout glows brightest
+		float kp = vAudio.x;
+		float zr = CamZ + 1.0 + (1.0 - kp) * 11.0;
+		float ring = exp(-abs(p.z - zr) * 2.0) * kp * ShockRing;
+		col += BassColor * ring * (0.2 + 1.5 * grout);
 		float rough = Roughness * (1.0 + grout * 2.0);
 		float blur = clamp(rough * 4.0, 0.0, 1.0);
 		//  (a stable pattern per pixel, interleaved gradient noise: no flicker)
@@ -386,7 +422,7 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord)
 	}
 	else
 		col = surface(p, h.y, 0.0);
-	col = haze(ro, rd, h.x, kk, col);
+	col = haze(ro, rd, h.x, kk, vAudio.w, col);
 
 	//  Grading: a soft tone curve, a vignette, grain
 	col = 1.0 - exp(-col * Exposure);

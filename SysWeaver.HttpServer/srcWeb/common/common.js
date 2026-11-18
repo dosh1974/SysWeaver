@@ -4243,6 +4243,38 @@ window.Sw.Sources["core/format.js"] = "common/common.js";
         },
 
         /**
+         * A display name from a file name or an id (an effect, a logo ...): "veil2_aurora_fjord" => "Veil 2 Aurora Fjord", "goldenLion" =>
+         * "Golden Lion", "Copper_Spectrum" => "Copper Spectrum". "_", "-", "." and spaces separate words, a lower case letter followed by an
+         * upper case one and a letter / digit change start a new word, every word starts with a capital. The same as the server's
+         * ShaderParser.BeautifyName (SysWeaver.Media.Shader), so names made here and there match.
+         * @param {string} id - The file name (without its extension) or id.
+         * @returns {string} The name.
+         */
+        BeautifyName(id) {
+            const s = String(id ?? "");
+            const sep = /[_\-. ]/;
+            const upper = c => c !== c.toLowerCase() && c === c.toUpperCase();
+            const lower = c => c !== c.toUpperCase() && c === c.toLowerCase();
+            const digit = c => c >= "0" && c <= "9";
+            const letter = c => upper(c) || lower(c);
+            let out = "";
+            let prev = " ";
+            for (const c of s) {
+                if (sep.test(c)) {
+                    if (prev !== " ")
+                        out += " ";
+                    prev = " ";
+                    continue;
+                }
+                if ((upper(c) && lower(prev)) || (digit(c) && letter(prev)) || (letter(c) && digit(prev)))
+                    out += " ";
+                out += prev === " " ? c.toUpperCase() : c;
+                prev = c;
+            }
+            return out.trim();
+        },
+
+        /**
          * Split text at the first separator into a trimmed [key, value] pair ([text, ""] if missing).
          * @param {string} text - Text.
          * @param {string} split - Separator.
@@ -26399,6 +26431,20 @@ window.Sw.Sources["ui/overlay.js"] = "common/common.js";
     }
 
     /**
+     * The element pop-ups, menus, dialogs, toasts and hints are added to: the element shown full screen (the Fullscreen api only
+     * renders it and what is inside it, a pop-up in the body would show behind it after full screen ends), else the body.
+     * An element that can't hold children (a video, a canvas, a frame ...) or the whole page in full screen: the body.
+     * @returns {HTMLElement} The parent.
+     */
+    function overlayRoot() {
+        const f = document.fullscreenElement || document.webkitFullscreenElement;
+        if (f && f !== document.documentElement && f !== document.body && f.isConnected
+            && !/^(video|audio|canvas|iframe|frame|img|object|embed|svg|select|input|textarea)$/i.test(f.tagName))
+            return f;
+        return document.body;
+    }
+
+    /**
      * Bring the background in line with the overlay stack (called on every stack change):
      * - while a dialog is open everything else in this document is inert (the shell chrome too: the shell is this document or does it
      *   for its content frame; a framed page that frames a dialog page makes its own content inert except the frame);
@@ -26491,7 +26537,7 @@ window.Sw.Sources["ui/overlay.js"] = "common/common.js";
         }
         //  Toasts and the live region inside the top dialog
         const td = topDialogEntry();
-        const host = td && !td.Closed ? td.Box : b;
+        const host = td && !td.Closed ? td.Box : overlayRoot();
         if (toastHost && toastHost.isConnected && toastHost.parentNode !== host)
             host.append(toastHost);
         const live = document.querySelector(".sw-page-live");
@@ -26768,8 +26814,8 @@ window.Sw.Sources["ui/overlay.js"] = "common/common.js";
                 }, { passive: true });
             }
             if (layer)
-                (o.Host || document.body).append(layer);
-            (o.Host || document.body).append(box);
+                (o.Host || overlayRoot()).append(layer);
+            (o.Host || overlayRoot()).append(box);
             p.DimLayer = !!o.Dim;
             pushStack(p);
             p.Place = () => Place(box, anchor, o);
@@ -27055,7 +27101,7 @@ window.Sw.Sources["ui/overlay.js"] = "common/common.js";
             //  All levels live in one host (display: contents); inside a dialog's focus trap the menu traps the focus in its host, so
             //  its items (and cascading submenus) can take the keyboard focus
             root.Host = el("div.sw-menu-host", { style: { display: "contents" } });
-            document.body.append(root.Host);
+            overlayRoot().append(root.Host);
             let trapped = false;
             if (!Focus.Allowed(root.Host)) {
                 Focus.Trap(root.Host);
@@ -29658,7 +29704,7 @@ window.Sw.Sources["ui/overlay.js"] = "common/common.js";
             //  No scrolling of the page behind (UX-POP-10)
             layer.addEventListener("wheel", e => e.preventDefault(), { passive: false });
             layer.addEventListener("touchmove", e => e.preventDefault(), { passive: false });
-            document.body.append(layer, box);
+            overlayRoot().append(layer, box);
             //  after its entrance the box has no animation of its own (the end of a rejection pulse must not replay the entrance)
             box.addEventListener("animationend", e => {
                 if (e.target === box && !box.classList.contains("sw-reject-pulse"))
@@ -33005,7 +33051,7 @@ window.Sw.Sources["ui/overlay.js"] = "common/common.js";
         if (!toastHost || !toastHost.isConnected) {
             toastHost = el("div.sw-toasts.sw-root", { attrs: { role: "region", "aria-label": _TF("Notifications", "Accessible name of the area where short messages (toasts) are shown") } });
             const td = topDialogEntry();
-            (td ? td.Box : document.body).append(toastHost);
+            (td ? td.Box : overlayRoot()).append(toastHost);
             fresh = true;
             //  toasts never cover actions (FBK-8): the generic geometry check watches them in developer mode
             //  (no free place: the stack took the place that covers the fewest, P3-A-10; not the caller's mistake, no developer warning)
@@ -33015,6 +33061,9 @@ window.Sw.Sources["ui/overlay.js"] = "common/common.js";
             if (reg)
                 reg.Place = placeToasts;
         }
+        else if (!topDialogEntry() && toastHost.parentNode !== overlayRoot())
+            //  full screen started or ended since the host was made: the toasts go where they can be seen
+            overlayRoot().append(toastHost);
         if (!toastResizeBound) {
             toastResizeBound = true;
             window.addEventListener("resize", () => {
@@ -33324,7 +33373,7 @@ window.Sw.Sources["ui/overlay.js"] = "common/common.js";
             if (!text)
                 return;
             const b = el("div.sw-hint.sw-root", { text, attrs: { role: "tooltip" } });
-            document.body.append(b);
+            overlayRoot().append(b);
             Place(b, e, { Side: "below", Align: "center", Gap: 6 });
             let timer = 0;
             const h = {
@@ -33675,6 +33724,11 @@ window.Sw.Sources["ui/overlay.js"] = "common/common.js";
          * @returns {boolean} True if document.fullscreenElement is set.
          */
         Is: () => !!(document.fullscreenElement || document.webkitFullscreenElement),
+        /**
+         * The element Sw pop-ups, menus, dialogs, toasts and hints are added to: the element shown full screen (only it is rendered), else the body.
+         * @returns {HTMLElement} The parent.
+         */
+        OverlayRoot: () => overlayRoot(),
         /**
          * Enter full screen.
          * @param {Element} [element] The element (default the whole page).
@@ -35151,14 +35205,14 @@ window.Sw.Sources["ui/editors.js"] = "common/common.js";
      *      the first definition of a group), NoSlider (number boxes only, for unbounded values),
      *      Multiline (strings: a text area, true = 2 rows or the number of rows), Hint (the hint line under the label; default for numbers: the range and unit, ex: "0 to 1 ms"; "" = none), Help (a help text under
      *      the value), ReadOnly (the value is shown as text: no input, nothing can change it; SetValues still updates it),
-     *      Map: { Min, Max, Unit, Format } (numbers: a normalized value, ex: a 0..1 controller, also shown in the units it stands for, mapped
+     *      Map: { Min, Max, Unit, Format, Decimals (optional: the decimals of the mapped value, default from Min / Max) } (numbers: a normalized value, ex: a 0..1 controller, also shown in the units it stands for, mapped
      *      linearly from the definition's Min..Max: "= 3000", "= 3000 lm"), Format (numbers: the display of the value, a template: "{0} BPM",
      *      "{0:1} %" = 1 decimal; shown after the value box instead of the Unit; see PropertyEditor.Display),
      *      Scale (numbers, default 1: the value is shown and typed × Scale, its range and step too; ex: 0.3 with Scale 100 and Unit "%"
      *      shows as 30 %, the value stays 0.3; see PropertyEditor.Scaled) }.
      * Units and mapped values sit in a slot of one width on every number row (FitSuffixes): the sliders and boxes line up.
      * Options: Defs, Values ({ key: value }, missing values show the defaults), OnInput(key, value) (continuous), OnChange(key, value) (committed),
-     *          Realtime (call OnInput while dragging, default true), ResetButtons (a reset to default button on the number rows, dimmed at the default),
+     *          Realtime (call OnInput while dragging, default true), ResetButtons (a reset to default button at the right end of every row, all types, dimmed at the default),
      *          Hints (default true: the hint lines), RowMenu(def) -> [Sw.Menu items] (a ⋯ button at the end of every row that isn't read only,
      *          for the row's own actions, ex: "Edit the definition…"; null / empty = no menu items). A definition's own Menu (items, or a
      *          function(def) returning them or a promise of them) and MenuTitle (the button's tool tip) give only that row a ⋯ menu (ex: "Choose an effect…").
@@ -35556,7 +35610,7 @@ window.Sw.Sources["ui/editors.js"] = "common/common.js";
                         const lo = d.Min ?? 0, hi = d.Max ?? 1;
                         const k = hi > lo ? (x - lo) / (hi - lo) : 0;
                         const mv = m.Min + (m.Max - m.Min) * k;
-                        mapped.textContent = _T("= {0}", PropertyEditor.Display(m, mv, PropertyEditor.Decimals(m.Min, m.Max)), "A normalized setting shown in the units it stands for, {0} the value");
+                        mapped.textContent = _T("= {0}", PropertyEditor.Display(m, mv, m.Decimals ?? PropertyEditor.Decimals(m.Min, m.Max)), "A normalized setting shown in the units it stands for, {0} the value");
                     };
                     const p = num((x, final) => {
                         showMap(x);
@@ -35585,19 +35639,22 @@ window.Sw.Sources["ui/editors.js"] = "common/common.js";
                         p.Set(x);
                         showMap(x);
                     };
-                    if (t.O.ResetButtons) {
-                        w.ResetBtn = new Sw.Button({
-                            Icon: "reset", Small: true, Kind: "ghost", Class: "sw-prop-reset",
-                            Title: _T("Set the default ({0})", String(PropertyEditor.Scaled(d, d.Default)) + (d.Unit ? " " + d.Unit : ""), "Tool tip of a button that resets a setting to its default value, {0} is the default value"),
-                            OnClick: () => {
-                                w.Set(d.Default);
-                                t.Emit(d, d.Default, true);
-                            },
-                        }).E;
-                        value.append(w.ResetBtn);
-                    }
                     break;
                 }
+            }
+            //  ResetButtons: a reset to the default at the end of every row (every type, before the ⋯), dimmed at the default; the css
+            //  puts it at the right end of the value column, so the reset buttons of all rows line up (ex: after a narrow color swatch)
+            if (t.O.ResetButtons) {
+                const shown = d.Type !== "enum" && typeof d.Default === "number" ? String(PropertyEditor.Scaled(d, d.Default)) + (d.Unit ? " " + d.Unit : "") : PropertyEditor.Text(d, d.Default);
+                w.ResetBtn = new Sw.Button({
+                    Icon: "reset", Small: true, Kind: "ghost", Class: "sw-prop-reset",
+                    Title: _T("Set the default ({0})", shown, "Tool tip of a button that resets a setting to its default value, {0} is the default value"),
+                    OnClick: () => {
+                        w.Set(d.Default);
+                        t.Emit(d, d.Default, true);
+                    },
+                }).E;
+                value.append(w.ResetBtn);
             }
             //  RowMenu(def) (every row) or the definition's own Menu (items or a function(def) returning them, only that row): the row's
             //  own actions (ex: "Edit…", "Choose from the library…") in a ⋯ menu at the end of the value

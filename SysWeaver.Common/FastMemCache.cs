@@ -160,6 +160,48 @@ namespace SysWeaver
         }
 
         /// <summary>
+        /// Update the value of an existing item (the expiration time is recomputed from the new value, same as <see cref="Set"/> and <see cref="TryAdd"/>)
+        /// </summary>
+        /// <param name="key">The key</param>
+        /// <param name="value">The new value</param>
+        /// <returns>True if the value was updated, false if no (non-expired) item with the key exist (nothing is added)</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="key"/> is null</exception>
+        /// <remarks>An expired item (that haven't been pruned yet) is treated as missing (it's not updated).
+        /// An item that is being created asynchronously (a pending entry) is treated as existing and is replaced by the new value,
+        /// the result of the running update is not cached (callers awaiting that update still get its result).
+        /// Must not be called for the same key from within a value factory (dead lock).</remarks>
+        public bool Update(K key, V value)
+        {
+            var c = C;
+            //  Fast path, nothing to update (no lock needed)
+            if (!c.ContainsKey(key))
+                return false;
+            Lock(key);
+            try
+            {
+                for (; ; )
+                {
+                    if (!c.TryGetValue(key, out var existing))
+                        return false;
+                    //  An expired entry (not pruned yet) is missing (like TryGet)
+                    if (DateTime.UtcNow >= existing.Item1)
+                        return false;
+                    var val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
+                    //  A pending entry can be replaced / removed by its completing update without the key lock, only replace the exact entry we inspected
+                    if (c.TryUpdate(key, val, existing))
+                    {
+                        Track(val.Item1, key);
+                        return true;
+                    }
+                }
+            }
+            finally
+            {
+                Unlock(key);
+            }
+        }
+
+        /// <summary>
         /// Get an item if it's cached
         /// </summary>
         /// <param name="key">The key</param>

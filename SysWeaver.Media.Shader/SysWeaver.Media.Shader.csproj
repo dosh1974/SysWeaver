@@ -20,29 +20,16 @@
   </PropertyGroup>
 
   <!--
-    The snippet library: Effect Weaver's _snippets (D:\EffectWeaver\_snippets, next to this repository) is the source (edited in the Effect Weaver
-    editor, documented there). When it exists its .glsl files are copied to srcData\ before the build, so the copy here stays in sync and a
-    checkout without Effect Weaver still builds the same library.
-  -->
-  <PropertyGroup>
-    <EwSnippetSource>$(MSBuildThisFileDirectory)..\..\EffectWeaver\_snippets\</EwSnippetSource>
-  </PropertyGroup>
-  <Target Name="SyncEwSnippets" Condition="Exists('$(EwSnippetSource)')">
-    <ItemGroup>
-      <EwSnippet Include="$(EwSnippetSource)**\*.glsl" Exclude="$(EwSnippetSource)effects\**;$(EwSnippetSource)tools\**" />
-    </ItemGroup>
-    <Copy SourceFiles="@(EwSnippet)" DestinationFiles="@(EwSnippet->'$(MSBuildThisFileDirectory)srcData\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
-  </Target>
-
-  <!--
-    The built in snippet library (SnippetLibrary.Builtin): srcData\<folder>\<Id>.glsl is brotli compressed to data\<folder>\<Id>.glsl.br (like the
-    web assets of the other projects) and embedded as "snippets/<folder>/<Id>.glsl.br", decompressed when the library loads.
+    The snippet library (the source, edited here or by the admins of the Effect Weaver editor, whose snippet folder is this srcData\ when the
+    repositories are next to each other): srcData\<folder>\<Id>.glsl + <Id>.md and srcData\README.md (the library docs and the summary table
+    with the number of places, written by Effect Weaver's snippet scanner). Every file is brotli compressed to data\...\<file>.br (like the
+    web assets of the other projects) and embedded as "snippets/<path>.br" (SnippetLibrary.Builtin decodes them once, when first used).
     -OptimizeShaders False: the snippets are stored as they are (no stripping or minification; they are inserted into effects as source code).
   -->
-  <Target Name="EmbedLocal" BeforeTargets="BeforeBuild" DependsOnTargets="SyncEwSnippets">
+  <Target Name="EmbedLocal" BeforeTargets="BeforeBuild">
     <Exec Command="..\_tools\compress\Compress.exe -Methods br -OptimizeShaders False .\srcData\*+ .\data" />
     <ItemGroup>
-      <EwSnippetData Include="data\**\*.glsl.br" />
+      <EwSnippetData Include="data\**\*.glsl.br;data\**\*.md.br" />
       <EmbeddedResource Include="@(EwSnippetData)" LogicalName="snippets/%(EwSnippetData.RecursiveDir)%(EwSnippetData.Filename)%(EwSnippetData.Extension)" Visible="false" />
     </ItemGroup>
   </Target>
