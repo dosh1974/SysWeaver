@@ -48,7 +48,23 @@ namespace SysWeaver.WebBrowser
         /// <param name="throwOnError">True to throw if waiting fails</param>
         /// <returns>True if the page is loaded, false if waiting failed (and throwOnError is false)</returns>
         Task<bool> WaitLoaded(bool throwOnError = true);
-        
+
+        /// <summary>
+        /// Wait until no network requests (from any frame, including cross origin frames such as an embedded map) have been
+        /// pending for <paramref name="idleMs"/> ms. Unlike <see cref="WaitLoaded"/> this can be called at any time, ex: after the
+        /// page has started loading content dynamically (map tiles, images etc).
+        /// Requests that stay open for a long time (streaming, long polling) are ignored after a while.
+        /// The default implementation (a browser that can't track requests) just waits for <paramref name="idleMs"/> ms and returns false.
+        /// </summary>
+        /// <param name="idleMs">The time in ms without any network activity that is required</param>
+        /// <param name="timeoutMs">The maximum time in ms to wait</param>
+        /// <returns>True if the network went idle, false on a time out (or if the browser can't track requests)</returns>
+        async Task<bool> WaitNetworkIdle(int idleMs = 500, int timeoutMs = 10000)
+        {
+            await Task.Delay(Math.Clamp(idleMs, 0, Math.Max(0, timeoutMs))).ConfigureAwait(false);
+            return false;
+        }
+
         /// <summary>
         /// Run some javascript in the page
         /// </summary>

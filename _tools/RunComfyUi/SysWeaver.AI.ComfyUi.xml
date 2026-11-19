@@ -4,6 +4,1204 @@
         <name>SysWeaver.AI.ComfyUi</name>
     </assembly>
     <members>
+        <member name="T:SysWeaver.AI.ComfyTaskTypes">
+            <summary>
+            The kind of task a workflow performs (determined when a workflow is analyzed, see <see cref="M:SysWeaver.AI.ComfyUiService.AddWorkflows(System.String)"/>)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskTypes.TextToImage">
+            <summary>
+            Create an image from a text prompt
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskTypes.ImagesToImage">
+            <summary>
+            Create an image from one or more reference images and a text prompt (ex: image edit)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskTypes.TextToVideo">
+            <summary>
+            Create a video from a text prompt
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskTypes.ImagesToVideo">
+            <summary>
+            Create a video from one or more reference images (ex: the first frame) and a text prompt
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskTypes.TextToMusic">
+            <summary>
+            Create music from a text prompt (the style) and optional lyrics
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskTypes.TextToSpeech">
+            <summary>
+            Create speech from a text (the text to speak), optionally a voice description and / or a reference voice
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskTypes.TextToSound">
+            <summary>
+            Create a sound (effect) from a text prompt
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.ComfyResult">
+            <summary>
+            The result of a task, the file created by the workflow (Name, Mime and Data) or an error.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyResult.ToString">
+            <summary>
+            The file, ex: "image_t2i_42.png" [123456] as image/png (workflow "image_t2i", seed 42).
+            Or the error, ex: Error: No TextToImage workflow available!
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyResult.Error">
+            <summary>
+            Null if successful, else a description of the error (and Data is null)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyResult.Workflow">
+            <summary>
+            The name of the workflow that was used, null if no workflow was found
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyResult.Seed">
+            <summary>
+            The seed that was used (useful if a random seed was requested)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.ComfyResult.IsSuccess">
+            <summary>
+            True if successful (Error is null)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.ComfyParams">
+            <summary>
+            Parameters common to all tasks.
+            A workflow maps the parameters it supports, unsupported parameters are ignored (see <see cref="F:SysWeaver.AI.ComfyTaskWorkflow.Parameters"/>).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyParams.DefNegativeImagePrompt">
+            <summary>
+            The default negative prompt used by the image and video task parameters
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyParams.ToString">
+            <summary>
+            A short description, ex: TextToImage "A cat on a roof", 1024x768, seed 42, workflow "image_t2i"
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyParams.Append(System.Text.StringBuilder)">
+            <summary>
+            Append the task specific values to the description (starting with ", ")
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.ComfyParams.TaskType">
+            <summary>
+            The task that these parameters are for
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.ComfyParams.Workflow">
+            <summary>
+            The name of the workflow to use (the file name without path and extension), null to use the default workflow for the task.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.ComfyParams.Prompt">
+            <summary>
+            The prompt, what to create.
+            For text to speech it's the text to speak, for music it's the style / description of the music.
+            Null to use the workflow default.
+            If the workflow requires a prefix or suffix (ex: a LoRA trigger, or a "{prompt}" placeholder in the default prompt) it's added, unless the prompt already has it.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.ComfyParams.NegativePrompt">
+            <summary>
+            What to avoid, ex: "blurry, misspelled text, watermark".
+            Null to use the workflow default, an empty string clears it.
+            Only respected if the workflow has a negative prompt (a text that ends up as negative conditioning, a "negative_prompt" input or a node annotated "$NegativePrompt").
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.ComfyParams.EnhancePrompt">
+            <summary>
+            If true, the prompt is enhanced (ex: expanded by an LLM) before it's used.
+            Only respected if the workflow has a prompt enhance option (a boolean named or titled "enhance").
+            Note that this value is always sent, so false disables prompt enhancement even if the workflow has it enabled by default.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.ComfyParams.Seed">
+            <summary>
+            The seed to use, the same seed and parameters gives the same result (ComfyUI returns a cached result).
+            A negative value (the default) uses a random seed, the used seed is returned in <see cref="F:SysWeaver.AI.ComfyResult.Seed"/>.
+            Only the lower 31 bits are used (so that the seed is valid for all nodes).
+            Note: some nodes use a seed of 0 for a random seed.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.ComfyParams.Steps">
+            <summary>
+            Number of steps to use, this is very model dependent.
+            0 means use model default.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.IVisualComfyParams">
+            <summary>
+            Parameters for tasks that create an image or a video
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.IVisualComfyParams.Width">
+            <summary>
+            The width in pixels, 0 to use the workflow default.
+            Both Width and Height must be set to change the size.
+            The size is rounded to a multiple that the model accepts (ex: 8 for images and 16 or 32 for videos).
+            For workflows where the size follows the reference image (ex: image edit), setting the size may switch to an empty latent of that size (if the workflow has such an option).
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.IVisualComfyParams.Height">
+            <summary>
+            The height in pixels, 0 to use the workflow default.
+            Both Width and Height must be set to change the size.
+            The size is rounded to a multiple that the model accepts (ex: 8 for images and 16 or 32 for videos).
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.IVisualComfyParams.Transparent">
+            <summary>
+            If true, the result should have a transparent background.
+            Only respected if the workflow has a transparency option (a boolean named or titled "transparent"), or the model makes a transparent image from the prompt (ex: Qwen-Image 2.1, a transparency prefix / suffix is added to the prompt).
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.IReferenceComfyParams">
+            <summary>
+            Parameters for tasks that use reference files (images or audio)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.IReferenceComfyParams.Files">
+            <summary>
+            The reference files, in the order of the load nodes of the workflow (ordered by node id).
+            Files with data are uploaded (named from a hash of the content), files without data (links) are downloaded by the server from the url in Name.
+            If fewer files than load nodes are supplied, the remaining load nodes use the workflow default, extra files are ignored.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.IDurationComfyParams">
+            <summary>
+            Parameters for tasks that create something with a duration (video, music, speech and sound)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.IDurationComfyParams.Duration">
+            <summary>
+            The duration in seconds, 0 to use the workflow default.
+            Depending on the workflow it's an exact duration, a maximum duration (ex: music) or rounded (ex: to whole seconds or a valid number of video frames).
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.TextToImageParams">
+            <summary>
+            Parameters for creating an image from a text prompt
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.TextToImageParams.#ctor">
+            <summary>
+            Create parameters with the default negative prompt
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.TextToImageParams.TaskType">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.AI.TextToImageParams.Width">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.AI.TextToImageParams.Height">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.AI.TextToImageParams.Transparent">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.AI.TextToImageParams.NegativePrompt">
+            <inheritdoc/>
+        </member>
+        <member name="T:SysWeaver.AI.ImagesToImageParams">
+            <summary>
+            Parameters for creating an image from one or more reference images and a text prompt (ex: image edit).
+            At least one file is required.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ImagesToImageParams.#ctor">
+            <summary>
+            Create parameters with the default negative prompt
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.ImagesToImageParams.TaskType">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.AI.ImagesToImageParams.Width">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.AI.ImagesToImageParams.Height">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.AI.ImagesToImageParams.Transparent">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.AI.ImagesToImageParams.Files">
+            <summary>
+            The reference images (at least one), in the order of the "Load Image" nodes of the workflow (ordered by node id).
+            Files with data are uploaded, files without data (links) are downloaded by the server from the url in Name.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.ImagesToImageParams.NegativePrompt">
+            <inheritdoc/>
+        </member>
+        <member name="T:SysWeaver.AI.TextToVideoParams">
+            <summary>
+            Parameters for creating a video from a text prompt
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.TextToVideoParams.#ctor">
+            <summary>
+            Create parameters with the default negative prompt
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.TextToVideoParams.TaskType">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.AI.TextToVideoParams.Width">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.AI.TextToVideoParams.Height">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.AI.TextToVideoParams.Transparent">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.AI.TextToVideoParams.Duration">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.AI.TextToVideoParams.NegativePrompt">
+            <inheritdoc/>
+        </member>
+        <member name="T:SysWeaver.AI.ImagesToVideoParams">
+            <summary>
+            Parameters for creating a video from one or more reference images (ex: the first frame) and a text prompt.
+            At least one file is required.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ImagesToVideoParams.#ctor">
+            <summary>
+            Create parameters with the default negative prompt
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.ImagesToVideoParams.TaskType">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.AI.ImagesToVideoParams.Width">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.AI.ImagesToVideoParams.Height">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.AI.ImagesToVideoParams.Transparent">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.AI.ImagesToVideoParams.Files">
+            <summary>
+            The reference images (at least one, ex: the first frame), in the order of the "Load Image" nodes of the workflow (ordered by node id).
+            Files with data are uploaded, files without data (links) are downloaded by the server from the url in Name.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.ImagesToVideoParams.Duration">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.AI.ImagesToVideoParams.NegativePrompt">
+            <inheritdoc/>
+        </member>
+        <member name="T:SysWeaver.AI.TextToMusicParams">
+            <summary>
+            Parameters for creating music.
+            The <see cref="P:SysWeaver.AI.ComfyParams.Prompt"/> is the style / description of the music, ex: "Synthwave, retro 80s, driving bass, female vocals".
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.TextToMusicParams.TaskType">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.AI.TextToMusicParams.Append(System.Text.StringBuilder)">
+            <inheritdoc/>
+        </member>
+        <member name="F:SysWeaver.AI.TextToMusicParams.Lyrics">
+            <summary>
+            The lyrics, null to use the workflow default.
+            Most models use section markers, ex: "[verse]\nFirst line\n\n[chorus]\nChorus line".
+            Only respected if the workflow has a lyrics input.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.TextToMusicParams.Duration">
+            <inheritdoc/>
+        </member>
+        <member name="T:SysWeaver.AI.TextToSpeechParams">
+            <summary>
+            Parameters for creating speech.
+            The <see cref="P:SysWeaver.AI.ComfyParams.Prompt"/> is the text to speak (for workflows with a single instruction input, it's the complete instruction).
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.TextToSpeechParams.TaskType">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.AI.TextToSpeechParams.Append(System.Text.StringBuilder)">
+            <inheritdoc/>
+        </member>
+        <member name="F:SysWeaver.AI.TextToSpeechParams.Voice">
+            <summary>
+            A description of the voice, ex: "male, low pitch, british accent", null to use the workflow default.
+            Only respected if the workflow has a voice description / instruction input.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.TextToSpeechParams.Files">
+            <summary>
+            Optional reference voice(s) to clone, in the order of the "Load Audio" nodes of the workflow (ordered by node id).
+            Only respected if the workflow is a voice clone workflow (has a "Load Audio" node).
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.TextToSpeechParams.Duration">
+            <inheritdoc/>
+        </member>
+        <member name="T:SysWeaver.AI.TextToSoundParams">
+            <summary>
+            Parameters for creating a sound (effect) from a text prompt, ex: "A heavy wooden door creaking open".
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.TextToSoundParams.TaskType">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.AI.TextToSoundParams.Duration">
+            <inheritdoc/>
+        </member>
+        <member name="T:SysWeaver.AI.ComfyTaskWorkflow">
+            <summary>
+            A ComfyUI workflow (API format) that has been analyzed for use with the task methods (TextToImage etc) of the <see cref="T:SysWeaver.AI.ComfyUiService"/>.
+            The analysis works on the node graph, so the workflow doesn't need any annotations:
+              The output is the save / preview node (image, video or audio) that the workflow produces, nodes annotated with "#tag" are preferred.
+              The task type is determined from the output and the load nodes (images to image / video), audio is classified as speech, music or sound using the names of the file, nodes, titles and inputs.
+              Each parameter is mapped to the node inputs that holds the value (following links through primitive, constant, math, switch and reroute nodes), ex: the prompt is the text that ends up in the positive conditioning.
+            Parameters can be mapped explicitly by annotating a node with a parameter name, ex: "$Prompt", "$Seed", "$Width", "$Height", "$Duration", "$Lyrics", "$Voice", "$EnhancePrompt" or "$Transparent".
+            When a node is annotated, the heuristics are not used for that parameter.
+            The workflow is uploaded to ComfyUI-Connect with annotations added for the mapped inputs (as "sw_[name]", and "sw_[name]_sized" if changing the size requires replacing links).
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.ComfyTaskWorkflow.ModelName">
+            <summary>
+            The name of the model (family) that the workflow uses, ex: "FLUX.2" or "LTX-2", null if not recognized.
+            Determined from the model files, node classes and the workflow name.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyTaskWorkflow.GetPromptEnhancement">
+            <summary>
+            Get a system prompt for an LLM that rewrites a user request (and any media details, such as the size or duration) into a prompt that is optimized for this workflow.
+            The instructions include the model (family) and how to best prompt it, the task, the prefix / suffix to apply, how the negative prompt is handled,
+            an example prompt (the default prompt of the workflow) and rules to only output the prompt.
+            Intended flow: prompt = LLM(system: GetPromptEnhancement(), user: request + media details), then run the task with the prompt.
+            </summary>
+            <returns>The system prompt</returns>
+        </member>
+        <member name="T:SysWeaver.AI.ComfyTaskWorkflow.Negatives">
+            <summary>
+            How negative prompts are handled by a model
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskWorkflow.Negatives.Unknown">
+            <summary>
+            Not known
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskWorkflow.Negatives.Used">
+            <summary>
+            Negative prompts are used and effective (real CFG)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskWorkflow.Negatives.Ignored">
+            <summary>
+            Negative prompts have no effect (guidance distilled or CFG 1)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.ComfyTaskWorkflow.Guide">
+            <summary>
+            Prompting guidance for a model (family)
+            </summary>
+            <param name="Name">The name of the model (family)</param>
+            <param name="Match">Matched against the workflow name, the model files and the node classes (one per line, lower case)</param>
+            <param name="Types">The task types this applies to, null for all</param>
+            <param name="Negative">How negative prompts are handled</param>
+            <param name="Guidance">The guidance (one instruction per line)</param>
+            <param name="TransparentPrefix">Text added before the prompt when a transparent result is requested (the model makes a transparent image from the prompt), null if none</param>
+            <param name="TransparentSuffix">Text added after the prompt when a transparent result is requested, null if none</param>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyTaskWorkflow.Guide.#ctor(System.String,System.Text.RegularExpressions.Regex,SysWeaver.AI.ComfyTaskTypes[],SysWeaver.AI.ComfyTaskWorkflow.Negatives,System.String,System.String,System.String)">
+            <summary>
+            Prompting guidance for a model (family)
+            </summary>
+            <param name="Name">The name of the model (family)</param>
+            <param name="Match">Matched against the workflow name, the model files and the node classes (one per line, lower case)</param>
+            <param name="Types">The task types this applies to, null for all</param>
+            <param name="Negative">How negative prompts are handled</param>
+            <param name="Guidance">The guidance (one instruction per line)</param>
+            <param name="TransparentPrefix">Text added before the prompt when a transparent result is requested (the model makes a transparent image from the prompt), null if none</param>
+            <param name="TransparentSuffix">Text added after the prompt when a transparent result is requested, null if none</param>
+        </member>
+        <member name="P:SysWeaver.AI.ComfyTaskWorkflow.Guide.Name">
+            <summary>The name of the model (family)</summary>
+        </member>
+        <member name="P:SysWeaver.AI.ComfyTaskWorkflow.Guide.Match">
+            <summary>Matched against the workflow name, the model files and the node classes (one per line, lower case)</summary>
+        </member>
+        <member name="P:SysWeaver.AI.ComfyTaskWorkflow.Guide.Types">
+            <summary>The task types this applies to, null for all</summary>
+        </member>
+        <member name="P:SysWeaver.AI.ComfyTaskWorkflow.Guide.Negative">
+            <summary>How negative prompts are handled</summary>
+        </member>
+        <member name="P:SysWeaver.AI.ComfyTaskWorkflow.Guide.Guidance">
+            <summary>The guidance (one instruction per line)</summary>
+        </member>
+        <member name="P:SysWeaver.AI.ComfyTaskWorkflow.Guide.TransparentPrefix">
+            <summary>Text added before the prompt when a transparent result is requested (the model makes a transparent image from the prompt), null if none</summary>
+        </member>
+        <member name="P:SysWeaver.AI.ComfyTaskWorkflow.Guide.TransparentSuffix">
+            <summary>Text added after the prompt when a transparent result is requested, null if none</summary>
+        </member>
+        <member name="P:SysWeaver.AI.ComfyTaskWorkflow.Guide.PromptTransparency">
+            <summary>
+            True if the model makes a transparent result from the prompt (it has a transparent prefix and / or suffix)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyTaskWorkflow.GT(System.String,System.String,SysWeaver.AI.ComfyTaskWorkflow.Negatives,System.String,System.String,System.String,SysWeaver.AI.ComfyTaskTypes[])">
+            <summary>
+            A model that makes a transparent result when the prompt gets a prefix and / or suffix (see <see cref="P:SysWeaver.AI.ComfyTaskWorkflow.Guide.TransparentPrefix"/>)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskWorkflow.QwenImage21Pattern">
+            <summary>
+            Qwen-Image 2.1 or later: a model file with a dotted version ("qwen_image_2.1_int8_convrot.safetensors", "qwen-image-edit-2_1",
+            "qwen_image_3"), or a node class with the version ("TextEncodeQwenImage21", "QwenImage21Cache").
+            A date version ("qwen_image_2512", "qwen_image_edit_2509") is an older release and doesn't match.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskWorkflow.QwenImageTransparentPrefix">
+            <summary>
+            The prompt prefix that makes Qwen-Image 2.1 (and later) create an image with transparency
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskWorkflow.QwenImageTransparentSuffix">
+            <summary>
+            The prompt suffix that makes Qwen-Image 2.1 (and later) create an image with transparency
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskWorkflow.Guides">
+            <summary>
+            The known models, the first match is used (so more specific entries are first).
+            Sources: the model cards / official READMEs and prompting guides of each model (Hugging Face, GitHub, docs.comfy.org, docs.bfl.ai).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyTaskWorkflow.TaskGuidance(SysWeaver.AI.ComfyTaskTypes)">
+            <summary>
+            General guidance per task type (used for all models)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyTaskWorkflow.IsAuxiliaryModel(System.String)">
+            <summary>
+            Models that don't identify the generator (vae's, upscalers, text encoders)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyTaskWorkflow.ToString">
+            <summary>
+            Ex: "image_t2i" TextToImage: Prompt, Seed, Width, Height
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskWorkflow.Name">
+            <summary>
+            The workflow name (the file name without path and extension), use as <see cref="P:SysWeaver.AI.ComfyParams.Workflow"/> to select the workflow
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskWorkflow.FileName">
+            <summary>
+            The full file name, null if created from json
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskWorkflow.Type">
+            <summary>
+            The task that this workflow performs
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskWorkflow.Parameters">
+            <summary>
+            The parameters that this workflow supports (respects), ex: "Prompt", "Seed", "Width", "Height", "Duration", "EnhancePrompt", "Transparent", "Lyrics", "Voice" and "Files".
+            Parameters not in this list are ignored.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskWorkflow.FileCount">
+            <summary>
+            The number of reference files that the workflow uses (the number of load nodes)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskWorkflow.Mappings">
+            <summary>
+            A description of how the parameters are mapped to the workflow (one line per mapping)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskWorkflow.OutputNode">
+            <summary>
+            The id of the output node
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskWorkflow.ModelFiles">
+            <summary>
+            The model files used by the workflow (the values of the loader nodes, ex: "flux-2-klein-9b-nvfp4.safetensors"), used to identify the model
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskWorkflow.Loras">
+            <summary>
+            The LoRA files used by the workflow
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskWorkflow.NodeClasses">
+            <summary>
+            The node classes used by the workflow (that the output depends on)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskWorkflow.DefaultPrompt">
+            <summary>
+            The default (positive) prompt of the workflow, null if the prompt isn't supported or is empty
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskWorkflow.DefaultNegativePrompt">
+            <summary>
+            The default negative prompt of the workflow, null if the negative prompt isn't supported or is empty
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskWorkflow.PromptPrefix">
+            <summary>
+            Text that is added before the prompt (ex: a LoRA trigger), null if none
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskWorkflow.PromptSuffix">
+            <summary>
+            Text that is added after the prompt, null if none
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.ComfyTaskWorkflow.TransparentPrefix">
+            <summary>
+            Text that is added before the prompt when a transparent result is requested (the model makes a transparent image from the prompt,
+            ex: Qwen-Image 2.1), null if none. Comes from the model (family) of the workflow, see <see cref="P:SysWeaver.AI.ComfyTaskWorkflow.ModelName"/>.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.ComfyTaskWorkflow.TransparentSuffix">
+            <summary>
+            Text that is added after the prompt when a transparent result is requested, null if none, see <see cref="P:SysWeaver.AI.ComfyTaskWorkflow.TransparentPrefix"/>.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskWorkflow.PromptTransparency">
+            <summary>
+            True if a transparent result is made by adding <see cref="P:SysWeaver.AI.ComfyTaskWorkflow.TransparentPrefix"/> / <see cref="P:SysWeaver.AI.ComfyTaskWorkflow.TransparentSuffix"/> to the prompt
+            (the model supports it and the workflow has a prompt)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyTaskWorkflow.TransparentAffix(System.String)">
+            <summary>
+            Add the transparent prefix and suffix to a prompt (unless already present)
+            </summary>
+            <param name="prompt">The prompt</param>
+            <returns>The prompt for a transparent result</returns>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyTaskWorkflow.Supports(System.String)">
+            <summary>
+            Check if a parameter is supported (case insensitive)
+            </summary>
+            <param name="name">The parameter name, ex: "Width"</param>
+            <returns>True if the parameter is respected by the workflow</returns>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyTaskWorkflow.Describe">
+            <summary>
+            A multi line description of the workflow and the mappings
+            </summary>
+            <returns>The description</returns>
+        </member>
+        <member name="T:SysWeaver.AI.ComfyTaskWorkflow.Target">
+            <summary>
+            A node input that a parameter is written to
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskWorkflow.Target.Tag">
+            <summary>
+            The tag that is added to the node title (unique per target)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskWorkflow.Target.Cut">
+            <summary>
+            True if the input is a link that is replaced by a value (only in the sized workflow)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskWorkflow.Target.IsInt">
+            <summary>
+            True if the value should be rounded to an integer
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskWorkflow.Target.Multiple">
+            <summary>
+            Sizes are rounded to this multiple
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskWorkflow.Target.Fps">
+            <summary>
+            If greater than zero, the input is a number of frames (the duration is converted using this frame rate)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskWorkflow.Target.Prefix">
+            <summary>
+            Text added before the prompt (ex: a LoRA trigger), null if none
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskWorkflow.Target.Suffix">
+            <summary>
+            Text added after the prompt, null if none
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskWorkflow.Target.Orig">
+            <summary>
+            The original (workflow) value of a steps target, or of a start / end step of a split sampler
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskWorkflow.Target.OrigSteps">
+            <summary>
+            The original steps of the node of a start / end step target (a split sampler, ex: KSamplerAdvanced)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyTaskWorkflow.Target.StripAffix(System.String)">
+            <summary>
+            Remove the prefix and suffix from a prompt (if present), ex: from the default prompt of the workflow before adding more text around it
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyTaskWorkflow.Target.Affix(System.String)">
+            <summary>
+            Add the prefix and suffix to a prompt (unless already present)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskWorkflow.Targets">
+            <summary>
+            The parameters, key is the parameter name (ex: "Prompt"), "Files" are the references
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskWorkflow.OutputTag">
+            <summary>
+            The tag of the output node
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskWorkflow.Workflow">
+            <summary>
+            The annotated workflow
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskWorkflow.SizedWorkflow">
+            <summary>
+            The annotated workflow to use if a size is specified (with links replaced and switches flipped), null if not needed (the Workflow is used)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyTaskWorkflow.Load(System.String,System.Nullable{SysWeaver.AI.ComfyTaskTypes})">
+            <summary>
+            Load and analyze a workflow file
+            </summary>
+            <param name="fileName">The API format workflow file</param>
+            <param name="type">Force a task type, null to determine it from the workflow</param>
+            <returns>The analyzed workflow</returns>
+            <exception cref="T:System.Exception">The workflow can't be used for any task (ex: an UI format workflow, or no image, video or audio output)</exception>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyTaskWorkflow.FromJson(System.String,System.Byte[],System.Nullable{SysWeaver.AI.ComfyTaskTypes})">
+            <summary>
+            Analyze a workflow
+            </summary>
+            <param name="name">The name of the workflow</param>
+            <param name="json">The API format workflow (utf8 json)</param>
+            <param name="type">Force a task type, null to determine it from the workflow</param>
+            <returns>The analyzed workflow</returns>
+            <exception cref="T:System.Exception">The workflow can't be used for any task (ex: an UI format workflow, or no image, video or audio output)</exception>
+        </member>
+        <member name="T:SysWeaver.AI.ComfyTaskWorkflow.ModelInfo">
+            <summary>
+            Information about the models and prompts of a workflow (used to build the prompt enhancement instructions)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyTaskWorkflow.ModelInfo.#ctor(System.Collections.Generic.IReadOnlyList{System.String},System.Collections.Generic.IReadOnlyList{System.String},System.Collections.Generic.IReadOnlyList{System.String},System.String,System.String)">
+            <summary>
+            Information about the models and prompts of a workflow (used to build the prompt enhancement instructions)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskWorkflow.PStepsSplit">
+            <summary>
+            The start / end steps of split samplers (scaled with the steps, not a parameter of its own)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskWorkflow.ParamTags">
+            <summary>
+            Normalized tag names (lower case, letters and digits only) that explicitly maps a node to a parameter, ex: "$Prompt" or "$Positive_Prompt"
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyTaskWorkflow.TagRegex">
+            <remarks>
+            Pattern:<br/>
+            <code>([\$#!])([a-zA-Z0-9_-]+)(?:\(([^)]*)\))?</code><br/>
+            Explanation:<br/>
+            <code>
+            ○ 1st capture group.<br/>
+                ○ Match a character in the set [!#$].<br/>
+            ○ 2nd capture group.<br/>
+                ○ Match a character in the set [\-0-9A-Z_a-z] greedily at least once.<br/>
+            ○ Optional (greedy).<br/>
+                ○ Match '('.<br/>
+                ○ 3rd capture group.<br/>
+                    ○ Match a character other than ')' atomically any number of times.<br/>
+                ○ Match ')'.<br/>
+            </code>
+            </remarks>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskWorkflow.GNode.InTags">
+            <summary>
+            "$tag" annotations (tag name, input filter or null)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskWorkflow.GNode.OutTags">
+            <summary>
+            "#tag" annotations
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.ComfyTaskWorkflow.Found">
+            <summary>
+            A value found by tracing an input
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyTaskWorkflow.Found.#ctor(System.String,System.String,System.Boolean,System.String)">
+            <summary>
+            A value found by tracing an input
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskWorkflow.Graph.Consumers">
+            <summary>
+            Key is the source node, value is the consumers (node, input)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyTaskWorkflow.IsValueNode(SysWeaver.AI.ComfyTaskWorkflow.GNode)">
+            <summary>
+            Nodes that holds a value (primitives, constants, literals)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyTaskWorkflow.IsTransformNode(SysWeaver.AI.ComfyTaskWorkflow.GNode)">
+            <summary>
+            Nodes that passes on or computes a value from the inputs (math, switches)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyTaskWorkflow.CompareIds(System.String,System.String)">
+            <summary>
+            Compare node id's naturally ("2" before "10", "459:451" before "459:1000")
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyTaskWorkflow.Trace(SysWeaver.AI.ComfyTaskWorkflow.Graph,System.String,System.String,SysWeaver.AI.ComfyTaskWorkflow.Kind,System.Collections.Generic.List{SysWeaver.AI.ComfyTaskWorkflow.Found},System.Collections.Generic.HashSet{System.String},System.Int32)">
+            <summary>
+            Find the value(s) of an input, following links through value and transform nodes.
+            A link to any other node is returned as a cut (the link can be replaced by a value).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyTaskWorkflow.IsStringCombiner(SysWeaver.AI.ComfyTaskWorkflow.GNode)">
+            <summary>
+            Nodes that combines text (concatenate, join, replace, format etc)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyTaskWorkflow.IsCombinerOption(System.String)">
+            <summary>
+            Inputs of a text combiner that are options rather than text parts
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyTaskWorkflow.Sinks(SysWeaver.AI.ComfyTaskWorkflow.Graph,System.String[],System.Func{SysWeaver.AI.ComfyTaskWorkflow.GNode,System.String,System.Boolean})">
+            <summary>
+            All inputs of the nodes that the output depends on (in node id order) with one of the names, excluding value and transform nodes
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyTaskWorkflow.Explicit(SysWeaver.AI.ComfyTaskWorkflow.Graph,System.String[],SysWeaver.AI.ComfyTaskWorkflow.Kind,System.String[])">
+            <summary>
+            Find the inputs of nodes annotated with a parameter tag, null if no node is annotated
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyTaskWorkflow.TitledValues(SysWeaver.AI.ComfyTaskWorkflow.Graph,SysWeaver.AI.ComfyTaskWorkflow.Kind,System.String[])">
+            <summary>
+            Value nodes with a literal of some kind and a title that matches some words
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyTaskWorkflow.IsNegativeOnly(SysWeaver.AI.ComfyTaskWorkflow.Graph,System.String)">
+            <summary>
+            True if all consumers of a node uses it as a negative input (ex: a CLIPTextEncode for the negative prompt)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyTaskWorkflow.FindSwitches(SysWeaver.AI.ComfyTaskWorkflow.Graph,System.String,System.Collections.Generic.List{System.ValueTuple{System.String,System.Boolean}},System.Collections.Generic.HashSet{System.String})">
+            <summary>
+            Find the switches that must be flipped for the value of a node to reach the output
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyTaskWorkflow.ModelInputRegex">
+            <remarks>
+            Pattern:<br/>
+            <code>(^|_)name\d*$|^ckpt|^model$|^model_path$|^repo_id$|^model_id$|^checkpoint$</code><br/>
+            Explanation:<br/>
+            <code>
+            ○ Match with 2 alternative expressions, atomically.<br/>
+                ○ Match a sequence of expressions.<br/>
+                    ○ 1st capture group.<br/>
+                        ○ Match with 2 alternative expressions.<br/>
+                            ○ Match if at the beginning of the string.<br/>
+                            ○ Match '_'.<br/>
+                    ○ Match the string "name".<br/>
+                    ○ Match a Unicode digit atomically any number of times.<br/>
+                    ○ Match if at the end of the string or if before an ending newline.<br/>
+                ○ Match a sequence of expressions.<br/>
+                    ○ Match if at the beginning of the string.<br/>
+                    ○ Match with 3 alternative expressions, atomically.<br/>
+                        ○ Match a sequence of expressions.<br/>
+                            ○ Match 'c'.<br/>
+                            ○ Match with 2 alternative expressions, atomically.<br/>
+                                ○ Match the string "kpt".<br/>
+                                ○ Match a sequence of expressions.<br/>
+                                    ○ Match the string "heckpoint".<br/>
+                                    ○ Match if at the end of the string or if before an ending newline.<br/>
+                        ○ Match a sequence of expressions.<br/>
+                            ○ Match the string "model".<br/>
+                            ○ Match with 2 alternative expressions, atomically.<br/>
+                                ○ Match if at the end of the string or if before an ending newline.<br/>
+                                ○ Match a sequence of expressions.<br/>
+                                    ○ Match '_'.<br/>
+                                    ○ Match with 2 alternative expressions, atomically.<br/>
+                                        ○ Match a sequence of expressions.<br/>
+                                            ○ Match the string "path".<br/>
+                                            ○ Match if at the end of the string or if before an ending newline.<br/>
+                                        ○ Match a sequence of expressions.<br/>
+                                            ○ Match the string "id".<br/>
+                                            ○ Match if at the end of the string or if before an ending newline.<br/>
+                        ○ Match a sequence of expressions.<br/>
+                            ○ Match the string "repo_id".<br/>
+                            ○ Match if at the end of the string or if before an ending newline.<br/>
+            </code>
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyTaskWorkflow.GetModelInfo(SysWeaver.AI.ComfyTaskWorkflow.Graph,System.Collections.Generic.Dictionary{System.String,System.Collections.Generic.IReadOnlyList{SysWeaver.AI.ComfyTaskWorkflow.Target}})">
+            <summary>
+            Get the models, LoRA's, node classes and default prompts used by a workflow
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskWorkflow.PromptPlaceholder">
+            <summary>
+            The placeholder for the prompt in the default prompt text of a workflow, ex: "photo of {prompt}, 35mm"
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyTaskWorkflow.TriggerRegex">
+            <remarks>
+            Pattern:<br/>
+            <code>^\s*([\p{L}\p{N}][\p{L}\p{N} _'\-\.]{0,39}?)\s*:[ \t]*(?=\S)</code><br/>
+            Explanation:<br/>
+            <code>
+            ○ Match if at the beginning of the string.<br/>
+            ○ Match a whitespace character greedily any number of times.<br/>
+            ○ 1st capture group.<br/>
+                ○ Match a character in the set [\p{L}\p{N}].<br/>
+                ○ Match a character in the set [ '\-._\p{L}\p{N}] lazily at most 39 times.<br/>
+            ○ Match a whitespace character atomically any number of times.<br/>
+            ○ Match ':'.<br/>
+            ○ Match a character in the set [\t ] atomically any number of times.<br/>
+            ○ Zero-width positive lookahead.<br/>
+                ○ Match any character other than a whitespace character.<br/>
+            </code>
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyTaskWorkflow.DetectAffixes(SysWeaver.AI.ComfyTaskWorkflow.Graph,System.String)">
+            <summary>
+            Detect text that must be kept before / after the prompt, from the default prompt of the workflow:
+              1. A "{prompt}" placeholder, the text before is the prefix and the text after is the suffix.
+              2. If the workflow uses a LoRA: a short trigger phrase followed by a ':' at the start (ex: "ohwx style: a cat"), it's the prefix.
+            Parts of the prompt that are separate text nodes combined with the prompt (concatenate, replace etc) are kept by the workflow itself.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskWorkflow.CommonLabels">
+            <summary>
+            Labels that are commonly used at the start of a prompt but aren't LoRA triggers
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyTaskWorkflow.GetFrameRate(SysWeaver.AI.ComfyTaskWorkflow.Graph)">
+            <summary>
+            Get the frame rate used by a video workflow (24 if not found)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyTaskWorkflow.ClassifyAudio(SysWeaver.AI.ComfyTaskWorkflow.Graph,System.String)">
+            <summary>
+            Classify an audio workflow as speech, music or sound (the default)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.ComfyUiApiParams">
+            <summary>
+            Parameters for the <see cref="T:SysWeaver.AI.ComfyUiApiService"/>
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiApiParams.Auth">
+            <summary>
+            The auth required to access the API's (all methods).
+            Null = open (no auth), empty = any logged in user, else comma separated tokens where at least one is required (ex: "Admin,Ops").
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.ComfyUiApiService">
+            <summary>
+            Exposes the media creation methods of the <see cref="T:SysWeaver.AI.ComfyUiService"/> as web API's (text to image, images to image, text to video, images to video, text to music, text to speech and text to sound).
+            Each API returns the created file as the response body, with the mime type of the file (ex: image/png, video/mp4 or audio/flac).
+            A failure (no workflow, a bad parameter, a workflow error etc) is returned as an error response.
+            The auth of all API's is <see cref="F:SysWeaver.AI.ComfyUiApiParams.Auth"/>.
+            Note: a request doesn't return until the workflow has completed, which can take minutes (ex: video), so clients must use a long time out.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiApiService.ToString">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiApiService.#ctor(SysWeaver.MicroService.ServiceManager,SysWeaver.AI.ComfyUiApiParams)">
+            <summary>
+            Create the API service
+            </summary>
+            <param name="manager">The service manager, a <see cref="T:SysWeaver.AI.ComfyUiService"/> must be registered</param>
+            <param name="p">The parameters</param>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiApiService.ApiNames">
+            <summary>
+            The names of all API methods (all uses the configured auth)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.ComfyUiApiService.WorkflowRow">
+            <summary>
+            A loaded (analyzed) workflow, a row of <see cref="M:SysWeaver.AI.ComfyUiApiService.WorkflowTable(SysWeaver.Data.TableDataRequest)"/>
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiApiService.WorkflowRow.Name">
+            <summary>
+            The workflow name (the file name without extension), use as the Workflow parameter
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiApiService.WorkflowRow.Type">
+            <summary>
+            The task that the workflow performs, ex: "TextToImage"
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiApiService.WorkflowRow.Default">
+            <summary>
+            True if this is the default workflow for the task
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiApiService.WorkflowRow.Model">
+            <summary>
+            The model (family) that the workflow uses, empty if not recognized
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiApiService.WorkflowRow.Parameters">
+            <summary>
+            The parameters that the workflow supports (respects)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiApiService.WorkflowRow.Files">
+            <summary>
+            The number of reference files (load image / audio nodes)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiApiService.WorkflowRow.ModelFiles">
+            <summary>
+            The model files used by the workflow
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiApiService.WorkflowRow.Loras">
+            <summary>
+            The LoRA files used by the workflow
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiApiService.WorkflowRow.PromptPrefix">
+            <summary>
+            Text that is added before the prompt (ex: a LoRA trigger)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiApiService.WorkflowRow.PromptSuffix">
+            <summary>
+            Text that is added after the prompt
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiApiService.WorkflowRow.TransparentPrefix">
+            <summary>
+            Text that is added before the prompt when a transparent result is requested (the model makes transparency from the prompt, ex: Qwen-Image 2.1)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiApiService.WorkflowRow.TransparentSuffix">
+            <summary>
+            Text that is added after the prompt when a transparent result is requested
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiApiService.WorkflowRow.DefaultPrompt">
+            <summary>
+            The default (positive) prompt of the workflow
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiApiService.WorkflowRow.DefaultNegativePrompt">
+            <summary>
+            The default negative prompt of the workflow
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiApiService.WorkflowRow.OutputNode">
+            <summary>
+            The id of the output node
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiApiService.WorkflowRow.SizedVariant">
+            <summary>
+            True if a size change uses a separate (sized) variant of the workflow, with links replaced by values and switches flipped
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiApiService.WorkflowRow.ServerNames">
+            <summary>
+            The names of the annotated workflow(s) uploaded to the ComfyUI-Connect server
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiApiService.WorkflowRow.Mappings">
+            <summary>
+            How the parameters are mapped to the node inputs (one per line)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiApiService.WorkflowRow.NodeClasses">
+            <summary>
+            The node classes used by the workflow
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiApiService.WorkflowRow.PromptEnhancement">
+            <summary>
+            The system prompt for an LLM that enhances a user request into a prompt for this workflow
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiApiService.WorkflowRow.FileName">
+            <summary>
+            The full file name of the workflow
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiApiService.WorkflowRow.FileSize">
+            <summary>
+            The size of the workflow file in bytes
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiApiService.WorkflowRow.FileChanged">
+            <summary>
+            When the workflow file was last changed (UTC)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiApiService.WorkflowTable(SysWeaver.Data.TableDataRequest)">
+            <summary>
+            All loaded (analyzed) workflows of the task methods, with the task type, model, supported parameters, mappings and more
+            </summary>
+            <param name="r">Table request parameters (paging, sorting, filtering)</param>
+            <returns>A table with one row per workflow</returns>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiApiService.GetWorkflow(System.String)">
+            <summary>
+            Get the details of a loaded workflow: the task type, model, supported parameters, model files, LoRA's, prompt prefix / suffix,
+            default prompts, how the parameters are mapped, the prompt enhancement (a system prompt for an LLM) and more.
+            </summary>
+            <param name="name">The workflow name (case insensitive), as used in the Workflow parameter</param>
+            <returns>The workflow details</returns>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiApiService.GetDefaultWorkflow(SysWeaver.AI.ComfyTaskTypes)">
+            <summary>
+            Get the details of the default workflow of a task (the one used when no workflow is specified), see <see cref="M:SysWeaver.AI.ComfyUiApiService.GetWorkflow(System.String)"/>.
+            </summary>
+            <param name="type">The task type, ex: "TextToImage"</param>
+            <returns>The workflow details, null if there is no workflow for the task</returns>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiApiService.GetWorkflowNames(SysWeaver.AI.ComfyTaskTypes)">
+            <summary>
+            Get the names of the workflows that performs a task (in alphabetical order)
+            </summary>
+            <param name="type">The task type, ex: "TextToImage"</param>
+            <returns>The workflow names (empty if there is none)</returns>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiApiService.GetDefaultWorkflows">
+            <summary>
+            Get the default workflow and the number of workflows of every task type
+            </summary>
+            <returns>One item per task type</returns>
+        </member>
+        <member name="P:SysWeaver.AI.ComfyUiApiService.MethodAuths">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiApiService.Get(System.Threading.Tasks.Task{SysWeaver.AI.ComfyResult},SysWeaver.AI.ComfyParams,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Return the file of a result, or throw the error.
+            A png image gets information chunks (the prompt as the description, the workflow and seed as the source, the user as the author), see <see cref="M:SysWeaver.AI.AiImageTools.AddPngInfo(System.ReadOnlyMemory{System.Byte},System.String,System.String,System.String,System.String)"/>.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiApiService.TextToImage(SysWeaver.AI.TextToImageParams,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Create an image from a text prompt.
+            The workflow is the one named in the parameters, or the default text to image workflow.
+            Width / Height (both or none), Transparent, EnhancePrompt and NegativePrompt are only respected if the workflow supports them.
+            </summary>
+            <param name="p">The parameters, ex: { "Prompt": "A red fox in the snow", "Width": 1024, "Height": 768 }</param>
+            <param name="request">The request (the user is stored as the author of a png image)</param>
+            <returns>The image (ex: image/png)</returns>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiApiService.ImagesToImage(SysWeaver.AI.ImagesToImageParams,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Create an image from one or more reference images and a text prompt (ex: an image edit).
+            The workflow is the one named in the parameters, or the default images to image workflow.
+            At least one file is required, in the order of the load image nodes of the workflow.
+            </summary>
+            <param name="p">The parameters, ex: { "Prompt": "Make it a watercolor painting", "Files": [ { "Name": "photo.png", "Mime": "image/png", "Data": "[base64]" } ] }</param>
+            <param name="request">The request (the user is stored as the author of a png image)</param>
+            <returns>The image (ex: image/png)</returns>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiApiService.TextToVideo(SysWeaver.AI.TextToVideoParams,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Create a video from a text prompt.
+            The workflow is the one named in the parameters, or the default text to video workflow.
+            Duration is in seconds (0 = the workflow default), Width / Height (both or none) are rounded to what the model accepts.
+            </summary>
+            <param name="p">The parameters, ex: { "Prompt": "A paper boat on a calm lake at sunset", "Width": 1280, "Height": 704, "Duration": 5 }</param>
+            <param name="request">The request (the user is stored as the author of a png image)</param>
+            <returns>The video (ex: video/mp4)</returns>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiApiService.ImagesToVideo(SysWeaver.AI.ImagesToVideoParams,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Create a video from one or more reference images (ex: the first frame) and a text prompt.
+            The workflow is the one named in the parameters, or the default images to video workflow.
+            At least one file is required, in the order of the load image nodes of the workflow.
+            </summary>
+            <param name="p">The parameters, ex: { "Prompt": "The fox slowly turns its head", "Files": [ { "Name": "fox.png", "Mime": "image/png", "Data": "[base64]" } ], "Duration": 5 }</param>
+            <param name="request">The request (the user is stored as the author of a png image)</param>
+            <returns>The video (ex: video/mp4)</returns>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiApiService.TextToMusic(SysWeaver.AI.TextToMusicParams,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Create music from a text prompt (the style / description of the music) and optional lyrics.
+            The workflow is the one named in the parameters, or the default text to music workflow.
+            Duration is in seconds (for some models a maximum duration).
+            </summary>
+            <param name="p">The parameters, ex: { "Prompt": "Upbeat synthwave, retro 80s", "Lyrics": "[verse]\nNeon lights tonight", "Duration": 60 }</param>
+            <param name="request">The request (the user is stored as the author of a png image)</param>
+            <returns>The audio (ex: audio/flac)</returns>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiApiService.TextToSpeech(SysWeaver.AI.TextToSpeechParams,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Create speech, the prompt is the text to speak.
+            The workflow is the one named in the parameters, or the default text to speech workflow.
+            Voice is a description of the voice (if supported), Files is an optional reference voice to clone (if the workflow is a voice clone workflow).
+            </summary>
+            <param name="p">The parameters, ex: { "Prompt": "Hello and welcome!", "Voice": "female, warm, british accent" }</param>
+            <param name="request">The request (the user is stored as the author of a png image)</param>
+            <returns>The audio (ex: audio/flac)</returns>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiApiService.TextToSound(SysWeaver.AI.TextToSoundParams,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Create a sound (effect) from a text prompt.
+            The workflow is the one named in the parameters, or the default text to sound workflow.
+            Duration is in seconds (0 = the workflow default).
+            </summary>
+            <param name="p">The parameters, ex: { "Prompt": "A heavy wooden door creaking open", "Duration": 4 }</param>
+            <param name="request">The request (the user is stored as the author of a png image)</param>
+            <returns>The audio (ex: audio/flac)</returns>
+        </member>
         <member name="T:SysWeaver.AI.ComfyUiNameAttribute">
             <summary>
             Explicitly map a property or field to a workflow value (matching is case insensitive).
@@ -13,6 +1211,12 @@
             Output types (R):
               "tag" maps to the output of the node(s) annotated with "#tag".
             </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiNameAttribute.#ctor(System.String)">
+            <summary>
+            Map the property or field to a workflow value
+            </summary>
+            <param name="name">The mapping, "tag.input" for an input, "tag" for a bool node tag or an output (see the class description)</param>
         </member>
         <member name="F:SysWeaver.AI.ComfyUiNameAttribute.Name">
             <summary>
@@ -32,6 +1236,9 @@
             If the name is omitted for data, a name is generated from a hash of the content.
             A byte[] property is the same as a ComfyUiFile with only Data set.
             </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiFile.ToString">
+            <inheritdoc/>
         </member>
         <member name="F:SysWeaver.AI.ComfyUiFile.Name">
             <summary>
@@ -116,7 +1323,8 @@
         </member>
         <member name="F:SysWeaver.AI.ComfyUiParams.NetworkTimeoutSeconds">
             <summary>
-            The network time out in seconds (a workflow request doesn't return until the workflow has completed)
+            The network time out in seconds (a workflow request doesn't return until the workflow has completed, so this is the longest time a workflow may run, including the time it waits in the ComfyUI queue).
+            Default 12 hours (heavy workloads, ex: long videos).
             </summary>
         </member>
         <member name="F:SysWeaver.AI.ComfyUiParams.WorkflowFolder">
@@ -130,6 +1338,37 @@
             <summary>
             If true, a workflow is uploaded (saved) to the ComfyUI-Connect server the first time it's used.
             If false, the workflow must already exist on the server (with the same name).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiParams.TaskWorkflowFolders">
+            <summary>
+            Folders with workflows for the task methods (TextToImage, ImagesToImage, TextToVideo, ImagesToVideo, TextToMusic, TextToSpeech and TextToSound).
+            All "*.json" files (API format workflows) in each folder are loaded, analyzed and added when the service is created, see ComfyUiService.AddWorkflows.
+            The workflow name is the file name without the ".json" extension, a workflow in a later folder replaces one with the same name in an earlier folder.
+            Variables can be used and with "$(" and ends with ")", ex: "$(ExecutableDir)/ComfyUi".
+            A folder can also be a file mask, ex: "$(ExecutableDir)/ComfyUi/image_*.json".
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiParams.DefaultTextToImage">
+            <summary>
+            The name of the default text to image workflow (used when no workflow / model is specified).
+            If null, empty or not available (anymore), the first text to image workflow in alphabetical order is used.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiParams.DefaultImagesToImage">
+            <summary>
+            The name of the default images to image (image edit) workflow (used when no workflow / model is specified).
+            If null, empty or not available (anymore), the first images to image workflow in alphabetical order is used.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiParams.DefaultImageWidth">
+            <summary>
+            The default width in pixels of an image created using IAiImageGenService.TextToImage or IAiImageEditService.ImageToImage (used when no width is specified).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiParams.DefaultImageHeight">
+            <summary>
+            The default height in pixels of an image created using IAiImageGenService.TextToImage or IAiImageEditService.ImageToImage (used when no height is specified).
             </summary>
         </member>
         <member name="F:SysWeaver.AI.ComfyUiParams.AnnotateSubgraphInputs">
@@ -158,6 +1397,9 @@
             Workflows are loaded from a local folder (API format json files) and uploaded to the server on first use (optional).
             </summary>
         </member>
+        <member name="M:SysWeaver.AI.ComfyUiService.ToString">
+            <inheritdoc/>
+        </member>
         <member name="M:SysWeaver.AI.ComfyUiService.#ctor(SysWeaver.MicroService.ServiceManager,SysWeaver.AI.ComfyUiParams,SysWeaver.IMessageHost)">
             <summary>
             Create a ComfyUI service
@@ -165,6 +1407,21 @@
             <param name="sm">The service manager</param>
             <param name="p">The parameters</param>
             <param name="msg">Optional message host (if null the service manager is used)</param>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiService.InitDefaultWorkflow(SysWeaver.AI.ComfyTaskTypes,System.String)">
+            <summary>
+            Set a configured default workflow, if it's not available (yet), the first workflow (in alphabetical order) is used until it is (see GetDefaultWorkflow)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiService.DefaultImageWidth">
+            <summary>
+            The width in pixels of an image created using IAiImageGenService.TextToImage or IAiImageEditService.ImageToImage when no width is specified
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiService.DefaultImageHeight">
+            <summary>
+            The height in pixels of an image created using IAiImageGenService.TextToImage or IAiImageEditService.ImageToImage when no height is specified
+            </summary>
         </member>
         <member name="F:SysWeaver.AI.ComfyUiService.UiWorkflowFolder">
             <summary>
@@ -208,6 +1465,17 @@
             Called by the compiled workflow delegates
             </summary>
         </member>
+        <member name="M:SysWeaver.AI.ComfyUiService.ExecuteCore``2(System.Threading.CancellationToken,SysWeaver.AI.ComfyUiWorkflow,``0,System.Action{``0,System.Text.Json.Utf8JsonWriter},System.Func{System.Text.Json.JsonElement,``1},System.Boolean)">
+            <summary>
+            Run a workflow
+            </summary>
+            <param name="cancel">Cancellation token</param>
+            <param name="wf">The workflow</param>
+            <param name="p">The input</param>
+            <param name="write">Writes the input values (tag objects)</param>
+            <param name="read">Reads the output from the "result" object</param>
+            <param name="upload">If true the workflow is uploaded (once per version)</param>
+        </member>
         <member name="M:SysWeaver.AI.ComfyUiService.GetWorkflow(System.String)">
             <summary>
             Get a workflow (loaded from disc on first use and cached).
@@ -243,6 +1511,246 @@
             <param name="cancel">Optional cancellation token</param>
             <returns></returns>
         </member>
+        <member name="M:SysWeaver.AI.ComfyUiService.TextToImage(SysWeaver.AI.TextToImagePrompt)">
+            <summary>
+            Create an image from a text prompt using a text to image workflow.
+            The model is the name of the workflow, if not specified the default text to image workflow is used (see <see cref="P:SysWeaver.AI.ComfyUiService.DefaultTextToImage"/>).
+            The size is rounded to a multiple that the model accepts, the negative prompt and transparency are only respected if the workflow supports them.
+            </summary>
+            <param name="prompt">The prompt</param>
+            <returns>The image (typically image/png)</returns>
+            <exception cref="T:System.Exception">The workflow failed or wasn't found</exception>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiService.ImageToImage(SysWeaver.AI.ImageToImagePrompt)">
+            <summary>
+            Create an image from a source image and a text prompt using an images to image (image edit) workflow.
+            The model is the name of the workflow, if not specified the default images to image workflow is used (see <see cref="P:SysWeaver.AI.ComfyUiService.DefaultImagesToImage"/>).
+            The size is rounded to a multiple that the model accepts, the negative prompt and transparency are only respected if the workflow supports them.
+            </summary>
+            <param name="prompt">The prompt and the source image</param>
+            <returns>The image (typically image/png)</returns>
+            <exception cref="T:System.Exception">The workflow failed or wasn't found</exception>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiService.ToImageFile(SysWeaver.AI.ComfyResult,SysWeaver.AI.ComfyParams)">
+            <summary>
+            Return the file of a result or throw the error, a png image gets information chunks (the prompt, the workflow and seed)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiService.TextToImage(SysWeaver.AI.TextToImageParams,System.Threading.CancellationToken)">
+            <summary>
+            Create an image from a text prompt
+            </summary>
+            <param name="p">The parameters</param>
+            <param name="cancel">Optional cancellation token</param>
+            <returns>The image, or an error (Error is set)</returns>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiService.ImagesToImage(SysWeaver.AI.ImagesToImageParams,System.Threading.CancellationToken)">
+            <summary>
+            Create an image from one or more reference images and a text prompt (ex: image edit)
+            </summary>
+            <param name="p">The parameters, at least one file is required</param>
+            <param name="cancel">Optional cancellation token</param>
+            <returns>The image, or an error (Error is set)</returns>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiService.TextToVideo(SysWeaver.AI.TextToVideoParams,System.Threading.CancellationToken)">
+            <summary>
+            Create a video from a text prompt
+            </summary>
+            <param name="p">The parameters</param>
+            <param name="cancel">Optional cancellation token</param>
+            <returns>The video, or an error (Error is set)</returns>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiService.ImagesToVideo(SysWeaver.AI.ImagesToVideoParams,System.Threading.CancellationToken)">
+            <summary>
+            Create a video from one or more reference images (ex: the first frame) and a text prompt
+            </summary>
+            <param name="p">The parameters, at least one file is required</param>
+            <param name="cancel">Optional cancellation token</param>
+            <returns>The video, or an error (Error is set)</returns>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiService.TextToMusic(SysWeaver.AI.TextToMusicParams,System.Threading.CancellationToken)">
+            <summary>
+            Create music from a text prompt (the style) and optional lyrics
+            </summary>
+            <param name="p">The parameters</param>
+            <param name="cancel">Optional cancellation token</param>
+            <returns>The audio, or an error (Error is set)</returns>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiService.TextToSpeech(SysWeaver.AI.TextToSpeechParams,System.Threading.CancellationToken)">
+            <summary>
+            Create speech from a text (the text to speak)
+            </summary>
+            <param name="p">The parameters</param>
+            <param name="cancel">Optional cancellation token</param>
+            <returns>The audio, or an error (Error is set)</returns>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiService.TextToSound(SysWeaver.AI.TextToSoundParams,System.Threading.CancellationToken)">
+            <summary>
+            Create a sound (effect) from a text prompt
+            </summary>
+            <param name="p">The parameters</param>
+            <param name="cancel">Optional cancellation token</param>
+            <returns>The audio, or an error (Error is set)</returns>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiService.RunTask(SysWeaver.AI.ComfyParams,System.Threading.CancellationToken)">
+            <summary>
+            Run a task using the workflow named in the parameters, or the default workflow for the task.
+            Errors are returned as a result with Error set, cancellation throws an OperationCanceledException.
+            </summary>
+            <param name="p">The parameters</param>
+            <param name="cancel">Optional cancellation token</param>
+            <returns>The created file, or an error (Error is set)</returns>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiService.AddWorkflows(System.String)">
+            <summary>
+            Scan, load and analyze the workflows in a folder (API format json files) for use with the task methods (TextToImage etc).
+            Each workflow is analyzed to determine what it is (the task type) and how the parameters maps to it, see <see cref="T:SysWeaver.AI.ComfyTaskWorkflow"/>.
+            The workflow name (to use as <see cref="P:SysWeaver.AI.ComfyParams.Workflow"/>) is the file name without path and extension, adding a workflow with the same name replaces it.
+            Files that can't be used are reported as warnings to the message host.
+            </summary>
+            <param name="pathAndMask">A folder (all "*.json" files are added), a file or a folder with a file mask, ex: "D:\Workflows\video_*.json".
+            Variables can be used, ex: "$(ExecutableDir)/ComfyUi", multiple can be separated by ';'.</param>
+            <returns>The workflows that was added</returns>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiService.AddWorkflow(System.String,System.Nullable{SysWeaver.AI.ComfyTaskTypes})">
+            <summary>
+            Load and analyze a single workflow file (API format json) for use with the task methods (TextToImage etc).
+            Adding a workflow with the same name replaces it.
+            </summary>
+            <param name="fileName">The workflow file, variables can be used, ex: "$(ExecutableDir)/ComfyUi/my_t2i.json"</param>
+            <param name="type">Force the task type (if the analysis gets it wrong), null to determine it from the workflow</param>
+            <returns>The workflow that was added</returns>
+            <exception cref="T:System.Exception">The workflow can't be used for a task</exception>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiService.AddWorkflow(SysWeaver.AI.ComfyTaskWorkflow)">
+            <summary>
+            Add an analyzed workflow (ex: created using <see cref="M:SysWeaver.AI.ComfyTaskWorkflow.FromJson(System.String,System.Byte[],System.Nullable{SysWeaver.AI.ComfyTaskTypes})"/>).
+            Adding a workflow with the same name replaces it.
+            </summary>
+            <param name="wf">The workflow</param>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiService.GetTaskWorkflow(System.String)">
+            <summary>
+            Get an analyzed workflow
+            </summary>
+            <param name="name">The workflow name (case insensitive)</param>
+            <returns>The workflow or null if not found</returns>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiService.GetPromptEnhancement(System.String)">
+            <summary>
+            Get a system prompt for an LLM that rewrites a user request (and any media details, such as the size or duration) into a prompt that is optimized for a workflow.
+            The instructions include the model (family) and how to best prompt it, the task, the prefix / suffix to apply, how the negative prompt is handled,
+            an example prompt (the default prompt of the workflow) and rules to only output the prompt.
+            Intended flow: prompt = LLM(system: GetPromptEnhancement(workflow), user: request + media details), then run the task with the prompt and the same workflow.
+            </summary>
+            <param name="workflow">The workflow name (case insensitive), see <see cref="P:SysWeaver.AI.ComfyParams.Workflow"/></param>
+            <returns>The system prompt</returns>
+            <exception cref="T:System.ArgumentException">The workflow isn't found</exception>
+        </member>
+        <member name="P:SysWeaver.AI.ComfyUiService.TaskWorkflows">
+            <summary>
+            All analyzed workflows (ordered by name)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiService.GetWorkflows(SysWeaver.AI.ComfyTaskTypes)">
+            <summary>
+            Get the names of the workflows that performs a task
+            </summary>
+            <param name="type">The task type</param>
+            <returns>The workflow names in alphabetical order (case insensitive)</returns>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiService.GetDefaultWorkflow(SysWeaver.AI.ComfyTaskTypes)">
+            <summary>
+            Get the default workflow for a task: the one set explicitly (if it exists), else the first in alphabetical order (case insensitive)
+            </summary>
+            <param name="type">The task type</param>
+            <returns>The workflow name or null if there are no workflows for the task</returns>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiService.SetDefaultWorkflow(SysWeaver.AI.ComfyTaskTypes,System.String)">
+            <summary>
+            Set the default workflow for a task
+            </summary>
+            <param name="type">The task type</param>
+            <param name="name">The workflow name (must be added and perform the task), null to use the first workflow in alphabetical order</param>
+            <exception cref="T:System.ArgumentException">The workflow doesn't exist or doesn't perform the task</exception>
+        </member>
+        <member name="P:SysWeaver.AI.ComfyUiService.TextToImageWorkflows">
+            <summary>
+            The names of the text to image workflows (alphabetical order)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.ComfyUiService.ImagesToImageWorkflows">
+            <summary>
+            The names of the images to image workflows (alphabetical order)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.ComfyUiService.TextToVideoWorkflows">
+            <summary>
+            The names of the text to video workflows (alphabetical order)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.ComfyUiService.ImagesToVideoWorkflows">
+            <summary>
+            The names of the images to video workflows (alphabetical order)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.ComfyUiService.TextToMusicWorkflows">
+            <summary>
+            The names of the text to music workflows (alphabetical order)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.ComfyUiService.TextToSpeechWorkflows">
+            <summary>
+            The names of the text to speech workflows (alphabetical order)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.ComfyUiService.TextToSoundWorkflows">
+            <summary>
+            The names of the text to sound workflows (alphabetical order)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.ComfyUiService.DefaultTextToImage">
+            <summary>
+            The default text to image workflow (used when <see cref="P:SysWeaver.AI.ComfyParams.Workflow"/> is null).
+            Defaults to the first in alphabetical order, set to null to restore that.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.ComfyUiService.DefaultImagesToImage">
+            <summary>
+            The default images to image workflow (used when <see cref="P:SysWeaver.AI.ComfyParams.Workflow"/> is null).
+            Defaults to the first in alphabetical order, set to null to restore that.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.ComfyUiService.DefaultTextToVideo">
+            <summary>
+            The default text to video workflow (used when <see cref="P:SysWeaver.AI.ComfyParams.Workflow"/> is null).
+            Defaults to the first in alphabetical order, set to null to restore that.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.ComfyUiService.DefaultImagesToVideo">
+            <summary>
+            The default images to video workflow (used when <see cref="P:SysWeaver.AI.ComfyParams.Workflow"/> is null).
+            Defaults to the first in alphabetical order, set to null to restore that.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.ComfyUiService.DefaultTextToMusic">
+            <summary>
+            The default text to music workflow (used when <see cref="P:SysWeaver.AI.ComfyParams.Workflow"/> is null).
+            Defaults to the first in alphabetical order, set to null to restore that.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.ComfyUiService.DefaultTextToSpeech">
+            <summary>
+            The default text to speech workflow (used when <see cref="P:SysWeaver.AI.ComfyParams.Workflow"/> is null).
+            Defaults to the first in alphabetical order, set to null to restore that.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.ComfyUiService.DefaultTextToSound">
+            <summary>
+            The default text to sound workflow (used when <see cref="P:SysWeaver.AI.ComfyParams.Workflow"/> is null).
+            Defaults to the first in alphabetical order, set to null to restore that.
+            </summary>
+        </member>
         <member name="T:SysWeaver.AI.ComfyUiSubgraphs">
             <summary>
             Annotates the inputs of subgraphs.
@@ -255,7 +1763,7 @@
         <member name="M:SysWeaver.AI.ComfyUiSubgraphs.InstanceTagRegex">
             <remarks>
             Pattern:<br/>
-            <code>\\$([a-zA-Z0-9_-]+)</code><br/>
+            <code>\$([a-zA-Z0-9_-]+)</code><br/>
             Explanation:<br/>
             <code>
             ○ Match '$'.<br/>
@@ -598,6 +2106,9 @@
             If the UI format workflow is supplied, all inputs of subgraphs are annotated automatically (one tag per subgraph input).
             </summary>
         </member>
+        <member name="M:SysWeaver.AI.ComfyUiWorkflow.ToString">
+            <inheritdoc/>
+        </member>
         <member name="F:SysWeaver.AI.ComfyUiWorkflow.Name">
             <summary>
             The name of the workflow (base file name, used as the endpoint name)
@@ -653,7 +2164,7 @@
         <member name="M:SysWeaver.AI.ComfyUiWorkflow.TagRegex">
             <remarks>
             Pattern:<br/>
-            <code>([\\$#!])([a-zA-Z0-9_-]+)(?:\\(([^)]*)\\))?</code><br/>
+            <code>([\$#!])([a-zA-Z0-9_-]+)(?:\(([^)]*)\))?</code><br/>
             Explanation:<br/>
             <code>
             ○ 1st capture group.<br/>
@@ -691,6 +2202,164 @@
         <member name="M:SysWeaver.AI.ComfyUiWorkflow.IsUiFormat(System.Text.Json.JsonElement)">
             <summary>
             Check if some json is an UI format workflow (and not an API format workflow)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.ComfyWorkflowInfo">
+            <summary>
+            The details of a loaded (analyzed) workflow of the task methods, see <see cref="T:SysWeaver.AI.ComfyTaskWorkflow"/>
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyWorkflowInfo.ToString">
+            <summary>
+            Ex: "image_t2i" TextToImage (FLUX.2): Prompt, Seed, Width, Height
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyWorkflowInfo.Name">
+            <summary>
+            The workflow name (the file name without extension), use as the Workflow parameter
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyWorkflowInfo.Type">
+            <summary>
+            The task that the workflow performs
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyWorkflowInfo.IsDefault">
+            <summary>
+            True if this is the default workflow for the task (used when no workflow is specified)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyWorkflowInfo.Model">
+            <summary>
+            The model (family) that the workflow uses, ex: "FLUX.2", null if not recognized
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyWorkflowInfo.Parameters">
+            <summary>
+            The parameters that the workflow supports (respects), ex: "Prompt", "Width", "Steps"; other parameters are ignored
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyWorkflowInfo.FileCount">
+            <summary>
+            The number of reference files (load image / audio nodes) that the workflow uses
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyWorkflowInfo.ModelFiles">
+            <summary>
+            The model files used by the workflow
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyWorkflowInfo.Loras">
+            <summary>
+            The LoRA files used by the workflow
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyWorkflowInfo.PromptPrefix">
+            <summary>
+            Text that is added before the prompt (ex: a LoRA trigger), null if none
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyWorkflowInfo.PromptSuffix">
+            <summary>
+            Text that is added after the prompt, null if none
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyWorkflowInfo.TransparentPrefix">
+            <summary>
+            Text that is added before the prompt when a transparent result is requested (the model makes transparency from the prompt, ex: Qwen-Image 2.1), null if none
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyWorkflowInfo.TransparentSuffix">
+            <summary>
+            Text that is added after the prompt when a transparent result is requested, null if none
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyWorkflowInfo.DefaultPrompt">
+            <summary>
+            The default (positive) prompt of the workflow, null if none
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyWorkflowInfo.DefaultNegativePrompt">
+            <summary>
+            The default negative prompt of the workflow, null if none
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyWorkflowInfo.OutputNode">
+            <summary>
+            The id of the output node
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyWorkflowInfo.SizedVariant">
+            <summary>
+            True if a size change uses a separate (sized) variant of the workflow, with links replaced by values and switches flipped
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyWorkflowInfo.ServerNames">
+            <summary>
+            The names of the annotated workflow(s) uploaded to the ComfyUI-Connect server
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyWorkflowInfo.Mappings">
+            <summary>
+            How the parameters are mapped to the node inputs
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyWorkflowInfo.NodeClasses">
+            <summary>
+            The node classes used by the workflow
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyWorkflowInfo.PromptEnhancement">
+            <summary>
+            A system prompt for an LLM that rewrites a user request into a prompt optimized for this workflow
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyWorkflowInfo.FileName">
+            <summary>
+            The full file name of the workflow, null if not loaded from a file
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyWorkflowInfo.FileSize">
+            <summary>
+            The size of the workflow file in bytes (0 if not known)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyWorkflowInfo.FileChanged">
+            <summary>
+            When the workflow file was last changed (UTC)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyWorkflowInfo.From(SysWeaver.AI.ComfyUiService,SysWeaver.AI.ComfyTaskWorkflow)">
+            <summary>
+            Get the details of a workflow
+            </summary>
+            <param name="comfy">The service (to know the default workflow of the task)</param>
+            <param name="w">The workflow</param>
+            <returns>The details</returns>
+        </member>
+        <member name="T:SysWeaver.AI.ComfyTaskDefault">
+            <summary>
+            The default workflow of a task type
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyTaskDefault.ToString">
+            <summary>
+            Ex: TextToImage: "image_t2i" (2 workflows)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskDefault.Type">
+            <summary>
+            The task type
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskDefault.Workflow">
+            <summary>
+            The name of the default workflow (used when no workflow is specified), null if there is no workflow for the task
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyTaskDefault.Count">
+            <summary>
+            The number of workflows that performs the task
             </summary>
         </member>
         <member name="T:SysWeaver.AI.ComfyUiRunContext">
@@ -764,66 +2433,130 @@
             Check if a member type is compatible with the type of the workflow (default) value
             </summary>
         </member>
-        <member name="T:System.Text.RegularExpressions.Generated.InstanceTagRegex_0">
-            <summary>Custom <see cref="T:System.Text.RegularExpressions.Regex"/>-derived type for the InstanceTagRegex method.</summary>
+        <member name="T:System.Text.RegularExpressions.Generated.TagRegex_0">
+            <summary>Custom <see cref="T:System.Text.RegularExpressions.Regex"/>-derived type for the TagRegex method.</summary>
         </member>
-        <member name="F:System.Text.RegularExpressions.Generated.InstanceTagRegex_0.Instance">
+        <member name="F:System.Text.RegularExpressions.Generated.TagRegex_0.Instance">
             <summary>Cached, thread-safe singleton instance.</summary>
         </member>
-        <member name="M:System.Text.RegularExpressions.Generated.InstanceTagRegex_0.#ctor">
+        <member name="M:System.Text.RegularExpressions.Generated.TagRegex_0.#ctor">
             <summary>Initializes the instance.</summary>
         </member>
-        <member name="T:System.Text.RegularExpressions.Generated.InstanceTagRegex_0.RunnerFactory">
+        <member name="T:System.Text.RegularExpressions.Generated.TagRegex_0.RunnerFactory">
             <summary>Provides a factory for creating <see cref="T:System.Text.RegularExpressions.RegexRunner"/> instances to be used by methods on <see cref="T:System.Text.RegularExpressions.Regex"/>.</summary>
         </member>
-        <member name="M:System.Text.RegularExpressions.Generated.InstanceTagRegex_0.RunnerFactory.CreateInstance">
+        <member name="M:System.Text.RegularExpressions.Generated.TagRegex_0.RunnerFactory.CreateInstance">
             <summary>Creates an instance of a <see cref="T:System.Text.RegularExpressions.RegexRunner"/> used by methods on <see cref="T:System.Text.RegularExpressions.Regex"/>.</summary>
         </member>
-        <member name="T:System.Text.RegularExpressions.Generated.InstanceTagRegex_0.RunnerFactory.Runner">
+        <member name="T:System.Text.RegularExpressions.Generated.TagRegex_0.RunnerFactory.Runner">
             <summary>Provides the runner that contains the custom logic implementing the specified regular expression.</summary>
         </member>
-        <member name="M:System.Text.RegularExpressions.Generated.InstanceTagRegex_0.RunnerFactory.Runner.Scan(System.ReadOnlySpan{System.Char})">
+        <member name="M:System.Text.RegularExpressions.Generated.TagRegex_0.RunnerFactory.Runner.Scan(System.ReadOnlySpan{System.Char})">
             <summary>Scan the <paramref name="inputSpan"/> starting from base.runtextstart for the next match.</summary>
             <param name="inputSpan">The text being scanned by the regular expression.</param>
         </member>
-        <member name="M:System.Text.RegularExpressions.Generated.InstanceTagRegex_0.RunnerFactory.Runner.TryFindNextPossibleStartingPosition(System.ReadOnlySpan{System.Char})">
+        <member name="M:System.Text.RegularExpressions.Generated.TagRegex_0.RunnerFactory.Runner.TryFindNextPossibleStartingPosition(System.ReadOnlySpan{System.Char})">
             <summary>Search <paramref name="inputSpan"/> starting from base.runtextpos for the next location a match could possibly start.</summary>
             <param name="inputSpan">The text being scanned by the regular expression.</param>
             <returns>true if a possible match was found; false if no more matches are possible.</returns>
         </member>
-        <member name="M:System.Text.RegularExpressions.Generated.InstanceTagRegex_0.RunnerFactory.Runner.TryMatchAtCurrentPosition(System.ReadOnlySpan{System.Char})">
+        <member name="M:System.Text.RegularExpressions.Generated.TagRegex_0.RunnerFactory.Runner.TryMatchAtCurrentPosition(System.ReadOnlySpan{System.Char})">
             <summary>Determine whether <paramref name="inputSpan"/> at base.runtextpos is a match for the regular expression.</summary>
             <param name="inputSpan">The text being scanned by the regular expression.</param>
             <returns>true if the regular expression matches at the current position; otherwise, false.</returns>
         </member>
-        <member name="T:System.Text.RegularExpressions.Generated.TagRegex_1">
-            <summary>Custom <see cref="T:System.Text.RegularExpressions.Regex"/>-derived type for the TagRegex method.</summary>
+        <member name="T:System.Text.RegularExpressions.Generated.ModelInputRegex_1">
+            <summary>Custom <see cref="T:System.Text.RegularExpressions.Regex"/>-derived type for the ModelInputRegex method.</summary>
         </member>
-        <member name="F:System.Text.RegularExpressions.Generated.TagRegex_1.Instance">
+        <member name="F:System.Text.RegularExpressions.Generated.ModelInputRegex_1.Instance">
             <summary>Cached, thread-safe singleton instance.</summary>
         </member>
-        <member name="M:System.Text.RegularExpressions.Generated.TagRegex_1.#ctor">
+        <member name="M:System.Text.RegularExpressions.Generated.ModelInputRegex_1.#ctor">
             <summary>Initializes the instance.</summary>
         </member>
-        <member name="T:System.Text.RegularExpressions.Generated.TagRegex_1.RunnerFactory">
+        <member name="T:System.Text.RegularExpressions.Generated.ModelInputRegex_1.RunnerFactory">
             <summary>Provides a factory for creating <see cref="T:System.Text.RegularExpressions.RegexRunner"/> instances to be used by methods on <see cref="T:System.Text.RegularExpressions.Regex"/>.</summary>
         </member>
-        <member name="M:System.Text.RegularExpressions.Generated.TagRegex_1.RunnerFactory.CreateInstance">
+        <member name="M:System.Text.RegularExpressions.Generated.ModelInputRegex_1.RunnerFactory.CreateInstance">
             <summary>Creates an instance of a <see cref="T:System.Text.RegularExpressions.RegexRunner"/> used by methods on <see cref="T:System.Text.RegularExpressions.Regex"/>.</summary>
         </member>
-        <member name="T:System.Text.RegularExpressions.Generated.TagRegex_1.RunnerFactory.Runner">
+        <member name="T:System.Text.RegularExpressions.Generated.ModelInputRegex_1.RunnerFactory.Runner">
             <summary>Provides the runner that contains the custom logic implementing the specified regular expression.</summary>
         </member>
-        <member name="M:System.Text.RegularExpressions.Generated.TagRegex_1.RunnerFactory.Runner.Scan(System.ReadOnlySpan{System.Char})">
+        <member name="M:System.Text.RegularExpressions.Generated.ModelInputRegex_1.RunnerFactory.Runner.Scan(System.ReadOnlySpan{System.Char})">
             <summary>Scan the <paramref name="inputSpan"/> starting from base.runtextstart for the next match.</summary>
             <param name="inputSpan">The text being scanned by the regular expression.</param>
         </member>
-        <member name="M:System.Text.RegularExpressions.Generated.TagRegex_1.RunnerFactory.Runner.TryFindNextPossibleStartingPosition(System.ReadOnlySpan{System.Char})">
+        <member name="M:System.Text.RegularExpressions.Generated.ModelInputRegex_1.RunnerFactory.Runner.TryFindNextPossibleStartingPosition(System.ReadOnlySpan{System.Char})">
             <summary>Search <paramref name="inputSpan"/> starting from base.runtextpos for the next location a match could possibly start.</summary>
             <param name="inputSpan">The text being scanned by the regular expression.</param>
             <returns>true if a possible match was found; false if no more matches are possible.</returns>
         </member>
-        <member name="M:System.Text.RegularExpressions.Generated.TagRegex_1.RunnerFactory.Runner.TryMatchAtCurrentPosition(System.ReadOnlySpan{System.Char})">
+        <member name="M:System.Text.RegularExpressions.Generated.ModelInputRegex_1.RunnerFactory.Runner.TryMatchAtCurrentPosition(System.ReadOnlySpan{System.Char})">
+            <summary>Determine whether <paramref name="inputSpan"/> at base.runtextpos is a match for the regular expression.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+            <returns>true if the regular expression matches at the current position; otherwise, false.</returns>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.TriggerRegex_2">
+            <summary>Custom <see cref="T:System.Text.RegularExpressions.Regex"/>-derived type for the TriggerRegex method.</summary>
+        </member>
+        <member name="F:System.Text.RegularExpressions.Generated.TriggerRegex_2.Instance">
+            <summary>Cached, thread-safe singleton instance.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.TriggerRegex_2.#ctor">
+            <summary>Initializes the instance.</summary>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.TriggerRegex_2.RunnerFactory">
+            <summary>Provides a factory for creating <see cref="T:System.Text.RegularExpressions.RegexRunner"/> instances to be used by methods on <see cref="T:System.Text.RegularExpressions.Regex"/>.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.TriggerRegex_2.RunnerFactory.CreateInstance">
+            <summary>Creates an instance of a <see cref="T:System.Text.RegularExpressions.RegexRunner"/> used by methods on <see cref="T:System.Text.RegularExpressions.Regex"/>.</summary>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.TriggerRegex_2.RunnerFactory.Runner">
+            <summary>Provides the runner that contains the custom logic implementing the specified regular expression.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.TriggerRegex_2.RunnerFactory.Runner.Scan(System.ReadOnlySpan{System.Char})">
+            <summary>Scan the <paramref name="inputSpan"/> starting from base.runtextstart for the next match.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.TriggerRegex_2.RunnerFactory.Runner.TryFindNextPossibleStartingPosition(System.ReadOnlySpan{System.Char})">
+            <summary>Search <paramref name="inputSpan"/> starting from base.runtextpos for the next location a match could possibly start.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+            <returns>true if a possible match was found; false if no more matches are possible.</returns>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.TriggerRegex_2.RunnerFactory.Runner.TryMatchAtCurrentPosition(System.ReadOnlySpan{System.Char})">
+            <summary>Determine whether <paramref name="inputSpan"/> at base.runtextpos is a match for the regular expression.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+            <returns>true if the regular expression matches at the current position; otherwise, false.</returns>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.InstanceTagRegex_3">
+            <summary>Custom <see cref="T:System.Text.RegularExpressions.Regex"/>-derived type for the InstanceTagRegex method.</summary>
+        </member>
+        <member name="F:System.Text.RegularExpressions.Generated.InstanceTagRegex_3.Instance">
+            <summary>Cached, thread-safe singleton instance.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.InstanceTagRegex_3.#ctor">
+            <summary>Initializes the instance.</summary>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.InstanceTagRegex_3.RunnerFactory">
+            <summary>Provides a factory for creating <see cref="T:System.Text.RegularExpressions.RegexRunner"/> instances to be used by methods on <see cref="T:System.Text.RegularExpressions.Regex"/>.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.InstanceTagRegex_3.RunnerFactory.CreateInstance">
+            <summary>Creates an instance of a <see cref="T:System.Text.RegularExpressions.RegexRunner"/> used by methods on <see cref="T:System.Text.RegularExpressions.Regex"/>.</summary>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.InstanceTagRegex_3.RunnerFactory.Runner">
+            <summary>Provides the runner that contains the custom logic implementing the specified regular expression.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.InstanceTagRegex_3.RunnerFactory.Runner.Scan(System.ReadOnlySpan{System.Char})">
+            <summary>Scan the <paramref name="inputSpan"/> starting from base.runtextstart for the next match.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.InstanceTagRegex_3.RunnerFactory.Runner.TryFindNextPossibleStartingPosition(System.ReadOnlySpan{System.Char})">
+            <summary>Search <paramref name="inputSpan"/> starting from base.runtextpos for the next location a match could possibly start.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+            <returns>true if a possible match was found; false if no more matches are possible.</returns>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.InstanceTagRegex_3.RunnerFactory.Runner.TryMatchAtCurrentPosition(System.ReadOnlySpan{System.Char})">
             <summary>Determine whether <paramref name="inputSpan"/> at base.runtextpos is a match for the regular expression.</summary>
             <param name="inputSpan">The text being scanned by the regular expression.</param>
             <returns>true if the regular expression matches at the current position; otherwise, false.</returns>
@@ -842,6 +2575,9 @@
         </member>
         <member name="F:System.Text.RegularExpressions.Generated.Utilities.s_asciiLettersAndDigitsAndDashUnderscore">
             <summary>Supports searching for characters in or not in "-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz".</summary>
+        </member>
+        <member name="F:System.Text.RegularExpressions.Generated.Utilities.s_ascii_8008600400">
+            <summary>Supports searching for characters in or not in "_cmnr".</summary>
         </member>
     </members>
 </doc>

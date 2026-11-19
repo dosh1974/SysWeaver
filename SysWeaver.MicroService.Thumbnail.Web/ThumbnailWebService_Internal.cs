@@ -106,6 +106,46 @@ namespace SysWeaver.MicroService
             internal bool IsCapturing;
 
             /// <summary>
+            /// The number of <see cref="waitNetworkIdle"/> calls in progress (the screenshot time out is extended while waiting)
+            /// </summary>
+            int NetWaits;
+
+            /// <summary>
+            /// Called by the page to wait until the network has been idle (no pending requests in any frame, including cross origin
+            /// frames such as a Google map) for some time, ex: before calling <see cref="doIt"/> when the content is loaded dynamically.
+            /// </summary>
+            /// <param name="idleMs">The time in ms without any network activity that is required (50 to 5000)</param>
+            /// <param name="timeoutMs">The maximum time in ms to wait (at most 20000)</param>
+            /// <returns>True if the network went idle, false on a time out (or if the browser can't track requests)</returns>
+            public async Task<bool> waitNetworkIdle(int idleMs = 500, int timeoutMs = 8000)
+            {
+                if (Dead)
+                    return false;
+                var w = Win;
+                if (w == null)
+                    return false;
+                idleMs = Math.Clamp(idleMs, 50, 5000);
+                timeoutMs = Math.Clamp(timeoutMs, idleMs, 20000);
+                Interlocked.Increment(ref NetWaits);
+                var start = System.Diagnostics.Stopwatch.GetTimestamp();
+                try
+                {
+                    var ok = await w.WaitNetworkIdle(idleMs, timeoutMs).ConfigureAwait(false);
+                    M.AddMessage(MessageLevels.Debug, $"{Prefix}Waited {System.Diagnostics.Stopwatch.GetElapsedTime(start).TotalMilliseconds:0} ms for the network to be idle: {(ok ? "idle" : "not idle")}");
+                    return ok;
+                }
+                catch (Exception ex)
+                {
+                    M.AddMessage($"{Prefix}Failed to wait for the network to be idle", ex, MessageLevels.Warning);
+                    return false;
+                }
+                finally
+                {
+                    Interlocked.Decrement(ref NetWaits);
+                }
+            }
+
+            /// <summary>
             /// Called by the page when it's ready to be captured (or has failed): takes the screenshot (after the extra delay).
             /// </summary>
             /// <param name="duration">The duration of the media (or effect) in seconds</param>
@@ -161,10 +201,10 @@ namespace SysWeaver.MicroService
 
             internal async Task<Byte[]> WaitScreenShot(int timeOut = 10000)
             {
-                //  A capture that is running when timing out is allowed to finish
+                //  A capture (or a wait for the network to be idle, it has a time out of it's own) that is running when timing out is allowed to finish
                 while (!await CsBlocker.WaitAsync(timeOut + ExtraDelay).ConfigureAwait(false))
                 {
-                    if (!IsCapturing)
+                    if (!(IsCapturing || (Volatile.Read(ref NetWaits) > 0)))
                     {
                         M.AddMessage($"{Prefix}The page didn't take a screen shot in time", MessageLevels.Warning);
                         break;

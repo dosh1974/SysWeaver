@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 namespace SysWeaver.Net
 {
     /// <summary>
-    /// A response cache for proxied GET and HEAD requests (used by <see cref="FileProxy"/> and the reverse proxy).
+    /// A response cache for proxied GET and HEAD requests (used by the reverse proxy).
     /// Responses are cached for the max-age of the upstream Cache-Control header (not cached if missing or zero, or if the response is "private" or "no-store"),
     /// keyed by the upstream url, the Accept-Encoding header and the forwarded Cookie and Authorization headers (so responses are only shared between requests with the same credentials).
     /// </summary>

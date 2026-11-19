@@ -165,5 +165,8 @@
             Create a collectible load context
             </summary>
         </member>
+        <member name="M:SysWeaver.Script.SimpleUnloadableAssemblyLoadContext.Load(System.Reflection.AssemblyName)">
+            <inheritdoc />
+        </member>
     </members>
 </doc>

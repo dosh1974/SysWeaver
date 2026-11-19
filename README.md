@@ -516,6 +516,7 @@ flowchart LR
 | [SysWeaver.Media.Svg](SysWeaver.Media.Svg/README.md) | Programmatic SVG creation and rendering: a canvas/scene API with paths, shapes, gradients, shadows, 3D-style extrusion, text with embedded fonts, barcodes, composition templates, and SVG-to-bitmap rendering. |
 | [SysWeaver.Media.Video](SysWeaver.Media.Video/README.md) | Video decoding and information through FFmpeg, with native FFmpeg libraries shipped per platform. |
 | [SysWeaver.Minifier.Svg](SysWeaver.Minifier.Svg/README.md) | SVG minifier/optimiser, used at build time (through the SvgOpt tool) for the framework's icons and at runtime by the SVG transformer. |
+| [SysWeaver.Converter.Js](Converter/SysWeaver.Converter.Js/README.md) | Converts modern JavaScript (and the scripts in html pages) to older versions (ES2017, ES2015, ES5 or a browser list) for old / embedded browsers, like Babel's preset-env, written in C# (used by the JsConvert tool). |
 | [SysWeaver.Map](SysWeaver.Map/README.md) | Generates styled SVG maps — the world, Africa, Europe, North America, individual countries and their administrative regions — from embedded map data. |
 | [SysWeaver.MicroService.Map](SysWeaver.MicroService.Map/README.md) | Web API and AI tools that generate SVG maps with SysWeaver.Map. |
 | [SysWeaver.MicroService.Media](SysWeaver.MicroService.Media/README.md) | A browser-based media player and viewer: images, video, audio, text and YouTube with WebGL shader effects, collages, animated counters and map views. |
@@ -559,6 +560,7 @@ Every folder has a README describing its content and its sub folders; follow the
 | `SysWeaver.*` | Framework projects (one folder per project, each with its own README) |
 | [`Serialization/`](Serialization/README.md) | Serializer plug-in projects |
 | [`Compression/`](Compression/README.md) | Compression codec plug-in projects |
+| [`Converter/`](Converter/README.md) | Source code converter projects (JavaScript to older JavaScript versions) |
 | [`Communication/`](Communication/README.md) | E-mail sender, e-mail reader and text message provider projects |
 | [`Platform/`](Platform/README.md) | OS-specific platform tools and service host factories (Windows, Linux) |
 | [`Internet/`](Internet/README.md) | Headless browser implementations (CEF, WebView2) |

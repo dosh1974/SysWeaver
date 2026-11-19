@@ -833,50 +833,50 @@
           }
         }
       },
-      "System.CodeDom/10.0.14": {
+      "System.CodeDom/11.0.0": {
         "runtime": {
-          "lib/net10.0/System.CodeDom.dll": {
-            "assemblyVersion": "10.0.0.0",
-            "fileVersion": "10.0.1426.52326",
+          "lib/net11.0/System.CodeDom.dll": {
+            "assemblyVersion": "11.0.0.0",
+            "fileVersion": "11.0.26.53018",
             "localPath": "System.CodeDom.dll"
           }
         }
       },
-      "System.Configuration.ConfigurationManager/10.0.14": {
+      "System.Configuration.ConfigurationManager/11.0.0": {
         "dependencies": {
-          "System.Diagnostics.EventLog": "10.0.14",
-          "System.Security.Cryptography.ProtectedData": "10.0.14"
+          "System.Diagnostics.EventLog": "11.0.0",
+          "System.Security.Cryptography.ProtectedData": "11.0.0"
         },
         "runtime": {
-          "lib/net10.0/System.Configuration.ConfigurationManager.dll": {
-            "assemblyVersion": "10.0.0.0",
-            "fileVersion": "10.0.1426.52326",
+          "lib/net11.0/System.Configuration.ConfigurationManager.dll": {
+            "assemblyVersion": "11.0.0.0",
+            "fileVersion": "11.0.26.53018",
             "localPath": "System.Configuration.ConfigurationManager.dll"
           }
         }
       },
-      "System.Diagnostics.EventLog/10.0.14": {
+      "System.Diagnostics.EventLog/11.0.0": {
         "runtime": {
-          "runtimes/win/lib/net10.0/System.Diagnostics.EventLog.Messages.dll": {
-            "assemblyVersion": "10.0.0.0",
+          "runtimes/win/lib/net11.0/System.Diagnostics.EventLog.Messages.dll": {
+            "assemblyVersion": "11.0.0.0",
             "fileVersion": "0.0.0.0",
             "localPath": "System.Diagnostics.EventLog.Messages.dll"
           },
-          "runtimes/win/lib/net10.0/System.Diagnostics.EventLog.dll": {
-            "assemblyVersion": "10.0.0.0",
-            "fileVersion": "10.0.1426.52326",
+          "runtimes/win/lib/net11.0/System.Diagnostics.EventLog.dll": {
+            "assemblyVersion": "11.0.0.0",
+            "fileVersion": "11.0.26.53018",
             "localPath": "System.Diagnostics.EventLog.dll"
           }
         }
       },
-      "System.Diagnostics.PerformanceCounter/10.0.14": {
+      "System.Diagnostics.PerformanceCounter/11.0.0": {
         "dependencies": {
-          "System.Configuration.ConfigurationManager": "10.0.14"
+          "System.Configuration.ConfigurationManager": "11.0.0"
         },
         "runtime": {
-          "runtimes/win/lib/net10.0/System.Diagnostics.PerformanceCounter.dll": {
-            "assemblyVersion": "10.0.0.0",
-            "fileVersion": "10.0.1426.52326",
+          "runtimes/win/lib/net11.0/System.Diagnostics.PerformanceCounter.dll": {
+            "assemblyVersion": "11.0.0.0",
+            "fileVersion": "11.0.26.53018",
             "localPath": "System.Diagnostics.PerformanceCounter.dll"
           }
         }
@@ -893,23 +893,23 @@
           }
         }
       },
-      "System.Management/10.0.14": {
+      "System.Management/11.0.0": {
         "dependencies": {
-          "System.CodeDom": "10.0.14"
+          "System.CodeDom": "11.0.0"
         },
         "runtime": {
-          "runtimes/win/lib/net10.0/System.Management.dll": {
-            "assemblyVersion": "10.0.0.14",
-            "fileVersion": "10.0.1426.52326",
+          "runtimes/win/lib/net11.0/System.Management.dll": {
+            "assemblyVersion": "11.0.0.0",
+            "fileVersion": "11.0.26.53018",
             "localPath": "System.Management.dll"
           }
         }
       },
-      "System.Security.Cryptography.ProtectedData/10.0.14": {
+      "System.Security.Cryptography.ProtectedData/11.0.0": {
         "runtime": {
-          "lib/net10.0/System.Security.Cryptography.ProtectedData.dll": {
-            "assemblyVersion": "10.0.0.0",
-            "fileVersion": "10.0.1426.52326",
+          "lib/net11.0/System.Security.Cryptography.ProtectedData.dll": {
+            "assemblyVersion": "11.0.0.0",
+            "fileVersion": "11.0.26.53018",
             "localPath": "System.Security.Cryptography.ProtectedData.dll"
           }
         }
@@ -949,8 +949,8 @@
       "SysWeaver.Common.Windows/1.0.0": {
         "dependencies": {
           "SysWeaver.Common": "1.0.0",
-          "System.Diagnostics.PerformanceCounter": "10.0.14",
-          "System.Management": "10.0.14"
+          "System.Diagnostics.PerformanceCounter": "11.0.0",
+          "System.Management": "11.0.0"
         },
         "runtime": {
           "SysWeaver.Common.Windows.dll": {
@@ -1081,33 +1081,33 @@
       "path": "svg/3.4.8",
       "hashPath": "svg.3.4.8.nupkg.sha512"
     },
-    "System.CodeDom/10.0.14": {
+    "System.CodeDom/11.0.0": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-oJYTzyBcc2g06mU699LaJfm964mdlFg6l7BPeqdu8bmK6Fdy9fL9BWugGsZAqWtjnNWp4tanZZ9DlZwHJmmhgg==",
-      "path": "system.codedom/10.0.14",
-      "hashPath": "system.codedom.10.0.14.nupkg.sha512"
+      "sha512": "sha512-jhvI5UbF+HuOQ5k8lyNQN+pM6fn7OSWmVK99qK+EvepjY6Ec+lg3039rvgpvXw+cT135xtzfoPpLbqppois5XA==",
+      "path": "system.codedom/11.0.0",
+      "hashPath": "system.codedom.11.0.0.nupkg.sha512"
     },
-    "System.Configuration.ConfigurationManager/10.0.14": {
+    "System.Configuration.ConfigurationManager/11.0.0": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-F/bLtwG0JuJ2OnTCsvJbnulvN7hr+BIFJLtE3PzgmW3AWkV8LYO5XF0j+zB4tHn/b4yfR7PAO0dZmoYeaINtnQ==",
-      "path": "system.configuration.configurationmanager/10.0.14",
-      "hashPath": "system.configuration.configurationmanager.10.0.14.nupkg.sha512"
+      "sha512": "sha512-EECIyxAPpkd/qek46ZGH/EyfEJHLS5BUxi627flzzoNsO6e4dpLC68Xj8Nl+YxFcfzBMWLu9/tyRKufbTshBAQ==",
+      "path": "system.configuration.configurationmanager/11.0.0",
+      "hashPath": "system.configuration.configurationmanager.11.0.0.nupkg.sha512"
     },
-    "System.Diagnostics.EventLog/10.0.14": {
+    "System.Diagnostics.EventLog/11.0.0": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-O/RzNwWoDzehkLlAG9hR8xooY5L41U7VUaYlcKvE3+FhHohBJqF10oLUzuv0v59VeJ62hv3uw9VoeX12zej7Sg==",
-      "path": "system.diagnostics.eventlog/10.0.14",
-      "hashPath": "system.diagnostics.eventlog.10.0.14.nupkg.sha512"
+      "sha512": "sha512-lKore9DXE1q8o6ss6/M7++xBpn2FMS0axaAypBspYLqY5OT1ZRPLzFGwF18l61aXfXTPpwkx5tYh4zMUHoAv/g==",
+      "path": "system.diagnostics.eventlog/11.0.0",
+      "hashPath": "system.diagnostics.eventlog.11.0.0.nupkg.sha512"
     },
-    "System.Diagnostics.PerformanceCounter/10.0.14": {
+    "System.Diagnostics.PerformanceCounter/11.0.0": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-R3SvY4OZXhcCU7mgit8uhBfICXonoNBrV6pi4bTQWrvh4h5EMV/3BXA9Kky52IMUp7/EG1L2K0l1meBqAXxArA==",
-      "path": "system.diagnostics.performancecounter/10.0.14",
-      "hashPath": "system.diagnostics.performancecounter.10.0.14.nupkg.sha512"
+      "sha512": "sha512-QyWQ02Soy64/Eom5szs8IGREfzI9THWuRfPaHdqj0rcHQCTaDJSwM8dQCl7q95loehX0E17CC8clYCTwtw0mhA==",
+      "path": "system.diagnostics.performancecounter/11.0.0",
+      "hashPath": "system.diagnostics.performancecounter.11.0.0.nupkg.sha512"
     },
     "System.Drawing.Common/5.0.3": {
       "type": "package",
@@ -1116,19 +1116,19 @@
       "path": "system.drawing.common/5.0.3",
       "hashPath": "system.drawing.common.5.0.3.nupkg.sha512"
     },
-    "System.Management/10.0.14": {
+    "System.Management/11.0.0": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-ywAltakc72Oe7liNatclpyq8oiLYx0VMSjQvphlsbPbiQ9glrV3JKvn5M2xFbsOzzh8sV3QAiUdmu2AV/ffN7Q==",
-      "path": "system.management/10.0.14",
-      "hashPath": "system.management.10.0.14.nupkg.sha512"
+      "sha512": "sha512-8x+8Jt/ASauIThRh7yT+kwiR7xmWbPMtTJ3p36EalBuOQZsq6NCqVejO3tlXaYQGb337zOATzrBqAzLgLa86Cg==",
+      "path": "system.management/11.0.0",
+      "hashPath": "system.management.11.0.0.nupkg.sha512"
     },
-    "System.Security.Cryptography.ProtectedData/10.0.14": {
+    "System.Security.Cryptography.ProtectedData/11.0.0": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-UuaBUHgmtc9h6CMxaQqFDDJxkS5JVy7XEB+DbtCvD68GFcVM9/AccuNwFpARx8nwCnvjaxzoOBjG3gPz32P1Eg==",
-      "path": "system.security.cryptography.protecteddata/10.0.14",
-      "hashPath": "system.security.cryptography.protecteddata.10.0.14.nupkg.sha512"
+      "sha512": "sha512-iS9iyAMwLDPFBzTdcREDkzRBYmwy7aENYl7EXxAvnNJNCbl7+UVRgJfWaVLtVjSeDmT3JIItgGODmuAPljXFww==",
+      "path": "system.security.cryptography.protecteddata/11.0.0",
+      "hashPath": "system.security.cryptography.protecteddata.11.0.0.nupkg.sha512"
     },
     "SysWeaver.CommandLine/1.0.0": {
       "type": "project",

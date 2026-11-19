@@ -1300,9 +1300,10 @@
             Requires <see cref="F:SysWeaver.Auth.SimpleAuthorizerParams.ApiKeyManagementAuth"/> (disabled if API keys are disabled).
             </summary>
             <param name="keyName">The name of the key (user name), or the full "name:key" string</param>
-            <returns>True if the key was removed, false if it doesn't exist</returns>
+            <returns>True when the key was removed (never false: a key that doesn't exist is a 409 with the reason)</returns>
             <param name="context">The caller (handled internally by the web api), named in the log line, may be null</param>
             <exception cref="T:System.ArgumentNullException"><paramref name="keyName"/> is null (DEBUG builds only).</exception>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">409 with the reason: there is no API key with that name (it may already be removed)</exception>
         </member>
         <member name="M:SysWeaver.Auth.SimpleAuthorizer.CallerName(SysWeaver.Auth.IAuthorizedRequest)">
             <summary>

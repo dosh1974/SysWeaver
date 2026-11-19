@@ -1,0 +1,104 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>JsConvert</name>
+    </assembly>
+    <members>
+        <member name="T:SysWeaver.JsConvertParams">
+            <summary>
+            The command line options of JsConvert (all converter options plus the tool options)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.JsConvertParams.Suffix">
+            <summary>
+            Text to add to the output file names (before the extension), ex: ".es5" writes "common.es5.js".
+            </summary>
+        </member>
+        <member name="F:SysWeaver.JsConvertParams.Overwrite">
+            <summary>
+            Allow the output to overwrite the source file (when there is no destination folder and no suffix).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.JsConvertParams.HelpersFile">
+            <summary>
+            Write all helper functions (and polyfills) used by the converted files to this file instead of adding them to every file (sets Helpers to External).
+            The file must be loaded (ex: with a script element) before the converted files. A name without a folder is created in the destination folder.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.JsConvertParams.Verbose">
+            <summary>
+            Also show information messages (ex: built-ins that might be missing in the target).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.JsConvertParams.ShowTarget">
+            <summary>
+            Show the target (EcmaScript version and browsers) and the features that will be transformed.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.JsConvertParams.Force">
+            <summary>
+            Always write the output files (by default a file is only written if its content changed, so the time stamp of unchanged files is kept).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.JsConvertParams.Site">
+            <summary>
+            Html files: clone the site, i.e. also process all scripts, style sheets (and other files, see SiteAssets) the pages use, including the files those reference
+            (css @import / url(), script imports, workers and literal script / css paths). Scripts are converted, other files are copied, the paths relative to the site root are kept.
+            Dependencies created dynamically with computed urls can't be found, iframes and links to other pages are not followed.
+            If false, only the html file itself is converted.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.JsConvertParams.SiteRoot">
+            <summary>
+            The root folder of the site(s): root relative urls ("/js/a.js") are resolved from here and the output keeps the paths relative to it.
+            Default: root relative urls are searched in the folder of the page and its parents, the root is the common folder of all used files.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.JsConvertParams.SiteAssets">
+            <summary>
+            Site mode: also copy the other files used by the pages and style sheets (images, fonts, icons, manifests ...), not only scripts and style sheets.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.JsConvertParams.SiteScanStrings">
+            <summary>
+            Site mode: also follow string literals in scripts that are relative paths of existing .js / .mjs / .css files (ex: includeJs("lib.js")).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.JsConvertProgram.ExitConvertFailed">
+            <summary>
+            Exit code: one or more files couldn't be converted (errors, or warnings with -WarningsAsErrors), the other files are converted.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.JsConvertProgram.WriteIfChanged(System.String,System.String,System.Boolean)">
+            <summary>
+            Write a file if the content changed (or if forced)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.JsConvertProgram.SitePages">
+            <summary>
+            The pages to clone, by destination root folder
+            </summary>
+        </member>
+        <member name="M:SysWeaver.JsConvertProgram.Report(SysWeaver.IMessageHost,SysWeaver.JsConvertParams,System.String,System.Collections.Generic.IEnumerable{SysWeaver.Converter.Js.JsDiagnostic})">
+            <summary>
+            Write diagnostics in the MSBuild / Visual Studio format: file(line,col): warning: message
+            </summary>
+        </member>
+        <member name="M:SysWeaver.JsConvertProgram.CloneSites(SysWeaver.IMessageHost,SysWeaver.JsConvertParams)">
+            <summary>
+            Clone the sites of the html files (site mode)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.JsConvertProgram.LastMessageHost">
+            <summary>
+            The message host of the files to folder tool (used for the site cloning after all files are processed)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.JsConvertProgram.Main(System.String[])">
+            <summary>
+            Process exit codes, 0 = success, non-zero (1-255) = failure:
+            0 = success or help requested, 1 = an exception while processing, 2 = invalid command line, 3 = one or more files couldn't be converted.
+            </summary>
+        </member>
+    </members>
+</doc>

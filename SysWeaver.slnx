@@ -21,6 +21,9 @@
     <Project Path="Compression/SysWeaver.Compression.BrotliNativeNET/SysWeaver.Compression.BrotliNativeNET.csproj" />
     <Project Path="Compression/SysWeaver.Compression.ZstdSharp/SysWeaver.Compression.ZstdSharp.csproj" />
   </Folder>
+  <Folder Name="/Converter/">
+    <Project Path="Converter/SysWeaver.Converter.Js/SysWeaver.Converter.Js.csproj" />
+  </Folder>
   <Folder Name="/Internet/">
     <Project Path="Internet/SysWeaver.WebBrowser.Cef/SysWeaver.WebBrowser.Cef.csproj" />
     <Project Path="Internet/SysWeaver.WebBrowser.WebView2/SysWeaver.WebBrowser.WebView2.csproj" />

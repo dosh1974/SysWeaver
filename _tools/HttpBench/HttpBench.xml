@@ -1,0 +1,195 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>HttpBench</name>
+    </assembly>
+    <members>
+        <member name="T:SysWeaver.HttpBench.HttpBenchOptions">
+            <summary>
+            The command line options of the HttpBench console tool, they match the settings of the HTTP bench page.
+            Every option is optional: an option that is not given keeps the value of the parameter file (-File), else the default.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.HttpBenchOptions.File">
+            <summary>
+            A parameter file (json with "DataType": "HttpBench"), as exported from the HTTP bench page or written with -Save.
+            It is loaded first, the other options override its values.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.HttpBenchOptions.Server">
+            <summary>
+            The root url of the SysWeaver server to test, ex: https://myserver:1212/ (required, here or in the parameter file).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.HttpBenchOptions.Duration">
+            <summary>
+            The duration of the test in seconds (default 60).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.HttpBenchOptions.Workers">
+            <summary>
+            The number of workers (default 16): clients that each send one request at a time, with their own connection and session.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.HttpBenchOptions.Apis">
+            <summary>
+            The end points to call, a ';' (or ',') separated list of:
+            All, Default (the modules that are on by default), None, a module ("Files", "Images", "Application", "Auth", "Types", "Explore", "Errors"),
+            an end point ("Application.GetMenu" or just "GetMenu").
+            Prefix an item with '!' to remove it, a list that starts with a removal starts from the current selection.
+            Ex: "All;!Errors", "Files;Application.GetMenu", "!Explore". Default: the end points of the parameter file, else Default. See -List.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.HttpBenchOptions.Values">
+            <summary>
+            How the apis that take a value get it: POST (the json body, default) or GET (the query string).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.HttpBenchOptions.ValueCompression">
+            <summary>
+            The compression of the api values: None (default), br, zstd, gzip, deflate (zstd needs .NET 11 or later, which HttpBench is built for).
+            POST: the Content-Encoding of the body. GET: the "_" + letter + base64url query string payload.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.HttpBenchOptions.AcceptEncoding">
+            <summary>
+            The accepted response compressions (the Accept-Encoding header): All (default, like a browser), None, or one of br, zstd, gzip, deflate.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.HttpBenchOptions.AnyCertificate">
+            <summary>
+            Accept any https certificate: true (default, self signed, LAN and expired certificates of test servers) or false (validate certificates).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.HttpBenchOptions.Timeout">
+            <summary>
+            The time out of one request in seconds (default 30), a request that takes longer is counted as an error.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.HttpBenchOptions.Drain">
+            <summary>
+            The time in seconds that the requests in flight at the end of the test may take to complete (default 5).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.HttpBenchOptions.WaitForServer">
+            <summary>
+            Wait at most this many seconds for the server to answer "serverTime" before the test starts (default 30, 0 = don't wait).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.HttpBenchOptions.StartDelay">
+            <summary>
+            Seconds to wait after the server answered, when it didn't answer at once (it was starting, default 10).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.HttpBenchOptions.WarmUp">
+            <summary>
+            Warm up before the test: true (default) or false.
+            The warm up calls the same end points (-WarmUpSeconds), then the server idles while "serverTime" is called every second (-WarmUpPause),
+            so it can finish its optimizations (tiered compilation) and caches while it stays active. The warm up is not in the report.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.HttpBenchOptions.WarmUpSeconds">
+            <summary>
+            The duration of the warm up in seconds (default 10).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.HttpBenchOptions.WarmUpPause">
+            <summary>
+            The pause between the warm up and the test in seconds (default 20), "serverTime" is called every second.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.HttpBenchOptions.Json">
+            <summary>
+            Also write the results (the totals, the parameters and the report name) as json to this file, for scripts.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.HttpBenchOptions.Save">
+            <summary>
+            Also save the parameters (after the overrides) to this parameter file, it can be imported on the HTTP bench page.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.HttpBenchOptions.NoRun">
+            <summary>
+            Don't run a test: only show the parameters (and save them with -Save).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.HttpBenchOptions.List">
+            <summary>
+            List the modules and end points (the names to use with -Apis) and exit.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.HttpBench.HttpBenchProgram">
+            <summary>
+            HttpBench: performance tests a SysWeaver web server from the command line and writes a markdown report.
+            Syntax: HttpBench [options] [report_name]
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.HttpBenchProgram.GetSettings(SysWeaver.HttpBench.HttpBenchOptions)">
+            <summary>
+            The settings: the defaults, then the parameter file, then the options that were given.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.HttpBenchProgram.Compression(System.String,System.Boolean)">
+            <summary>
+            A compression option: "none" / "" = none, "all" / "*" = all (Accept-Encoding only), else an http compression code.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.HttpBenchProgram.SelectEndPoints(System.String,System.String[])">
+            <summary>
+            The end points of an -Apis selection (see <see cref="F:SysWeaver.HttpBench.HttpBenchOptions.Apis"/>).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.HttpBenchProgram.DefaultReportName(System.Uri)">
+            <summary>
+            "Report_[server].md": the server address without the scheme, the port separator ':' (and anything else a file name can't hold) as '_'.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.HttpBenchProgram.Stopping">
+            <summary>
+            Cancelled by the first Ctrl+C.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.HttpBenchProgram.Current">
+            <summary>
+            The run (warm up or test) that a Ctrl+C stops.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.HttpBenchProgram.Phases(SysWeaver.HttpBench.HttpBenchOptions)">
+            <summary>
+            The phases before the test: the longest wait for the server, the delay after a server that was starting, the warm up and the pause after it.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.HttpBenchProgram.ResultJson(SysWeaver.HttpBench.BenchRun,SysWeaver.HttpBench.BenchStatus,System.String,System.String)">
+            <summary>
+            The results as json: "DataType": "HttpBenchResult", the report (relative to the json file), the parameters and the totals (<see cref="T:SysWeaver.HttpBench.BenchStatus"/>).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.HttpBenchProgram.WaitForServer(SysWeaver.HttpBench.BenchServerProbe,System.Int32,System.Int32,System.Threading.CancellationToken)">
+            <summary>
+            Wait for the server to answer, then the start delay if it didn't answer at once.
+            </summary>
+            <returns>False if it didn't answer in time</returns>
+        </member>
+        <member name="M:SysWeaver.HttpBench.HttpBenchProgram.Pause(SysWeaver.HttpBench.BenchServerProbe,System.Int32,System.Threading.CancellationToken)">
+            <summary>
+            The pause after the warm up: one serverTime request per second, so the server stays active while it finishes its optimizations.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.HttpBenchProgram.RunWithProgress(SysWeaver.HttpBench.BenchRun,System.String,System.Boolean)">
+            <summary>
+            Run a warm up or a test and show its progress.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.HttpBench.HttpBenchProgram.StatusLine">
+            <summary>
+            A status line that is redrawn in place; when the output is redirected only the last text is written (by <see cref="M:SysWeaver.HttpBench.HttpBenchProgram.StatusLine.End"/>).
+            </summary>
+        </member>
+        <member name="T:SysWeaver.HttpBench.HttpBenchProgram.ProgressMeter">
+            <summary>
+            The progress of a warm up or test on one console line (redrawn in place), or a line every 10 % when the output is redirected.
+            Also sets the terminal (task bar / tab) progress indicator when the console supports it.
+            </summary>
+        </member>
+    </members>
+</doc>

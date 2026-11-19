@@ -1,0 +1,1253 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>SysWeaver.Chat</name>
+    </assembly>
+    <members>
+        <member name="T:SysWeaver.Chat.ChatBaseRequest">
+            <summary>
+            The base for any request that requires a chat id
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatBaseRequest.ChatId">
+            <summary>
+            The id of the chat session to target
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Chat.ChatCreateRequest">
+            <summary>
+            Used to create a new chat session
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatCreateRequest.Provider">
+            <summary>
+            The provider to create a session for
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatCreateRequest.Type">
+            <summary>
+            The provider specific type to create a session
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Chat.ChatDataView">
+            <summary>
+            How one entry of <see cref="F:SysWeaver.Chat.ChatMessageBody.Data"/> is shown (see <see cref="F:SysWeaver.Chat.ChatMessage.DataViews"/>, one per entry, same order).
+            All urls are relative to the chat page (normally "../" relative, like the data urls).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatDataView.Raw">
+            <summary>
+            The original asset (what the data entry is). The menu operations (copy url, store, create link, download) use this.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatDataView.Viewer">
+            <summary>
+            Optional: the url to display (ex: an extension viewer page for the asset), null to show the raw asset as is
+            (images, files to download, application pages).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatDataView.Source">
+            <summary>
+            Optional: a view of the source of the asset (ex: a read only text view of an html, svg or markdown file), the chat shows a
+            "Source" toggle (and a "View source" menu item) for it.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Chat.ChatDataViews">
+            <summary>
+            Build <see cref="T:SysWeaver.Chat.ChatDataView"/>'s from the data urls, using the extension viewers / editors of the <see cref="T:SysWeaver.MicroService.ServiceManager"/>
+            (<see cref="M:SysWeaver.MicroService.ServiceManager.GetExtensionViewer(System.String,System.String)"/>).
+            <para>
+            The heuristic (see <see cref="M:SysWeaver.Chat.ChatDataViews.GetOne(SysWeaver.MicroService.ServiceManager,System.String,System.Collections.Generic.IReadOnlyList{System.String})"/>) separates two kinds of links:
+            <list type="bullet">
+            <item><b>Files</b> (a document, a data file, a report the AI made, an upload): shown in the extension viewer of the file type when
+            one exists, with a source view (the read only extension editor) when that is something else than the viewer.</item>
+            <item><b>Live links</b> (an application page such as a table, a chart or the api explorer, an api call, anything with a query or a
+            fragment): shown as they are (the page is the view), never with a source view (the page template or the request means nothing
+            to the reader).</item>
+            </list>
+            An html page is only treated as a file when it is user / chat content (the chat files, the user storage); every other html page of
+            the site is an application page. Other file types are files unless they are an api call.
+            </para>
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatDataViews.Fill(SysWeaver.MicroService.ServiceManager,SysWeaver.Chat.ChatMessage)">
+            <summary>
+            Fill <see cref="F:SysWeaver.Chat.ChatMessage.DataViews"/> from <see cref="F:SysWeaver.Chat.ChatMessageBody.Data"/> (again when the data changed).
+            Views set by the provider itself are kept.
+            </summary>
+            <param name="manager">The service manager (extension viewers), may be null (no views).</param>
+            <param name="message">The message (may be null).</param>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatDataViews.Get(SysWeaver.MicroService.ServiceManager,System.String)">
+            <summary>
+            Get the views of a data string (";" separated urls).
+            </summary>
+            <param name="manager">The service manager (extension viewers), may be null (no views).</param>
+            <param name="data">The data urls.</param>
+            <returns>One view per entry, null if there is no data, or no entry has a viewer or a source view.</returns>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatDataViews.ChatFilePrefix">
+            <summary>
+            The site root relative prefix of the chat files (the files of a chat, ex: what the AI made, "file/AI/..." relative to the chat page).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatDataViews.ContentPrefixes(SysWeaver.MicroService.ServiceManager)">
+            <summary>
+            Get the site root relative url prefixes of user / chat content (files, not application pages): the chat files and the user storage
+            (when there is one).
+            </summary>
+            <param name="manager">The service manager (may be null).</param>
+            <returns>The prefixes (lower case, ending with "/").</returns>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatDataViews.HtmlFiles">
+            <summary>
+            Html pages: their extension viewer is only used for user / chat content (see <see cref="T:SysWeaver.Chat.ChatDataViews"/>).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatDataViews.GetOne(SysWeaver.MicroService.ServiceManager,System.String)">
+            <summary>
+            Get the view of one data url (see <see cref="M:SysWeaver.Chat.ChatDataViews.GetOne(SysWeaver.MicroService.ServiceManager,System.String,System.Collections.Generic.IReadOnlyList{System.String})"/>).
+            </summary>
+            <param name="manager">The service manager.</param>
+            <param name="raw">The raw (chat page relative) url.</param>
+            <returns>The view.</returns>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatDataViews.GetOne(SysWeaver.MicroService.ServiceManager,System.String,System.Collections.Generic.IReadOnlyList{System.String})">
+            <summary>
+            Get the view of one data url:
+            <list type="number">
+            <item>Other origins, site absolute, data: and blob: urls: the raw url only (chat page relative urls without "../" are files of the chat).</item>
+            <item>No file extension (an api call, a folder): the raw url only.</item>
+            <item>An api call (a path with an "Api" folder, ex: "../chat/Api/GetFile.json?..."): the raw url only.</item>
+            <item>Html: a live link (a query or a fragment, ex: "../explore/table.html?q=...") or an html page of the site that isn't user / chat
+            content (an application page, ex: "../chart/Chart.html") is shown as it is, without a source view.
+            User / chat content (a document) uses the extension viewer of html with "sandbox=0" (the page runs with this site's origin, so the
+            files and apis it uses work; when there is no viewer it's shown as it is) and gets a source view.</item>
+            <item>Images (svg and raster): a static image uses its extension viewer (when there is one, else it's shown as an image), a static
+            svg also gets a source view; a generated image (a query) is shown as an image.</item>
+            <item>Other files: the extension viewer (or else the read only extension editor) if one exists; a static file (no query or fragment)
+            also gets the read only extension editor as a source view, when that is something else than the viewer.</item>
+            </list>
+            </summary>
+            <param name="manager">The service manager.</param>
+            <param name="raw">The raw (chat page relative) url.</param>
+            <param name="contentPrefixes">The site root relative url prefixes of user / chat content (lower case, see <see cref="M:SysWeaver.Chat.ChatDataViews.ContentPrefixes(SysWeaver.MicroService.ServiceManager)"/>).</param>
+            <returns>The view.</returns>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatDataViews.IsApi(System.String)">
+            <summary>
+            Test if a site root relative path is an api call (it has a folder named "Api", any case, ex: "chat/Api/GetFile", "Api/Foo.json").
+            </summary>
+            <param name="path">The path (no query).</param>
+            <returns>True for an api call.</returns>
+        </member>
+        <member name="T:SysWeaver.Chat.ChatJoinRequest">
+            <summary>
+            A request to poll messages from a given chat session
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatJoinRequest.FromId">
+            <summary>
+            The first message to retrieve (inclusive), or the last message to retrieve (exclusive) if MaxCount is less than zero.
+            If from id is less or equal to zero, the total message count is added.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatJoinRequest.MaxCount">
+            <summary>
+            The maximum number of messages to retrieve.
+            If negative, messages up until the FromId ís retrieved.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Chat.ChatTranslateRequest">
+            <summary>
+            A request to translate a chat message
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatTranslateRequest.MessageId">
+            <summary>
+            Id of the message
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatJoinResponse.UserName">
+            <summary>
+            The name of the currently logged in user
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatJoinResponse.UserGuid">
+            <summary>
+            The guid of the currently logged in user
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatJoinResponse.UserStore">
+            <summary>
+            The path part of the storage that belongs to the logged in user
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatJoinResponse.Lang">
+            <summary>
+            The language currently selected by the user
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatJoinResponse.MaxTextLength">
+            <summary>
+            The maximum length of the text
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatJoinResponse.MaxDataLength">
+            <summary>
+            The maximum length of the data
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatJoinResponse.MaxDataCount">
+            <summary>
+            The maximum number of data items
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatJoinResponse.Messages">
+            <summary>
+            The messages
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatJoinResponse.CanClear">
+            <summary>
+            True if this user can clear the chat
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatJoinResponse.CanPost">
+            <summary>
+            True if this user can post messages to the chat
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatJoinResponse.DoNotConfirmClear">
+            <summary>
+            If true, the clear operation don't pop-up a confirmation
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatJoinResponse.CanRemove">
+            <summary>
+            What messages this user can remove
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatJoinResponse.Menus">
+            <summary>
+            Optional menus, 
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatJoinResponse.SpeechName">
+            <summary>
+            If this is non-null speech input will be enabled, listening to this name.
+            Every string can optionally have a prefix that is added to the spoken text, by adding a | and the text, ex:
+            "All|-" will add the "-" prefix to any spoken text.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatJoinResponse.Voices">
+            <summary>
+            Array of user to voice mappings
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatJoinResponse.EnableSpeechByDefault">
+            <summary>
+            If true, speech should be enabled by default
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatJoinResponse.AllowMarkDown">
+            <summary>
+            If true, the user may input markdown text (client is allowed to send the message with the MarkDown format).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatJoinResponse.CanStore">
+            <summary>
+            If true, the user can store images and other data (create persistant links to it).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatJoinResponse.CanTranslate">
+            <summary>
+            If true, the server supports message translation (to the users language)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatJoinResponse.CanShowProfile">
+            <summary>
+            If true, enable the menu option to show a user profile
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatJoinResponse.UploadRepo">
+            <summary>
+            If non-empty and a IUserStorage is available, files can be uploaded
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatJoinResponse.AllowPublicStore">
+            <summary>
+            If true, the user can store files in chat in a way that anyone can look at them
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatJoinResponse.#ctor">
+            <summary>
+            Create an empty response (for deserialization)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatJoinResponse.#ctor(SysWeaver.Chat.ChatSessionParams,SysWeaver.Net.HttpSession,SysWeaver.Chat.ChatMessage[],SysWeaver.Net.IUserStorageService)">
+            <summary>
+            Create a response for a user
+            </summary>
+            <param name="r">The chat session settings</param>
+            <param name="session">The session of the user (what the user is allowed to do is evaluated using its auth)</param>
+            <param name="messages">The initial messages</param>
+            <param name="storage">Optional user storage service</param>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatMenuItem.Id">
+            <summary>
+            The id used when setting a chat value.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatMenuItem.Name">
+            <summary>
+            The display name (shown in menu)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatMenuItem.Desc">
+            <summary>
+            A title (description) shown in menu when hovering.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatMenuItem.Icon">
+            <summary>
+            Icon class to use
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatMenuItem.Value">
+            <summary>
+            The value to set when this is clicked (only valid if there are no children)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatMenuItem.Auth">
+            <summary>
+            The auth required for this
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatMenuItem.Checked">
+            <summary>
+            Null for a plain item, else a check box item (true = checked): the menu shows a check mark for the current state,
+            ex: an option that is on (send a <see cref="F:SysWeaver.Chat.ChatMenuItem.Value"/> that switches it).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatMenuItem.Radio">
+            <summary>
+            With <see cref="F:SysWeaver.Chat.ChatMenuItem.Checked"/>: a radio item (one of a group of choices, the checked one is the current choice).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatMenuItem.Children">
+            <summary>
+            Any child items
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatMenuItem.GetAuthTokens">
+            <summary>
+            Get the pre-processed tokens of <see cref="F:SysWeaver.Chat.ChatMenuItem.Auth"/> (parsed once per value), for <see cref="M:SysWeaver.Auth.AuthExt.IsValid(SysWeaver.Auth.Authorization,System.Collections.Generic.IReadOnlyList{System.String})"/>.
+            </summary>
+            <returns>The same as <see cref="M:SysWeaver.Auth.Authorization.GetRequiredTokens(System.String)"/> of <see cref="F:SysWeaver.Chat.ChatMenuItem.Auth"/></returns>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatMenuItem.AuthTokens">
+            <summary>
+            The parsed <see cref="F:SysWeaver.Chat.ChatMenuItem.Auth"/> (cached per reference of the requirement string, not copied by <see cref="M:SysWeaver.Chat.ChatMenuItem.CopyTo(SysWeaver.Chat.ChatMenuItem)"/>)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatMenuItem.CopyTo(SysWeaver.Chat.ChatMenuItem)">
+            <summary>
+            Copy everything but the children
+            </summary>
+            <param name="dest"></param>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatMenuItem.Clone(System.Boolean)">
+            <summary>
+            Make a clone
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="T:SysWeaver.Chat.ChatMessage">
+            <summary>
+            A chat message
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatMessage.Id">
+            <summary>
+            The unique id of the message (unique in the chat session)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatMessage.From">
+            <summary>
+            The user/entity who posted this message
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatMessage.SetTo(System.String)">
+            <summary>
+            Set the intended user that should receive this message
+            </summary>
+            <param name="to">The authenticated users guid</param>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatMessage.IsFor(System.String)">
+            <summary>
+            Check if this message is intended for a specific user
+            </summary>
+            <param name="guid">The authenticated users guid</param>
+            <returns>True if the message is only visible to the supplied user</returns>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatMessage.GetTo">
+            <summary>
+            Get the intended user of this message
+            </summary>
+            <returns>The guid of the user that should receive the message, null or empty if it's for everyone</returns>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatMessage.To">
+            <summary>
+            If non empty, this message is only for that user
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatMessage.FromImage">
+            <summary>
+            Url to an image that represents the user/entity that posted this message
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatMessage.Time">
+            <summary>
+            The time when this message was created
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatMessage.Flags">
+            <summary>
+            Flags
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatMessage.MenuItems">
+            <summary>
+            Optional extra menu items
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatMessage.DataViews">
+            <summary>
+            Optional: how the <see cref="F:SysWeaver.Chat.ChatMessageBody.Data"/> entries are shown, one per entry in the same order (raw asset, viewer url,
+            source view url). Null when there is no data, or no entry has a viewer.
+            Filled by the <see cref="T:SysWeaver.Chat.ChatService"/> from the extension viewers when a message is sent (<see cref="M:SysWeaver.Chat.ChatDataViews.Fill(SysWeaver.MicroService.ServiceManager,SysWeaver.Chat.ChatMessage)"/>);
+            a provider may set it itself (it's then kept as is).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatMessage.DataViewsOf">
+            <summary>
+            The <see cref="F:SysWeaver.Chat.ChatMessageBody.Data"/> that <see cref="F:SysWeaver.Chat.ChatMessage.DataViews"/> was made from (null: set by the provider).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatMessage.AddFileData(System.String,System.String,System.String,System.String,System.Collections.Generic.IReadOnlyList{System.String},SysWeaver.Net.HttpServerRequest,System.String)">
+            <summary>
+            Add a file to this message from a "data:...;base64," url, or from plain text (used as UTF8 and compressed) if it isn't a base64 data url.
+            </summary>
+            <param name="mime">The mime type</param>
+            <param name="data">A base64 data url or plain text</param>
+            <param name="providerName">The provider name (part of the url)</param>
+            <param name="providerChatId">The provider chat id (part of the url)</param>
+            <param name="auth">The auth required to get the file</param>
+            <param name="request">The request (not used)</param>
+            <param name="filename">The file name</param>
+            <returns>The local url of the file</returns>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatMessage.AddFileData(System.String,System.ReadOnlyMemory{System.Byte},System.String,System.String,System.Collections.Generic.IReadOnlyList{System.String},SysWeaver.Net.HttpServerRequest,System.String)">
+            <summary>
+            Add a file from bytes, same as calling <see cref="M:SysWeaver.Chat.ChatMessage.AddFileData(System.String,System.String,System.String,System.String,System.Collections.Generic.IReadOnlyList{System.String},SysWeaver.Net.HttpServerRequest,System.String)"/> with the data url of the bytes
+            ("data:" + mime + ";base64," + base64 data) without the base64 encoding and decoding
+            </summary>
+            <param name="mime">The mime type</param>
+            <param name="data">The data (copied)</param>
+            <param name="providerName">The provider name (part of the url)</param>
+            <param name="providerChatId">The provider chat id (part of the url)</param>
+            <param name="auth">The auth required to get the file</param>
+            <param name="request">The request (not used)</param>
+            <param name="filename">The file name</param>
+            <returns>The local url of the file</returns>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatMessage.FromBase64(System.String,System.Int32)">
+            <summary>
+            Same as Convert.FromBase64String(data.Substring(start)) without the copy of the payload (if the decoded length is exact, i.e. no white space).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatMessage.AddData(System.Object,System.String,System.String,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Attach an object to this message, it can be retrieved with <see cref="M:SysWeaver.Chat.ChatMessage.GetData(System.String)"/> using the file id (the last part of the returned name).
+            </summary>
+            <param name="o">The object</param>
+            <param name="providerName">The provider name (part of the name)</param>
+            <param name="providerChatId">The provider chat id (part of the name)</param>
+            <param name="request">The request (not used)</param>
+            <returns>A name for the object (parts joined with '_')</returns>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatMessage.GetData(System.String)">
+            <summary>
+            Get an object (or file handler) that was added to this message
+            </summary>
+            <param name="url">The key of the object (the file id or the name given to <see cref="M:SysWeaver.Chat.ChatMessage.AddNamedData(System.String,System.Object)"/>)</param>
+            <returns>The object or null if unknown</returns>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatMessage.AddNamedData(System.String,System.Object)">
+            <summary>
+            Attach an object to this message using a name (an existing name is not replaced)
+            </summary>
+            <param name="name">The name (key)</param>
+            <param name="o">The object</param>
+        </member>
+        <member name="T:SysWeaver.Chat.ChatMessageBody">
+            <summary>
+            The body of a chat message
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatMessageBody.Text">
+            <summary>
+            The text
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatMessageBody.Data">
+            <summary>
+            A link to an url with some data (typically images), can use have multiple data entries using semicolon as a separator
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatMessageBody.Format">
+            <summary>
+            The format of the supplied text
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatMessageBody.Lang">
+            <summary>
+            The language used in this message.
+            A two letter ISO 639-1 language code or a three letter ISO 639-2 language code, optionally combined with a two letter ISO 3166-A2 country code using a hyphen.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatMessageFlags.FromAi">
+            <summary>
+            The message is written by an AI (an answer of an AI chat session, or a message sent as its agent).
+            The web client tags the sender with "AI", so people know that they talk to an AI (EU AI Act art. 50).
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Chat.ChatMessageFormats">
+            <summary>
+            Indicates what type the text in the message body is.
+            All messages are encoded using UTF-8.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatMessageFormats.Text">
+            <summary>
+            Plain text
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatMessageFormats.MarkDown">
+            <summary>
+            MarkDown text.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatMessageFormats.HTML">
+            <summary>
+            HTML code.
+            Only the server application may send HTML messages (clients posting HTML to <see cref="M:SysWeaver.Chat.ChatService.UserMessage(SysWeaver.Chat.ChatMessageRequest,SysWeaver.Net.HttpServerRequest)"/> are refused with 400).
+            The web front end still sanitizes it (an element / attribute allow list) before showing it.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatMessageIdRequest.MessageId">
+            <summary>
+            The id of the message
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Chat.ChatMessageRequest">
+            <summary>
+            A request to post a new message to the given chat session
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatMessageRequest.Body">
+            <summary>
+            The chat message to post
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Chat.ChatPushMessage">
+            <summary>
+            A push message with chat updates
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatPushMessage.Chat">
+            <summary>
+            The chat message that was added or updated
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Chat.ChatRemoveMessages">
+            <summary>
+            Used to indicate what type of messages a user can remove 
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatRemoveMessages.None">
+            <summary>
+            The user is not allowed to remove any messages
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatRemoveMessages.Own">
+            <summary>
+            The user is allowed to their own messages
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatRemoveMessages.Any">
+            <summary>
+            The user can remove any message
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatScopes.Global">
+            <summary>
+            A shared chat that can be accessed by anyone
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatScopes.Session">
+            <summary>
+            A chat bound to the current session
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Chat.ChatService">
+            <summary>
+            A service that handles the sync/coms between the chat client and server.
+            Multiple chat providers may be registered.
+            Services in the ServiceManager that implements the IChatProvider will be registered automatically.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatService.ToString">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Chat.ChatService.OnlyForPrefixes">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Chat.ChatService.AsyncHandler">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatService.EnumEndPoints(System.String)">
+            <summary>
+            Enumerate all enpoints
+            </summary>
+            <param name="root">If null all endpoints are returned (recursively)</param>
+            <returns>End point information</returns>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatService.#ctor(SysWeaver.MicroService.ServiceManager,SysWeaver.Chat.ChatServiceParams)">
+            <summary>
+            Create the chat service, all chat providers and link handlers in the service manager are registered (also those added later).
+            </summary>
+            <param name="manager">The service manager to find providers in</param>
+            <param name="p">Parameters, null uses the defaults</param>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatService.AllowPublicStore">
+            <summary>
+            If true, the user can store files in chat in a way that anyone can look at them
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatService.AddLinkHandler(SysWeaver.Net.IChatStoreLinkHandler)">
+            <summary>
+            Add a handler for chat store links
+            </summary>
+            <param name="h">The handler (null is ignored)</param>
+            <returns>True if added, false if null or already added</returns>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatService.RemoveLinkHandler(SysWeaver.Net.IChatStoreLinkHandler)">
+            <summary>
+            Remove a handler for chat store links
+            </summary>
+            <param name="h">The handler (null is ignored)</param>
+            <returns>True if removed, false if null or not added</returns>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatService.Dispose">
+            <summary>
+            Stop listening to services added to or removed from the service manager
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatService.AddChatProvider(SysWeaver.Chat.IChatProvider)">
+            <summary>
+            Register a chat provider (providers in the service manager are registered automatically)
+            </summary>
+            <param name="chatProvider">The provider (null is ignored)</param>
+            <returns>The controller the provider should use to push actions to clients, null if the provider was null</returns>
+            <exception cref="T:System.Exception">The provider name is empty or the provider (name) is already registered</exception>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatService.RemoveChatProvider(SysWeaver.Chat.IChatProvider)">
+            <summary>
+            Unregister a chat provider (its controller is reset by calling <see cref="M:SysWeaver.Chat.IChatProvider.OnInit(SysWeaver.Chat.IChatController)"/> with null)
+            </summary>
+            <param name="chatProvider">The provider (null is ignored)</param>
+            <exception cref="T:System.Exception">The provider isn't registered</exception>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatService.CreateNewChat(SysWeaver.Chat.ChatCreateRequest,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Call to create a new chat session for the given chat provider and chat type.
+            </summary>
+            <param name="r">The parameters for the chat create request</param>
+            <param name="context">The context for the http request (ignore)</param>
+            <returns>A new chat id for the create chat session if succeeded, else null</returns>
+            <exception cref="T:System.Exception"></exception>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatService.ClearAllMessages(System.String,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Request that the specified chat session should be cleared (restarted)
+            </summary>
+            <param name="chatId">The unique id of the chat session, as returned by the CreateNewChat method (or any static chat "channels" available)</param>
+            <param name="context">The context for the http request (ignore)</param>
+            <returns>True when the chat was cleared (never false: failures throw)</returns>
+            <exception cref="T:System.ArgumentException">Unknown chat id</exception>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">409 with the reason: the chat doesn't support being cleared</exception>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatService.RemoveMessage(SysWeaver.Chat.ChatMessageIdRequest,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Remove a single message from a chat.
+            </summary>
+            <param name="msgRequest">The parameters for the post message request</param>
+            <param name="context">The context for the http request (ignore)</param>
+            <returns>True when the message was removed (never false: failures throw)</returns>
+            <exception cref="T:System.ArgumentException">Unknown chat id</exception>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">409 with the reason: the message could not be removed</exception>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatService.GetCurrentId(System.String,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Get the current message id for the specified chat session.
+            </summary>
+            <param name="chatId">The unique id of the chat session, as returned by the CreateNewChat method (or any static chat "channels" available)</param>
+            <param name="context">The context for the http request (ignore)</param>
+            <returns>The last message id in the chat session, or 0 if no messages are available</returns>
+            <exception cref="T:System.ArgumentException"></exception>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatService.Join(SysWeaver.Chat.ChatJoinRequest,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Get messages from the specified chat session.
+            </summary>
+            <param name="joinRequest">The parameters for the poll messages request</param>
+            <param name="context">The context for the http request (ignore)</param>
+            <returns>Array of messages, can be null or empty</returns>
+            <exception cref="T:System.ArgumentException"></exception>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatService.FillDataViews(SysWeaver.Chat.ChatMessage[])">
+            <summary>
+            Fill the data views of messages (how their attachments are shown, see <see cref="T:SysWeaver.Chat.ChatDataViews"/>).
+            </summary>
+            <param name="messages">The messages (may be null).</param>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatService.GetMessages(SysWeaver.Chat.ChatJoinRequest,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Get messages from the specified chat session.
+            </summary>
+            <param name="msgRequest">The parameters for the poll messages request</param>
+            <param name="context">The context for the http request (ignore)</param>
+            <returns>Array of messages, can be null or empty</returns>
+            <exception cref="T:System.ArgumentException"></exception>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatService.Translate(SysWeaver.Chat.ChatTranslateRequest,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Translate a message to the users selected language
+            </summary>
+            <param name="translateRequest"></param>
+            <param name="context"></param>
+            <returns>The translated message</returns>
+            <exception cref="T:System.ArgumentException"></exception>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatService.TranslatorUnavailable(System.Exception,System.Int32@)">
+            <summary>
+            Test if an exception of the translator means that the translator itself is unavailable (not a mistake of the request, not a client that went away).
+            </summary>
+            <param name="ex">The exception</param>
+            <param name="status">The status to answer: 503 if the translator is busy (429 / 503), unreachable or timed out, else 502 (it failed or refused,
+            ex: rejected the credentials of this server)</param>
+            <returns>True if the translator is unavailable</returns>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatService.UserMessage(SysWeaver.Chat.ChatMessageRequest,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Post a message to the specified chat session
+            </summary>
+            <param name="msgRequest">The parameters for the post message request</param>
+            <param name="context">The context for the http request (ignore)</param>
+            <returns>True when the message was posted (never false: failures throw)</returns>
+            <exception cref="T:System.ArgumentException">Unknown chat id</exception>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">400: the message format is not allowed; 409 with the reason: the chat refused the message</exception>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatService.SetValue(SysWeaver.Chat.ChatValueRequest,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Set a chat value
+            </summary>
+            <param name="request">The parameters for the request</param>
+            <param name="context">The context for the http request (ignore)</param>
+            <returns>True when the value was set (never false: failures throw)</returns>
+            <exception cref="T:System.ArgumentException">Unknown chat id</exception>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">409 with the reason: the chat refused to set the value</exception>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatService.StoreFile(SysWeaver.Chat.ChatStore,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Persist a file to the user's storage an return a link that can be shared.
+            </summary>
+            <param name="request">What and how to store</param>
+            <param name="context">The context for the http request (ignore)</param>
+            <returns>URL to the stored file, this linked can be shared</returns>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatService.GetStoredFiles(SysWeaver.Data.TableDataRequest,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Get all stored files
+            </summary>
+            <param name="r">Optional filters</param>
+            <param name="context"></param>
+            <returns></returns>
+            <exception cref="T:SysWeaver.Net.NoUserLoggedInException"></exception>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatService.GetLocalUrl(System.String,System.String)">
+            <summary>
+            Get the local url (relative to the server prefix) of an absolute url on this server.
+            The url may omit the port of the prefix (ex: "https://host/a" for the prefix "https://host:8443/").
+            </summary>
+            <param name="prefix">The server prefix (ex: "https://host:8443/")</param>
+            <param name="url">An absolute url</param>
+            <returns>The url relative to the prefix</returns>
+            <exception cref="T:System.Exception">The url isn't on this server</exception>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatService.StoreLink(SysWeaver.Chat.ChatStore,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Create a persistent link to some URL, save it and any files required to the user's storage.
+            When a user want to store something, this is what you want unless the user explicitly instructs you to save it as a file.
+            </summary>
+            <param name="request">What and how to store</param>
+            <param name="context">The context for the http request (ignore)</param>
+            <returns>A public URL that can be shared</returns>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatService.GetStoredLinks(SysWeaver.Data.TableDataRequest,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Get all stored links
+            </summary>
+            <param name="r">Optional filters</param>
+            <param name="context"></param>
+            <returns></returns>
+            <exception cref="T:SysWeaver.Net.NoUserLoggedInException"></exception>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatService.GetInputLanguages(SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Get a list of the supported input languages, with localized meta information.
+            </summary>
+            <returns>The list of supported languages.
+            null = No language support</returns>
+        </member>
+        <member name="T:SysWeaver.Chat.ChatStore">
+            <summary>
+            Details on what to store
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatStore.Url">
+            <summary>
+            The local URL to store
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatStore.Scope">
+            <summary>
+            The access scope of the stored data.
+            Always assume that the user wants a public scope, unless they state that it's private or if they wan't to share it with other users (use protected).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatServiceParams.AllowPublicStore">
+            <summary>
+            If true, the user can store files in chat in a way that anyone can look at them
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatServiceParams.InputLanguages">
+            <summary>
+            Array of input languages that are allowed (can be selected).
+            If null, the setup in the http server is used.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Chat.ChatSessionParams">
+            <summary>
+            Settings and access rules of a chat session (room).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatSessionParams.Auth">
+            <summary>
+            Auth required to join (comma separated tokens), null to allow joining anonymously, empty for any logged in user, '-' for no one.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatSessionParams.PostAuth">
+            <summary>
+            Auth required to post a message, null to use Auth
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatSessionParams.ClearAuth">
+            <summary>
+            Auth required to clear the chat room.
+            Use '-' to disable everyone from clearing it.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatSessionParams.RemoveOwn">
+            <summary>
+            True to enable removal of messages sent by yourself
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatSessionParams.RemoveAnyAuth">
+            <summary>
+            Auth required to remove any chat message.
+            Use '-' to disable everyone from removing a chat message.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatSessionParams.Name">
+            <summary>
+            Name of the room
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatSessionParams.SpeechName">
+            <summary>
+            If non-null, continous speech input will be enabled, listening to this keyword.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatSessionParams.EnableSpeechByDefault">
+            <summary>
+            If true, enable speech by default
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatSessionParams.AllowUserMarkDown">
+            <summary>
+            If true, the user may input markdown text (client is allowed to send the message with the MarkDown format).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatSessionParams.AllowStore">
+            <summary>
+            Allow storing files and links on the server (requires a UserStore).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatSessionParams.CanTranslate">
+            <summary>
+            If true, the server supports message translation (to the users language)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatSessionParams.CanShowProfile">
+            <summary>
+            If true, enable the menu option to show a user profile
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatSessionParams.OnlyShowProfileIfPostIsAllowed">
+            <summary>
+            If true, only enable the show porfile option if the user may post new messages
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatSessionParams.UploadRepo">
+            <summary>
+            If non-empty and a IUserStorage is available, files can be uploaded
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatSessionParams.MaxDataCount">
+            <summary>
+            The maximum number of data items
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatSessionParams.CanJoin(SysWeaver.Auth.Authorization)">
+            <summary>
+            Check if the supplied auth (of the user making the request) can join this session
+            </summary>
+            <param name="auth">The auth of the user making the request</param>
+            <returns>True if the user should be able to join</returns>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatSessionParams.CanPost(SysWeaver.Auth.Authorization)">
+            <summary>
+            Check if the supplied auth (of the user making the request) can post messages to this session
+            </summary>
+            <param name="auth">The auth of the user making the request</param>
+            <returns>True if the user should be able to post messages</returns>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatSessionParams.CanClear(SysWeaver.Auth.Authorization)">
+            <summary>
+            Check if the supplied auth (of the user making the request) can clear this session
+            </summary>
+            <param name="auth">The auth of the user making the request</param>
+            <returns>True if the user should be able to clear the session</returns>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatSessionParams.CanRemove(SysWeaver.Auth.Authorization)">
+            <summary>
+            Check what type of messages that the supplied auth (of the user making the request) can remove
+            </summary>
+            <param name="auth">The auth of the user making the request</param>
+            <returns>What type of messages that the user should be able to remove from this session</returns>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatTools.GetAnonymousUsername(SysWeaver.Net.HttpSession)">
+            <summary>
+            Get an anonymous user name for the given session
+            </summary>
+            <param name="session"></param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatTools.GetUsername(SysWeaver.Net.HttpSession)">
+            <summary>
+            Get the user name from a session
+            </summary>
+            <param name="session"></param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatTools.TrimDataTable(SysWeaver.Data.TableData)">
+            <summary>
+            Remove data from a table that an AI doesn't care about
+            </summary>
+            <param name="d">The table to trim</param>
+            <returns>The same table, but trimmed</returns>
+        </member>
+        <member name="M:SysWeaver.Chat.ChatTools.TrimDataTable``1(SysWeaver.Data.TypedTableData{``0})">
+            <summary>
+            Remove data from a table that an AI doesn't care about
+            </summary>
+            <param name="d">The table to trim</param>
+            <returns>The same table, but trimmed</returns>
+        </member>
+        <member name="T:SysWeaver.Chat.ChatValueRequest">
+            <summary>
+            The data required to set a new chat value
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatValueRequest.Key">
+            <summary>
+            The key to set a value for
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatValueRequest.Value">
+            <summary>
+            The key to set a value for
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatValueRequest.Id">
+            <summary>
+            Message Id (0 = Global command)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatVoice.Name">
+            <summary>
+            The user name that will be spoken with this voice
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatVoice.Voice">
+            <summary>
+            The preferred voice
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatVoice.Language">
+            <summary>
+            The BCP 47 code of the desired language.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatVoice.Male">
+            <summary>
+            True if a male voice is preferred over a female.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatVoice.Rate">
+            <summary>
+            [0.1, 10] Rate (speed) of the voice
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatVoice.Pitch">
+            <summary>
+            [0, 2] Pitch of the voice
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Chat.IChatController.PostMessage(System.String,SysWeaver.Chat.ChatMessage,SysWeaver.Net.HttpSession,SysWeaver.Chat.ChatScopes)">
+            <summary>
+            Post a message to the given chat session
+            </summary>
+            <param name="providerChatId">The unique id of the chat session, as returned by the CreateNewChat method (or any static chat "channels" available)</param>
+            <param name="message">The message to send to clients listening to this chat session</param>
+            <param name="session">The current session</param>
+            <param name="scope">The scope of this chat</param>
+        </member>
+        <member name="M:SysWeaver.Chat.IChatController.ReplaceMessage(System.String,SysWeaver.Chat.ChatMessage,SysWeaver.Net.HttpSession,SysWeaver.Chat.ChatScopes)">
+            <summary>
+            Replace / update and already existing message in the given chat session
+            </summary>
+            <param name="providerChatId">The unique id of the chat session, as returned by the CreateNewChat method (or any static chat "channels" available)</param>
+            <param name="message">The message to update/replace to clients listening to this chat session (the message Id must already exist)</param>
+            <param name="session">The current session</param>
+            <param name="scope">The scope of this chat</param>
+        </member>
+        <member name="M:SysWeaver.Chat.IChatController.RemoveMessage(System.String,System.Int64,SysWeaver.Net.HttpSession,SysWeaver.Chat.ChatScopes)">
+            <summary>
+            Remove an existing message in the given chat session
+            </summary>
+            <param name="providerChatId">The unique id of the chat session, as returned by the CreateNewChat method (or any static chat "channels" available)</param>
+            <param name="messageId">The id of a message that already exist</param>
+            <param name="session">The current session</param>
+            <param name="scope">The scope of this chat</param>
+        </member>
+        <member name="M:SysWeaver.Chat.IChatController.ClearAllMessages(System.String,SysWeaver.Net.HttpSession,SysWeaver.Chat.ChatScopes)">
+            <summary>
+            Remoe all existing messages in the given chat session
+            </summary>
+            <param name="providerChatId">The unique id of the chat session, as returned by the CreateNewChat method (or any static chat "channels" available)</param>
+            <param name="session">The current session</param>
+            <param name="scope">The scope of this chat</param>
+        </member>
+        <member name="T:SysWeaver.Chat.IChatProvider">
+            <summary>
+            Implementations of this interface may be used by the chat service to provide a front end for a chat
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Chat.IChatProvider.Name">
+            <summary>
+            Unique name for this chat provider
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Chat.IChatProvider.CreateNewChat(System.String,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            If the provider supports user creation of chat sessions, implement this function, return null if not supported
+            </summary>
+            <param name="type">Type of that the user wants to create</param>
+            <param name="request">The http request of the callee</param>
+            <returns>A unique id for the created chat session</returns>
+        </member>
+        <member name="M:SysWeaver.Chat.IChatProvider.Clear(System.String,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            If the provider support that a user clears the chat (starts over), implement this function, else return false.
+            </summary>
+            <param name="providerChatId">The unique id of the chat session, as returned by the CreateNewChat method (or any static chat "channels" available)</param>
+            <param name="request">The http request of the callee</param>
+            <returns>True if chat was cleared, else false</returns>
+        </member>
+        <member name="M:SysWeaver.Chat.IChatProvider.RemoveMessage(System.String,System.Int64,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Delete a chat message (must be allowed to do so)
+            </summary>
+            <param name="providerChatId">The unique id of the chat session, as returned by the CreateNewChat method (or any static chat "channels" available)</param>
+            <param name="messageId">The id of the message to delete</param>
+            <param name="request">The http request of the callee</param>
+            <returns>True if message was deleted</returns>
+        </member>
+        <member name="M:SysWeaver.Chat.IChatProvider.GetCurrentId(System.String,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Get the id of the last (current) message for the given chat session (id's should increment by one for every new message in a chat session).
+            The first message should have id one.
+            </summary>
+            <param name="providerChatId">The unique id of the chat session, as returned by the CreateNewChat method (or any static chat "channels" available)</param>
+            <param name="request">The http request of the callee</param>
+            <returns>The current id or zero if no messages exist in the session</returns>
+        </member>
+        <member name="M:SysWeaver.Chat.IChatProvider.Join(System.String,SysWeaver.Net.HttpServerRequest,System.Int64,System.Int32)">
+            <summary>
+            Join a chat session, returns the session settings of the user together with the first messages
+            </summary>
+            <param name="providerChatId">The unique id of the chat session, as returned by the CreateNewChat method (or any static chat "channels" available)</param>
+            <param name="request">The http request of the callee</param>
+            <param name="pivotId">The first message to retrieve (inclusive), if maxCount is negative this is the last message to retrieve (exclusive).
+            If equal or less than zero, get messages from the end</param>
+            <param name="maxCount">The maximum number of messages to retrieve, if negative retrieve message up until the pivot message id</param>
+            <returns>The join response (session information and the messages)</returns>
+        </member>
+        <member name="M:SysWeaver.Chat.IChatProvider.GetMessages(System.String,SysWeaver.Net.HttpServerRequest,System.Int64,System.Int32)">
+            <summary>
+            Get messages from the given chat session.
+            </summary>
+            <param name="providerChatId">The unique id of the chat session, as returned by the CreateNewChat method (or any static chat "channels" available)</param>
+            <param name="request">The http request of the callee</param>
+            <param name="pivotId">The first message to retrieve (inclusive), if maxCount is negative this is the last message to retrieve (exclusive).
+            If equal or less than zero, get messages from the end</param>
+            <param name="maxCount">The maximum number of messages to retrieve, if negative retrieve message up until the pivot message id</param>
+            <returns>An array of chat messages, can be empty or null if no new data exists</returns>
+        </member>
+        <member name="M:SysWeaver.Chat.IChatProvider.UserMessage(System.String,SysWeaver.Net.HttpServerRequest,SysWeaver.Chat.ChatMessageBody)">
+            <summary>
+            Post a user message to the given chat session. 
+            </summary>
+            <param name="providerChatId">The unique id of the chat session, as returned by the CreateNewChat method (or any static chat "channels" available)</param>
+            <param name="request">The http request of the callee</param>
+            <param name="message">The message to post</param>
+            <returns>True if successful</returns>
+        </member>
+        <member name="M:SysWeaver.Chat.IChatProvider.SetValue(System.String,SysWeaver.Net.HttpServerRequest,System.Int64,System.String,System.String)">
+            <summary>
+            Set a chat variable
+            </summary>
+            <param name="providerChatId">The unique id of the chat session, as returned by the CreateNewChat method (or any static chat "channels" available)</param>
+            <param name="request">The http request of the callee</param>
+            <param name="messageId">The ID of the message, 0 for none messge specific values</param>
+            <param name="key">The key of the value</param>
+            <param name="value">The new value</param>
+            <returns>True if successful</returns>
+        </member>
+        <member name="M:SysWeaver.Chat.IChatProvider.OnInit(SysWeaver.Chat.IChatController)">
+            <summary>
+            Called once when the chat service registers the instance.
+            The supplied controller is used to push actions back to clients.
+            </summary>
+            <param name="controller">The controller to use for pushing actions to clients</param>
+        </member>
+        <member name="M:SysWeaver.Chat.IChatProvider.GetChatMessage(System.String,System.Int64,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Get the chat message for the given message id, return null if it no longer exists
+            </summary>
+            <param name="providerChatId">The unique id of the chat session, as returned by the CreateNewChat method (or any static chat "channels" available)</param>
+            <param name="messageId">The id of the message to retrieve</param>
+            <param name="request">The http request of the callee</param>
+            <returns>The requested message or null</returns>
+        </member>
+        <member name="T:SysWeaver.Chat.SimpleChatRoom">
+            <summary>
+            A chat room of the <see cref="T:SysWeaver.Chat.SimpleChatService"/>, the <see cref="F:SysWeaver.Chat.ChatSessionParams.Name"/> is the room name.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Chat.SimpleChatParams">
+            <summary>
+            Parameters for the <see cref="T:SysWeaver.Chat.SimpleChatService"/>
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.SimpleChatParams.AllowUserCreatedChat">
+            <summary>
+            Not used by <see cref="T:SysWeaver.Chat.SimpleChatService"/> (it doesn't support user created chats).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.SimpleChatParams.Rooms">
+            <summary>
+            The chat rooms (or sessions), rooms with an empty name are ignored.
+            Access to each room is defined by the <see cref="T:SysWeaver.Chat.ChatSessionParams"/> members (ex: <see cref="F:SysWeaver.Chat.ChatSessionParams.Auth"/>).
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Chat.SimpleChatService">
+            <summary>
+            A simple in memory chat provider with a fixed set of chat rooms (messages are lost on restart).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Chat.SimpleChatService.ToString">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Chat.SimpleChatService.#ctor(SysWeaver.IMessageHost,SysWeaver.Chat.SimpleChatParams)">
+            <summary>
+            Create a simple chat service
+            </summary>
+            <param name="msg">Optional message host, used to log the rooms that are added</param>
+            <param name="p">Parameters, null uses the defaults</param>
+        </member>
+        <member name="M:SysWeaver.Chat.SimpleChatService.OnInit(SysWeaver.Chat.IChatController)">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Chat.SimpleChatService.Name">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Chat.SimpleChatService.CreateNewChat(System.String,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Not supported, always throws.
+            </summary>
+            <exception cref="T:System.NotImplementedException">Always</exception>
+        </member>
+        <member name="M:SysWeaver.Chat.SimpleChatService.Clear(System.String,SysWeaver.Net.HttpServerRequest)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Chat.SimpleChatService.RemoveMessage(System.String,System.Int64,SysWeaver.Net.HttpServerRequest)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Chat.SimpleChatService.GetCurrentId(System.String,SysWeaver.Net.HttpServerRequest)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Chat.SimpleChatService.GetMessages(System.String,SysWeaver.Net.HttpServerRequest,System.Int64,System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Chat.SimpleChatService.Join(System.String,SysWeaver.Net.HttpServerRequest,System.Int64,System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Chat.SimpleChatService.GetChatMessage(System.String,System.Int64,SysWeaver.Net.HttpServerRequest)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Chat.SimpleChatService.UserMessage(System.String,SysWeaver.Net.HttpServerRequest,SysWeaver.Chat.ChatMessageBody)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Chat.SimpleChatService.SetValue(System.String,SysWeaver.Net.HttpServerRequest,System.Int64,System.String,System.String)">
+            <summary>
+            Not supported, always throws (no variables exist).
+            </summary>
+            <exception cref="T:System.Exception">Always (or if the room is unknown / not accessible)</exception>
+        </member>
+    </members>
+</doc>

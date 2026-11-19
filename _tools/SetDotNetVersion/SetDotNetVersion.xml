@@ -1,0 +1,77 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>SetDotNetVersion</name>
+    </assembly>
+    <members>
+        <member name="F:SetDotNetVersion.SetDotNetVersionProgram.ExitSuccess">
+            <summary>
+            Exit code: success (also returned when help was requested).
+            </summary>
+        </member>
+        <member name="F:SetDotNetVersion.SetDotNetVersionProgram.ExitGenericError">
+            <summary>
+            Exit code: generic error, an exception (ex: the folder doesn't exist).
+            </summary>
+        </member>
+        <member name="F:SetDotNetVersion.SetDotNetVersionProgram.ExitInvalidArguments">
+            <summary>
+            Exit code: invalid command line (no arguments, unknown option, no folder etc).
+            </summary>
+        </member>
+        <member name="F:SetDotNetVersion.SetDotNetVersionProgram.ExitFileFailed">
+            <summary>
+            Exit code: one or more files couldn't be processed (the others are).
+            </summary>
+        </member>
+        <member name="F:SetDotNetVersion.SetDotNetVersionProgram.Frameworks">
+            <summary>
+            The supported target frameworks (the option is "-" + the name, ex: "-net10.0" or "-net10").
+            </summary>
+        </member>
+        <member name="F:SetDotNetVersion.SetDotNetVersionProgram.RuntimeAsyncMinMajor">
+            <summary>
+            The first major version that supports runtime async.
+            </summary>
+        </member>
+        <member name="F:SetDotNetVersion.SetDotNetVersionProgram.SkipFolders">
+            <summary>
+            Folders that are never searched.
+            </summary>
+        </member>
+        <member name="F:SetDotNetVersion.SetDotNetVersionProgram.FileMasks">
+            <summary>
+            Files to process: project files, shared MSBuild files (ex: Directory.Build.props) and publish profiles.
+            </summary>
+        </member>
+        <member name="M:SetDotNetVersion.SetDotNetVersionProgram.DetectEncoding(System.Byte[],System.Int32@)">
+            <summary>
+            Detect the encoding using the BOM, defaults to UTF-8 (without a BOM).
+            </summary>
+        </member>
+        <member name="M:SetDotNetVersion.SetDotNetVersionProgram.TryParseTfm(System.String,System.Int32@,System.String@)">
+            <summary>
+            Parse a .NET (5+) target framework moniker, ex: "net10.0" or "net10.0-windows".
+            </summary>
+            <param name="tfm">The target framework moniker</param>
+            <param name="major">The major version</param>
+            <param name="suffix">The platform suffix including the dash (ex: "-windows") or an empty string</param>
+            <returns>True if this is a .NET 5+ target framework</returns>
+        </member>
+        <member name="F:SetDotNetVersion.SetDotNetVersionProgram.RuntimeAsyncGroupRegex">
+            <summary>
+            A property group that only contains runtime async (as added by this tool), including the line and any preceding empty line.
+            </summary>
+        </member>
+        <member name="F:SetDotNetVersion.SetDotNetVersionProgram.RuntimeAsyncLineRegex">
+            <summary>
+            A Features element that only contains runtime async, including the line.
+            </summary>
+        </member>
+        <member name="M:SetDotNetVersion.SetDotNetVersionProgram.GetChildIndent(System.String,System.Int32,System.String)">
+            <summary>
+            Get the indentation of the line at some position (the target framework element), falls back to the group indent + 2 spaces.
+            </summary>
+        </member>
+    </members>
+</doc>

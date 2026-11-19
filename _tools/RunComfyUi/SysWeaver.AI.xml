@@ -1,0 +1,3643 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>SysWeaver.AI</name>
+    </assembly>
+    <members>
+        <member name="T:SysWeaver.AI.AiChatSessionBase">
+            <summary>
+            API agnostic base class for chat sessions.
+            Handles menus, commands, appearance, messages, system prompt building etc.
+            Derived classes implements the actual API calls.
+            </summary>
+        </member>
+        <member name="E:SysWeaver.AI.AiChatSessionBase.OnUserMessage">
+            <inheritdoc />
+        </member>
+        <member name="E:SysWeaver.AI.AiChatSessionBase.OnAiResponseCompleted">
+            <inheritdoc />
+        </member>
+        <member name="P:SysWeaver.AI.AiChatSessionBase.ThinkMessage">
+            <inheritdoc />
+        </member>
+        <member name="F:SysWeaver.AI.AiChatSessionBase.ChatLock">
+            <summary>
+            Optional lock used to limit the number of concurrent requests to the API
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiChatSessionBase.#ctor(System.Boolean,System.String,System.Boolean,System.Boolean,System.Nullable{System.Boolean},SysWeaver.AI.IAiToolCache,System.String,System.String,SysWeaver.PerfMonitor,SysWeaver.AsyncLock,SysWeaver.AI.IAiMemory,System.String)">
+            <summary>
+            Create a chat session
+            </summary>
+            <param name="isPrivate">If true, this chat is user only</param>
+            <param name="model">The model used</param>
+            <param name="haveTemperature">True if the model supports setting the temperature</param>
+            <param name="supportSystemRole">True if the model supports a system prompt (system role)</param>
+            <param name="supportParallelToolCalls">True if the model supports parallel tool calls, null if unknown</param>
+            <param name="toolCache">The tool cache</param>
+            <param name="joinAuth">Comma separated list of required auth tokens</param>
+            <param name="clearAuth">Auth required to clear the chat session</param>
+            <param name="monitor">Optional performance monitor</param>
+            <param name="chatLock">Optional lock used to limit the number of concurrent requests to the API</param>
+            <param name="memory">Optional memory implementation</param>
+            <param name="agentIcon">The filename of the agent icon (in the icon root), ex: "openai.svg"</param>
+        </member>
+        <member name="P:SysWeaver.AI.AiChatSessionBase.ChatId">
+            <inheritdoc />
+        </member>
+        <member name="M:SysWeaver.AI.AiChatSessionBase.ToString">
+            <inheritdoc />
+        </member>
+        <member name="M:SysWeaver.AI.AiChatSessionBase.AddCommand(System.String,System.Func{System.String,SysWeaver.AI.IAiChatSession,SysWeaver.Net.HttpServerRequest,System.Threading.Tasks.Task{SysWeaver.Chat.ChatMessage}},System.String,System.String,System.String[])">
+            <inheritdoc />
+        </member>
+        <member name="M:SysWeaver.AI.AiChatSessionBase.TryGetToolCommand(System.String,SysWeaver.AI.AiCommand@)">
+            <inheritdoc />
+        </member>
+        <member name="M:SysWeaver.AI.AiChatSessionBase.AddToMenu(System.Boolean,SysWeaver.Chat.ChatMenuItem,SysWeaver.AI.IAiChatSession.SetVarDel,SysWeaver.Chat.ChatMenuItem)">
+            <inheritdoc />
+        </member>
+        <member name="M:SysWeaver.AI.AiChatSessionBase.SetValue(SysWeaver.Chat.IChatController,System.String,SysWeaver.Chat.ChatScopes,SysWeaver.Net.HttpSession,System.Int64,System.String,System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:SysWeaver.AI.AiChatSessionBase.GetMenu(SysWeaver.Net.HttpSession,System.Boolean,System.Collections.Generic.IReadOnlySet{System.String})">
+            <inheritdoc />
+        </member>
+        <member name="P:SysWeaver.AI.AiChatSessionBase.IsPrivate">
+            <inheritdoc />
+        </member>
+        <member name="P:SysWeaver.AI.AiChatSessionBase.AgentName">
+            <summary>
+            Name used for AI response messages
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.AiChatSessionBase.AgentSpeechName">
+            <inheritdoc />
+        </member>
+        <member name="P:SysWeaver.AI.AiChatSessionBase.ErrorName">
+            <summary>
+            Name used for error messages
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.AiChatSessionBase.AgentImageUrl">
+            <summary>
+            Url to image used for AI response messages
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.AiChatSessionBase.ErrorImageUrl">
+            <summary>
+            Url to image used for error messages
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.AiChatSessionBase.DebugImageUrl">
+            <summary>
+            Url to image used for debug messages
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.AiChatSessionBase.EnableSpeechByDefault">
+            <summary>
+            If true, speech should be enabled by default
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.AiChatSessionBase.AllowUserMarkDown">
+            <summary>
+            If true, the user may input markdown text (client is allowed to send the message with the MarkDown format).
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.AiChatSessionBase.AllowStore">
+            <summary>
+            Allow storing files and links on the server (requires a UserStore).
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.AiChatSessionBase.CanTranslate">
+            <summary>
+            If true, the server supports message translation (to the users language)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.AiChatSessionBase.CanShowProfile">
+            <summary>
+            If true, enable the menu option to show a user profile
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.AiChatSessionBase.CanUpload">
+            <summary>
+            If true a user may upload files
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.AiChatSessionBase.WorkingImageUrl">
+            <summary>
+            The image to use when the AI is working
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.AiChatSessionBase.SpeechNames">
+            <inheritdoc />
+        </member>
+        <member name="P:SysWeaver.AI.AiChatSessionBase.Voices">
+            <inheritdoc />
+        </member>
+        <member name="P:SysWeaver.AI.AiChatSessionBase.GetSystemPrompt">
+            <summary>
+            The function used to get the system prompt
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.AiChatSessionBase.FormatUserMessage">
+            <summary>
+            The function used to format a user message.
+            Parameters are: session, user name, original message.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiChatSessionBase.BuildSystemPrompt(SysWeaver.Net.HttpSession)">
+            <summary>
+            Build the complete system prompt (user supplied prompt, memory and REST API instructions)
+            </summary>
+            <param name="s">The http session</param>
+            <returns>The system prompt</returns>
+        </member>
+        <member name="P:SysWeaver.AI.AiChatSessionBase.ChatQueryLock">
+            <inheritdoc />
+        </member>
+        <member name="M:SysWeaver.AI.AiChatSessionBase.Complete(System.String,SysWeaver.Net.HttpServerRequest,SysWeaver.AI.AiDebugMessage,System.String,System.Func{System.String,System.Int64,System.Int64,System.Threading.Tasks.Task})">
+            <summary>
+            Add a user message to the conversation and get the AI response (tools are executed as needed).
+            </summary>
+            <param name="text">The user message</param>
+            <param name="request">The request</param>
+            <param name="debug">An optional obejct used to track tool calls etc</param>
+            <param name="from">Optional name of the user</param>
+            <param name="onUsage">An optional function to call when token in/out usage is changed</param>
+            <returns>The AI response</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiChatSessionBase.CompleteUpdate(System.String,System.Collections.Generic.IReadOnlyList{System.ValueTuple{SysWeaver.AI.AiContentPart,System.String}},SysWeaver.Net.HttpServerRequest,System.Func{System.String,System.String,System.Threading.Tasks.Task},System.Func{System.String,System.String,System.String,System.String},System.Func{System.Object,System.String},System.Action{System.String},SysWeaver.AI.AiDebugMessage,System.String,System.Func{System.String,System.Int64,System.Int64,System.Threading.Tasks.Task})">
+            <summary>
+            Add a user message to the conversation and stream the AI response (tools are executed as needed).
+            </summary>
+            <returns>null if successful, else an error message</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiChatSessionBase.ClearApiMessages">
+            <summary>
+            Clear the conversation history sent to the API
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiChatSessionBase.WriteConversation(System.Text.Json.Utf8JsonWriter)">
+            <summary>
+            Write the tools and messages (including the system prompt) as json properties (the containing object is written by the caller).
+            </summary>
+            <param name="writer">The writer to use</param>
+        </member>
+        <member name="M:SysWeaver.AI.AiChatSessionBase.SetToolContext(SysWeaver.Net.HttpServerRequest,System.Text.StringBuilder,System.Func{System.String,System.String,System.String,System.String},System.Func{System.Object,System.String})">
+            <summary>
+            Set the tool context of a request (used by tools to add links, files, data etc to the response message).
+            </summary>
+            <param name="request">The request</param>
+            <param name="link">Links added by tools are appended here (separated by ';')</param>
+            <param name="saveFile">Function used to save a file (mime, data, filename) returns an url</param>
+            <param name="saveData">Function used to save some data, returns an id</param>
+        </member>
+        <member name="M:SysWeaver.AI.AiChatSessionBase.AppendAttachmentUrls(System.String,System.Collections.Generic.IReadOnlyList{System.ValueTuple{SysWeaver.AI.AiContentPart,System.String}})">
+            <summary>
+            Append the urls of any attachments to the user message text (so that the AI can refer to them)
+            </summary>
+            <param name="text">The user message</param>
+            <param name="extraData">The attachments</param>
+            <returns>The text to send to the AI</returns>
+        </member>
+        <member name="P:SysWeaver.AI.AiChatSessionBase.AutoRemoveToolCalls">
+            <inheritdoc />
+        </member>
+        <member name="P:SysWeaver.AI.AiChatSessionBase.JoinAuth">
+            <inheritdoc />
+        </member>
+        <member name="P:SysWeaver.AI.AiChatSessionBase.ClearAuth">
+            <inheritdoc />
+        </member>
+        <member name="P:SysWeaver.AI.AiChatSessionBase.Messages">
+            <inheritdoc />
+        </member>
+        <member name="P:SysWeaver.AI.AiChatSessionBase.MessageLookup">
+            <inheritdoc />
+        </member>
+        <member name="P:SysWeaver.AI.AiChatSessionBase.MsgId">
+            <inheritdoc />
+        </member>
+        <member name="M:SysWeaver.AI.AiChatSessionBase.NextMsgId">
+            <summary>
+            Get the next (new) message id
+            </summary>
+            <returns>The new message id</returns>
+        </member>
+        <member name="T:SysWeaver.AI.AiCommand">
+            <summary>
+            A chat command (ex: "/tools") that a user can run in a chat session
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiCommand.ToString">
+            <inheritdoc />
+        </member>
+        <member name="F:SysWeaver.AI.AiCommand.Name">
+            <summary>
+            The name of the command
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiCommand.Auth">
+            <summary>
+            The auth required to run the command
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiCommand.Fn">
+            <summary>
+            The function that runs the command (arguments, session, request), returns the message to show
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiCommand.Args">
+            <summary>
+            A description of the arguments (ex: "&lt;tool name&gt;"), null if none
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiCommand.Desc">
+            <summary>
+            A description of what the command does
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiCommand.#ctor(System.String,System.Collections.Generic.IReadOnlyList{System.String},System.Func{System.String,SysWeaver.AI.IAiChatSession,SysWeaver.Net.HttpServerRequest,System.Threading.Tasks.Task{SysWeaver.Chat.ChatMessage}},System.String,System.String)">
+            <summary>
+            Create a command
+            </summary>
+            <param name="name">The name of the command</param>
+            <param name="auth">The auth required to run the command</param>
+            <param name="fn">The function that runs the command</param>
+            <param name="args">A description of the arguments, null if none</param>
+            <param name="desc">A description of what the command does</param>
+        </member>
+        <member name="T:SysWeaver.AI.AiCompletionRoles">
+            <summary>
+            The role of a message in a completion request
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiCompletionRoles.User">
+            <summary>
+            A message from the user
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiCompletionRoles.Assistant">
+            <summary>
+            A message from the model (can contain tool calls)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiCompletionRoles.Tool">
+            <summary>
+            The result of a tool call
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.AiCompletionToolChoices">
+            <summary>
+            How the model should use the tools of a completion request
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiCompletionToolChoices.Auto">
+            <summary>
+            The model decides if a tool should be called
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiCompletionToolChoices.None">
+            <summary>
+            The model may not call any tools
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiCompletionToolChoices.Required">
+            <summary>
+            The model must call at least one tool
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.AiCompletionFinishReasons">
+            <summary>
+            Why the model stopped generating
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiCompletionFinishReasons.Stop">
+            <summary>
+            The model completed the response
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiCompletionFinishReasons.Length">
+            <summary>
+            The maximum number of output tokens was reached
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiCompletionFinishReasons.ToolCalls">
+            <summary>
+            The model wants the caller to execute some tool calls
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.AiCompletionToolCall">
+            <summary>
+            A tool call made by the model, the caller executes it and adds the result as a Tool message
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiCompletionToolCall.ToString">
+            <inheritdoc />
+        </member>
+        <member name="F:SysWeaver.AI.AiCompletionToolCall.Id">
+            <summary>
+            A unique id of the call (used to match the result)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiCompletionToolCall.Name">
+            <summary>
+            The name of the tool (function)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiCompletionToolCall.Arguments">
+            <summary>
+            The arguments as a json object
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiCompletionToolCall.Signature">
+            <summary>
+            Optional opaque provider specific data of the call (ex: a Gemini thought signature, base64 encoded), can be null.
+            Send it back unchanged with the call (in the assistant message) in the next request, some models require it to continue after a tool call.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.AiCompletionMessage">
+            <summary>
+            A message in a completion request
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiCompletionMessage.ToString">
+            <inheritdoc />
+        </member>
+        <member name="F:SysWeaver.AI.AiCompletionMessage.Role">
+            <summary>
+            The role of the message
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiCompletionMessage.Text">
+            <summary>
+            The text content of the message (can be null for assistant messages with tool calls)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiCompletionMessage.Name">
+            <summary>
+            Optional name of the participant (user messages) or the tool (tool messages)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiCompletionMessage.ToolCalls">
+            <summary>
+            Tool calls made by the model (assistant messages only)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiCompletionMessage.ToolCallId">
+            <summary>
+            The id of the tool call this is the result of (tool messages only)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiCompletionMessage.Parts">
+            <summary>
+            Optional attachments (images, files) of user messages and tool messages (ex: a screenshot returned by a tool), can be null.
+            Text parts are added after the Text.
+            Providers that can't put images (or files) into a tool result add them as a user message right after the tool results
+            (or use whatever the API supports best, ex: multimodal function responses).
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.AiCompletionRequest">
+            <summary>
+            An API agnostic (stateless) completion request, the whole conversation is supplied.
+            Tools are defined by the caller, tool calls are returned to the caller (not executed).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiCompletionRequest.Model">
+            <summary>
+            The model to use, null or empty for the service default
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiCompletionRequest.SystemPrompt">
+            <summary>
+            The system prompt (instructions), can be null
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiCompletionRequest.Messages">
+            <summary>
+            The conversation
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiCompletionRequest.Tools">
+            <summary>
+            Tools that the model can call, can be null
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiCompletionRequest.ToolChoice">
+            <summary>
+            How the model should use the tools
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiCompletionRequest.Temperature">
+            <summary>
+            The temperature, null for the service default
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiCompletionRequest.MaxTokens">
+            <summary>
+            The maximum number of output tokens, null for the service default
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiCompletionRequest.Reasoning">
+            <summary>
+            The reasoning effort, null for the service default
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiCompletionRequest.Cancel">
+            <summary>
+            Can be used to cancel the request
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.AiCompletionResult">
+            <summary>
+            The result of a completion request
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiCompletionResult.ToString">
+            <inheritdoc />
+        </member>
+        <member name="F:SysWeaver.AI.AiCompletionResult.Model">
+            <summary>
+            The model that was used
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiCompletionResult.Text">
+            <summary>
+            The text response (can be empty if the model only made tool calls)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiCompletionResult.ToolCalls">
+            <summary>
+            Tool calls made by the model, null if none
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiCompletionResult.FinishReason">
+            <summary>
+            Why the model stopped generating
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiCompletionResult.InputTokens">
+            <summary>
+            Number of input (prompt) tokens used
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiCompletionResult.CachedTokens">
+            <summary>
+            Number of the input tokens that were read from the provider's prompt cache (included in InputTokens, 0 if unknown)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiCompletionResult.OutputTokens">
+            <summary>
+            Number of output tokens used
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.AiCompletionException">
+            <summary>
+            Thrown by a completion when the request is invalid
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiCompletionException.#ctor(System.String,System.String,System.Int32)">
+            <summary>
+            Create a completion exception
+            </summary>
+            <param name="message">The message</param>
+            <param name="code">An optional error code, ex: "context_length_exceeded"</param>
+            <param name="statusCode">The http status code to use if the error is returned in a http response</param>
+        </member>
+        <member name="F:SysWeaver.AI.AiCompletionException.Code">
+            <summary>
+            An optional error code, ex: "context_length_exceeded"
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiCompletionException.StatusCode">
+            <summary>
+            The http status code to use if the error is returned in a http response
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.AiContentPartKinds">
+            <summary>
+            The kind of content of an <see cref="T:SysWeaver.AI.AiContentPart"/>
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiContentPartKinds.Text">
+            <summary>
+            Some text
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiContentPartKinds.Image">
+            <summary>
+            An image (bytes or an uri)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiContentPartKinds.File">
+            <summary>
+            A file (bytes or an uri)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.AiContentPart">
+            <summary>
+            An API agnostic message content part (typically used for attachments)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiContentPart.ToString">
+            <inheritdoc />
+        </member>
+        <member name="P:SysWeaver.AI.AiContentPart.Kind">
+            <summary>
+            The kind of content
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.AiContentPart.Text">
+            <summary>
+            The text (for text parts)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.AiContentPart.Data">
+            <summary>
+            The binary data (for image and file parts), null if an uri is used
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.AiContentPart.MimeType">
+            <summary>
+            The mime type of the data (for image and file parts)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.AiContentPart.Uri">
+            <summary>
+            An uri to the data (for image and file parts), null if the data is supplied
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.AiContentPart.Filename">
+            <summary>
+            An optional filename (for file parts)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.AiContentPart.HighDetail">
+            <summary>
+            For images, true to request high detail processing (if supported by the API)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiContentPart.CreateTextPart(System.String)">
+            <summary>
+            Create a text part
+            </summary>
+            <param name="text">The text</param>
+            <returns>The part</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiContentPart.CreateImagePart(System.BinaryData,System.String,System.Boolean)">
+            <summary>
+            Create an image part from bytes
+            </summary>
+            <param name="data">The image data</param>
+            <param name="mimeType">The mime type of the image</param>
+            <param name="highDetail">True to request high detail processing (if supported by the API)</param>
+            <returns>The part</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiContentPart.CreateImagePart(System.Uri,System.Boolean)">
+            <summary>
+            Create an image part from an uri
+            </summary>
+            <param name="uri">The uri of the image</param>
+            <param name="highDetail">True to request high detail processing (if supported by the API)</param>
+            <returns>The part</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiContentPart.CreateFilePart(System.BinaryData,System.String,System.String)">
+            <summary>
+            Create a file part from bytes
+            </summary>
+            <param name="data">The file data</param>
+            <param name="mimeType">The mime type of the file</param>
+            <param name="filename">The name of the file</param>
+            <returns>The part</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiContentPart.CreateFilePart(System.Uri,System.String)">
+            <summary>
+            Create a file part from an uri
+            </summary>
+            <param name="uri">The uri of the file</param>
+            <param name="mimeType">The mime type of the file, if known</param>
+            <returns>The part</returns>
+        </member>
+        <member name="T:SysWeaver.AI.AiData">
+            <summary>
+            Parameters for some data to be serverd from an url
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiData.MimeType">
+            <summary>
+            The mime of the data.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiData.Data">
+            <summary>
+            The data as an UTF-8 encoded string.
+            Binary data can be suplied using a base64 data uri, for instance:
+            "data:text/plain;base64,SGVsbG8h".
+            The mime encoded in the data uri is ignored, the mime used will be the one in MimeType
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiData.Title">
+            <summary>
+            The title of this data, used as filename etc.
+            Max length is 64.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.AiDebugInfo">
+            <summary>
+            What function call debugging to output
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiDebugInfo.Stats">
+            <summary>
+            Output some basic stats about the AI completion.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiDebugInfo.Overview">
+            <summary>
+            Output the function names and if they was successful.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiDebugInfo.Parameters">
+            <summary>
+            Output function calls, the parameters supplied by OpenAI (as a json blob).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiDebugInfo.Details">
+            <summary>
+            Output function calls, the parameters supplied by OpenAI (as a json blob) and the results supplied back to OpenAI.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.AiCallInstance">
+            <summary>
+            A single tool call made by the AI (for debug information)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiCallInstance.Tool">
+            <summary>
+            The tool that was called, null if the tool was unknown
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiCallInstance.Args">
+            <summary>
+            The arguments (json) the AI supplied
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiCallInstance.Start">
+            <summary>
+            When the call started (UTC)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiCallInstance.End">
+            <summary>
+            When the call ended (UTC)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiCallInstance.Ret">
+            <summary>
+            The value returned by the tool
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiCallInstance.Ex">
+            <summary>
+            The exception thrown by the call, null if it succeeded
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiCallInstance.UnknownName">
+            <summary>
+            The name the AI used, if the tool was unknown
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiCallInstance.#ctor(SysWeaver.AI.AiTool,System.BinaryData,System.DateTime,System.DateTime,System.String)">
+            <summary>
+            Create info about a successful call
+            </summary>
+            <param name="tool">The tool that was called</param>
+            <param name="args">The arguments the AI supplied</param>
+            <param name="start">When the call started (UTC)</param>
+            <param name="end">When the call ended (UTC)</param>
+            <param name="ret">The value returned by the tool</param>
+        </member>
+        <member name="M:SysWeaver.AI.AiCallInstance.#ctor(SysWeaver.AI.AiTool,System.BinaryData,System.DateTime,System.DateTime,System.Exception,System.String)">
+            <summary>
+            Create info about a failed call
+            </summary>
+            <param name="tool">The tool that was called, null if unknown</param>
+            <param name="args">The arguments the AI supplied</param>
+            <param name="start">When the call started (UTC)</param>
+            <param name="end">When the call ended (UTC)</param>
+            <param name="ex">The exception thrown by the call</param>
+            <param name="unknownName">The name the AI used, if the tool was unknown</param>
+        </member>
+        <member name="T:SysWeaver.AI.AiDebugBatch">
+            <summary>
+            A batch of tool calls made by the AI in a single response (for debug information)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiDebugBatch.Start">
+            <summary>
+            When the batch started (UTC)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.AiDebugBatch.End">
+            <summary>
+            When the batch ended (UTC)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiDebugBatch.#ctor(System.DateTime)">
+            <summary>
+            Create a batch
+            </summary>
+            <param name="start">When the batch started (UTC)</param>
+        </member>
+        <member name="T:SysWeaver.AI.AiDebugMessage">
+            <summary>
+            Collects debug information (tool calls, timing and token usage) of an AI response
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiDebugMessage.Took">
+            <summary>
+            The total time the response took
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiDebugMessage.InputTokenCount">
+            <summary>
+            The number of input tokens used
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiDebugMessage.OutputTokenCount">
+            <summary>
+            The number of output tokens used
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiDebugMessage.Get(SysWeaver.AI.AiDebugInfo)">
+            <summary>
+            Get the debug information as markdown text
+            </summary>
+            <param name="debug">What information to include</param>
+            <returns>The markdown text</returns>
+        </member>
+        <member name="P:SysWeaver.AI.AiDebugMessage.HaveInfo">
+            <summary>
+            True if any tool calls have been recorded
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.AiImageAspectRatios">
+            <summary>
+            The aspect ratio of a generated image
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiImageAspectRatios.Auto">
+            <summary>
+            Let the image model choose aspect ratio
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiImageAspectRatios.Square">
+            <summary>
+            1:1 aspect ratio
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiImageAspectRatios.Portrait">
+            <summary>
+            Typically 3:4 aspect ratio
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiImageAspectRatios.Landscape">
+            <summary>
+            Typically 4:3 aspect ratio
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiImageAspectRatios.TallPortrait">
+            <summary>
+            Typically 9:16 aspect ratio
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiImageAspectRatios.WideLandscape">
+            <summary>
+            Typically 16:9 aspect ratio
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.AiImageBackgrounds">
+            <summary>
+            The background type of a generated image
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiImageBackgrounds.Auto">
+            <summary>
+            Automatically select background depending on context
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiImageBackgrounds.Opaque">
+            <summary>
+            An opaque image
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiImageBackgrounds.Transparent">
+            <summary>
+            A semi-transparent image
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.AiImageModel">
+            <summary>
+            Information about an image generation model available from an AI service
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiImageModel.ToString">
+            <inheritdoc />
+        </member>
+        <member name="F:SysWeaver.AI.AiImageModel.Id">
+            <summary>
+            The model id, this is the value to use as the image model, ex: "dall-e-3"
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiImageModel.Name">
+            <summary>
+            A human readable name of the model (if available)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiImageModel.Description">
+            <summary>
+            A description of the model (if available)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiImageModel.Owner">
+            <summary>
+            The organization that owns the model (if available)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiImageModel.Created">
+            <summary>
+            When the model was created (if available)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.AiImages">
+            <summary>
+            A predefined set of images that can be shown and used in projects.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiImages.ApplicationLogo">
+            <summary>
+            The logo of the application that hosts the chat session as an SVG file (this not a company logo).
+            Don't use unless the user expclitly asks for the application logo.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiImages.ApplicationIcon">
+            <summary>
+            The icon of the application that hosts the chat session as an SVG file (this not a company logo).
+            Don't use unless the user expclitly asks for the application icon.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiImages.AgentLogo">
+            <summary>
+            The avatar image of the AI agent.
+            This is the image that is shown as YOU, the agent.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiImages.AngrySmiley">
+            <summary>
+            An animated smiley emoji that is angry.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiImages.HappySmiley">
+            <summary>
+            An animated smiley emoji that is happy, laughing until crying.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiImages.LoveSmiley">
+            <summary>
+            An animated smiley emoji that is loveful, hearts popping out of it's eyes.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiImages.SadSmiley">
+            <summary>
+            An animated smiley emoji that is sad.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiImages.TeasingSmiley">
+            <summary>
+            An animated smiley emoji that is teasing.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.AiImageTools">
+            <summary>
+            Helpers for AI image generation
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiImageTools.AddPngInfo(System.ReadOnlyMemory{System.Byte},System.String,System.String,System.String,System.String)">
+            <summary>
+            Add information chunks (creation time, software, source, description, author and title) to a png image
+            </summary>
+            <param name="png">The png image data</param>
+            <param name="source">The source of the image, typically the model and options used</param>
+            <param name="prompt">The prompt used to generate the image</param>
+            <param name="title">Optional title of the image</param>
+            <param name="author">Optional author of the image (user that created it)</param>
+            <returns>The new png data</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiImageTools.GetImageSize(System.Int32,System.Int32,System.Int32,System.Int32)">
+            <summary>
+            Get the size to use for an image, using a default size if a size isn't specified.
+            If only the width or height is specified, the other one is computed using the aspect ratio of the default size.
+            </summary>
+            <param name="width">The requested width, 0 or less to use the default</param>
+            <param name="height">The requested height, 0 or less to use the default</param>
+            <param name="defaultWidth">The default width (1280 if 0 or less)</param>
+            <param name="defaultHeight">The default height (720 if 0 or less)</param>
+            <returns>The width and height to use (always positive)</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiImageTools.GetImageMime(System.ReadOnlySpan{System.Byte})">
+            <summary>
+            Get the mime type of some image data from its signature (png, jpeg, gif, webp and bmp)
+            </summary>
+            <param name="data">The image data (or the start of it)</param>
+            <returns>The mime type, ex: "image/png", or null if unknown</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiImageTools.GetSourceImage(SysWeaver.MemoryFile)">
+            <summary>
+            Get the data of a source image (ex: for image editing), loading it if it's a link.
+            </summary>
+            <param name="image">The image, either with data (if Mime is null it's detected from the data) or a link (Data is null) where Name is an "http://", "https://" or "data:" url</param>
+            <returns>A file with the data, the mime type (never null) and a file name with an extension (never null)</returns>
+            <exception cref="T:System.ArgumentNullException">The image is null</exception>
+            <exception cref="T:System.ArgumentException">The image is empty or not a supported link</exception>
+        </member>
+        <member name="M:SysWeaver.AI.AiImageTools.CombinePrompt(System.String,System.String)">
+            <summary>
+            Combine a prompt and a negative prompt, for models that doesn't support negative prompts
+            </summary>
+            <param name="prompt">The prompt</param>
+            <param name="negativePrompt">The negative prompt (things to avoid), null or blank for none</param>
+            <returns>The prompt (with the things to avoid appended)</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiImageTools.GetImageName(System.String,System.String)">
+            <summary>
+            Get a file name for a generated image, ex: "gpt-image-2_20261118_203300.png"
+            </summary>
+            <param name="model">The model used</param>
+            <param name="ext">The extension (including the '.')</param>
+            <returns>A file name</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiImageTools.LoadImage(System.String,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Load an image from an url
+            </summary>
+            <param name="s">The url to the image, can be:
+            - A data uri, "data:image/png;base64,xxxxx".
+            - A fully qualified uri, "http://www.xxx.com/xxx/xxx.png".
+            - A relative uri (relative to the request), "../data/xxx.png".
+            </param>
+            <param name="request">The request (used for relative uri's)</param>
+            <returns>The image file</returns>
+        </member>
+        <member name="T:SysWeaver.AI.AiLlmModel">
+            <summary>
+            Information about a large language model (chat / text generation) available from an AI service
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiLlmModel.ToString">
+            <inheritdoc />
+        </member>
+        <member name="F:SysWeaver.AI.AiLlmModel.Id">
+            <summary>
+            The model id, this is the value to use as the model in a session, ex: "gpt-4.1"
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiLlmModel.Name">
+            <summary>
+            A human readable name of the model (if available)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiLlmModel.Description">
+            <summary>
+            A description of the model (if available)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiLlmModel.Owner">
+            <summary>
+            The organization that owns the model (if available)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiLlmModel.Created">
+            <summary>
+            When the model was created (if available)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiLlmModel.InputTokenLimit">
+            <summary>
+            The maximum number of input tokens (if available)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiLlmModel.OutputTokenLimit">
+            <summary>
+            The maximum number of output tokens (if available)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiLlmModel.CanReason">
+            <summary>
+            True if the model supports thinking (reasoning), null if unknown
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.AiLogo">
+            <summary>
+            Parameters used to generate a logo for some text string, typically a company-, user- or product-name.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiLogo.Icon">
+            <summary>
+            Set to true to generate an icon instead of a logo
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiLogo.Name">
+            <summary>
+            The name to generate a logo or icon for.
+            Company, user, product name.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiLogo.Abbrevation">
+            <summary>
+            An optional abbrevation, typically 2 letters.
+            If omitted, it's generated from the name (typically using the uppercase letters).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiLogo.Seed">
+            <summary>
+            A random seed, different seed gives different appearances
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiLogo.Title">
+            <summary>
+            The title of this image, used as filename etc.
+            Max length is 64.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.AiMemoryAdd">
+            <summary>
+            Parameters for adding a memory
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiMemoryAdd.Desc">
+            <summary>
+            A short textual description of this memory.
+            This is listed in the system prompt.
+            Max length is 128.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.AiMemoryEntry">
+            <summary>
+            The header of a memory (everything but the value)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiMemoryEntry.ToString">
+            <inheritdoc />
+        </member>
+        <member name="F:SysWeaver.AI.AiMemoryEntry.Key">
+            <summary>
+            The unique key of the memory
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiMemoryEntry.Last">
+            <summary>
+            When the memory was last accessed (UTC ticks)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiMemoryEntry.Desc">
+            <summary>
+            A short description of the memory
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.AiMemoryLimits">
+            <summary>
+            Size limits of the AI memory
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiMemoryLimits.MaxRecords">
+            <summary>
+            The maximum number of memories per user
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiMemoryLimits.MaxKeyLen">
+            <summary>
+            The maximum length of a key
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiMemoryLimits.MaxDescLen">
+            <summary>
+            The maximum length of a description
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiMemoryLimits.MaxContentLen">
+            <summary>
+            The maximum length of a value
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.AiMemorySet">
+            <summary>
+            Parameters for setting the value of a memory
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiMemorySet.Key">
+            <summary>
+            The unique key used to manage this memory.
+            This is listed in the system prompt.
+            Max length is 32.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiMemorySet.Value">
+            <summary>
+            The value of this memory, typically MD text.
+            Max length is 4096.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.AiPromptMinimizer">
+             <summary>
+             Rule based minimizer of English LLM prompts, see <see cref="M:SysWeaver.AI.AiTools.MinimizePrompt(System.String)"/>.
+            
+             Works in three steps:
+             1. Everything that must survive verbatim (code, quotes, templates, tags, identifiers, urls, examples..) is swapped for an opaque slot.
+             2. The remaining prose is rewritten by a set of rules, that are all written to fail safe, when in doubt the text is left as is.
+             3. The slots are swapped back.
+            
+             Things that are deliberately never removed, since doing so can change what the LLM is told to do:
+             - Negations and exceptions (not, never, no, without, except, unless..).
+             - Modals and conditions (must, should, may, only, always, if, when..).
+             - Words that restrict or are manner of a command (just, only, very, clearly, simply at the end of a sentence, literally, honestly..).
+             - UPPERCASE words (emphasis).
+            
+             Rewrites target tokens rather than chars, so abbreviations (e.g. "for example" to "e.g.") and vowel dropping is not used, as they usually tokenize worse.
+             This is a separate class so that the compiled regular expressions aren't created until they are needed.
+             </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiPromptMinimizer.Cache">
+            <summary>
+            Prompt => minimized prompt, the same prompts tends to be used repeatedly.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiPromptMinimizer.Minimize(System.String)">
+            <summary>
+            Minimize a prompt, see <see cref="M:SysWeaver.AI.AiTools.MinimizePrompt(System.String)"/>
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiPromptMinimizer.SlotStart">
+            <summary>
+            Start of a slot, followed by the decimal slot index and then SlotEnd.
+            Uses the unicode private use area, the chars are not regarded as word chars by the regular expressions.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiPromptMinimizer.CapNext">
+            <summary>
+            Inserted when a sentence start was removed, the next letter should be capitalized
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.AiPromptMinimizer.Slots">
+            <summary>
+            Stores protected text. Identical text share a slot, so that repeated sentences can be detected even if they contains protected text.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiPromptMinimizer.Slots.Restore(System.Text.StringBuilder,System.String)">
+            <summary>
+            A slot can contain other slots (a token containing inline code), the nesting is finite since a slot can only reference previous slots
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiPromptMinimizer.Dedent(System.String)">
+            <summary>
+            Removes the indentation shared by all lines, typically the result of a prompt in a multi line string in source code.
+            Relative indentation is kept (it can define nesting).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiPromptMinimizer.LiteralLine">
+            <summary>
+            Table rows and indented code (but not nested list items)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiPromptMinimizer.LiteralLabel">
+            <summary>
+            Lines starting with a label that (usually) is followed by literal data.
+            If there is nothing after the label, the lines up until the next blank line are protected.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiPromptMinimizer.Tag">
+            <summary>
+            A xml like tag, the attributes can't contain a tag start so scanning is bounded.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiPromptMinimizer.LiteralTags">
+            <summary>
+            The content of these tags are data, not instructions, so they are protected along with the tags.
+            The content of other tags (ex: instructions) is compressed, only the tags themselves are protected.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiPromptMinimizer.ProtectBlocks(System.String,SysWeaver.AI.AiPromptMinimizer.Slots)">
+            <summary>
+            Protect multi line spans and things that can contain any other syntax: Code fences, inline code, data tags, tables, labeled data.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiPromptMinimizer.FindLineLiteral(System.String,System.Int32)">
+            <summary>
+            Get the end of a literal starting at the start of a line, or -1 if there is none
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiPromptMinimizer.FindFenceEnd(System.String,System.Int32)">
+            <summary>
+            Get the end of a code fence starting on this line, or -1 if this isn't a code fence. An unterminated fence continues to the end of the text.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiPromptMinimizer.FindInlineCodeEnd(System.String,System.Int32,System.Int32)">
+            <summary>
+            Get the end of a inline code span, closed by a backtick run of the same length on the same line, or -1 if it isn't closed.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiPromptMinimizer.ProtectInline(System.String,SysWeaver.AI.AiPromptMinimizer.Slots)">
+            <summary>
+            Protect single tokens and delimited spans in what's left after <see cref="M:SysWeaver.AI.AiPromptMinimizer.ProtectBlocks(System.String,SysWeaver.AI.AiPromptMinimizer.Slots)"/>
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiPromptMinimizer.FindBracketPairs(System.String)">
+            <summary>
+            Find matching curly and square brackets (independent of each other, since prose can be unbalanced).
+            Done in one pass, so that many unbalanced brackets can't cause quadratic behaviour.
+            Double quoted strings on one line inside of brackets are skipped, so that json with a bracket in a string works.
+            </summary>
+            <returns>Index of the start bracket => index of the end bracket</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiPromptMinimizer.FindQuoteEnd(System.String,System.Int32)">
+            <summary>
+            Get the end of a quote that must be closed on the same line, or -1 if it isn't closed
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiPromptMinimizer.ProtectToken(System.String,System.Int32,System.Text.StringBuilder,SysWeaver.AI.AiPromptMinimizer.Slots)">
+            <summary>
+            Handle one whitespace delimited token, protecting it if it isn't a plain word.
+            </summary>
+            <returns>Index of the next char to process</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiPromptMinimizer.IsTechnical(System.ReadOnlySpan{System.Char})">
+            <summary>
+            Check if a token is anything else than a plain word, such as: identifiers (snake_case, camelCase, PascalCase), UPPERCASE, urls, paths, file names, versions, command line flags, numbers with units, and/or.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiPromptMinimizer.Phrases">
+            <summary>
+            Verbose phrase => shorter phrase with the same meaning. An empty string removes the phrase.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiPromptMinimizer.PhraseRule">
+            <summary>
+            Matches any phrase in <see cref="F:SysWeaver.AI.AiPromptMinimizer.Phrases"/>, longest first
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiPromptMinimizer.AsWellAsRule">
+            <summary>
+            "as well as" is the same as "and", except when comparing (ex: "do it as well as possible")
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiPromptMinimizer.RequestRule">
+            <summary>
+            A polite way to ask for something at the start of a sentence, the question becomes a command.
+            A plain "Can you" is left as is, it can be a real question about capabilities.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiPromptMinimizer.MustRule">
+            <summary>
+            Different ways of saying must at the start of a sentence, not valid elsewhere (ex: "if you need to").
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiPromptMinimizer.FillerRule">
+            <summary>
+            Words without meaning, anywhere. Words that can be a command (ex: "answer honestly", "take it literally") or restrict one (ex: "just the number") must not be here.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiPromptMinimizer.PleaseRule">
+            <summary>
+            The word please, unless it is a verb (ex: "that will please customers")
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiPromptMinimizer.LeadRule">
+            <summary>
+            Words without meaning at the start of a sentence, a new sentence is already an addition.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiPromptMinimizer.GreetingRule">
+            <summary>
+            A greeting at the very start of the prompt
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiPromptMinimizer.ThanksRule">
+            <summary>
+            A complete sentence just thanking
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiPromptMinimizer.ArticleRule">
+            <summary>
+            Articles can be removed before a lower case word, except:
+            - Before a word that shows that it's not used as an article (ex: "a or b", "a is 5").
+            - In idioms where the meaning changes (ex: "a few" vs "few", "a day", "in a row", "by the way").
+            - When used as a name (ex: "option a").
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiPromptMinimizer.RewriteProse(System.String)">
+            <summary>
+            Rewrite the prose. Order matters, phrases that contain words that are removed by a later rule must be handled first.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiPromptMinimizer.KeepCase(System.Text.RegularExpressions.Match,System.String)">
+            <summary>
+            Get the replacement of a match that started with a capital letter (the first letter of what ends up there is capitalized later)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiPromptMinimizer.ApplyCapitalization(System.String)">
+            <summary>
+            Process the markers inserted by <see cref="M:SysWeaver.AI.AiPromptMinimizer.KeepCase(System.Text.RegularExpressions.Match,System.String)"/>
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiPromptMinimizer.MinRepeatWords">
+            <summary>
+            Minimum number of words in a sentence for it to be considered a repetition, repeating short texts can be intentional or data (ex: "Yes. Yes.")
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiPromptMinimizer.DropRepeats(System.String)">
+            <summary>
+            Drop lines and sentences that are exact copies of the one before it, this does not lose any instruction.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.AiFunctionCall">
+            <summary>
+            A function call requested by the AI model
+            </summary>
+            <param name="Name">The name of the function (tool)</param>
+            <param name="Arguments">The arguments as a json object (as supplied by the AI)</param>
+        </member>
+        <member name="M:SysWeaver.AI.AiFunctionCall.#ctor(System.String,System.BinaryData)">
+            <summary>
+            A function call requested by the AI model
+            </summary>
+            <param name="Name">The name of the function (tool)</param>
+            <param name="Arguments">The arguments as a json object (as supplied by the AI)</param>
+        </member>
+        <member name="P:SysWeaver.AI.AiFunctionCall.Name">
+            <summary>The name of the function (tool)</summary>
+        </member>
+        <member name="P:SysWeaver.AI.AiFunctionCall.Arguments">
+            <summary>The arguments as a json object (as supplied by the AI)</summary>
+        </member>
+        <member name="T:SysWeaver.AI.AiQuerySessionBase">
+            <summary>
+            API agnostic base class for query (and chat) sessions.
+            Handles tool registration, tool invocation, the memory tools and some common model properties.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiQuerySessionBase.#ctor(System.String,System.Boolean,System.Boolean,System.Nullable{System.Boolean},SysWeaver.AI.IAiToolCache,SysWeaver.PerfMonitor,SysWeaver.AI.IAiMemory)">
+            <summary>
+            Create a session
+            </summary>
+            <param name="model">The model name</param>
+            <param name="haveTemperature">True if the model supports setting the temperature</param>
+            <param name="supportSystemRole">True if the model supports a system role (else the system prompt is sent as a user message)</param>
+            <param name="supportParallelToolCalls">True if the model supports parallel tool calls, false if not, null if unknown or not applicable</param>
+            <param name="toolCache">Optional cache for tool results</param>
+            <param name="monitor">Optional performance monitor</param>
+            <param name="memory">Optional AI memory, if set the memory tools are added to the session</param>
+        </member>
+        <member name="F:SysWeaver.AI.AiQuerySessionBase.Memory">
+            <summary>
+            The AI memory used by this session, null if none
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiQuerySessionBase.AddMemory(SysWeaver.AI.AiMemoryAdd,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Add a memory entry for the current user.
+            A maximum of 64 entries can be added.
+            If the memory alredy exist, it's overwritten with this memory.
+            The memory stored for the key "Global" is availabe in the system prompt at all times.
+            </summary>
+            <param name="data">Data to add</param>
+            <param name="context"></param>
+            <returns>True if successful</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiQuerySessionBase.GetMemory(System.String,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Get some memory associated with the current user
+            </summary>
+            <param name="key">The memory key</param>
+            <param name="context"></param>
+            <returns>The saved memory</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiQuerySessionBase.RemoveMemory(System.String,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Remove some stored memory associated with the current user
+            </summary>
+            <param name="key"></param>
+            <param name="context"></param>
+            <returns>True if successful</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiQuerySessionBase.SetMemory(SysWeaver.AI.AiMemorySet,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Update / set some memoru associated with the current user
+            </summary>
+            <param name="data">Data to update / set</param>
+            <param name="context"></param>
+            <returns>True if successful</returns>
+        </member>
+        <member name="F:SysWeaver.AI.AiQuerySessionBase.Monitor">
+            <summary>
+            The performance monitor, null if none
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiQuerySessionBase.ToolCache">
+            <summary>
+            The cache used to get tools, null if none
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.AiQuerySessionBase.Model">
+            <summary>
+            The model name
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.AiQuerySessionBase.HaveTemperature">
+            <summary>
+            True if the model supports setting the temperature
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.AiQuerySessionBase.SupportSystemRole">
+            <summary>
+            True if the model supports a system role (else the system prompt is sent as a user message)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.AiQuerySessionBase.SupportParallelToolCalls">
+            <summary>
+            True if the model supports parallel tool calls, false if not, null if unknown or not applicable
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.AiQuerySessionBase.Temperature">
+            <summary>
+            Temperature of the AI model, lower is more consistent and less random [0, 2] (the default of this class is 0.2).
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.AiQuerySessionBase.SystemPrompt">
+            <summary>
+            The system prompt
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.AiQuerySessionBase.ALlTools">
+            <inheritdoc />
+        </member>
+        <member name="M:SysWeaver.AI.AiQuerySessionBase.GetTools">
+            <summary>
+            Get all tools in this session (cached until a tool is added)
+            </summary>
+            <returns>All tools</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiQuerySessionBase.OnToolsChanged">
+            <summary>
+            Called whenever a tool is added (to invalidate cached API options etc)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiQuerySessionBase.AddTool(System.String,System.String)">
+            <summary>
+            Add an API endpoint that the AI can use in this session
+            </summary>
+            <param name="apiName">Name of tha api local url: ex: "Api/auth/GetUser"</param>
+            <param name="fn">An optional function name (as shown to the AI).
+            null - will use the underlaying method name (or as specified by the OpenAiToolName attribute) in combination with the declaring type name.
+            "" - will user the full apiName, but with '/' replaced by '_'.
+            </param>
+            <returns>True if the tool was added</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiQuerySessionBase.AddRegistredTool(System.String)">
+            <summary>
+            Add a tool from some registered tool
+            </summary>
+            <param name="name">The name of the tool</param>
+            <returns>True if the tool was added</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiQuerySessionBase.AddTool(System.Object,System.Reflection.MethodInfo,System.String,SysWeaver.PerfMonitor,System.String,System.String,System.String)">
+            <summary>
+            Add a method that the AI can use in this session.
+            </summary>
+            <param name="instance">Object instance</param>
+            <param name="method">The method</param>
+            <param name="fn">Optional function name, default will be instance type name _ method name</param>
+            <param name="perfMonitor">An optional performance monitor</param>
+            <param name="defaultAuth">The default auth to use if there is no WebApiAuthAttribute on the method</param>
+            <param name="defaultCachedCompression">The default compression when there is no WebApiCompressionAttribute on the method</param>
+            <param name="defaultCompression">The default compression for uncached cached methods when there is no WebApiCompressionAttribute on the method</param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiQuerySessionBase.AiCalls(System.Collections.Generic.IReadOnlyList{SysWeaver.AI.AiFunctionCall},SysWeaver.Net.HttpServerRequest,SysWeaver.AI.AiDebugMessage,System.Action{System.String})">
+            <summary>
+            Execute a batch of function calls (in parallel)
+            </summary>
+            <param name="calls">The calls to perform</param>
+            <param name="request">The request</param>
+            <param name="debugMsg">Optional debug tracking</param>
+            <param name="onToolCalls">Optional callback with a summary (icons) of the tools being called</param>
+            <returns>The output for each call (in the same order as the input), to be sent back to the AI</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiQuerySessionBase.Query(System.String,SysWeaver.AI.AiDebugMessage,System.Func{System.String,System.Int64,System.Int64,System.Threading.Tasks.Task},System.Collections.Generic.IReadOnlyList{System.ValueTuple{SysWeaver.AI.AiContentPart,System.String}})">
+            <summary>
+            Perform a query (the query is not added to any conversation history)
+            </summary>
+            <param name="text">The query text</param>
+            <param name="debug">An optional obejct used to track tool calls etc</param>
+            <param name="onUsage">An optional function to call when token in/out usage is changed</param>
+            <param name="extraData">optional attachements</param>
+            <returns>The Ai response, typically MD encoded text</returns>
+        </member>
+        <member name="T:SysWeaver.AI.AiRestCall">
+            <summary>
+            Parameters for the REST API validation tool
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiRestCall.ApiUrl">
+            <summary>
+            The absolute url of the REST API end point.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiRestCall.PostJsonData">
+            <summary>
+            The data to send to the Api, encoded as a json string.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.AiServiceBase">
+            <summary>
+            API agnostic base class for AI services.
+            Implements the chat provider, the tool cache, commands, default tools etc.
+            Derived classes implements the creation of sessions (and other API specific functionality).
+            Note: WebApi methods must be declared in the derived classes (the url is based on the declaring type).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.ToString">
+            <inheritdoc />
+        </member>
+        <member name="F:SysWeaver.AI.AiServiceBase.Msg">
+            <summary>
+            The message host used to report messages
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.#ctor(SysWeaver.MicroService.ServiceManager,SysWeaver.AI.AiServiceParams,SysWeaver.IMessageHost,System.String,System.String,System.String,System.String)">
+            <summary>
+            Create an AI service
+            </summary>
+            <param name="sm">The service manager</param>
+            <param name="p">The parameters (must be non-null)</param>
+            <param name="msg">Message host (if null the service manager is used)</param>
+            <param name="defaultName">The name of the chat provider if not specified in the parameters</param>
+            <param name="defaultChatModel">The default chat model if not specified in the parameters</param>
+            <param name="defaultImageModel">The default image model (text to image) if not specified in the parameters</param>
+            <param name="defaultImageEditModel">The default image edit model (image to image) if not specified in the parameters, null to use the default image model</param>
+        </member>
+        <member name="P:SysWeaver.AI.AiServiceBase.DefaultChatModel">
+            <summary>
+            The model used when not supplying a model in a session (can be configured)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.AiServiceBase.DefaultReasoning">
+            <summary>
+            The reasoning effort used when not supplying a reasoning effort in a session (can be configured)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.AiServiceBase.DefaultImageModel">
+            <summary>
+            The model used for image generation (text to image) when supplying an empty model (can be configured)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.AiServiceBase.DefaultImageEditModel">
+            <summary>
+            The model used for image editing (image to image) when supplying an empty model (can be configured)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.AiServiceBase.DefaultImageWidth">
+            <summary>
+            The width in pixels of a generated image when no width is specified (can be configured)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.AiServiceBase.DefaultImageHeight">
+            <summary>
+            The height in pixels of a generated image when no height is specified (can be configured)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiServiceBase.ChatLock">
+            <summary>
+            Optional lock used to limit the number of concurrent chat requests
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiServiceBase.ImageGenLock">
+            <summary>
+            Optional lock used to limit the number of concurrent image generations
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiServiceBase.UserStorage">
+            <summary>
+            The user storage service, null if not available
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiServiceBase.Manager">
+            <summary>
+            The service manager, null if the service wasn't created by a service manager
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiServiceBase.QrCode">
+            <summary>
+            The QR code service, null if not available
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiServiceBase.Api">
+            <summary>
+            The API http server module, null if not available
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.AiServiceBase.PerfMon">
+            <inheritdoc />
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.Dispose">
+            <summary>
+            Release all resources of the service
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.AddTools(SysWeaver.AI.IHaveAiTools)">
+            <summary>
+            Register tools from an instance (tools still have to be added to a session)
+            </summary>
+            <param name="a"></param>
+        </member>
+        <member name="F:SysWeaver.AI.AiServiceBase.IoParams">
+            <summary>
+            The API serialization parameters used by tools (json in and out)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.RemoveTools(SysWeaver.AI.IHaveAiTools)">
+            <summary>
+            Unregister tools from an instance
+            </summary>
+            <param name="a"></param>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.CreateAiChatSession(System.Boolean,SysWeaver.AI.AiSessionParams,System.String,System.String,System.Boolean,SysWeaver.AI.IAiMemory)">
+            <summary>
+            Create a chat session (API specific).
+            </summary>
+            <param name="isPrivate">If true, this chat is user only</param>
+            <param name="p">Optional parameters for this session, if null, the default will be used (can be a derived API specific type)</param>
+            <param name="joinAuth">Optional comma separated list of required auth tokens</param>
+            <param name="clearAuth">Auth required to clear the chat session</param>
+            <param name="defaultTools">true to add some default tools for the AI to use (call AddDefaultTools)</param>
+            <param name="memory">An optional memory implementation </param>
+            <returns>A new chat session</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.CreateAiQuerySession(SysWeaver.AI.AiSessionParams)">
+            <summary>
+            Create a query session (API specific).
+            </summary>
+            <param name="p">Optional parameters for this session, if null, the default will be used (can be a derived API specific type)</param>
+            <returns>A new query session</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.AddDefaultTools(SysWeaver.AI.IAiChatSession)">
+            <summary>
+            Add the default tools to a chat session, override to add API specific tools (call the base).
+            </summary>
+            <param name="s">The chat session</param>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.InternalChatSession(System.String,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Chat session for debugging, only use to test server connection etc (should be exposed as a WebApi by the derived class).
+            </summary>
+            <param name="prompt">Some prompt</param>
+            <param name="context">The request</param>
+            <returns>Some response</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.StoreGeneratedImage(SysWeaver.AI.IAiToolContext,SysWeaver.Net.HttpServerRequest,System.ReadOnlyMemory{System.Byte},System.String)">
+            <summary>
+            Store a generated image (in the user storage if available, else as message data) and return an url to it.
+            Typically used by image generation tools.
+            </summary>
+            <param name="c">The tool context</param>
+            <param name="request">The request</param>
+            <param name="png">The png image data</param>
+            <param name="title">The title of the image (used as the filename)</param>
+            <returns>An url to the image</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.GetTool(System.String,System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.GetTool(System.Object,System.Reflection.MethodInfo,System.String,SysWeaver.PerfMonitor,System.String,System.String,System.String,System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.GetRegisteredTool(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.ValidateRestApiCall(SysWeaver.AI.AiRestCall,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Validate an API.
+            Use this to validate a REST API call in some code that you make.
+            This will actually perform the supplied request and inform of any errors as well as letting you inspect the response structure.
+            </summary>
+            <param name="data">The REST API parameters</param>
+            <param name="context"></param>
+            <returns>The REST API return value as a Json string</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.AddChat(SysWeaver.AI.IAiChatSession,System.String)">
+            <summary>
+            Add a shared chat session to this service
+            </summary>
+            <param name="chat">The session (may only be added once)</param>
+            <param name="name">The chat id</param>
+            <returns>False if a chat with the same name already exists</returns>
+            <exception cref="T:System.Exception">If the session was already added</exception>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.RemoveChat(System.String)">
+            <summary>
+            Remove a shared chat session
+            </summary>
+            <param name="name">The chat id</param>
+            <returns>True if the chat was removed</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.AddChatSession(SysWeaver.AI.IAiChatSession,System.String,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Add a chat session that is stored in the http session of the user
+            </summary>
+            <param name="chat">The session (may only be added once)</param>
+            <param name="name">The chat id</param>
+            <param name="request">The request (holding the http session)</param>
+            <returns>False if a chat with the same name already exists in the http session</returns>
+            <exception cref="T:System.Exception">If the session was already added</exception>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.TryGetSession(System.String,SysWeaver.Net.HttpServerRequest,SysWeaver.AI.IAiChatSession@)">
+            <summary>
+            Try to get a chat session stored in the http session of the user
+            </summary>
+            <param name="name">The chat id</param>
+            <param name="request">The request (holding the http session)</param>
+            <param name="chat">The chat session if found</param>
+            <returns>True if found</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.RemoveChatSession(System.String,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Remove a chat session stored in the http session of the user
+            </summary>
+            <param name="name">The chat id</param>
+            <param name="request">The request (holding the http session)</param>
+            <returns>The removed session, or null if not found</returns>
+        </member>
+        <member name="P:SysWeaver.AI.AiServiceBase.Name">
+            <inheritdoc />
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.CreateNewChat(System.String,SysWeaver.Net.HttpServerRequest)">
+            <inheritdoc />
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.Clear(System.String,SysWeaver.Net.HttpServerRequest)">
+            <inheritdoc />
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.ForceClear(System.String,SysWeaver.Net.HttpServerRequest)">
+            <inheritdoc />
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.RemoveMessage(System.String,System.Int64,SysWeaver.Net.HttpServerRequest)">
+            <inheritdoc />
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.GetCurrentId(System.String,SysWeaver.Net.HttpServerRequest)">
+            <inheritdoc />
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.GetMessages(System.String,SysWeaver.Net.HttpServerRequest,System.Int64,System.Int32)">
+            <inheritdoc />
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.Join(System.String,SysWeaver.Net.HttpServerRequest,System.Int64,System.Int32)">
+            <inheritdoc />
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.SetValue(System.String,SysWeaver.Net.HttpServerRequest,System.Int64,System.String,System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.SendMessageAs(System.String,SysWeaver.Net.HttpServerRequest,SysWeaver.Chat.ChatMessageBody,System.String,System.String,System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.AddCommand(System.String,System.Func{System.String,SysWeaver.AI.IAiChatSession,SysWeaver.Net.HttpServerRequest,System.Threading.Tasks.Task{SysWeaver.Chat.ChatMessage}},System.String,System.String,System.String[])">
+            <summary>
+            Add a command (ex: "/help") that is available in all chats of this service
+            </summary>
+            <param name="name">The name of the command</param>
+            <param name="func">The function that runs the command (arguments, session, request), returns the message to show</param>
+            <param name="args">A description of the arguments (null if none)</param>
+            <param name="desc">A description of what the command does</param>
+            <param name="auths">The auth required to run the command</param>
+        </member>
+        <member name="T:SysWeaver.AI.AiServiceBase.UsageDelegate">
+            <summary>
+            Called when token usage is reported
+            </summary>
+            <param name="request">The request</param>
+            <param name="inputTokens">The number of input tokens</param>
+            <param name="outputTokens">The number of output tokens</param>
+            <returns>A task that completes when the usage is handled</returns>
+        </member>
+        <member name="E:SysWeaver.AI.AiServiceBase.OnUse">
+            <summary>
+            Callback with usage stats, args are: the request, model, number of input tokens, number of output tokens
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.UserMessage(System.String,SysWeaver.Net.HttpServerRequest,SysWeaver.Chat.ChatMessageBody)">
+            <inheritdoc />
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.GetChatMessage(System.String,System.Int64,SysWeaver.Net.HttpServerRequest)">
+            <inheritdoc />
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.OnInit(SysWeaver.Chat.IChatController)">
+            <inheritdoc />
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.Complete(SysWeaver.AI.AiCompletionRequest,System.Func{System.String,System.Threading.Tasks.Task})">
+            <summary>
+            Complete a conversation (stateless, the whole conversation is in the request).
+            The default implementation uses a query session, the conversation is sent as a transcript and caller defined tools aren't supported (they are ignored).
+            Override to use the API natively (multiple messages, tool calls, streaming).
+            </summary>
+            <param name="request">The request</param>
+            <param name="onText">Optional callback with the accumulated text response (the default implementation calls it once, with the full response)</param>
+            <returns>The result</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.GetTranscript(SysWeaver.AI.AiCompletionRequest)">
+            <summary>
+            Get the conversation of a request as a single text (the last user message is the query, previous messages are added as a transcript)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiServiceBase.RequestAiToolContext">
+            <summary>
+            The name of the request property that holds the <see cref="T:SysWeaver.AI.AiToolContext"/> of a tool call
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.GetPredefinedImage(SysWeaver.AI.AiImages,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Get an url (svg) to a predefined image
+            </summary>
+            <param name="type">The type of image to display</param>
+            <param name="request"></param>
+            <returns>An url to the svg image</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.GetFileExtensionIcon(System.String,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Get an url (svg) to the image used for a given file extension
+            </summary>
+            <param name="fileExtension">The file extension to get an image for</param>
+            <param name="request"></param>
+            <returns>An url to the svg image</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.GetCountryFlagIcon(System.String,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Get an url (svg) to the image containing the flag for a given country.
+            Do NOT use any other source for flags, unless this function fails.
+            </summary>
+            <param name="iso3166">The 2 letter, ISO 3166 alpha 2, code for the desired country.
+            Besides the country codes, the following flags are defined:
+            "arab": Arabic flag
+            "eu": The European Union flag.
+            "eac": East African Community.
+            "aq": Antartica.
+            Some regional flags: "es-ct", "es-ga", "es-pv", "gb-eng", "gb-nir", "gb-sct", "gb-wls", "sh-ac", "sh-hl", "sh-ta",
+            </param>
+            <param name="request"></param>
+            <returns>An url to the svg image</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.BuildLogo(SysWeaver.AI.AiLogo,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Get an url (svg) to a generated logo or icon for some given text.
+            </summary>
+            <param name="logo">Parameters for the generation</param>
+            <param name="request"></param>
+            <returns>An url to the generated svg image</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.BuildQrCode(System.String,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Get an url (svg) to a generated QR code with the specified content encoded.
+            </summary>
+            <param name="qrCodeContent">The text string to encode in the QR code</param>
+            <param name="request"></param>
+            <returns>An url to the generated svg image</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.BuildData(SysWeaver.AI.AiData,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Use this function to convert some data (typically text based) into an URL.
+            </summary>
+            <param name="data">Data parameters</param>
+            <param name="request"></param>
+            <returns>An url to the data</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.DisplayData(SysWeaver.AI.AiData,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Use this function to convert some data (typically text based) into an URL and then display it.
+            Works perfect for html files, text files etc.
+            </summary>
+            <param name="data">Data parameters</param>
+            <param name="request"></param>
+            <returns>True when sucessful</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.DisplayUrl(System.String,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Use this function to display data to the user.
+            ALWAYS use this method to display ANY url's returned by a tool.
+            Do not output the url or link to the url or in your text output.
+            </summary>
+            <param name="url">The url to display</param>
+            <param name="request"></param>
+            <returns>True when successful</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.AddTool_GetPredefinedImage(SysWeaver.AI.IAiChatSession)">
+            <summary>
+            Add this tool to the chat session (if not included by default)
+            </summary>
+            <param name="s"></param>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.AddTool_GetFileExtensionIcon(SysWeaver.AI.IAiChatSession)">
+            <summary>
+            Add this tool to the chat session (if not included by default)
+            </summary>
+            <param name="s"></param>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.AddTool_GetCountryFlagIcon(SysWeaver.AI.IAiChatSession)">
+            <summary>
+            Add this tool to the chat session (if not included by default)
+            </summary>
+            <param name="s"></param>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.AddTool_BuildLogo(SysWeaver.AI.IAiChatSession)">
+            <summary>
+            Add this tool to the chat session (if not included by default)
+            </summary>
+            <param name="s"></param>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.AddTool_BuildQrCode(SysWeaver.AI.IAiChatSession)">
+            <summary>
+            Add this tool to the chat session (if not included by default)
+            </summary>
+            <param name="s"></param>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.AddTool_BuildData(SysWeaver.AI.IAiChatSession)">
+            <summary>
+            Add this tool to the chat session (if not included by default)
+            </summary>
+            <param name="s"></param>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.AddTool_DisplayData(SysWeaver.AI.IAiChatSession)">
+            <summary>
+            Add this tool to the chat session (if not included by default)
+            </summary>
+            <param name="s"></param>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.AddTool_DisplayUrl(SysWeaver.AI.IAiChatSession)">
+            <summary>
+            Add this tool to the chat session (if not included by default)
+            </summary>
+            <param name="s"></param>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.AddTool_DisplayTable(SysWeaver.AI.IAiChatSession)">
+            <summary>
+            Add this tool to the chat session (if not included by default)
+            </summary>
+            <param name="s"></param>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.AddTool_Calculate(SysWeaver.AI.IAiChatSession)">
+            <summary>
+            Add this tool to the chat session (if not included by default)
+            </summary>
+            <param name="s"></param>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.AddTool_ElapsedTime(SysWeaver.AI.IAiChatSession)">
+            <summary>
+            Add this tool to the chat session (if not included by default)
+            </summary>
+            <param name="s"></param>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.AddTool_BuildTable(SysWeaver.AI.IAiChatSession)">
+            <summary>
+            Add this tool to the chat session (if not included by default)
+            </summary>
+            <param name="s"></param>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.AddTool_BuildGraph(SysWeaver.AI.IAiChatSession,System.Boolean)">
+            <summary>
+            Add this tool to the chat session (if not included by default)
+            </summary>
+            <param name="s"></param>
+            <param name="useAdvanced">If true, use an advanced charting method (may fails more often, but more powerful)</param>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.AddTool_DisplayGraph(SysWeaver.AI.IAiChatSession,System.Boolean)">
+            <summary>
+            Add this tool to the chat session (if not included by default).
+            </summary>
+            <param name="s"></param>
+            <param name="useAdvanced">If true, use an advanced charting method (may fails more often, but more powerful)</param>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.AddTool_BuildMap(SysWeaver.AI.IAiChatSession)">
+            <summary>
+            Add this tool to the chat session (if not included by default)
+            </summary>
+            <param name="s"></param>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.AddTool_Store(SysWeaver.AI.IAiChatSession)">
+            <summary>
+            Add this tool to the chat session (if not included by default)
+            </summary>
+            <param name="s"></param>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.AddTool_ValidateRestApiCall(SysWeaver.AI.IAiChatSession)">
+            <summary>
+            Add this tool to the chat session (if not included by default)
+            </summary>
+            <param name="s"></param>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.BuildTable(SysWeaver.AI.AiTable,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Get an url (html) to some data as a table.
+            </summary>
+            <param name="table">Data parameters</param>
+            <param name="request"></param>
+            <returns>An url (html) to the table</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.DisplayTable(SysWeaver.AI.AiTable,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Use this function to display some data as a table.
+            </summary>
+            <param name="table">Data parameters</param>
+            <param name="request"></param>
+            <returns>True if successful</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.Calculate(System.String)">
+            <summary>
+            Use this function to compute a value from a math expression, ex: "Sqrt(2) * 3.5^2 + Max(1, 4)".
+            Operators: + - * / % (remainder), ^ (power), parentheses, "," between function arguments, &amp; | ~ (integer bit operators).
+            Function and constant names are case sensitive and must be written exactly as listed:
+            Abs, Min, Max, Clamp, Floor, Ceiling, Round (halves to even), Truncate, Sqrt, Cbrt, Pow, Exp, Log (Log(x) is the natural log, Log(x, base)), Log10, Log2,
+            Sin, Cos, Tan, Asin, Acos, Atan, Atan2, Sinh, Cosh, Tanh (angles in radians), PI, E, Tau.
+            Numbers use "." as the decimal separator and no thousands separator, "0x" (hex), "0b" (binary) and "0o" (octal) prefixes are supported.
+            </summary>
+            <param name="expression">The math expression to compute, ex: "(12.5 + 7) * 3" or "Log(8, 2)"</param>
+            <returns>The value of the expression</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.ElapsedTime(SysWeaver.AI.AiTimeInterval)">
+            <summary>
+            Computes the elapsed time from a time interval.
+            </summary>
+            <param name="time">The interval (start, stop) and the desired return unit (seconds, minutes, hours, days)</param>
+            <returns>The elapsed time in the specified unit</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.MessageTable(SysWeaver.Data.TableDataRequest,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Do not use directly!
+            Get used internally by an AI tool to display tables generated by the AI.
+            </summary>
+            <param name="r"></param>
+            <param name="context"></param>
+            <returns></returns>
+        </member>
+        <member name="T:SysWeaver.AI.AiServiceBase.AiModels">
+            <summary>
+            The models available from the API (as returned by FetchModels)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.AiModels.#ctor(SysWeaver.AI.AiLlmModel[],SysWeaver.AI.AiImageModel[])">
+            <summary>
+            Create the model lists
+            </summary>
+            <param name="llmModels">The large language models, null for none</param>
+            <param name="imageModels">The image generation models, null for none</param>
+        </member>
+        <member name="F:SysWeaver.AI.AiServiceBase.AiModels.LlmModels">
+            <summary>
+            The large language models
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiServiceBase.AiModels.ImageModels">
+            <summary>
+            The image generation models
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.FetchModels">
+            <summary>
+            Fetch all available models from the API (API specific).
+            The result is cached, so this is called at most once every 5 minutes.
+            </summary>
+            <returns>The available models</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.GetLlmModels">
+            <summary>
+            Get the large language models (chat / text generation) available from the API (cached, updated at most every 5 minutes)
+            </summary>
+            <returns>The available models</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.GetImageModels">
+            <summary>
+            Get the image generation models available from the API (cached, updated at most every 5 minutes)
+            </summary>
+            <returns>The available models</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.RateImageModel(System.String,System.Boolean,System.Boolean)">
+            <summary>
+            Rate how suitable an image model is, used to select a model when the default image model isn't available (anymore).
+            </summary>
+            <param name="model">The model id (as returned by GetImageModels)</param>
+            <param name="edit">True if the model will be used for image editing (image to image), false for text to image</param>
+            <param name="transparent">True if a transparent background is requested</param>
+            <returns>A negative value if the model can't be used, else a higher value for a more suitable model</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.GetImageModel(System.String,System.Boolean,System.Boolean)">
+            <summary>
+            Get the image model to use.
+            If a model is specified it's used as is.
+            Else the default image model (or image edit model) is used, unless it's not available from the API (anymore) or isn't suitable (see RateImageModel),
+            then the most suitable available model is used instead (a warning is reported when an unavailable default is replaced).
+            If the available models can't be fetched, the default is used.
+            </summary>
+            <param name="model">The requested model, null or blank to use the default</param>
+            <param name="edit">True to get a model for image editing (image to image), false for text to image</param>
+            <param name="transparent">True if a transparent background is requested (a default model that doesn't support it may be replaced by one that does)</param>
+            <returns>The model id to use</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.GetImageSize(System.Int32,System.Int32)">
+            <summary>
+            Get the size to use for an image, using the default size if a size isn't specified.
+            If only the width or height is specified, the other one is computed using the aspect ratio of the default size.
+            </summary>
+            <param name="width">The requested width, 0 or less to use the default</param>
+            <param name="height">The requested height, 0 or less to use the default</param>
+            <returns>The width and height to use (always positive)</returns>
+        </member>
+        <member name="T:SysWeaver.AI.AiReasoning">
+            <summary>
+            The reasoning (thinking) effort for models that support reasoning
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiReasoning.None">
+            <summary>
+            No reasoning (if the model supports disabling it)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiReasoning.Minimal">
+            <summary>
+            The least reasoning the model supports
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiReasoning.Low">
+            <summary>
+            Low reasoning effort
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiReasoning.Medium">
+            <summary>
+            Medium reasoning effort
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiReasoning.High">
+            <summary>
+            High reasoning effort
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiReasoning.ExtraHigh">
+            <summary>
+            Extra high reasoning effort
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiReasoning.Max">
+            <summary>
+            The most reasoning the model supports
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.AiServiceParams">
+            <summary>
+            Common (API agnostic) parameters for an AI service
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiServiceParams.EndPoint">
+            <summary>
+            The service endpoint that the client will send requests to. If not set, the default endpoint will be used.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiServiceParams.NetworkTimeoutSeconds">
+            <summary>
+            The network time out in seconds
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiServiceParams.DefaultChatModel">
+            <summary>
+            The default model to use for chat
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiServiceParams.ChatName">
+            <summary>
+            The name of chat's using this chat provider
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiServiceParams.DefaultReasoning">
+            <summary>
+            The reasoning effort for models that support reasoning
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiServiceParams.MaxConcurrentChats">
+            <summary>
+            Maximum number of concurrent chat requests at the same time
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiServiceParams.DefaultImageModel">
+            <summary>
+            The default model to use for image generation (text to image).
+            If null or empty the service default is used.
+            If the model isn't available from the API (anymore), the most suitable available model is used instead.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiServiceParams.DefaultImageEditModel">
+            <summary>
+            The default model to use for image editing (image to image).
+            If null or empty the service default is used.
+            If the model isn't available from the API (anymore), the most suitable available model is used instead.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiServiceParams.DefaultImageWidth">
+            <summary>
+            The default width in pixels of a generated image (used when no width is specified).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiServiceParams.DefaultImageHeight">
+            <summary>
+            The default height in pixels of a generated image (used when no height is specified).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiServiceParams.MaxConcurrentImages">
+            <summary>
+            Maximum number of concurrent images being generated at the same time
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.AiSessionParams">
+            <summary>
+            Common (API agnostic) parameters for an AI session
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiSessionParams.Model">
+            <summary>
+            The model to use for this session.
+            If null or empty, the service default will be used.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiSessionParams.Reasoning">
+            <summary>
+            The reasoning effort for models that support reasoning.
+            Null to use default.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.AiTable">
+            <summary>
+            Represents a data table
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiTable.ToString">
+            <inheritdoc />
+        </member>
+        <member name="F:SysWeaver.AI.AiTable.Title">
+            <summary>
+            Title of the table.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.AiTable.Columns">
+            <summary>
+            Defines the columns that this table have
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.AiTable.Rows">
+            <summary>
+            All rows in the data
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.AiTableColumn">
+            <summary>
+            Defines a column of an <see cref="T:SysWeaver.AI.AiTable"/>
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiTableColumn.ToString">
+            <inheritdoc />
+        </member>
+        <member name="P:SysWeaver.AI.AiTableColumn.Name">
+            <summary>
+            Name of the column (show as header)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.AiTableColumn.ColDesc">
+            <summary>
+            Optional column description of the data in the columns, displayed as a tool tip on the column header.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.AiTableColumn.Type">
+            <summary>
+            The type of data in the column
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.AiTableColumn.ValuePrefix">
+            <summary>
+            An optional value prefix.
+            Do not format the actual values in the row data if the same output can be achieved using prefix and suffix.
+            Final text is: Prefix + FormattedValue + Suffix.
+            The FormattedValue depends on the type.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.AiTableColumn.ValueSuffix">
+            <summary>
+            An optional value suffix.
+            Do not format the actual values in the row data if the same output can be achieved using prefix and suffix.
+            Final text is: Prefix + FormattedValue + Suffix.
+            The FormattedValue depends on the type.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.AiTableColumn.ValueDesc">
+            <summary>
+            Optional value description, displayed as a tool tip on the value.
+            "{Value}" is replaced by the formatted value (as displayed).
+            "{Raw}" is replaced by the raw input value.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.AiTableColumn.NumDecimals">
+            <summary>
+            For decimal types, this is the number of decimals to show.
+            Do not round the actual values in the row data, use this property for rounding.
+            The default is 2.
+            Example: 123.6895 will be displayed as "123.69" if the number of decimals is two.
+            If the number is negative, the number will be displayed with that many decimals OR without decimals if the number is an integer:
+            Example: 123.6895 will be displayed as "123.69" if the number of decimals is "-2", but 42.00 will be displayed as "42".
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.AiTableColumnTypes">
+            <summary>
+            The type of data in a table column
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiTableColumnTypes.Text">
+            <summary>
+            Column is generic text.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiTableColumnTypes.Float">
+            <summary>
+            Column data is a floating point number
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiTableColumnTypes.Integer">
+            <summary>
+            Column data is an integer number
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiTableColumnTypes.Boolean">
+            <summary>
+            Column data is a boolean.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiTableColumnTypes.DateTime">
+            <summary>
+            Column data is a time stamp (date and time)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiTableColumnTypes.Image">
+            <summary>
+            Column data is an URL to an image (that is displayed)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiTableColumnTypes.Link">
+            <summary>
+            Column data is an URL (that is displayed as a clickable link)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiTableColumnTypes.Amount">
+            <summary>
+            Column data is an amount string that MUST be a floating point number, a space and an ISO 4217 currency code, ex: "12.50 USD".
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.AiTableRow">
+            <summary>
+            All column values of a row
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiTableRow.ToString">
+            <inheritdoc />
+        </member>
+        <member name="P:SysWeaver.AI.AiTableRow.ColumnData">
+            <summary>
+            Column data for this row, must have one value per header.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiTimeInterval.From">
+            <summary>
+            The start time
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiTimeInterval.To">
+            <summary>
+            The end time
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiTimeInterval.ReturnUnit">
+            <summary>
+            What to return
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiTimeIntervalUnits.Seconds">
+            <summary>
+            The number of seconds ellapsed
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiTimeIntervalUnits.Minutes">
+            <summary>
+            The number of minutes ellapsed
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiTimeIntervalUnits.Hours">
+            <summary>
+            The number of hours ellapsed
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiTimeIntervalUnits.Days">
+            <summary>
+            The number of days ellapsed
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.AiToolFunction">
+            <summary>
+            An API agnostic function definition, as described to the AI model.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiToolFunction.ToString">
+            <inheritdoc />
+        </member>
+        <member name="M:SysWeaver.AI.AiToolFunction.#ctor(System.String,System.String,System.BinaryData,System.Nullable{System.Boolean})">
+            <summary>
+            Create a function definition
+            </summary>
+            <param name="functionName">The name of the function</param>
+            <param name="functionDescription">The description of the function</param>
+            <param name="functionParameters">The JSON schema of the parameters, or null if none</param>
+            <param name="functionSchemaIsStrict">If the schema should be strictly followed, null for the API default</param>
+        </member>
+        <member name="F:SysWeaver.AI.AiToolFunction.FunctionName">
+            <summary>
+            The name of the function
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiToolFunction.FunctionDescription">
+            <summary>
+            The description of the function (as sent to the AI model)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiToolFunction.FunctionParameters">
+            <summary>
+            The JSON schema of the function parameters (an object), or null if the function takes no parameters
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiToolFunction.FunctionSchemaIsStrict">
+            <summary>
+            If the JSON schema should be strictly followed, null for the API default
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiToolFunction.GetApiTool``1(System.Func{SysWeaver.AI.AiToolFunction,``0})">
+            <summary>
+            Get (or create and cache) an API specific representation of this function.
+            </summary>
+            <typeparam name="T">The API specific type</typeparam>
+            <param name="create">Function used to create the API specific representation</param>
+            <returns>The API specific representation</returns>
+        </member>
+        <member name="T:SysWeaver.AI.AiTool">
+            <summary>
+            A tool (function) that an AI model can call, backed by an API end point
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiTool.ToString">
+            <inheritdoc />
+        </member>
+        <member name="F:SysWeaver.AI.AiTool.Tool">
+            <summary>
+            The API agnostic function definition sent to the AI model
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiTool.Name">
+            <summary>
+            The name of the tool
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiTool.Desc">
+            <summary>
+            The description of the tool
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiTool.Arg">
+            <summary>
+            The type of the argument, or null if the tool has no argument
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiTool.ArgName">
+            <summary>
+            The name of the argument
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiTool.ArgDesc">
+            <summary>
+            The description of the argument
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiTool.Ret">
+            <summary>
+            The type of the return value, or null if none
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiTool.RetDesc">
+            <summary>
+            The description of the return value
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiTool.Auth">
+            <summary>
+            The auth required to use the tool
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiTool.Icon">
+            <summary>
+            The icon of the tool
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiTool.Api">
+            <summary>
+            The url of the REST API of the tool
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiTool.Create(System.String,SysWeaver.Net.IApiHttpServerEndPoint,SysWeaver.AI.AiToolFunction,System.Boolean)">
+            <summary>
+            Create a tool
+            </summary>
+            <param name="name">The name of the tool</param>
+            <param name="endPoint">The end point the tool calls</param>
+            <param name="tool">The function definition</param>
+            <param name="exposeApi">If true, the REST API url is exposed</param>
+            <returns>The tool</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiTool.IsTool(System.Reflection.MethodInfo)">
+            <summary>
+            Check if a method should be used as a tool (have an AiToolAttribute or an OpenAiUseAttribute)
+            </summary>
+            <param name="method">The method</param>
+            <returns>True if the method is a tool</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiTool.GetToolMethods(System.Type)">
+            <summary>
+            Get all tool methods (have an AiToolAttribute or an OpenAiUseAttribute) of a type, including private methods declared in base types
+            </summary>
+            <param name="type">The type</param>
+            <returns>The tool methods</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiTool.GetToolName(System.Reflection.MethodInfo)">
+            <summary>
+            Get the name of a tool (as seen by the AI), uses the AiToolPrefixAttribute and the AiToolNameAttribute
+            </summary>
+            <param name="method">The method</param>
+            <returns>The name of the tool</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiTool.FromEndPoint(System.String,SysWeaver.Net.IApiHttpServerEndPoint,System.Boolean)">
+            <summary>
+            Create a tool from an end point, the function description and parameter schema is created from the end point (and the XML documentation)
+            </summary>
+            <param name="fn">The name of the tool</param>
+            <param name="a">The end point</param>
+            <param name="exposeApi">If true, the REST API url is added to the description</param>
+            <returns>A tool</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiTool.FromMethod(System.Object,System.Reflection.MethodInfo,System.String,SysWeaver.PerfMonitor,System.String,System.String,System.String,System.String)">
+            <summary>
+            Create a tool from a method
+            </summary>
+            <param name="instance">Object instance (null for static methods)</param>
+            <param name="method">The method</param>
+            <param name="fn">Optional function name, default is computed using GetToolName</param>
+            <param name="perfMonitor">An optional performance monitor</param>
+            <param name="defaultAuth">The default auth to use if there is no WebApiAuthAttribute on the method</param>
+            <param name="defaultCachedCompression">The default compression when there is no WebApiCompressionAttribute on the method</param>
+            <param name="defaultCompression">The default compression for uncached cached methods when there is no WebApiCompressionAttribute on the method</param>
+            <param name="locationPrefix">The location prefix</param>
+            <returns>A tool</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiTool.CreateExternal(SysWeaver.AI.AiToolFunction)">
+            <summary>
+            Create a tool that is defined (and executed) by a caller, used to describe the tool to the model only (it can't be invoked)
+            </summary>
+            <param name="tool">The function definition</param>
+            <returns>A tool</returns>
+        </member>
+        <member name="F:SysWeaver.AI.AiTool.Invoke">
+            <summary>
+            Invoke the tool, the first argument is the function arguments as supplied by the AI (a json object with a single property)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiTool.AsCommand">
+            <summary>
+            The tool as a chat command (runs the tool with the supplied json argument)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.AiToolContext">
+            <summary>
+            The context of a tool call in a chat session (properties of the session, links and files attached to the response message)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiToolContext.Session">
+            <summary>
+            The chat session that the tool is called from
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiToolContext.SetProperty``1(System.String,``0)">
+            <inheritdoc />
+        </member>
+        <member name="M:SysWeaver.AI.AiToolContext.TryGetProperty``1(System.String,``0@)">
+            <inheritdoc />
+        </member>
+        <member name="M:SysWeaver.AI.AiToolContext.TryRemoveProperty``1(System.String,``0@)">
+            <inheritdoc />
+        </member>
+        <member name="M:SysWeaver.AI.AiToolContext.AddLink(System.String)">
+            <summary>
+            Add a link to something (displayed in chat)
+            </summary>
+            <param name="url">The local or absolute url to the file</param>
+        </member>
+        <member name="M:SysWeaver.AI.AiToolContext.AddMessageFile(System.String,System.String,System.String)">
+            <summary>
+            Attach some data as a file to a message
+            </summary>
+            <param name="mime">The mimetype of the file</param>
+            <param name="data">The data of the file</param>
+            <param name="filename">The name of the file</param>
+            <returns>The local url to the file</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiToolContext.AddMessageFile(System.String,System.ReadOnlyMemory{System.Byte},System.String)">
+            <summary>
+            Attach some data as a file to a message
+            </summary>
+            <param name="mime">The mimetype of the file</param>
+            <param name="data">The data of the file</param>
+            <param name="filename">The name of the file</param>
+            <returns>The local url to the file</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiToolContext.ToDataUrl(System.String,System.ReadOnlyMemory{System.Byte})">
+            <summary>
+            Same as String.Concat("data:", mime, ";base64," + Convert.ToBase64String(data.Span)) using a single allocation (the data can be large)
+            </summary>
+            <param name="mime">The mime type (null is treated as empty)</param>
+            <param name="data">The data</param>
+            <returns>A data url</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiToolContext.AddMessageData(System.Object)">
+            <summary>
+            Attach some data to a message
+            </summary>
+            <param name="data">The data object to attach</param>
+            <returns>The local url to the data</returns>
+        </member>
+        <member name="T:SysWeaver.AI.AiFileSaver">
+            <summary>
+            A file save function that can also save bytes.
+            The <see cref="M:SysWeaver.AI.AiFileSaver.Save(System.String,System.String,System.String)"/> method is passed as the (data url or text based) save file delegate (ex: to <see cref="M:SysWeaver.AI.IAiChatSession.CompleteUpdate(System.String,System.Collections.Generic.IReadOnlyList{System.ValueTuple{SysWeaver.AI.AiContentPart,System.String}},SysWeaver.Net.HttpServerRequest,System.Func{System.String,System.String,System.Threading.Tasks.Task},System.Func{System.String,System.String,System.String,System.String},System.Func{System.Object,System.String},System.Action{System.String},SysWeaver.AI.AiDebugMessage,System.String,System.Func{System.String,System.Int64,System.Int64,System.Threading.Tasks.Task})"/>),
+            the <see cref="T:SysWeaver.AI.AiToolContext"/> uses <see cref="F:SysWeaver.AI.AiFileSaver.SaveBytes"/> for binary data (no base64 encoding and decoding).
+            </summary>
+            <remarks>
+            The save file delegate must be the <see cref="M:SysWeaver.AI.AiFileSaver.Save(System.String,System.String,System.String)"/> method itself (<c>saveFile: saver.Save</c>), the saver is found through the target of the delegate:
+            a delegate that wraps it (ex: a lambda that calls <see cref="M:SysWeaver.AI.AiFileSaver.Save(System.String,System.String,System.String)"/>) saves binary data as a data url.
+            </remarks>
+            <example>
+            <code>
+            var saver = new AiFileSaver(
+                (mime, data, filename) => message.AddFileData(mime, data, ..),     // a data url or text
+                (mime, bytes, filename) => message.AddFileData(mime, bytes, ..));  // the same file from bytes
+            await session.CompleteUpdate(text, extraData, request, onUpdate, saver.Save, saveData, onTools, debug, from, onUsage);
+            </code>
+            </example>
+        </member>
+        <member name="M:SysWeaver.AI.AiFileSaver.#ctor(System.Func{System.String,System.String,System.String,System.String},System.Func{System.String,System.ReadOnlyMemory{System.Byte},System.String,System.String})">
+            <summary>
+            Create a file saver
+            </summary>
+            <param name="saveText">Save a file from a data url or text (mime, data, filename), returns an url</param>
+            <param name="saveBytes">Save a file from bytes (mime, data, filename), returns an url, must give the same result as saving the data url of the bytes.
+            Null saves binary data as a data url using <paramref name="saveText"/></param>
+            <exception cref="T:System.ArgumentNullException"><paramref name="saveText"/> is null (DEBUG builds only).</exception>
+        </member>
+        <member name="F:SysWeaver.AI.AiFileSaver.SaveBytes">
+            <summary>
+            Save a file from bytes (mime, data, filename), returns an url
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiFileSaver.Save(System.String,System.String,System.String)">
+            <summary>
+            Save a file from a data url or text
+            </summary>
+            <param name="mime">The mime type</param>
+            <param name="data">A data url or text</param>
+            <param name="filename">The file name</param>
+            <returns>The url</returns>
+        </member>
+        <member name="T:SysWeaver.AI.AiTools">
+            <summary>
+            Helper functions for AI tools and messages
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiTools.WebRoot">
+            <summary>
+            The url root of the web resources of this service
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiTools.IconRoot">
+            <summary>
+            The url root of the icons of this service
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiTools.MdEscapeCharList">
+            <summary>
+            The chars escaped by <see cref="M:SysWeaver.AI.AiTools.MdEscape(System.String)"/>
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiTools.MdEscapeChars">
+            <summary>
+            The chars that are escaped by <see cref="M:SysWeaver.AI.AiTools.MdEscape(System.String)"/>
+            </summary>
+            <summary>
+            The chars that are escaped by <see cref="M:SysWeaver.AI.AiTools.MdEscape(System.String)"/>
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiTools.MdEscapeSearch">
+            <summary>
+            The same chars as <see cref="F:SysWeaver.AI.AiTools.MdEscapeChars"/>, for vectorized searches
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiTools.MdEscape(System.String)">
+            <summary>
+            Escape all markdown special chars with a backslash
+            </summary>
+            <param name="s">The text, must not be null</param>
+            <returns>The escaped text (the same instance if nothing needed escaping)</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiTools.Intendent(System.String,System.String)">
+            <summary>
+            Indent all lines after the first by inserting a prefix after each line break
+            </summary>
+            <param name="t">The text</param>
+            <param name="i">The indent (prefix)</param>
+            <returns>The indented text, or the indent if the text is null or empty</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiTools.BeautifyJson(System.String,System.String)">
+            <summary>
+            Format JSON with indentation
+            </summary>
+            <param name="json">The JSON text</param>
+            <param name="indent">The indent (prefix) for the result, also returned if the JSON is null or empty</param>
+            <returns>The formatted JSON</returns>
+        </member>
+        <member name="M:SysWeaver.AI.AiTools.MinimizePrompt(System.String)">
+            <summary>
+            Reduce the number of tokens in an English LLM prompt, while keeping all of it's instructions.
+            Only rule based rewriting of the prose is done:
+            - Politeness, filler words and most articles are removed, verbose phrases are shortened and whitespace is compacted.
+            - Code, quoted text, tables, templates, tags, identifiers, urls, paths, numbers, UPPERCASE words and examples are kept verbatim.
+            - Negations, conditions, modals and restricting words (not, never, unless, if, must, only, just..) are kept.
+            The savings depends on how verbose the prompt is, a terse prompt is mostly left as is.
+            Results are cached for 5 minutes (from when the prompt was first minimized), reading doesn't extend the time.
+            </summary>
+            <param name="prompt">The prompt, null and empty strings are returned as is</param>
+            <returns>The minimized prompt</returns>
+        </member>
+        <member name="T:SysWeaver.AI.IAiQuerySession">
+            <summary>
+            A simple (stateless) query session, supporting a system prompt and tools
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.IAiQuerySession.Model">
+            <summary>
+            The model used by this session
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.IAiQuerySession.HaveTemperature">
+            <summary>
+            True if the model supports setting the temperature
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.IAiQuerySession.SupportSystemRole">
+            <summary>
+            True if the model supports a system prompt (system role)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.IAiQuerySession.SupportParallelToolCalls">
+            <summary>
+            True if the model supports parallel tool calls, null if unknown
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.IAiQuerySession.Temperature">
+            <summary>
+            Temperature of the AI model, lower is more cosistent and less random [0, 2] (1 is default).
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.IAiQuerySession.SystemPrompt">
+            <summary>
+            The system prompt
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.IAiQuerySession.ALlTools">
+            <summary>
+            All tools of this session by name
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.IAiQuerySession.AddTool(System.String,System.String)">
+            <summary>
+            Add an API endpoint that the AI can use in this session
+            </summary>
+            <param name="apiName">Name of tha api local url: ex: "Api/auth/GetUser"</param>
+            <param name="fn">An optional function name (as shown to the AI).
+            null - will use the underlaying method name (or as specified by the OpenAiToolName attribute) in combination with the declaring type name.
+            "" - will user the full apiName, but with '/' replaced by '_'.
+            </param>
+            <returns>True if the tool was added</returns>
+        </member>
+        <member name="M:SysWeaver.AI.IAiQuerySession.AddRegistredTool(System.String)">
+            <summary>
+            Add a tool from some registered tool
+            </summary>
+            <param name="name">The name of the tool</param>
+            <returns>True if the tool was added</returns>
+        </member>
+        <member name="M:SysWeaver.AI.IAiQuerySession.AddTool(System.Object,System.Reflection.MethodInfo,System.String,SysWeaver.PerfMonitor,System.String,System.String,System.String)">
+            <summary>
+            Add a method that the AI can use in this session.
+            </summary>
+            <param name="instance">Object instance</param>
+            <param name="method">The method</param>
+            <param name="fn">Optional function name, default will be instance type name _ method name</param>
+            <param name="perfMonitor">An optional performance monitor</param>
+            <param name="defaultAuth">The default auth to use if there is no WebApiAuthAttribute on the method</param>
+            <param name="defaultCachedCompression">The default compression when there is no WebApiCompressionAttribute on the method</param>
+            <param name="defaultCompression">The default compression for uncached cached methods when there is no WebApiCompressionAttribute on the method</param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.AI.IAiQuerySession.Query(System.String,SysWeaver.AI.AiDebugMessage,System.Func{System.String,System.Int64,System.Int64,System.Threading.Tasks.Task},System.Collections.Generic.IReadOnlyList{System.ValueTuple{SysWeaver.AI.AiContentPart,System.String}})">
+            <summary>
+            Perform a query (the query is not added to any conversation history)
+            </summary>
+            <param name="text">The query text</param>
+            <param name="debug">An optional obejct used to track tool calls etc</param>
+            <param name="onUsage">An optional function to call when token in/out usage is changed</param>
+            <param name="extraData">optional attachements</param>
+            <returns>The Ai response, typically MD encoded text</returns>
+        </member>
+        <member name="T:SysWeaver.AI.IAiChatSession">
+            <summary>
+            A chat session (a conversation), supporting a system prompt, tools, menus, commands etc
+            </summary>
+        </member>
+        <member name="E:SysWeaver.AI.IAiChatSession.OnUserMessage">
+            <summary>
+            Raised when a user message is received (session, message text, request), before it is sent to the AI
+            </summary>
+        </member>
+        <member name="E:SysWeaver.AI.IAiChatSession.OnAiResponseCompleted">
+            <summary>
+            Raised when the AI has completed a response (session, response text, request)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.IAiChatSession.ThinkMessage">
+            <summary>
+            The text of the temporary message shown while the AI is working on a response
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.IAiChatSession.ChatId">
+            <summary>
+            The id of this chat (set when the session is added to a service)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.IAiChatSession.AddCommand(System.String,System.Func{System.String,SysWeaver.AI.IAiChatSession,SysWeaver.Net.HttpServerRequest,System.Threading.Tasks.Task{SysWeaver.Chat.ChatMessage}},System.String,System.String,System.String[])">
+            <summary>
+            Add a command (ex: "/tools") that users can run in this chat
+            </summary>
+            <param name="name">The name of the command</param>
+            <param name="func">The function that runs the command (arguments, session, request), returns the message to show</param>
+            <param name="args">A description of the arguments (null if none)</param>
+            <param name="desc">A description of what the command does</param>
+            <param name="auths">The auth required to run the command</param>
+        </member>
+        <member name="M:SysWeaver.AI.IAiChatSession.TryGetToolCommand(System.String,SysWeaver.AI.AiCommand@)">
+            <summary>
+            Try to get the command that runs a tool of this session
+            </summary>
+            <param name="name">The name of the tool</param>
+            <param name="cmd">The command if found</param>
+            <returns>True if a tool with the name exist in this session</returns>
+        </member>
+        <member name="T:SysWeaver.AI.IAiChatSession.SetVarDel">
+            <summary>
+            Called when a menu value is changed
+            </summary>
+            <param name="c">The chat controller</param>
+            <param name="providerChatId">The id of the chat</param>
+            <param name="scope">The scope of the change</param>
+            <param name="session">The session of the user</param>
+            <param name="messageId">The id of the message the change applies to (for message menus)</param>
+            <param name="value">The new value</param>
+            <returns>True if the value was accepted</returns>
+        </member>
+        <member name="M:SysWeaver.AI.IAiChatSession.AddToMenu(System.Boolean,SysWeaver.Chat.ChatMenuItem,SysWeaver.AI.IAiChatSession.SetVarDel,SysWeaver.Chat.ChatMenuItem)">
+            <summary>
+            Add an item to the chat menu
+            </summary>
+            <param name="toMessageMenu">True to add to the message menu, false to add to the chat menu</param>
+            <param name="item">The item to add</param>
+            <param name="setFunc">Optional function called when the value of the item is changed</param>
+            <param name="parent">Optional parent item (that must already have been added)</param>
+            <returns>False if an item with the same id was already added</returns>
+        </member>
+        <member name="M:SysWeaver.AI.IAiChatSession.SetValue(SysWeaver.Chat.IChatController,System.String,SysWeaver.Chat.ChatScopes,SysWeaver.Net.HttpSession,System.Int64,System.String,System.String)">
+            <summary>
+            Set the value of a menu item (calls the function supplied when the item was added)
+            </summary>
+            <param name="c">The chat controller</param>
+            <param name="providerChatId">The id of the chat</param>
+            <param name="scope">The scope of the change</param>
+            <param name="session">The session of the user</param>
+            <param name="messageId">The id of the message the change applies to (for message menus)</param>
+            <param name="key">The id of the menu item</param>
+            <param name="value">The new value</param>
+            <returns>True if the value was accepted</returns>
+        </member>
+        <member name="M:SysWeaver.AI.IAiChatSession.GetMenu(SysWeaver.Net.HttpSession,System.Boolean,System.Collections.Generic.IReadOnlySet{System.String})">
+            <summary>
+            Get the menu items that the user of a session may use
+            </summary>
+            <param name="session">The session of the user</param>
+            <param name="isMessage">True to get the message menu, false to get the chat menu</param>
+            <param name="exclude">Optional ids of items to exclude</param>
+            <returns>The menu items (with children), filtered by the auth of the user</returns>
+        </member>
+        <member name="P:SysWeaver.AI.IAiChatSession.IsPrivate">
+            <summary>
+            True if this is a private chat (user only)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.IAiChatSession.AgentName">
+            <summary>
+            Name used for AI response messages
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.IAiChatSession.AgentSpeechName">
+            <summary>
+            Name used for the AI when speaking (updated from AgentName when that is changed)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.IAiChatSession.ErrorName">
+            <summary>
+            Name used for error messages
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.IAiChatSession.AgentImageUrl">
+            <summary>
+            Url to image used for AI response messages
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.IAiChatSession.ErrorImageUrl">
+            <summary>
+            Url to image used for error messages
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.IAiChatSession.DebugImageUrl">
+            <summary>
+            Url to image used for debug messages
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.IAiChatSession.EnableSpeechByDefault">
+            <summary>
+            If true, speech should be enabled by default
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.IAiChatSession.AllowUserMarkDown">
+            <summary>
+            If true, the user may input markdown text (client is allowed to send the message with the MarkDown format).
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.IAiChatSession.AllowStore">
+            <summary>
+            Allow storing files and links on the server (requires a UserStore).
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.IAiChatSession.CanTranslate">
+            <summary>
+            If true, the server supports message translation (to the users language)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.IAiChatSession.CanShowProfile">
+            <summary>
+            If true, enable the menu option to show a user profile
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.IAiChatSession.CanUpload">
+            <summary>
+            If true a user may upload files
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.IAiChatSession.WorkingImageUrl">
+            <summary>
+            The image to use when the AI is working
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.IAiChatSession.SpeechNames">
+            <summary>
+            The names that are spoken by the speech engine, "{0}" is replaced with the AgentSpeechName
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.IAiChatSession.Voices">
+            <summary>
+            The voices available for speech
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.IAiChatSession.GetSystemPrompt">
+            <summary>
+            The function used to get the system prompt
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.IAiChatSession.FormatUserMessage">
+            <summary>
+            The function used to format a user message.
+            Parameters are: session, user name, original message.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.IAiChatSession.ChatQueryLock">
+            <summary>
+            Lock held while a query is run in the chat (only one query at a time)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.IAiChatSession.AutoRemoveToolCalls">
+            <summary>
+            If true, tool call messages should be removed from the history when done (not currently read by the library)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.IAiChatSession.JoinAuth">
+            <summary>
+            The auth required to join the chat
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.IAiChatSession.ClearAuth">
+            <summary>
+            The auth required to clear the chat
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.IAiChatSession.Messages">
+            <summary>
+            The messages of the chat, in order
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.IAiChatSession.MessageLookup">
+            <summary>
+            The messages of the chat by message id
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.IAiChatSession.MsgId">
+            <summary>
+            The current (last used) message id
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.IAiChatSession.NextMsgId">
+            <summary>
+            Allocate a new message id
+            </summary>
+            <returns>The new message id</returns>
+        </member>
+        <member name="M:SysWeaver.AI.IAiChatSession.ClearApiMessages">
+            <summary>
+            Clear the conversation history sent to the API
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.IAiChatSession.Complete(System.String,SysWeaver.Net.HttpServerRequest,SysWeaver.AI.AiDebugMessage,System.String,System.Func{System.String,System.Int64,System.Int64,System.Threading.Tasks.Task})">
+            <summary>
+            Add a user message to the conversation and get the AI response (tools are executed as needed).
+            </summary>
+            <param name="text">The user message</param>
+            <param name="request">The request</param>
+            <param name="debug">An optional obejct used to track tool calls etc</param>
+            <param name="from">Optional name of the user</param>
+            <param name="onUsage">An optional function to call when token in/out usage is changed</param>
+            <returns>The AI response</returns>
+        </member>
+        <member name="M:SysWeaver.AI.IAiChatSession.CompleteUpdate(System.String,System.Collections.Generic.IReadOnlyList{System.ValueTuple{SysWeaver.AI.AiContentPart,System.String}},SysWeaver.Net.HttpServerRequest,System.Func{System.String,System.String,System.Threading.Tasks.Task},System.Func{System.String,System.String,System.String,System.String},System.Func{System.Object,System.String},System.Action{System.String},SysWeaver.AI.AiDebugMessage,System.String,System.Func{System.String,System.Int64,System.Int64,System.Threading.Tasks.Task})">
+            <summary>
+            Add a user message to the conversation and stream the AI response (tools are executed as needed).
+            </summary>
+            <returns>null if successful, else an error message</returns>
+        </member>
+        <member name="M:SysWeaver.AI.IAiChatSession.WriteConversation(System.Text.Json.Utf8JsonWriter)">
+            <summary>
+            Write the tools and messages (including the system prompt) as json properties (the containing object is written by the caller).
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.IAiImageEditService">
+            <summary>
+            A service that can create an image from a source image and a text prompt, ex: edit an image (API agnostic).
+            Implemented by the OpenAI, Google and ComfyUI services.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.IAiImageEditService.ImageToImage(SysWeaver.AI.ImageToImagePrompt)">
+            <summary>
+            Create an image from a source image and a text prompt, ex: "Make it a watercolor painting".
+            </summary>
+            <param name="prompt">The source image, what to do with it, the model (null or blank for the service default), the size etc</param>
+            <returns>The created image (typically a png image, see <see cref="F:SysWeaver.MemoryFile.Mime"/>)</returns>
+            <exception cref="T:System.ArgumentNullException">The prompt or the source image is null</exception>
+            <exception cref="T:System.Exception">The image couldn't be created (ex: the model refused or the service failed)</exception>
+        </member>
+        <member name="T:SysWeaver.AI.IAiImageGenService">
+            <summary>
+            A service that can create an image from a text prompt (API agnostic).
+            Implemented by the OpenAI, Google and ComfyUI services.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.IAiImageGenService.TextToImage(SysWeaver.AI.TextToImagePrompt)">
+            <summary>
+            Create an image from a text prompt.
+            </summary>
+            <param name="prompt">What to create, the model (null or blank for the service default), the size etc</param>
+            <returns>The created image (typically a png image, see <see cref="F:SysWeaver.MemoryFile.Mime"/>)</returns>
+            <exception cref="T:System.ArgumentNullException">The prompt is null</exception>
+            <exception cref="T:System.Exception">The image couldn't be created (ex: the model refused or the service failed)</exception>
+        </member>
+        <member name="T:SysWeaver.AI.IAiMemory">
+            <summary>
+            A per user memory that the AI can use to store and retrieve information between conversations.
+            See <see cref="T:SysWeaver.AI.AiMemoryLimits"/> for the size limits.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.IAiMemory.GetMemoryEntries(SysWeaver.Net.HttpSession)">
+            <summary>
+            Get the headers (key, last access time and description) of all memories of the user
+            </summary>
+            <param name="session">The session of the user</param>
+            <returns>The memory headers</returns>
+        </member>
+        <member name="M:SysWeaver.AI.IAiMemory.AddMemory(SysWeaver.Net.HttpSession,System.String,System.String,System.String)">
+            <summary>
+            Add a memory (or replace an existing memory with the same key)
+            </summary>
+            <param name="session">The session of the user</param>
+            <param name="key">The unique key of the memory</param>
+            <param name="desc">A short description of the memory</param>
+            <param name="value">The value of the memory</param>
+            <returns>True on success</returns>
+            <exception cref="T:System.Exception">If an argument is invalid (empty or too long) or there are too many memories</exception>
+        </member>
+        <member name="M:SysWeaver.AI.IAiMemory.GetMemory(SysWeaver.Net.HttpSession,System.String)">
+            <summary>
+            Get the value of a memory
+            </summary>
+            <param name="session">The session of the user</param>
+            <param name="key">The key of the memory</param>
+            <returns>The value, or null if there is no memory with the key</returns>
+        </member>
+        <member name="M:SysWeaver.AI.IAiMemory.SetMemory(SysWeaver.Net.HttpSession,System.String,System.String)">
+            <summary>
+            Change the value of an existing memory
+            </summary>
+            <param name="session">The session of the user</param>
+            <param name="key">The key of the memory</param>
+            <param name="value">The new value</param>
+            <returns>True on success</returns>
+            <exception cref="T:System.Exception">If the value is invalid or the memory doesn't exist</exception>
+        </member>
+        <member name="M:SysWeaver.AI.IAiMemory.RemoveMemory(SysWeaver.Net.HttpSession,System.String)">
+            <summary>
+            Remove a memory
+            </summary>
+            <param name="session">The session of the user</param>
+            <param name="key">The key of the memory</param>
+            <returns>True on success</returns>
+            <exception cref="T:System.Exception">If the memory doesn't exist</exception>
+        </member>
+        <member name="T:SysWeaver.AI.IAiService">
+            <summary>
+            An AI service (API agnostic), acts as a chat provider and can create chat and query sessions
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.IAiService.DefaultChatModel">
+            <summary>
+            The model used when not supplying a model in a session (can be configured)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.IAiService.DefaultReasoning">
+            <summary>
+            The reasoning effort used when not supplying a reasoning effort in a session (can be configured)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.IAiService.DefaultImageModel">
+            <summary>
+            The model used for image generation (text to image) when not supplying a model (can be configured)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.IAiService.DefaultImageEditModel">
+            <summary>
+            The model used for image editing (image to image) when not supplying a model (can be configured)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.IAiService.GetLlmModels">
+            <summary>
+            Get the large language models (chat / text generation) available from the API (cached, updated at most every 5 minutes)
+            </summary>
+            <returns>The available models</returns>
+        </member>
+        <member name="M:SysWeaver.AI.IAiService.GetImageModels">
+            <summary>
+            Get the image generation models available from the API (cached, updated at most every 5 minutes)
+            </summary>
+            <returns>The available models</returns>
+        </member>
+        <member name="M:SysWeaver.AI.IAiService.Complete(SysWeaver.AI.AiCompletionRequest,System.Func{System.String,System.Threading.Tasks.Task})">
+            <summary>
+            Complete a conversation (stateless, the whole conversation is in the request).
+            Tools in the request are defined by the caller, tool calls are returned (not executed).
+            </summary>
+            <param name="request">The request</param>
+            <param name="onText">Optional callback with the accumulated text response whenever it changes (streaming), not all services stream</param>
+            <returns>The result</returns>
+        </member>
+        <member name="M:SysWeaver.AI.IAiService.CreateChatSession(System.Boolean,SysWeaver.AI.AiSessionParams,System.String,System.String,System.Boolean,SysWeaver.AI.IAiMemory)">
+            <summary>
+            Create a chat session (supporting SystemPrompt, tools etc)
+            </summary>
+            <param name="isPrivate">If true, this chat is user only</param>
+            <param name="p">Optional parameters for this session, if null, the default will be used (can be a derived API specific type)</param>
+            <param name="joinAuth">Optional comma separated list of required auth tokens</param>
+            <param name="clearAuth">Auth required to clear the chat session</param>
+            <param name="defaultTools">true to add some default tools for the AI to use</param>
+            <param name="memory">An optional memory implementation </param>
+            <returns>A new chat session</returns>
+        </member>
+        <member name="M:SysWeaver.AI.IAiService.CreateQuerySession(SysWeaver.AI.AiSessionParams)">
+            <summary>
+            Create a query session (supporting SystemPrompt, tools etc)
+            </summary>
+            <param name="p">Optional parameters for this session, if null, the default will be used (can be a derived API specific type)</param>
+            <returns>A new query session</returns>
+        </member>
+        <member name="M:SysWeaver.AI.IAiService.CreateQuerySession(System.String)">
+            <summary>
+            Create a query session (supporting SystemPrompt, tools etc)
+            </summary>
+            <param name="model">The model to use.</param>
+            <returns>A new query session</returns>
+        </member>
+        <member name="M:SysWeaver.AI.IAiService.AddChat(SysWeaver.AI.IAiChatSession,System.String)">
+            <summary>
+            Add a global chat (accessible to all users that meet the join auth of the chat)
+            </summary>
+            <param name="chat">The chat session</param>
+            <param name="name">The name (id) of the chat</param>
+            <returns>True if added</returns>
+        </member>
+        <member name="M:SysWeaver.AI.IAiService.RemoveChat(System.String)">
+            <summary>
+            Remove a global chat
+            </summary>
+            <param name="name">The name (id) of the chat</param>
+            <returns>True if removed</returns>
+        </member>
+        <member name="M:SysWeaver.AI.IAiService.AddChatSession(SysWeaver.AI.IAiChatSession,System.String,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Add a chat to the http session of a request (only accessible to that http session)
+            </summary>
+            <param name="chat">The chat session</param>
+            <param name="name">The name (id) of the chat</param>
+            <param name="request">The request</param>
+            <returns>True if added</returns>
+        </member>
+        <member name="M:SysWeaver.AI.IAiService.TryGetSession(System.String,SysWeaver.Net.HttpServerRequest,SysWeaver.AI.IAiChatSession@)">
+            <summary>
+            Get a chat from the http session of a request
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.IAiService.RemoveChatSession(System.String,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Remove a chat from the http session of a request
+            </summary>
+            <returns>The removed chat or null</returns>
+        </member>
+        <member name="M:SysWeaver.AI.IAiService.SendMessageAs(System.String,SysWeaver.Net.HttpServerRequest,SysWeaver.Chat.ChatMessageBody,System.String,System.String,System.String)">
+            <summary>
+            Post a message to a chat (no AI response is generated)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.IAiService.AddCommand(System.String,System.Func{System.String,SysWeaver.AI.IAiChatSession,SysWeaver.Net.HttpServerRequest,System.Threading.Tasks.Task{SysWeaver.Chat.ChatMessage}},System.String,System.String,System.String[])">
+            <summary>
+            Add a command available to all chat sessions created by this service
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.IAiService.AddTools(SysWeaver.AI.IHaveAiTools)">
+            <summary>
+            Register tools from an instance (tools still have to be added to a session)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.IAiService.RemoveTools(SysWeaver.AI.IHaveAiTools)">
+            <summary>
+            Unregister tools from an instance
+            </summary>
+        </member>
+        <member name="E:SysWeaver.AI.IAiService.OnUse">
+            <summary>
+            Callback with usage stats, args are: the request, model, number of input tokens, number of output tokens
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.IAiToolCache">
+            <summary>
+            A cache of AI tools (wrapping API end points), so the same tool is shared between sessions
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.IAiToolCache.GetRegisteredTool(System.String)">
+            <summary>
+            Get a tool that has already been registered
+            </summary>
+            <param name="fn">The tool (function) name</param>
+            <returns>The tool, or null if no tool with the name is registered</returns>
+        </member>
+        <member name="M:SysWeaver.AI.IAiToolCache.GetTool(System.String,System.String)">
+            <summary>
+            Get (or create) a tool for an existing API
+            </summary>
+            <param name="apiName">The name (url) of the API</param>
+            <param name="fn">The tool name, null to derive it from the API method</param>
+            <returns>The tool, or null if the service has no API server</returns>
+            <exception cref="T:System.ArgumentException">If the API name is unknown</exception>
+        </member>
+        <member name="M:SysWeaver.AI.IAiToolCache.GetTool(System.Object,System.Reflection.MethodInfo,System.String,SysWeaver.PerfMonitor,System.String,System.String,System.String,System.String)">
+            <summary>
+            Get (or create) a tool for a method of an object
+            </summary>
+            <param name="instance">The object instance (null for static methods)</param>
+            <param name="method">The method</param>
+            <param name="fn">The tool name, null to derive it from the method</param>
+            <param name="perfMonitor">Optional performance monitor for the calls</param>
+            <param name="defaultAuth">The auth used if the method has none</param>
+            <param name="defaultCachedCompression">The cached compression used if the method has none</param>
+            <param name="defaultCompression">The compression used if the method has none</param>
+            <param name="locationPrefix">The location prefix of the created end point</param>
+            <returns>The tool</returns>
+        </member>
+        <member name="T:SysWeaver.AI.ImageToImagePrompt">
+            <summary>
+            Parameters for creating an image from a source image and a text prompt, see <see cref="T:SysWeaver.AI.IAiImageEditService"/>.
+            The prompt describes what to do with the source image, ex: "Make it a watercolor painting".
+            The model defaults to the service default image edit model (not the text to image model).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ImageToImagePrompt.ToString">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.AI.ImageToImagePrompt.SourceImage">
+            <summary>
+            The source image (required).
+            Either the image data (if <see cref="F:SysWeaver.MemoryFile.Mime"/> is null, it's detected from the data),
+            or a link (<see cref="F:SysWeaver.MemoryFile.Data"/> is null) where <see cref="F:SysWeaver.MemoryFile.Name"/> is an "http://", "https://" or "data:" url.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.JsonSchema">
+            <summary>
+            Builds JSON schemas (as <see cref="T:SysWeaver.AI.JsonSchemaParam"/>) from .NET types, used to describe tool parameters to AI models
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.JsonSchema.Get(System.Type,System.Boolean,System.String,System.Boolean)">
+            <summary>
+            Get the (cached) schema of a type
+            </summary>
+            <param name="type">The type</param>
+            <param name="isOutput">True if the schema describes a return value, false for an argument</param>
+            <param name="description">Optional description of the value</param>
+            <param name="isOptional">If true, the description is prefixed with "[Optional]"</param>
+            <returns>The schema</returns>
+        </member>
+        <member name="M:SysWeaver.AI.JsonSchema.GetString(System.Type,System.Boolean,System.String)">
+            <summary>
+            Get the (cached) schema of a type as indented JSON
+            </summary>
+            <param name="type">The type</param>
+            <param name="isOutput">True if the schema describes a return value, false for an argument</param>
+            <param name="description">Optional description of the value</param>
+            <returns>The JSON schema, or "null" if the type has no schema</returns>
+        </member>
+        <member name="M:SysWeaver.AI.JsonSchema.ToString(SysWeaver.AI.JsonSchemaParam,System.Boolean)">
+            <summary>
+            Serialize a schema to JSON
+            </summary>
+            <param name="p">The schema</param>
+            <param name="verbose">True to use the verbose serializer options</param>
+            <returns>The JSON, or "null" if the schema is null</returns>
+        </member>
+        <member name="M:SysWeaver.AI.JsonSchema.TryGetPrim(System.Type,System.String@)">
+            <summary>
+            Try to get the JSON schema type name of a primitive type
+            </summary>
+            <param name="type">The type</param>
+            <param name="typeName">The schema type name (ex: "string", "integer"), if found</param>
+            <returns>True if the type is a primitive type</returns>
+        </member>
+        <member name="T:SysWeaver.AI.JsonSchemaCache">
+            <summary>
+            A cache of tool parameter schemas
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.JsonSchemaCache.GetBinaryDataParam(System.Type,System.String,System.Boolean,System.String)">
+            <summary>
+            Get the (cached) schema of a tool parameter, as an object schema with a single (required) property
+            </summary>
+            <param name="type">The type of the parameter</param>
+            <param name="paramName">The name of the property holding the parameter</param>
+            <param name="isOutput">True if the schema describes a return value, false for an argument</param>
+            <param name="description">Optional description of the parameter</param>
+            <returns>The JSON schema, or null if the type has no schema</returns>
+        </member>
+        <member name="T:SysWeaver.AI.JsonSchemaParam">
+            <summary>
+            A JSON schema node (a subset of JSON schema, as used for AI tool parameters)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.JsonSchemaParam.ToString">
+            <inheritdoc />
+        </member>
+        <member name="F:SysWeaver.AI.JsonSchemaParam.Type">
+            <summary>
+            The JSON schema type (ex: "string", "integer", "number", "boolean", "array", "object")
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.JsonSchemaParam.Format">
+            <summary>
+            Optional format of the value (ex: "date-time")
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.JsonSchemaParam.Properties">
+            <summary>
+            The properties of an object, by name
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.JsonSchemaParam.Description">
+            <summary>
+            Description of the value
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.JsonSchemaParam.Enum">
+            <summary>
+            The allowed values (for enums)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.JsonSchemaParam.Required">
+            <summary>
+            The names of the required properties of an object
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.JsonSchemaParam.Items">
+            <summary>
+            The schema of the items of an array
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.KeyValueStorageAiMemory">
+            <summary>
+            An <see cref="T:SysWeaver.AI.IAiMemory"/> that stores the memories of each user in the application key value store
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.KeyValueStorageAiMemory.GetMemoryEntries(SysWeaver.Net.HttpSession)">
+            <inheritdoc />
+        </member>
+        <member name="M:SysWeaver.AI.KeyValueStorageAiMemory.AddMemory(SysWeaver.Net.HttpSession,System.String,System.String,System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:SysWeaver.AI.KeyValueStorageAiMemory.GetMemory(SysWeaver.Net.HttpSession,System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:SysWeaver.AI.KeyValueStorageAiMemory.RemoveMemory(SysWeaver.Net.HttpSession,System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:SysWeaver.AI.KeyValueStorageAiMemory.SetMemory(SysWeaver.Net.HttpSession,System.String,System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:SysWeaver.AI.KeyValueStorageAiMemory.GetAiMemoryTable(SysWeaver.Data.TableDataRequest,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Displays the memory that the AI have stored
+            </summary>
+            <param name="r"></param>
+            <param name="context"></param>
+            <returns></returns>
+        </member>
+        <member name="T:SysWeaver.AI.KeyValueStorageAiMemory.MemDebug">
+            <summary>
+            A row of the AI memory table
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.KeyValueStorageAiMemory.MemDebug.#ctor">
+            <summary>
+            Create an empty row (for deserialization)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.KeyValueStorageAiMemory.MemDebug.#ctor(SysWeaver.AI.KeyValueStorageAiMemory.MemEntry)">
+            <summary>
+            Create a row from a memory entry
+            </summary>
+            <param name="e">The memory entry</param>
+        </member>
+        <member name="F:SysWeaver.AI.KeyValueStorageAiMemory.MemDebug.Key">
+            <summary>
+            The key used to access the memory
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.KeyValueStorageAiMemory.MemDebug.Last">
+            <summary>
+            When the memory was last accessed
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.KeyValueStorageAiMemory.MemDebug.Desc">
+            <summary>
+            A short description / hint of the memory contents
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.KeyValueStorageAiMemory.MemDebug.Value">
+            <summary>
+            The content of the memory
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.KeyValueStorageAiMemory.Mem">
+            <summary>
+            The memories of a user
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.KeyValueStorageAiMemory.Mem.Lock">
+            <summary>
+            Lock that must be held when accessing <see cref="F:SysWeaver.AI.KeyValueStorageAiMemory.Mem.M"/>
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.KeyValueStorageAiMemory.Mem.M">
+            <summary>
+            The memories by key, null until loaded
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.KeyValueStorageAiMemory.MemEntry">
+            <summary>
+            A stored memory
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.KeyValueStorageAiMemory.MemEntry.#ctor">
+            <summary>
+            Create an empty entry (for deserialization)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.KeyValueStorageAiMemory.MemEntry.H">
+            <summary>
+            The header (key, last access and description)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.KeyValueStorageAiMemory.MemEntry.V">
+            <summary>
+            The value
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.KeyValueStorageAiMemory.MemEntry.#ctor(System.String,System.String,System.String)">
+            <summary>
+            Create an entry, last access is set to now
+            </summary>
+            <param name="key">The unique key</param>
+            <param name="desc">A short description</param>
+            <param name="value">The value</param>
+        </member>
+        <member name="T:SysWeaver.AI.TextToImagePrompt">
+            <summary>
+            Parameters for creating an image from a text prompt, see <see cref="T:SysWeaver.AI.IAiImageGenService"/>.
+            Options that a service or model doesn't support are ignored.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.TextToImagePrompt.ToString">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.AI.TextToImagePrompt.Model">
+            <summary>
+            The model to use, null or blank to use the service default (configured in the service parameters).
+            For ComfyUI this is the name of the workflow.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.TextToImagePrompt.Width">
+            <summary>
+            The desired width in pixels, 0 or less to use the default.
+            If only one of Width and Height is set, the other one is computed using the aspect ratio of the default size.
+            The image is created using the size (or aspect ratio) closest to this that the model supports, so the actual size may differ.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.TextToImagePrompt.Height">
+            <summary>
+            The desired height in pixels, 0 or less to use the default.
+            If only one of Width and Height is set, the other one is computed using the aspect ratio of the default size.
+            The image is created using the size (or aspect ratio) closest to this that the model supports, so the actual size may differ.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.TextToImagePrompt.Prompt">
+            <summary>
+            The description of the image to create (required).
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.TextToImagePrompt.NegativePrompt">
+            <summary>
+            What to avoid in the image, ex: "blurry, watermark, text".
+            Null or empty for none (ComfyUI: null uses the default negative prompt).
+            Services without negative prompt support append it to the prompt as things to avoid.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AI.TextToImagePrompt.Transparent">
+            <summary>
+            If true, the image should have a transparent background.
+            Only respected if the model supports it (if no model is specified, a model that supports transparency may be selected).
+            </summary>
+        </member>
+    </members>
+</doc>

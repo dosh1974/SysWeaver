@@ -692,6 +692,7 @@ namespace SysWeaver.WebBrowser
             Params = p;
             M = m;
             Owner = owner;
+            TrackNetwork(page);
         }
 
         readonly PlaywrightBrowser.WindowOwner Owner;
@@ -1017,6 +1018,7 @@ namespace SysWeaver.WebBrowser
             var oldPage = Page;
             Owned = c;
             Page = page;
+            TrackNetwork(page);
             Scale = scale;
             _ = Close(oldContext, oldPage, false);
         }
@@ -1054,6 +1056,108 @@ namespace SysWeaver.WebBrowser
             }
             return true;
         }
+
+
+        #region Network tracking
+
+        /// <summary>
+        /// A request that has been pending for this long (ms) is considered long lived (streaming, long polling etc) and doesn't
+        /// prevent the network from being idle
+        /// </summary>
+        const int StalledRequestMs = 6000;
+
+        readonly Object NetLock = new Object();
+
+        /// <summary>
+        /// The pending requests (of all frames) and when they started (Stopwatch timestamp)
+        /// </summary>
+        readonly Dictionary<IRequest, long> NetPending = new Dictionary<IRequest, long>();
+
+        /// <summary>
+        /// When a request was last started or completed (Stopwatch timestamp)
+        /// </summary>
+        long NetLastActivity = Stopwatch.GetTimestamp();
+
+        IPage NetPage;
+
+        /// <summary>
+        /// Start tracking the requests of a page (stops tracking the previous page)
+        /// </summary>
+        void TrackNetwork(IPage page)
+        {
+            lock (NetLock)
+            {
+                var old = NetPage;
+                if (old == page)
+                    return;
+                if (old != null)
+                {
+                    old.Request -= OnNetRequest;
+                    old.RequestFinished -= OnNetDone;
+                    old.RequestFailed -= OnNetDone;
+                }
+                NetPage = page;
+                NetPending.Clear();
+                NetLastActivity = Stopwatch.GetTimestamp();
+                if (page != null)
+                {
+                    page.Request += OnNetRequest;
+                    page.RequestFinished += OnNetDone;
+                    page.RequestFailed += OnNetDone;
+                }
+            }
+        }
+
+        void OnNetRequest(Object sender, IRequest r)
+        {
+            var now = Stopwatch.GetTimestamp();
+            lock (NetLock)
+            {
+                NetPending[r] = now;
+                NetLastActivity = now;
+            }
+        }
+
+        void OnNetDone(Object sender, IRequest r)
+        {
+            var now = Stopwatch.GetTimestamp();
+            lock (NetLock)
+            {
+                if (NetPending.Remove(r))
+                    NetLastActivity = now;
+            }
+        }
+
+        public async Task<bool> WaitNetworkIdle(int idleMs = 500, int timeoutMs = 10000)
+        {
+            var idle = TimeSpan.FromMilliseconds(Math.Clamp(idleMs, 50, 30000));
+            var timeout = TimeSpan.FromMilliseconds(Math.Clamp(timeoutMs, 0, 120000));
+            var stalled = TimeSpan.FromMilliseconds(Math.Max(StalledRequestMs, idle.TotalMilliseconds * 4));
+            var start = Stopwatch.GetTimestamp();
+            for (; ; )
+            {
+                var now = Stopwatch.GetTimestamp();
+                int pending = 0;
+                TimeSpan quiet;
+                lock (NetLock)
+                {
+                    foreach (var t in NetPending.Values)
+                        if (Stopwatch.GetElapsedTime(t, now) < stalled)
+                            ++pending;
+                    quiet = Stopwatch.GetElapsedTime(NetLastActivity, now);
+                }
+                if ((pending == 0) && (quiet >= idle))
+                    return true;
+                if (Stopwatch.GetElapsedTime(start, now) >= timeout)
+                {
+                    M?.AddMessage(String.Concat(Prefix, "Network didn't go idle within ", timeout.TotalMilliseconds.ToString(CultureInfo.InvariantCulture), " ms (", pending.ToString(CultureInfo.InvariantCulture), " pending requests)"), MessageLevels.Debug);
+                    return false;
+                }
+                await Task.Delay(50).ConfigureAwait(false);
+            }
+        }
+
+        #endregion//Network tracking
     }
 
 

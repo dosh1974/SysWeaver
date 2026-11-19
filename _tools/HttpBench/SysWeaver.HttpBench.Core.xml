@@ -1,0 +1,1386 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>SysWeaver.HttpBench.Core</name>
+    </assembly>
+    <members>
+        <member name="T:SysWeaver.HttpBench.BenchEndPoint">
+            <summary>
+            One end point that a test can call.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchEndPoint.Id">
+            <summary>
+            A unique id ("module.name"), used by the client to select it.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchEndPoint.Module">
+            <summary>
+            The id of the module (group) of the end point.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchEndPoint.Name">
+            <summary>
+            The display name.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchEndPoint.Method">
+            <summary>
+            The http method: GET or POST.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchEndPoint.Path">
+            <summary>
+            The url relative to the root of the target server (may include a query string).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchEndPoint.Body">
+            <summary>
+            The json body of a POST (null for none).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchEndPoint.IsApi">
+            <summary>
+            True for an api (Accept: application/json), false for a file.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchEndPoint.Desc">
+            <summary>
+            What it does and what part of SysWeaver it exercises.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchEndPoint.ToString">
+            <summary>
+            The http method and path, ex: "GET serverTime".
+            </summary>
+        </member>
+        <member name="T:SysWeaver.HttpBench.BenchModule">
+            <summary>
+            A group of end points that the user toggles on and off together.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchModule.Id">
+            <summary>
+            A unique id.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchModule.Name">
+            <summary>
+            The display name.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchModule.Desc">
+            <summary>
+            What the end points of this module exercise.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchModule.Icon">
+            <summary>
+            An icon (inline icon name of the Sw ui library).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchModule.Default">
+            <summary>
+            True if the module is selected by default.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchModule.EndPoints">
+            <summary>
+            The end points of this module.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.HttpBench.BenchCatalog">
+            <summary>
+            The end points that can be tested.
+            A selection of public (no sign in needed) end points of the services that a typical SysWeaver server runs
+            (the services of SwServerManager, except the folder sync, server manager and the http server hosts), picked to hit as many of the
+            common (frequently used) modules as possible: static and templated files, generated images, the icon module, the application and
+            session apis, auth helpers, type information and table data, the explore listings and the media service.
+            This is not a coverage test.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchCatalog.CanCallUrls">
+            <summary>
+            The urls that a page asks Api/auth/CanCall about (Sw.Access asks about every api a page uses in one request).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchCatalog.Modules">
+            <summary>
+            All modules, in display order.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchCatalog.ById">
+            <summary>
+            All end points by id.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchCatalog.ModuleById">
+            <summary>
+            All modules by id.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.HttpBench.BenchMarkDownReport">
+            <summary>
+            The report of a test as a markdown (GitHub flavored) document: the key results first (requests per second and response times), then the
+            parameters and the tables (end points, modules, status codes, errors, the timeline and the response time distribution).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchMarkDownReport.MaxTimelineRows">
+            <summary>
+            The most rows of the timeline (seconds are merged into groups when a test is longer).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchMarkDownReport.Num(System.Double,System.Int32)">
+            <summary>
+            A number with thousand separators (a space, readable in any locale).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchMarkDownReport.Ms(System.Double)">
+            <summary>
+            A time in ms with a precision that fits its size: "0.152 ms", "3.41 ms", "27.5 ms", "312 ms".
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchMarkDownReport.Bytes(System.Double)">
+            <summary>
+            A byte size: "512 B", "1.5 KB", "12.3 MB".
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchMarkDownReport.Duration(System.Double)">
+            <summary>
+            A duration: "45 s", "2 min 30 s", "1 h 5 min".
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchMarkDownReport.DescribeEndPoints(System.Collections.Generic.IEnumerable{System.String})">
+            <summary>
+            The end points of a selection, by module: "Pages and scripts (all 11), Application and session (GetMenu, GetUser)".
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchMarkDownReport.Parameters(SysWeaver.HttpBench.BenchStartRequest)">
+            <summary>
+            The parameters of a test as (name, value) pairs (shown in the report and by the console tool).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchMarkDownReport.ByteColumns">
+            <summary>
+            The byte size columns of the latency rows: the markdown export writes them as plain numbers, the totals are in the results.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchMarkDownReport.Create(SysWeaver.HttpBench.BenchRun,System.String)">
+            <summary>
+            The report of a test (done or running).
+            </summary>
+            <param name="run">The test</param>
+            <param name="tool">The name of the program that made the report (shown in the footer)</param>
+            <returns>The markdown text</returns>
+        </member>
+        <member name="T:SysWeaver.HttpBench.BenchReport">
+            <summary>
+            The table rows of a test (from the totals down to single requests), the same for the tables of the page and the markdown report.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchReport.ModuleName(SysWeaver.HttpBench.BenchEndPoint)">
+            <summary>
+            The display name of the module of an end point.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchReport.StatusMeaning(System.Int32)">
+            <summary>
+            What an http status code means: "OK", "Not found", 0 = "No response".
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchReport.EndPointRows(SysWeaver.HttpBench.BenchRun)">
+            <summary>
+            The results per end point (in the order the workers call them).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchReport.ModuleRows(SysWeaver.HttpBench.BenchRun)">
+            <summary>
+            The results per module (group of end points), in the catalog order.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchReport.SecondRows(SysWeaver.HttpBench.BenchRun,System.Int32)">
+            <summary>
+            The results per second (all end points), or per group of seconds when there are more than <paramref name="maxRows"/> seconds.
+            </summary>
+            <param name="run">The test</param>
+            <param name="maxRows">The most rows: seconds are merged into groups of the same length to stay below it</param>
+            <returns>One row per second (or group of seconds), <see cref="F:SysWeaver.HttpBench.BenchSecondRow.Second"/> is the first second of a group</returns>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchReport.SecondEndPointRows(SysWeaver.HttpBench.BenchRun)">
+            <summary>
+            The results per second and end point (that completed requests in that second).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchReport.WorkerRows(SysWeaver.HttpBench.BenchRun)">
+            <summary>
+            The results per worker.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchReport.StatusRows(SysWeaver.HttpBench.BenchRun)">
+            <summary>
+            The responses per end point and status code (in the end point order, then by status).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchReport.StatusTotalRows(SysWeaver.HttpBench.BenchRun)">
+            <summary>
+            The responses per status code (all end points), by status.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchReport.ErrorRows(SysWeaver.HttpBench.BenchRun)">
+            <summary>
+            The errors per end point, status and message (the most frequent first).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchReport.RequestRows(SysWeaver.HttpBench.BenchRun,System.String@)">
+            <summary>
+            Single requests: all of them, or a uniform random sample of all requests when there were more than the test keeps.
+            </summary>
+            <param name="run">The test</param>
+            <param name="title">A title that says if these are all requests or a sample</param>
+            <returns>One row per request</returns>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchReport.HistogramRows(SysWeaver.HttpBench.BenchRun)">
+            <summary>
+            The latency histogram (all end points), from the fastest to the slowest request.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.HttpBench.BenchLatencyRow">
+            <summary>
+            The latency and traffic columns that the end point, module, second and worker tables share.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.HttpBench.BenchEndPointRow">
+            <summary>
+            The results of one end point.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.HttpBench.BenchModuleRow">
+            <summary>
+            The results of one module (group of end points).
+            </summary>
+        </member>
+        <member name="T:SysWeaver.HttpBench.BenchSecondRow">
+            <summary>
+            The results of one second (all end points).
+            </summary>
+        </member>
+        <member name="T:SysWeaver.HttpBench.BenchSecondEndPointRow">
+            <summary>
+            The results of one end point in one second.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.HttpBench.BenchWorkerRow">
+            <summary>
+            The results of one worker.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.HttpBench.BenchStatusRow">
+            <summary>
+            The responses of one end point with one status code.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.HttpBench.BenchErrorRow">
+            <summary>
+            One kind of error (end point, status and message).
+            </summary>
+        </member>
+        <member name="T:SysWeaver.HttpBench.BenchRequestRow">
+            <summary>
+            One request (a sample of all requests when there were many).
+            </summary>
+        </member>
+        <member name="T:SysWeaver.HttpBench.BenchHistogramRow">
+            <summary>
+            One bucket of the latency histogram.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.HttpBench.BenchRun">
+            <summary>
+            One test: the workers that call the end points and the metrics they collect.
+            Every worker is a client of its own (a connection pool of one connection and a cookie jar, so one server session per worker) that
+            calls the selected end points in order, one request at a time, until the time is up.
+            The metrics are kept per end point and second, so every table and chart is built from the same data.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.HttpBench.BenchRun.Prepared">
+            <summary>
+            An end point, ready to be called.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchRun.Prepared.Body">
+            <summary>
+            The (compressed) body, null for none.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchRun.Prepared.ValueSize">
+            <summary>
+            The size of the api value as sent: the (compressed) POST body or the GET query string, 0 for none.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchRun.Methods">
+            <summary>
+            The http method each end point is called with ("GET" / "POST", by <see cref="F:SysWeaver.HttpBench.BenchStartRequest.SendAsGet"/> for apis with a value).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchRun.QueryLetter(System.String)">
+            <summary>
+            The query string letter of a compression ("_" + letter + base64url data, see the HttpServer README "Calling APIs").
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchRun.QueryValue(System.Byte[],SysWeaver.Compression.ICompType)">
+            <summary>
+            Encode an api value (json) as a GET query string: the url encoded json without compression, else "_" + the letter of the
+            compression + the compressed json as base64url (no padding).
+            </summary>
+        </member>
+        <member name="T:SysWeaver.HttpBench.BenchRun.Worker">
+            <summary>
+            One worker (a client that sends one request at a time).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchRun.Worker.Index">
+            <summary>
+            The index of the worker.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchRun.Worker.Client">
+            <summary>
+            The http client of the worker (created by <see cref="M:SysWeaver.HttpBench.BenchRun.Start"/>).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchRun.Worker.Wire">
+            <summary>
+            The wire byte counters of the worker.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchRun.Worker.Totals">
+            <summary>
+            The totals of this worker (only the worker writes them).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchRun.Worker.Buffer">
+            <summary>
+            The buffer used to read response bodies.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchRun.Worker.Samples">
+            <summary>
+            The kept single requests of the worker (a uniform random sample once full, see <see cref="F:SysWeaver.HttpBench.BenchRun.Worker.SamplesSeen"/>).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchRun.Worker.SamplesSeen">
+            <summary>
+            The number of requests that were offered to <see cref="F:SysWeaver.HttpBench.BenchRun.Worker.Samples"/>.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchRun.Worker.Rng">
+            <summary>
+            The random generator used to select the samples to keep.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchRun.Worker.Started">
+            <summary>
+            The time stamp (<see cref="M:System.Diagnostics.Stopwatch.GetTimestamp"/>) when the worker started.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchRun.Worker.Local">
+            <summary>
+            The counters of the requests that completed in <see cref="F:SysWeaver.HttpBench.BenchRun.Worker.LocalSecond"/>, per end point (with histograms).
+            Only the worker writes them, they are merged into the shared counters when the second changes and when the worker ends.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchRun.Worker.LocalSecond">
+            <summary>
+            The second of <see cref="F:SysWeaver.HttpBench.BenchRun.Worker.Local"/>, -1 for none.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchRun.Worker.LocalStatuses">
+            <summary>
+            The responses per end point and status of <see cref="F:SysWeaver.HttpBench.BenchRun.Worker.LocalSecond"/>.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchRun.Worker.TimeoutCts">
+            <summary>
+            The time out of a request (linked to the abort of the test), reused for every request until it fires.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchRun.#ctor(System.Int32,SysWeaver.HttpBench.BenchSetup,SysWeaver.HttpBench.BenchLimits)">
+            <summary>
+            Create a test (call <see cref="M:SysWeaver.HttpBench.BenchRun.Start"/> to run it).
+            </summary>
+            <param name="id">The id of the test</param>
+            <param name="setup">The validated settings</param>
+            <param name="limits">The limits and timing of the host, null for the defaults</param>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchRun.Id">
+            <summary>
+            The id of the test.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchRun.Settings">
+            <summary>
+            The (normalized) settings of the test.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchRun.Target">
+            <summary>
+            The root url of the server.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchRun.EndPoints">
+            <summary>
+            The end points that are called, in order.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchRun.Concurrency">
+            <summary>
+            The number of workers.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchRun.DurationSeconds">
+            <summary>
+            The duration of the test in seconds.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchRun.AcceptEncoding">
+            <summary>
+            The Accept-Encoding header value that is sent, null for none.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchRun.ContentEncoding">
+            <summary>
+            The Content-Encoding of the request bodies (the http code of the request compression), null for none.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.HttpBench.BenchRun.Started">
+            <summary>
+            The utc time the workers started (set by <see cref="M:SysWeaver.HttpBench.BenchRun.Start"/>).
+            </summary>
+        </member>
+        <member name="P:SysWeaver.HttpBench.BenchRun.Ended">
+            <summary>
+            The utc time the test ended, null while it is running.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchRun.State">
+            <summary>
+            The state of the test.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.HttpBench.BenchRun.Message">
+            <summary>
+            A message that tells why the test failed or was stopped, null if there is none.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchRun.Workers">
+            <summary>
+            The workers.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchRun.AbortCts">
+            <summary>
+            Cancelled by a stop (at once) and at the end of the test (after the drain time): requests that are cancelled by it are not counted.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchRun.EpTotals">
+            <summary>
+            The totals per end point (with latency histograms).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchRun.Seconds">
+            <summary>
+            The counters per second (of the completion of the request) and end point, created when needed.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchRun.SecondHists">
+            <summary>
+            The latency histogram of all end points per second, created when needed.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchRun.Statuses">
+            <summary>
+            The responses per end point and status code (0 = no response).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchRun.Errors">
+            <summary>
+            The errors per end point, status and message.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchRun.OnDone">
+            <summary>
+            Called once when the test is done (any end state).
+            </summary>
+        </member>
+        <member name="P:SysWeaver.HttpBench.BenchRun.IsDone">
+            <summary>
+            True when the test is over (completed, stopped or failed).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchRun.Start">
+            <summary>
+            Start the workers.
+            The http clients are created first, so the test time (and the per second counters) starts with the first request.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchRun.WaitAsync">
+            <summary>
+            Wait for the test to end (any end state), completes at once if it was never started.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchRun.Stop">
+            <summary>
+            Stop the test now (requests in flight are cancelled and not counted).
+            </summary>
+            <returns>True if the test was stopped, false if it was already done</returns>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchRun.Dispose">
+            <summary>
+            Stop the test and wait (up to 10 seconds) for it to end.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.HttpBench.BenchRun.ElapsedSeconds">
+            <summary>
+            The time since the start (until the end when done).
+            </summary>
+        </member>
+        <member name="P:SysWeaver.HttpBench.BenchRun.MeasuredSeconds">
+            <summary>
+            The time that requests were sent (at most the duration).
+            </summary>
+        </member>
+        <member name="P:SysWeaver.HttpBench.BenchRun.SecondCount">
+            <summary>
+            The number of seconds that have counters (complete seconds while running, all seconds when done).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchRun.GetSecond(System.Int32)">
+            <summary>
+            The counters of one second (null if nothing completed in it).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchRun.GetSecondHist(System.Int32)">
+            <summary>
+            The latency histogram of one second (null if nothing completed in it).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchRun.SecondTime(System.Int32)">
+            <summary>
+            The utc time of the start of a second of the test.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchRun.SecondTotal(System.Int32)">
+            <summary>
+            The totals of all end points of one second (no histogram).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchRun.Total(System.Func{System.Int32,System.Boolean})">
+            <summary>
+            The totals of all end points (with a histogram).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchRun.GetPeakRps">
+            <summary>
+            The highest number of requests completed in one second (complete seconds only).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchRun.GetStatus">
+            <summary>
+            The live state and totals.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchRun.Call(SysWeaver.HttpBench.BenchRun.Worker,SysWeaver.HttpBench.BenchRun.Prepared,System.Threading.CancellationToken)">
+            <summary>
+            Call an end point once and record the result.
+            </summary>
+            <returns>False if the test was stopped while it ran (nothing recorded)</returns>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchRun.ErrorText(System.Int32,System.String,System.IO.MemoryStream,System.Collections.Generic.ICollection{System.String})">
+            <summary>
+            The text of an error response: the status and the start of the body (SysWeaver servers send the reason as text).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchRun.Merge(SysWeaver.HttpBench.BenchRun.Worker)">
+            <summary>
+            Merge the counters of the current second of a worker into the shared counters (the end point totals, the second and its
+            histogram and the status codes), then clear them. Called by the worker only (when its second changes and when it ends).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchRun.GetSamples">
+            <summary>
+            The kept request samples, in the order they completed (<see cref="F:SysWeaver.HttpBench.BenchSample.Seq"/> is set to that order).
+            </summary>
+        </member>
+        <member name="P:SysWeaver.HttpBench.BenchRun.SamplesSeen">
+            <summary>
+            The total number of requests that the samples were taken from.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.HttpBench.BenchServerProbe">
+            <summary>
+            Checks if a SysWeaver server answers: a GET of "serverTime" (the cheapest end point of every SysWeaver web server, the shell syncs its clock with it).
+            Used to wait for a server that is starting and to keep a server active between a warm up and a test.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchServerProbe.Path">
+            <summary>
+            The path of the probe, relative to the target.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchServerProbe.#ctor(System.Uri,System.Boolean,System.TimeSpan)">
+            <summary>
+            Create a probe.
+            </summary>
+            <param name="target">The root url of the server</param>
+            <param name="ignoreCertificateErrors">Accept any https certificate</param>
+            <param name="timeout">The time out of one request</param>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchServerProbe.Uri">
+            <summary>
+            The url that is requested.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchServerProbe.Dispose">
+            <summary>
+            Dispose the http client of the probe.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchServerProbe.PingAsync(System.Threading.CancellationToken)">
+            <summary>
+            Request the probe once.
+            </summary>
+            <param name="cancel">Cancels the request</param>
+            <returns>Null and the time in ms if the server answered with a 2xx status, else the reason it didn't</returns>
+            <exception cref="T:System.OperationCanceledException"><paramref name="cancel"/> was cancelled</exception>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchServerProbe.WaitAsync(System.TimeSpan,System.Threading.CancellationToken,System.Action{System.String,System.Double})">
+            <summary>
+            Request the probe until the server answers (one request per second at most).
+            </summary>
+            <param name="maxWait">The longest time to wait</param>
+            <param name="cancel">Cancels the wait</param>
+            <param name="onFail">Called after a failed request with the reason and the seconds waited so far, may be null</param>
+            <returns>Ok: the server answered. Failures: the number of failed requests before that (0 = it answered at once). Error: the last reason, null if ok</returns>
+            <exception cref="T:System.OperationCanceledException"><paramref name="cancel"/> was cancelled</exception>
+        </member>
+        <member name="T:SysWeaver.HttpBench.BenchStartRequest">
+            <summary>
+            The settings of a test: what the page sends when the user presses GO, what an exported parameter file holds (see <see cref="T:SysWeaver.HttpBench.BenchSettingsFile"/>)
+            and what the HttpBench console tool runs.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchStartRequest.Target">
+            <summary>
+            The root url of the server to test, ex: "https://myserver/" (end points are relative to it).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchStartRequest.DurationSeconds">
+            <summary>
+            The duration of the test in seconds.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchStartRequest.Concurrency">
+            <summary>
+            The number of workers: each worker is a client with its own connection and session that sends one request at a time.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchStartRequest.EndPoints">
+            <summary>
+            The ids of the end points to call (see <see cref="T:SysWeaver.HttpBench.BenchCatalog"/>), every worker calls them in the catalog order, over and over.
+            Null = the end points of the modules that are selected by default.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchStartRequest.SendAsGet">
+            <summary>
+            Send the values of the apis that take one (the POST end points of the catalog) as GET requests with the value in the query string,
+            instead of POST requests with the value as the body.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchStartRequest.RequestCompression">
+            <summary>
+            The compression of the api values (an http compression such as "br", "zstd", "gzip", "deflate"), null or empty for none.
+            POST: the body is compressed (Content-Encoding). GET: the query string is "_" + the compression letter + the compressed json as
+            base64url (without compression: the url encoded json).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchStartRequest.ResponseCompression">
+            <summary>
+            The response compressions to accept (the Accept-Encoding header), null or empty for none, "*" for all that the bench supports.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchStartRequest.IgnoreCertificateErrors">
+            <summary>
+            Accept any https certificate (self signed, LAN or expired certificates of test servers).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchStartRequest.Clone">
+            <summary>
+            A copy.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.HttpBench.BenchLimits">
+            <summary>
+            The limits and timing of the tests of a host (the bench service or the console tool).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchLimits.MaxConcurrency">
+            <summary>
+            The most workers (concurrent requests) of a test.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchLimits.MinDurationSeconds">
+            <summary>
+            The shortest test, in seconds.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchLimits.MaxDurationSeconds">
+            <summary>
+            The longest test, in seconds.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchLimits.RequestTimeoutSeconds">
+            <summary>
+            The time out of one request, in seconds (a request that takes longer is counted as an error).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchLimits.DrainSeconds">
+            <summary>
+            The time that requests that were started before the end of a test may take to complete, in seconds (they are cancelled after that and are not counted).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchLimits.MaxRequestSamples">
+            <summary>
+            The most single requests that are kept for the request details of a test (a uniform random sample of all requests when there are more).
+            </summary>
+        </member>
+        <member name="T:SysWeaver.HttpBench.BenchSetup">
+            <summary>
+            A validated test: the settings (normalized) and what a <see cref="T:SysWeaver.HttpBench.BenchRun"/> needs to start.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.HttpBench.BenchSetup.Settings">
+            <summary>
+            The settings, normalized: the target ends with a '/', the end points are in the catalog order, compressions are trimmed ("" for none).
+            </summary>
+        </member>
+        <member name="P:SysWeaver.HttpBench.BenchSetup.Target">
+            <summary>
+            The root url of the server (end points are relative to it).
+            </summary>
+        </member>
+        <member name="P:SysWeaver.HttpBench.BenchSetup.EndPoints">
+            <summary>
+            The end points to call, in the catalog order.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.HttpBench.BenchSetup.AcceptEncoding">
+            <summary>
+            The value of the Accept-Encoding header, null for none.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.HttpBench.BenchSetup.BodyCompression">
+            <summary>
+            The compression of the api values, null for none.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchSetup.CompressionCodes">
+            <summary>
+            The compressions this process can encode and decode (the http codes, best first).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchSetup.DefaultEndPoints">
+            <summary>
+            The ids of the end points of the modules that are selected by default, in the catalog order.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchSetup.Create(SysWeaver.HttpBench.BenchStartRequest,SysWeaver.HttpBench.BenchLimits)">
+            <summary>
+            Validate settings.
+            </summary>
+            <param name="r">The settings (not changed)</param>
+            <param name="limits">The limits, null for the defaults</param>
+            <returns>The validated test</returns>
+            <exception cref="T:System.ArgumentException">The settings are invalid (the message says why, it can be shown to a user)</exception>
+        </member>
+        <member name="T:SysWeaver.HttpBench.BenchSettingsFile">
+            <summary>
+            A parameter file: the settings of a test as json, with a "DataType": "HttpBench" member that identifies the file.
+            The page exports and imports these files, the HttpBench console tool loads them (-File) and writes them (-Save).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchSettingsFile.TypeMember">
+            <summary>
+            The name of the member that identifies the file type.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchSettingsFile.DataType">
+            <summary>
+            The value of the <see cref="F:SysWeaver.HttpBench.BenchSettingsFile.TypeMember"/> member.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchSettingsFile.ToJson(SysWeaver.HttpBench.BenchStartRequest)">
+            <summary>
+            The json text of settings.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchSettingsFile.FromJson(System.String)">
+            <summary>
+            Read settings from json text.
+            </summary>
+            <param name="json">The json text</param>
+            <returns>The settings (members that are missing in the json get their default value)</returns>
+            <exception cref="T:System.IO.InvalidDataException">Not a parameter file (invalid json or no "DataType": "HttpBench")</exception>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchSettingsFile.Load(System.String)">
+            <summary>
+            Load settings from a file.
+            </summary>
+            <exception cref="T:System.IO.InvalidDataException">Not a parameter file</exception>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchSettingsFile.Save(System.String,SysWeaver.HttpBench.BenchStartRequest)">
+            <summary>
+            Save settings to a file (UTF-8 json).
+            </summary>
+        </member>
+        <member name="T:SysWeaver.HttpBench.BenchStates">
+            <summary>
+            The state of a test.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchStates.Running">
+            <summary>
+            Workers are sending requests.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchStates.Finishing">
+            <summary>
+            The time is up, the last requests are completing.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchStates.Completed">
+            <summary>
+            The test ran for its whole duration.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchStates.Stopped">
+            <summary>
+            The test was stopped by a user (or the host stopped).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchStates.Failed">
+            <summary>
+            The test failed to run.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.HttpBench.BenchStatus">
+            <summary>
+            The live state and the totals of a test.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchStatus.Id">
+            <summary>
+            The id of the test.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchStatus.State">
+            <summary>
+            The state of the test.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchStatus.Done">
+            <summary>
+            True when the test is over.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchStatus.Target">
+            <summary>
+            The root url of the tested server.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchStatus.Started">
+            <summary>
+            The utc time the test started.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchStatus.Ended">
+            <summary>
+            The utc time the test ended, null while it is running.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchStatus.ElapsedSeconds">
+            <summary>
+            The seconds the test has run.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchStatus.DurationSeconds">
+            <summary>
+            The planned duration of the test in seconds.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchStatus.Progress">
+            <summary>
+            0 to 100.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchStatus.Concurrency">
+            <summary>
+            The number of workers.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchStatus.EndPointCount">
+            <summary>
+            The number of end points that are called.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchStatus.RequestCompression">
+            <summary>
+            The compression of the api values (see <see cref="F:SysWeaver.HttpBench.BenchStartRequest.RequestCompression"/>).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchStatus.ResponseCompression">
+            <summary>
+            The accepted response compressions (see <see cref="F:SysWeaver.HttpBench.BenchStartRequest.ResponseCompression"/>).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchStatus.ValueMethod">
+            <summary>
+            How api values are sent: "POST" (body) or "GET" (query string).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchStatus.Requests">
+            <summary>
+            The number of completed requests (including errors).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchStatus.Errors">
+            <summary>
+            The number of requests that failed.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchStatus.ErrorPercent">
+            <summary>
+            The percentage of the requests that failed.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchStatus.Rps">
+            <summary>
+            Requests per second over the whole test.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchStatus.CurrentRps">
+            <summary>
+            Requests per second of the last complete second.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchStatus.PeakRps">
+            <summary>
+            The highest requests per second of any second.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchStatus.AvgMs">
+            <summary>
+            The average request time in ms.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchStatus.CurrentAvgMs">
+            <summary>
+            The average request time in ms of the last complete second.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchStatus.MinMs">
+            <summary>
+            The shortest request time in ms.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchStatus.MaxMs">
+            <summary>
+            The longest request time in ms.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchStatus.P50Ms">
+            <summary>
+            The median request time in ms.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchStatus.P90Ms">
+            <summary>
+            The 90th percentile of the request time in ms.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchStatus.P95Ms">
+            <summary>
+            The 95th percentile of the request time in ms.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchStatus.P99Ms">
+            <summary>
+            The 99th percentile of the request time in ms.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchStatus.AvgTtfbMs">
+            <summary>
+            The average time to the first byte of the response in ms.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchStatus.WireSent">
+            <summary>
+            The bytes sent on the wire (headers and TLS included).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchStatus.WireRecv">
+            <summary>
+            The bytes received on the wire (headers and TLS included).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchStatus.BodySent">
+            <summary>
+            The body bytes sent.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchStatus.BodyRecv">
+            <summary>
+            The response body bytes received.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchStatus.Connections">
+            <summary>
+            The number of connections that were opened.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchStatus.Message">
+            <summary>
+            A message that tells why the test failed, null if there is none.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.HttpBench.LatencyHistogram">
+            <summary>
+            A logarithmic latency histogram: 20 buckets per decade of microseconds (each bucket is about 12 % wide), from 1 µs to 1000 s.
+            Percentiles are read as the geometric middle of their bucket (clamped to the exact min and max), so they are accurate to about ±6 %.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.LatencyHistogram.PerDecade">
+            <summary>
+            Buckets per decade.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.LatencyHistogram.Count">
+            <summary>
+            The number of buckets (1 µs to 10^9 µs).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.LatencyHistogram.Index(System.Int64)">
+            <summary>
+            The bucket of a duration.
+            </summary>
+            <param name="us">The duration in µs</param>
+            <returns>The bucket index</returns>
+        </member>
+        <member name="M:SysWeaver.HttpBench.LatencyHistogram.From(System.Int32)">
+            <summary>
+            The lowest duration of a bucket in µs.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.LatencyHistogram.To(System.Int32)">
+            <summary>
+            The highest duration of a bucket in µs.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.LatencyHistogram.Mid(System.Int32)">
+            <summary>
+            The duration that represents a bucket (its geometric middle) in µs.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.LatencyHistogram.Add(System.Int64[],System.Int64)">
+            <summary>
+            Add a value (not thread safe: a histogram that only one thread updates).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.LatencyHistogram.AddAtomic(System.Int64[],System.Int64[])">
+            <summary>
+            Add all values of a histogram to one that other threads update too (thread safe for the destination, only the buckets that have values).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.LatencyHistogram.AddTo(System.Int64[],System.Int64[])">
+            <summary>
+            Add all values of a histogram to another one (not thread safe for the destination).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.LatencyHistogram.Percentile(System.Int64[],System.Int64,System.Double,System.Int64,System.Int64)">
+            <summary>
+            Get a percentile in µs.
+            </summary>
+            <param name="h">The histogram</param>
+            <param name="total">The total count</param>
+            <param name="p">The percentile (0 to 1)</param>
+            <param name="minUs">The exact minimum (clamps the result)</param>
+            <param name="maxUs">The exact maximum (clamps the result)</param>
+            <returns>The value in µs, 0 if there are no values</returns>
+        </member>
+        <member name="T:SysWeaver.HttpBench.BenchCounters">
+            <summary>
+            The counters of a set of requests.
+            A worker records its requests with <see cref="M:SysWeaver.HttpBench.BenchCounters.AddLocal(System.Int64,System.Int64,System.Boolean,System.Int64,System.Int64,System.Int64,System.Int64,System.Boolean)"/> into counters of its own (no locks or interlocked operations in the request path)
+            and merges them into the shared counters once per second with <see cref="M:SysWeaver.HttpBench.BenchCounters.AddAtomic(SysWeaver.HttpBench.BenchCounters,System.Boolean)"/>.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchCounters.Count">
+            <summary>
+            The number of requests (including errors).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchCounters.Errors">
+            <summary>
+            The number of requests that failed.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchCounters.SumUs">
+            <summary>
+            The sum of the request times, in microseconds.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchCounters.SumTtfbUs">
+            <summary>
+            The sum of the times to the first byte of the response, in microseconds.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchCounters.MinUs">
+            <summary>
+            The shortest request time in microseconds (long.MaxValue if there are no requests).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchCounters.MaxUs">
+            <summary>
+            The longest request time in microseconds.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchCounters.WireSent">
+            <summary>
+            The number of bytes sent on the wire (headers and TLS included).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchCounters.WireRecv">
+            <summary>
+            The number of bytes received on the wire (headers and TLS included).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchCounters.BodySent">
+            <summary>
+            The number of body bytes sent (the api value).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchCounters.BodyRecv">
+            <summary>
+            The number of response body bytes received.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchCounters.Connections">
+            <summary>
+            The number of requests that had to open a new connection.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchCounters.Hist">
+            <summary>
+            The latency histogram (null if not kept).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchCounters.#ctor(System.Boolean)">
+            <summary>
+            Create empty counters.
+            </summary>
+            <param name="histogram">True to keep a latency histogram</param>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchCounters.AddLocal(System.Int64,System.Int64,System.Boolean,System.Int64,System.Int64,System.Int64,System.Int64,System.Boolean)">
+            <summary>
+            Add a request (not thread safe: counters that only one thread updates, other threads may read them while they change).
+            </summary>
+            <param name="us">The request time in microseconds</param>
+            <param name="ttfbUs">The time to the first byte of the response in microseconds</param>
+            <param name="error">True if the request failed</param>
+            <param name="wireSent">The bytes sent on the wire</param>
+            <param name="wireRecv">The bytes received on the wire</param>
+            <param name="bodySent">The body bytes sent</param>
+            <param name="bodyRecv">The response body bytes received</param>
+            <param name="newConnection">True if the request opened a new connection</param>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchCounters.AddAtomic(SysWeaver.HttpBench.BenchCounters,System.Boolean)">
+            <summary>
+            Add counters to these ones while other threads do the same (thread safe for these counters, the source must not change meanwhile).
+            </summary>
+            <param name="c">The counters to add</param>
+            <param name="histogram">Add the histogram too (if both have one)</param>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchCounters.Reset">
+            <summary>
+            Clear all values (not thread safe).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchCounters.AddFrom(SysWeaver.HttpBench.BenchCounters)">
+            <summary>
+            Add the values of other counters (not thread safe, used to build snapshots).
+            </summary>
+        </member>
+        <member name="P:SysWeaver.HttpBench.BenchCounters.AvgMs">
+            <summary>
+            The average request time in ms.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.HttpBench.BenchCounters.AvgTtfbMs">
+            <summary>
+            The average time to the first byte of the response in ms.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.HttpBench.BenchCounters.MinMs">
+            <summary>
+            The shortest request time in ms.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.HttpBench.BenchCounters.MaxMs">
+            <summary>
+            The longest request time in ms.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.HttpBench.BenchCounters.ErrorPercent">
+            <summary>
+            The percentage of the requests that failed.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpBench.BenchCounters.PercentileMs(System.Double)">
+            <summary>
+            A percentile in ms (needs the histogram).
+            </summary>
+            <param name="p">The percentile</param>
+            <returns>The request time in ms</returns>
+        </member>
+        <member name="T:SysWeaver.HttpBench.BenchSample">
+            <summary>
+            One request, kept for the request details.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchSample.Seq">
+            <summary>
+            The sequence number of the request, in completion order (set when the samples are listed).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchSample.StartUs">
+            <summary>
+            The start time of the request in microseconds, since the start of the test.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchSample.EndPoint">
+            <summary>
+            The index of the end point.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchSample.Worker">
+            <summary>
+            The index of the worker.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchSample.Status">
+            <summary>
+            The http status (0 = no response).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchSample.DurationUs">
+            <summary>
+            The request time in microseconds.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchSample.TtfbUs">
+            <summary>
+            The time to the first byte of the response in microseconds.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchSample.WireSent">
+            <summary>
+            The bytes sent on the wire.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchSample.WireRecv">
+            <summary>
+            The bytes received on the wire.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchSample.BodySent">
+            <summary>
+            The body bytes sent.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchSample.BodyRecv">
+            <summary>
+            The response body bytes received.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchSample.NewConnection">
+            <summary>
+            True if the request opened a new connection.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchSample.Error">
+            <summary>
+            The error message, null if the request succeeded.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.HttpBench.BenchError">
+            <summary>
+            The counters of one error (end point, status and message).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchError.EndPoint">
+            <summary>
+            The index of the end point.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchError.Status">
+            <summary>
+            The http status (0 = no response).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchError.Message">
+            <summary>
+            The error message.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchError.Count">
+            <summary>
+            The number of times the error occurred.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchError.FirstUs">
+            <summary>
+            The start time of the first request that had the error, in microseconds since the start of the test (long.MaxValue if none).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.BenchError.LastUs">
+            <summary>
+            The start time of the last request that had the error, in microseconds since the start of the test.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.HttpBench.WireCounters">
+            <summary>
+            The counters of the wire bytes of one worker (all its connections).
+            Only the connection of the worker writes them (one request at a time, no interlocked operations), other threads read them.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.WireCounters.Sent">
+            <summary>
+            The bytes sent.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.WireCounters.Recv">
+            <summary>
+            The bytes received.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpBench.WireCounters.Connections">
+            <summary>
+            The number of connections that were opened.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.HttpBench.CountingStream">
+            <summary>
+            A stream that counts the bytes read and written (wraps the network stream of a connection, below TLS: wire bytes including headers and TLS).
+            </summary>
+        </member>
+    </members>
+</doc>

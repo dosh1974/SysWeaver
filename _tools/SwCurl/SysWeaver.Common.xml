@@ -1557,6 +1557,11 @@
             SemaphoreSlim.WaitAsync, but with a timeout less than -1 it don't register a waiter (that would take a slot that is never released) when returning the faulted task
             </summary>
         </member>
+        <member name="M:SysWeaver.AsyncLock.Wait(System.Threading.SemaphoreSlim,System.Int32)">
+            <summary>
+            SemaphoreSlim.Wait, but a timeout less than -1 succeeds if a slot is free (else throws), the same as WaitAsync and as SemaphoreSlim before .NET 11 (it validates the timeout first since .NET 11)
+            </summary>
+        </member>
         <member name="M:SysWeaver.AsyncLock.LockSync">
             <summary>
             Wait for a lock to be taken
@@ -7213,6 +7218,11 @@
             The filters, one array per filter row (with one filter per column)
             </summary>
         </member>
+        <member name="F:SysWeaver.Data.CurrencyTableDataRequest.Currency">
+            <summary>
+            The currency to use
+            </summary>
+        </member>
         <member name="T:SysWeaver.Data.TableDataRow">
             <summary>
             A single row in a <see cref="T:SysWeaver.Data.BaseTableData"/>.
@@ -7528,6 +7538,24 @@
             <returns>A shared message handler instance (the same instance is returned for the same style)</returns>
             <exception cref="T:System.IndexOutOfRangeException"><paramref name="style"/> is not a defined <see cref="T:SysWeaver.Message.TextStyles"/> value.</exception>
         </member>
+        <member name="M:SysWeaver.DebugMessageHandler.ToString">
+            <summary>
+            The handler type, mode and text style.
+            </summary>
+            <returns>A short text for debugging.</returns>
+        </member>
+        <member name="M:SysWeaver.DebugMessageHandler.WriteText(System.String)">
+            <summary>
+            Writes the text to the debugger output (<see cref="M:System.Diagnostics.Debug.Write(System.String)"/>).
+            </summary>
+            <param name="text">The formatted message text.</param>
+            <returns>A completed task.</returns>
+        </member>
+        <member name="M:SysWeaver.DebugMessageHandler.OnFlush">
+            <summary>
+            Flushes the debug output (<see cref="M:System.Diagnostics.Debug.Flush"/>).
+            </summary>
+        </member>
         <member name="T:SysWeaver.DictionaryList`2">
             <summary>
             A multi-map: a dictionary that maps each key to a <see cref="T:System.Collections.Generic.List`1"/> of values.
@@ -7686,6 +7714,11 @@
             <summary>
             A css color string that is always stored as "#rrggbb" (or "#rrggbbaa" when <see cref="F:SysWeaver.EditColorAttribute.Alpha"/> is true):
             a typed or pasted css color (named, rgb(), hsl() ...) is converted, for members that are read as hex only.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.EditColorFormat.Struct8">
+            <summary>
+            An object with integer R, G, B members in 0..255 and optionally A (0..255) or Opacity (0..100 percent), ex: a css colour class.
             </summary>
         </member>
         <member name="T:SysWeaver.EditColorAttribute">
@@ -7929,6 +7962,24 @@
         <member name="F:SysWeaver.EditReadOnlyAttribute.ReadOnly">
             <summary>
             True if the member should be read only
+            </summary>
+        </member>
+        <member name="T:SysWeaver.EditRandomAttribute">
+            <summary>
+            Put this on an integer or floating point field or property (ex: a seed) to let the user set a random value: the editor shows a
+            dice button (and a "Random" member menu item) that sets a random value within the min and max of the member (see
+            <see cref="T:SysWeaver.EditRangeAttribute"/>, <see cref="T:SysWeaver.EditMinAttribute"/>, <see cref="T:SysWeaver.EditMaxAttribute"/>), or of the type when not set.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.EditRandomAttribute.#ctor(System.Boolean)">
+            <summary>
+            Put this on an integer or floating point field or property to let the user set a random value
+            </summary>
+            <param name="random">True to allow random values (false turns off an inherited attribute)</param>
+        </member>
+        <member name="F:SysWeaver.EditRandomAttribute.Random">
+            <summary>
+            True to allow random values
             </summary>
         </member>
         <member name="T:SysWeaver.EditRangeAttribute">
@@ -8848,7 +8899,7 @@
         <member name="M:SysWeaver.ExceptionExt.SecretKeyValueRegex">
             <remarks>
             Pattern:<br/>
-            <code>(?&lt;k&gt;(?&lt;![A-Za-z0-9_\\-])(?:password|passwd|pwd|pass|passphrase|user\\s?id|uid|user\\s?name|user|login|account\\s?key|shared\\s?access\\s?key|shared\\s?access\\s?signature|client[_\\-]?secret|secret|api[_\\-]?key|access[_\\-]?key|access[_\\-]?token|refresh[_\\-]?token|id[_\\-]?token|auth[_\\-]?token|token|key|sig|signature|credentials?|data\\s?source|server|host|address|addr)\\s*=\\s*)(?&lt;v&gt;"[^"]*"|'[^']*'|[^;&amp;,\\s"'&lt;&gt;]+)</code><br/>
+            <code>(?&lt;k&gt;(?&lt;![A-Za-z0-9_\-])(?:password|passwd|pwd|pass|passphrase|user\s?id|uid|user\s?name|user|login|account\s?key|shared\s?access\s?key|shared\s?access\s?signature|client[_\-]?secret|secret|api[_\-]?key|access[_\-]?key|access[_\-]?token|refresh[_\-]?token|id[_\-]?token|auth[_\-]?token|token|key|sig|signature|credentials?|data\s?source|server|host|address|addr)\s*=\s*)(?&lt;v&gt;"[^"]*"|'[^']*'|[^;&amp;,\s"'&lt;&gt;]+)</code><br/>
             Options:<br/>
             <code>RegexOptions.IgnoreCase | RegexOptions.CultureInvariant</code><br/>
             Explanation:<br/>
@@ -8875,16 +8926,14 @@
                                 ○ Match a character in the set [Dd].<br/>
                             ○ Match a sequence of expressions.<br/>
                                 ○ Match a character in the set [Aa].<br/>
-                                ○ Match with 2 alternative expressions.<br/>
-                                    ○ Match a character in the set [Ss] exactly 2 times.<br/>
-                                    ○ Match a sequence of expressions.<br/>
-                                        ○ Match a character in the set [Ss] exactly 2 times.<br/>
-                                        ○ Match a character in the set [Pp].<br/>
-                                        ○ Match a character in the set [Hh].<br/>
-                                        ○ Match a character in the set [Rr].<br/>
-                                        ○ Match a character in the set [Aa].<br/>
-                                        ○ Match a character in the set [Ss].<br/>
-                                        ○ Match a character in the set [Ee].<br/>
+                                ○ Match a character in the set [Ss] exactly 2 times.<br/>
+                                ○ Optional (lazy).<br/>
+                                    ○ Match a character in the set [Pp].<br/>
+                                    ○ Match a character in the set [Hh].<br/>
+                                    ○ Match a character in the set [Rr].<br/>
+                                    ○ Match a character in the set [Aa].<br/>
+                                    ○ Match a character in the set [Ss].<br/>
+                                    ○ Match a character in the set [Ee].<br/>
                     ○ Match a sequence of expressions.<br/>
                         ○ Match a character in the set [Uu].<br/>
                         ○ Match with 3 alternative expressions.<br/>
@@ -8901,15 +8950,13 @@
                             ○ Match a sequence of expressions.<br/>
                                 ○ Match a character in the set [Ss].<br/>
                                 ○ Match a character in the set [Ee].<br/>
-                                ○ Match with 2 alternative expressions.<br/>
-                                    ○ Match a sequence of expressions.<br/>
-                                        ○ Match a character in the set [Rr].<br/>
-                                        ○ Match a whitespace character atomically, optionally.<br/>
-                                        ○ Match a character in the set [Nn].<br/>
-                                        ○ Match a character in the set [Aa].<br/>
-                                        ○ Match a character in the set [Mm].<br/>
-                                        ○ Match a character in the set [Ee].<br/>
-                                    ○ Match a character in the set [Rr].<br/>
+                                ○ Match a character in the set [Rr].<br/>
+                                ○ Optional (greedy).<br/>
+                                    ○ Match a whitespace character atomically, optionally.<br/>
+                                    ○ Match a character in the set [Nn].<br/>
+                                    ○ Match a character in the set [Aa].<br/>
+                                    ○ Match a character in the set [Mm].<br/>
+                                    ○ Match a character in the set [Ee].<br/>
                     ○ Match a sequence of expressions.<br/>
                         ○ Match a character in the set [Ll].<br/>
                         ○ Match a character in the set [Oo].<br/>
@@ -8934,22 +8981,18 @@
                         ○ Match a character in the set [Rr].<br/>
                         ○ Match a character in the set [Ee].<br/>
                         ○ Match a character in the set [Dd].<br/>
+                        ○ Match a whitespace character atomically, optionally.<br/>
+                        ○ Match a character in the set [Aa].<br/>
+                        ○ Match a character in the set [Cc] exactly 2 times.<br/>
+                        ○ Match a character in the set [Ee].<br/>
                         ○ Match with 2 alternative expressions.<br/>
                             ○ Match a sequence of expressions.<br/>
-                                ○ Match a whitespace character atomically, optionally.<br/>
-                                ○ Match a character in the set [Aa].<br/>
-                                ○ Match a character in the set [Cc] exactly 2 times.<br/>
-                                ○ Match a character in the set [Ee].<br/>
                                 ○ Match a character in the set [Ss] exactly 2 times.<br/>
                                 ○ Match a whitespace character atomically, optionally.<br/>
                                 ○ Match a character in the set [Kk\u212A].<br/>
                                 ○ Match a character in the set [Ee].<br/>
                                 ○ Match a character in the set [Yy].<br/>
                             ○ Match a sequence of expressions.<br/>
-                                ○ Match a whitespace character atomically, optionally.<br/>
-                                ○ Match a character in the set [Aa].<br/>
-                                ○ Match a character in the set [Cc] exactly 2 times.<br/>
-                                ○ Match a character in the set [Ee].<br/>
                                 ○ Match a character in the set [Ss] exactly 2 times.<br/>
                                 ○ Match a whitespace character atomically, optionally.<br/>
                                 ○ Match a character in the set [Ss].<br/>
@@ -8996,14 +9039,13 @@
                                 ○ Match a character in the set [Cc] exactly 2 times.<br/>
                                 ○ Match a character in the set [Ee].<br/>
                                 ○ Match a character in the set [Ss] exactly 2 times.<br/>
+                                ○ Match a character in the set [\-_] atomically, optionally.<br/>
                                 ○ Match with 2 alternative expressions.<br/>
                                     ○ Match a sequence of expressions.<br/>
-                                        ○ Match a character in the set [\-_] atomically, optionally.<br/>
                                         ○ Match a character in the set [Kk\u212A].<br/>
                                         ○ Match a character in the set [Ee].<br/>
                                         ○ Match a character in the set [Yy].<br/>
                                     ○ Match a sequence of expressions.<br/>
-                                        ○ Match a character in the set [\-_] atomically, optionally.<br/>
                                         ○ Match a character in the set [Tt].<br/>
                                         ○ Match a character in the set [Oo].<br/>
                                         ○ Match a character in the set [Kk\u212A].<br/>
@@ -9056,16 +9098,14 @@
                     ○ Match a sequence of expressions.<br/>
                         ○ Match a character in the set [Ss].<br/>
                         ○ Match a character in the set [Ii].<br/>
-                        ○ Match with 2 alternative expressions.<br/>
-                            ○ Match a character in the set [Gg].<br/>
-                            ○ Match a sequence of expressions.<br/>
-                                ○ Match a character in the set [Gg].<br/>
-                                ○ Match a character in the set [Nn].<br/>
-                                ○ Match a character in the set [Aa].<br/>
-                                ○ Match a character in the set [Tt].<br/>
-                                ○ Match a character in the set [Uu].<br/>
-                                ○ Match a character in the set [Rr].<br/>
-                                ○ Match a character in the set [Ee].<br/>
+                        ○ Match a character in the set [Gg].<br/>
+                        ○ Optional (lazy).<br/>
+                            ○ Match a character in the set [Nn].<br/>
+                            ○ Match a character in the set [Aa].<br/>
+                            ○ Match a character in the set [Tt].<br/>
+                            ○ Match a character in the set [Uu].<br/>
+                            ○ Match a character in the set [Rr].<br/>
+                            ○ Match a character in the set [Ee].<br/>
                     ○ Match a sequence of expressions.<br/>
                         ○ Match a character in the set [Cc].<br/>
                         ○ Match a character in the set [Rr].<br/>
@@ -9105,12 +9145,10 @@
                     ○ Match a sequence of expressions.<br/>
                         ○ Match a character in the set [Aa].<br/>
                         ○ Match a character in the set [Dd] exactly 2 times.<br/>
-                        ○ Match with 2 alternative expressions.<br/>
-                            ○ Match a sequence of expressions.<br/>
-                                ○ Match a character in the set [Rr].<br/>
-                                ○ Match a character in the set [Ee].<br/>
-                                ○ Match a character in the set [Ss] exactly 2 times.<br/>
-                            ○ Match a character in the set [Rr].<br/>
+                        ○ Match a character in the set [Rr].<br/>
+                        ○ Optional (greedy).<br/>
+                            ○ Match a character in the set [Ee].<br/>
+                            ○ Match a character in the set [Ss] exactly 2 times.<br/>
                 ○ Match a whitespace character atomically any number of times.<br/>
                 ○ Match '='.<br/>
                 ○ Match a whitespace character greedily any number of times.<br/>
@@ -9131,7 +9169,7 @@
         <member name="M:SysWeaver.ExceptionExt.SecretJsonRegex">
             <remarks>
             Pattern:<br/>
-            <code>(?&lt;k&gt;"(?:password|passwd|pwd|passphrase|secret|client_?secret|api_?key|access_?key|access_?token|refresh_?token|id_?token|auth_?token|token|authorization|connection_?string)"\\s*:\\s*)"(?:[^"\\\\]|\\\\.)*"</code><br/>
+            <code>(?&lt;k&gt;"(?:password|passwd|pwd|passphrase|secret|client_?secret|api_?key|access_?key|access_?token|refresh_?token|id_?token|auth_?token|token|authorization|connection_?string)"\s*:\s*)"(?:[^"\\]|\\.)*"</code><br/>
             Options:<br/>
             <code>RegexOptions.IgnoreCase | RegexOptions.CultureInvariant</code><br/>
             Explanation:<br/>
@@ -9199,14 +9237,13 @@
                                 ○ Match a character in the set [Cc] exactly 2 times.<br/>
                                 ○ Match a character in the set [Ee].<br/>
                                 ○ Match a character in the set [Ss] exactly 2 times.<br/>
+                                ○ Match '_' atomically, optionally.<br/>
                                 ○ Match with 2 alternative expressions.<br/>
                                     ○ Match a sequence of expressions.<br/>
-                                        ○ Match '_' atomically, optionally.<br/>
                                         ○ Match a character in the set [Kk\u212A].<br/>
                                         ○ Match a character in the set [Ee].<br/>
                                         ○ Match a character in the set [Yy].<br/>
                                     ○ Match a sequence of expressions.<br/>
-                                        ○ Match '_' atomically, optionally.<br/>
                                         ○ Match a character in the set [Tt].<br/>
                                         ○ Match a character in the set [Oo].<br/>
                                         ○ Match a character in the set [Kk\u212A].<br/>
@@ -9301,7 +9338,7 @@
         <member name="M:SysWeaver.ExceptionExt.UrlUserInfoRegex">
             <remarks>
             Pattern:<br/>
-            <code>(?&lt;s&gt;\\b[A-Za-z][A-Za-z0-9+.\\-]*://)[^/\\s@'"&lt;&gt;]+@</code><br/>
+            <code>(?&lt;s&gt;\b[A-Za-z][A-Za-z0-9+.\-]*://)[^/\s@'"&lt;&gt;]+@</code><br/>
             Options:<br/>
             <code>RegexOptions.CultureInvariant</code><br/>
             Explanation:<br/>
@@ -9319,7 +9356,7 @@
         <member name="M:SysWeaver.ExceptionExt.AuthTokenRegex">
             <remarks>
             Pattern:<br/>
-            <code>(?&lt;k&gt;\\b(?:[Bb]earer|BEARER)\\s+)(?=[A-Za-z0-9\\-._~+/]*(?:[0-9\\-._~+/]|[a-z][A-Z]))[A-Za-z0-9\\-._~+/]{8,}=*|(?&lt;k&gt;\\b(?:[Bb]asic|BASIC)\\s+)(?=[A-Za-z0-9+/]*(?:[0-9+/=]|[a-z][A-Z]))[A-Za-z0-9+/]{8,}={0,2}</code><br/>
+            <code>(?&lt;k&gt;\b(?:[Bb]earer|BEARER)\s+)(?=[A-Za-z0-9\-._~+/]*(?:[0-9\-._~+/]|[a-z][A-Z]))[A-Za-z0-9\-._~+/]{8,}=*|(?&lt;k&gt;\b(?:[Bb]asic|BASIC)\s+)(?=[A-Za-z0-9+/]*(?:[0-9+/=]|[a-z][A-Z]))[A-Za-z0-9+/]{8,}={0,2}</code><br/>
             Options:<br/>
             <code>RegexOptions.CultureInvariant</code><br/>
             Explanation:<br/>
@@ -9367,13 +9404,13 @@
         <member name="M:SysWeaver.ExceptionExt.KnownTokenRegex">
             <remarks>
             Pattern:<br/>
-            <code>\\beyJ[A-Za-z0-9_\\-]{5,}\\.[A-Za-z0-9_\\-]{5,}\\.[A-Za-z0-9_\\-]*|\\b(?:sk|pk|rk)-[A-Za-z0-9_\\-]{16,}|\\bAKIA[0-9A-Z]{16}\\b|\\bAIza[0-9A-Za-z_\\-]{30,}|\\bgh[pousr]_[A-Za-z0-9]{30,}|\\bxox[abposr]-[A-Za-z0-9\\-]{10,}</code><br/>
+            <code>\beyJ[A-Za-z0-9_\-]{5,}\.[A-Za-z0-9_\-]{5,}\.[A-Za-z0-9_\-]*|\b(?:sk|pk|rk)-[A-Za-z0-9_\-]{16,}|\bAKIA[0-9A-Z]{16}\b|\bAIza[0-9A-Za-z_\-]{30,}|\bgh[pousr]_[A-Za-z0-9]{30,}|\bxox[abposr]-[A-Za-z0-9\-]{10,}</code><br/>
             Options:<br/>
             <code>RegexOptions.CultureInvariant</code><br/>
             Explanation:<br/>
             <code>
             ○ Match if at a word boundary.<br/>
-            ○ Match with 6 alternative expressions, atomically.<br/>
+            ○ Match with 5 alternative expressions, atomically.<br/>
                 ○ Match a sequence of expressions.<br/>
                     ○ Match the string "eyJ".<br/>
                     ○ Match a character in the set [\-0-9A-Z_a-z] atomically at least 5 times.<br/>
@@ -9389,12 +9426,15 @@
                     ○ Match '-'.<br/>
                     ○ Match a character in the set [\-0-9A-Z_a-z] atomically at least 16 times.<br/>
                 ○ Match a sequence of expressions.<br/>
-                    ○ Match the string "AKIA".<br/>
-                    ○ Match a character in the set [0-9A-Z] exactly 16 times.<br/>
-                    ○ Match if at a word boundary.<br/>
-                ○ Match a sequence of expressions.<br/>
-                    ○ Match the string "AIza".<br/>
-                    ○ Match a character in the set [\-0-9A-Z_a-z] atomically at least 30 times.<br/>
+                    ○ Match 'A'.<br/>
+                    ○ Match with 2 alternative expressions, atomically.<br/>
+                        ○ Match a sequence of expressions.<br/>
+                            ○ Match the string "KIA".<br/>
+                            ○ Match a character in the set [0-9A-Z] exactly 16 times.<br/>
+                            ○ Match if at a word boundary.<br/>
+                        ○ Match a sequence of expressions.<br/>
+                            ○ Match the string "Iza".<br/>
+                            ○ Match a character in the set [\-0-9A-Z_a-z] atomically at least 30 times.<br/>
                 ○ Match a sequence of expressions.<br/>
                     ○ Match the string "gh".<br/>
                     ○ Match a character in the set [oprsu].<br/>
@@ -9411,7 +9451,7 @@
         <member name="M:SysWeaver.ExceptionExt.SqlNearRegex">
             <remarks>
             Pattern:<br/>
-            <code>(?&lt;k&gt;\\bnear ')(?s:.*?)(?=' at line \\d)</code><br/>
+            <code>(?&lt;k&gt;\bnear ')(?s:.*?)(?=' at line \d)</code><br/>
             Options:<br/>
             <code>RegexOptions.CultureInvariant</code><br/>
             Explanation:<br/>
@@ -9429,7 +9469,7 @@
         <member name="M:SysWeaver.ExceptionExt.SqlDuplicateRegex">
             <remarks>
             Pattern:<br/>
-            <code>(?&lt;k&gt;\\bDuplicate entry ')(?s:.*?)(?=' for key)</code><br/>
+            <code>(?&lt;k&gt;\bDuplicate entry ')(?s:.*?)(?=' for key)</code><br/>
             Options:<br/>
             <code>RegexOptions.CultureInvariant</code><br/>
             Explanation:<br/>
@@ -9446,7 +9486,7 @@
         <member name="M:SysWeaver.ExceptionExt.SqlUserRegex">
             <remarks>
             Pattern:<br/>
-            <code>(?&lt;k&gt;\\bfor user ')[^'\\r\\n]*'@'[^'\\r\\n]*'</code><br/>
+            <code>(?&lt;k&gt;\bfor user ')[^'\r\n]*'@'[^'\r\n]*'</code><br/>
             Options:<br/>
             <code>RegexOptions.CultureInvariant</code><br/>
             Explanation:<br/>
@@ -9464,7 +9504,7 @@
         <member name="M:SysWeaver.ExceptionExt.SqlStatementRegex">
             <remarks>
             Pattern:<br/>
-            <code>\\b(?:SELECT|INSERT|UPDATE|DELETE|REPLACE|MERGE|UPSERT|CALL|EXEC|EXECUTE|VALUES|WHERE|SET)\\b[^\\r\\n]*</code><br/>
+            <code>\b(?:SELECT|INSERT|UPDATE|DELETE|REPLACE|MERGE|UPSERT|CALL|EXEC|EXECUTE|VALUES|WHERE|SET)\b[^\r\n]*</code><br/>
             Options:<br/>
             <code>RegexOptions.CultureInvariant</code><br/>
             Explanation:<br/>
@@ -9494,7 +9534,7 @@
         <member name="M:SysWeaver.ExceptionExt.SqlLiteralRegex">
             <remarks>
             Pattern:<br/>
-            <code>'(?:[^'\\\\]|\\\\.|'')*(?:'|$)</code><br/>
+            <code>'(?:[^'\\]|\\.|'')*(?:'|$)</code><br/>
             Options:<br/>
             <code>RegexOptions.CultureInvariant</code><br/>
             Explanation:<br/>
@@ -9516,7 +9556,7 @@
         <member name="M:SysWeaver.ExceptionExt.PrivateIpV4Regex">
             <remarks>
             Pattern:<br/>
-            <code>(?&lt;![\\w.=])(?:10\\.\\d{1,3}|172\\.(?:1[6-9]|2\\d|3[01])|192\\.168|169\\.254)\\.\\d{1,3}\\.\\d{1,3}(?!\\.?\\d)</code><br/>
+            <code>(?&lt;![\w.=])(?:10\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])|192\.168|169\.254)\.\d{1,3}\.\d{1,3}(?!\.?\d)</code><br/>
             Options:<br/>
             <code>RegexOptions.CultureInvariant</code><br/>
             Explanation:<br/>
@@ -9555,7 +9595,7 @@
         <member name="M:SysWeaver.ExceptionExt.PrivateIpV6Regex">
             <remarks>
             Pattern:<br/>
-            <code>(?&lt;![\\w:])(?:f[cd][0-9a-f]{2}|fe[89ab][0-9a-f]):[0-9a-f:]*[0-9a-f](?:%\\w+)?</code><br/>
+            <code>(?&lt;![\w:])(?:f[cd][0-9a-f]{2}|fe[89ab][0-9a-f]):[0-9a-f:]*[0-9a-f](?:%\w+)?</code><br/>
             Options:<br/>
             <code>RegexOptions.IgnoreCase | RegexOptions.CultureInvariant</code><br/>
             Explanation:<br/>
@@ -9583,7 +9623,7 @@
         <member name="M:SysWeaver.ExceptionExt.InternalHostRegex">
             <remarks>
             Pattern:<br/>
-            <code>(?&lt;![\\w\\-.])(?:[a-z0-9](?:[a-z0-9\\-]*[a-z0-9])?\\.)+(?:local|internal|lan|corp|intranet|localdomain|home\\.arpa)(?![\\w\\-]|\\.\\w)</code><br/>
+            <code>(?&lt;![\w\-.])(?:[a-z0-9](?:[a-z0-9\-]*[a-z0-9])?\.)+(?:local|internal|lan|corp|intranet|localdomain|home\.arpa)(?![\w\-]|\.\w)</code><br/>
             Options:<br/>
             <code>RegexOptions.CultureInvariant</code><br/>
             Explanation:<br/>
@@ -9616,7 +9656,7 @@
         <member name="M:SysWeaver.ExceptionExt.WindowsPathRegex">
             <remarks>
             Pattern:<br/>
-            <code>(?&lt;![A-Za-z0-9])(?:[A-Za-z]:|\\\\\\\\[^\\\\/\\s"'&lt;&gt;|*?:]+)[\\\\/]+(?:(?&lt;d&gt;[^\\\\/\\s"'&lt;&gt;|*?:]+(?: (?=(?:[^\\\\/\\s"'&lt;&gt;|*?:]+ ){0,3}[^\\\\/\\s"'&lt;&gt;|*?:]+[\\\\/])[^\\\\/\\s"'&lt;&gt;|*?:]+)*)[\\\\/]+)*(?&lt;f&gt;[^\\\\/\\s"'&lt;&gt;|*?:,;()\\[\\]]*)</code><br/>
+            <code>(?&lt;![A-Za-z0-9])(?:[A-Za-z]:|\\\\[^\\/\s"'&lt;&gt;|*?:]+)[\\/]+(?:(?&lt;d&gt;[^\\/\s"'&lt;&gt;|*?:]+(?: (?=(?:[^\\/\s"'&lt;&gt;|*?:]+ ){0,3}[^\\/\s"'&lt;&gt;|*?:]+[\\/])[^\\/\s"'&lt;&gt;|*?:]+)*)[\\/]+)*(?&lt;f&gt;[^\\/\s"'&lt;&gt;|*?:,;()\[\]]*)</code><br/>
             Options:<br/>
             <code>RegexOptions.CultureInvariant</code><br/>
             Explanation:<br/>
@@ -9652,7 +9692,7 @@
         <member name="M:SysWeaver.ExceptionExt.UnixPathRegex">
             <remarks>
             Pattern:<br/>
-            <code>(?&lt;=^|[\\s"'(\\[=,:/])(?:~|/(?:home|usr|var|etc|tmp|opt|mnt|srv|root|proc|sys|dev|app|apps|data|run|lib|lib64|bin|sbin|boot|media|Users|Volumes|private|snap|nix|workspace|workspaces|build|src|github|azp|agent|__w))/+(?:(?&lt;d&gt;[^\\\\/\\s"'&lt;&gt;|*?:]+(?: (?=(?:[^\\\\/\\s"'&lt;&gt;|*?:]+ ){0,3}[^\\\\/\\s"'&lt;&gt;|*?:]+/)[^\\\\/\\s"'&lt;&gt;|*?:]+)*)/+)*(?&lt;f&gt;[^\\\\/\\s"'&lt;&gt;|*?:,;()\\[\\]]*)</code><br/>
+            <code>(?&lt;=^|[\s"'(\[=,:/])(?:~|/(?:home|usr|var|etc|tmp|opt|mnt|srv|root|proc|sys|dev|app|apps|data|run|lib|lib64|bin|sbin|boot|media|Users|Volumes|private|snap|nix|workspace|workspaces|build|src|github|azp|agent|__w))/+(?:(?&lt;d&gt;[^\\/\s"'&lt;&gt;|*?:]+(?: (?=(?:[^\\/\s"'&lt;&gt;|*?:]+ ){0,3}[^\\/\s"'&lt;&gt;|*?:]+/)[^\\/\s"'&lt;&gt;|*?:]+)*)/+)*(?&lt;f&gt;[^\\/\s"'&lt;&gt;|*?:,;()\[\]]*)</code><br/>
             Options:<br/>
             <code>RegexOptions.CultureInvariant</code><br/>
             Explanation:<br/>
@@ -9828,6 +9868,192 @@
             The description of the "Exception" statistics returned by <see cref="M:SysWeaver.ExceptionTracker.GetStats(System.String,System.String)"/>
             </summary>
         </member>
+        <member name="T:SysWeaver.ExecutableKinds">
+            <summary>
+            The kind of an executable file (as found by <see cref="T:SysWeaver.ExecutableFinder"/>).
+            The order is the preference when guessing the main executable of a folder (lower is better).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ExecutableKinds.Console">
+            <summary>
+            A native console (character mode) executable: a PE image with the console subsystem (Windows), or an ELF executable (Linux).
+            Services and their command line interface are console programs.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ExecutableKinds.Gui">
+            <summary>
+            A native graphical executable (a PE image with the Windows GUI subsystem), unlikely to be a service.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ExecutableKinds.Script">
+            <summary>
+            A script with an interpreter line ("#!", Linux).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ExecutableKinds.None">
+            <summary>
+            Not an executable (or an unknown format).
+            </summary>
+        </member>
+        <member name="T:SysWeaver.ExecutableFile">
+            <summary>
+            An executable file found in a folder by <see cref="M:SysWeaver.ExecutableFinder.Find(System.String,System.Boolean)"/> (or <see cref="M:SysWeaver.IPlatformTools.FindExecutables(System.String)"/>).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.ExecutableFile.ToString">
+            <summary>
+            Short description of the executable, the name followed by the format in brackets.
+            </summary>
+            <returns>A short text representation.</returns>
+        </member>
+        <member name="F:SysWeaver.ExecutableFile.FullName">
+            <summary>
+            The full path of the file.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ExecutableFile.Name">
+            <summary>
+            The file name (no folder).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ExecutableFile.Kind">
+            <summary>
+            The kind of executable.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ExecutableFile.Format">
+            <summary>
+            A short description of the format, ex: "PE32+ x64 console", "ELF64 x86-64 PIE", "Script (/bin/bash)".
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ExecutableFile.LastModifiedUtc">
+            <summary>
+            The last write time of the file (UTC).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ExecutableFile.Size">
+            <summary>
+            The size of the file in bytes.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ExecutableFile.CanExecute">
+            <summary>
+            True if the file can be executed (Linux: at least one execute bit is set, Windows: always true).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ExecutableFile.IsKnownTool">
+            <summary>
+            True if the name is a known bundled tool (ex: "createdump" of .NET), it's never the main executable unless there is nothing else.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ExecutableFile.IsDotNetHost">
+            <summary>
+            True if this looks like a .NET app host (a "[name].dll" and a "[name].runtimeconfig.json" is next to it), informational only.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ExecutableFile.Rank">
+            <summary>
+            The position in the list (0 = the best guess for the main executable).
+            </summary>
+        </member>
+        <member name="T:SysWeaver.ExecutableFinder">
+            <summary>
+            Finds the executables in a folder by inspecting the file headers (not by trusting the name), and guesses the main executable:
+            <para>1. The kind: console executables, then gui executables, then scripts (see <see cref="T:SysWeaver.ExecutableKinds"/>).</para>
+            <para>2. Known bundled tools (ex: "createdump") last.</para>
+            <para>3. The last modified first: bundled tools (copied from a package) are older than the executable that was just built.</para>
+            <para>4. The name (ordinal), so that the result is stable.</para>
+            No assumption is made about the language / runtime the executable is written in.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ExecutableFinder.KnownTools">
+            <summary>
+            Names (lower case, no extension) of tools that are known to be bundled with a runtime / framework, never the main executable unless there is nothing else.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ExecutableFinder.MaxFiles">
+            <summary>
+            The maximum number of files that are inspected in a folder (the newest are inspected first).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.ExecutableFinder.Find(System.String,System.Boolean)">
+            <summary>
+            Find the executables in a folder (not recursive), the best guess for the main executable is first.
+            </summary>
+            <param name="folder">The folder</param>
+            <param name="windows">True to find Windows executables (*.exe files that are PE images), false to find Linux executables (any file that is an ELF executable or a script)</param>
+            <returns>The executables, best guess first, empty if none was found (or the folder doesn't exist)</returns>
+        </member>
+        <member name="M:SysWeaver.ExecutableFinder.Compare(SysWeaver.ExecutableFile,SysWeaver.ExecutableFile)">
+            <summary>
+            The order of <see cref="M:SysWeaver.ExecutableFinder.Find(System.String,System.Boolean)"/>: kind, not a known tool, last modified (newest first), name.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.ExecutableFinder.IsSharedLibraryName(System.String)">
+            <summary>
+            Test if a name is a shared library name: "*.so" or "*.so.[version]".
+            </summary>
+        </member>
+        <member name="M:SysWeaver.ExecutableFinder.Inspect(System.String,System.String@)">
+            <summary>
+            Inspect the header of a file.
+            </summary>
+            <param name="file">The file</param>
+            <param name="format">A short description of the format (see <see cref="F:SysWeaver.ExecutableFile.Format"/>), null if not an executable</param>
+            <returns>The kind of executable, <see cref="F:SysWeaver.ExecutableKinds.None"/> if not an executable</returns>
+        </member>
+        <member name="M:SysWeaver.ExecutableFinder.InspectPe(Microsoft.Win32.SafeHandles.SafeFileHandle,System.Int64,System.String@)">
+            <summary>
+            PE: "MZ", e_lfanew at 0x3c, "PE\0\0", COFF header (machine, characteristics), optional header (magic, subsystem).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.ExecutableFinder.InspectElf(Microsoft.Win32.SafeHandles.SafeFileHandle,System.Int64,System.String@)">
+            <summary>
+            ELF: class, data (endian), type (EXEC or DYN), machine; a DYN is an executable (PIE) if it has an interpreter (PT_INTERP),
+            or if it has no interpreter and isn't named as a shared library (a static PIE).
+            </summary>
+        </member>
+        <member name="T:SysWeaver.ExternalProcessResult">
+            <summary>
+            The result of <see cref="M:SysWeaver.ExternalProcess.RunWithTimeoutAsync(System.String,System.Collections.Generic.IEnumerable{System.String},System.TimeSpan,System.String,System.Action{System.String,System.Boolean})"/>.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.ExternalProcessResult.ToString">
+            <summary>
+            A short description of the outcome: the failure message, "Timed out" or the exit code.
+            </summary>
+            <returns>A short text.</returns>
+        </member>
+        <member name="F:SysWeaver.ExternalProcessResult.ExitCode">
+            <summary>
+            The exit code of the process, -1 if it couldn't be started or timed out.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ExternalProcessResult.TimedOut">
+            <summary>
+            True if the process didn't exit in time and was killed (with all it's child processes).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ExternalProcessResult.Exception">
+            <summary>
+            The exception if the process couldn't be started (ex: the executable doesn't exist), else null.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ExternalProcessResult.Output">
+            <summary>
+            The output (stdout and stderr lines in the order they were received, trimmed).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ExternalProcessResult.Duration">
+            <summary>
+            The time it took.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.ExternalProcessResult.Exited">
+            <summary>
+            True if the process ran and exited by itself (it may still have failed, see <see cref="F:SysWeaver.ExternalProcessResult.ExitCode"/>).
+            </summary>
+        </member>
         <member name="T:SysWeaver.ExternalProcess">
             <summary>
             Helpers for running an external process, waiting for it to exit and capturing its output.
@@ -9869,6 +10095,21 @@
             <exception cref="T:System.OperationCanceledException"><paramref name="cancelWait"/> was cancelled while waiting for the process to exit.</exception>
             <exception cref="T:System.Exception">Any exception thrown while starting or running the process is re-thrown (after <paramref name="onExit"/> has been invoked).</exception>
             <remarks>Blocks the calling thread while reading stdout (the read is synchronous).</remarks>
+        </member>
+        <member name="M:SysWeaver.ExternalProcess.RunWithTimeoutAsync(System.String,System.Collections.Generic.IEnumerable{System.String},System.TimeSpan,System.String,System.Action{System.String,System.Boolean})">
+            <summary>
+            Run an external command with a time limit, the process (and all it's child processes) is killed if it doesn't exit in time.
+            Never throws (a failure to start is returned in <see cref="F:SysWeaver.ExternalProcessResult.Exception"/>).
+            </summary>
+            <param name="cmd">The executable to run</param>
+            <param name="args">The arguments (each one is quoted as needed), may be null</param>
+            <param name="timeout">The maximum time to wait for the process to exit</param>
+            <param name="workingFolder">The folder to use as the current, null to use the current folder of this process</param>
+            <param name="onMessage">Optional output callback, called once per non-empty line, second parameter is false for stdout and true for stderr (from a background thread, never concurrent, exceptions are ignored)</param>
+            <returns>The result</returns>
+            <remarks>
+            When the process has exited, the output is read for at most 2 more seconds: a child process that inherited the output (ex: a daemon started by the process) keeps it open.
+            </remarks>
         </member>
         <member name="M:SysWeaver.ExternalProcess.OnOutput(System.Collections.Generic.LinkedList{System.String},System.String,System.Boolean,System.Action{System.String,System.Boolean})">
             <summary>
@@ -10015,6 +10256,19 @@
             <returns>True if the value was added, false if a (non-expired) item with the key already exist (the value is not updated)</returns>
             <exception cref="T:System.ArgumentNullException"><paramref name="key"/> is null</exception>
             <remarks>An expired item (that haven't been pruned yet) is treated as missing (and is replaced).
+            Must not be called for the same key from within a value factory (dead lock).</remarks>
+        </member>
+        <member name="M:SysWeaver.FastMemCache`2.Update(`0,`1)">
+            <summary>
+            Update the value of an existing item (the expiration time is recomputed from the new value, same as <see cref="M:SysWeaver.FastMemCache`2.Set(`0,`1)"/> and <see cref="M:SysWeaver.FastMemCache`2.TryAdd(`0,`1)"/>)
+            </summary>
+            <param name="key">The key</param>
+            <param name="value">The new value</param>
+            <returns>True if the value was updated, false if no (non-expired) item with the key exist (nothing is added)</returns>
+            <exception cref="T:System.ArgumentNullException"><paramref name="key"/> is null</exception>
+            <remarks>An expired item (that haven't been pruned yet) is treated as missing (it's not updated).
+            An item that is being created asynchronously (a pending entry) is treated as existing and is replaced by the new value,
+            the result of the running update is not cached (callers awaiting that update still get its result).
             Must not be called for the same key from within a value factory (dead lock).</remarks>
         </member>
         <member name="M:SysWeaver.FastMemCache`2.TryGet(`0,`1@)">
@@ -11066,6 +11320,19 @@
             <summary>
             The file name of the log file, as supplied to the constructor.
             </summary>
+        </member>
+        <member name="M:SysWeaver.FileLogMessageHandler.ToString">
+            <summary>
+            The quoted file name, mode and text style.
+            </summary>
+            <returns>A short text for debugging.</returns>
+        </member>
+        <member name="M:SysWeaver.FileLogMessageHandler.WriteText(System.String)">
+            <summary>
+            Appends the text to the log file (when the file exceeds the maximum size, the oldest lines are removed so that about 75% of the maximum size remains).
+            </summary>
+            <param name="text">The formatted message text.</param>
+            <returns>A task that completes when the text is written.</returns>
         </member>
         <member name="P:SysWeaver.FileLogMessageHandler.PerfMon">
             <summary>
@@ -16175,6 +16442,11 @@
             The content of the file, null if this is a link
             </summary>
         </member>
+        <member name="M:SysWeaver.MemoryFile.#ctor">
+            <summary>
+            Create an empty file (all members are null), used when deserializing (ex: a file as an api argument)
+            </summary>
+        </member>
         <member name="M:SysWeaver.MemoryFile.#ctor(System.String)">
             <summary>
             Create a link to a file (<see cref="F:SysWeaver.MemoryFile.Mime"/> and <see cref="F:SysWeaver.MemoryFile.Data"/> are null)
@@ -19738,6 +20010,23 @@
             <param name="directoryName">The full path to the directory</param>
             <returns>null if successful, else the exception that occurred</returns>
         </member>
+        <member name="M:SysWeaver.IPlatformTools.FindExecutables(System.String)">
+            <summary>
+            Find the executables of this platform in a folder (not recursive), by inspecting the file content (not by trusting names), see <see cref="T:SysWeaver.ExecutableFinder"/>.
+            Windows: *.exe files that are PE images (not dll's). Linux: any file that is an ELF executable or a script ("#!").
+            </summary>
+            <param name="folder">The folder</param>
+            <returns>The executables, the best guess for the main executable first (never null)</returns>
+        </member>
+        <member name="M:SysWeaver.IPlatformTools.MakeExecutable(System.String)">
+            <summary>
+            Make sure that a file can be executed.
+            Linux: adds the execute bit for every class (user, group, other) that can read the file (like "chmod +x" honoring the read bits).
+            Windows: nothing to do.
+            </summary>
+            <param name="file">The file</param>
+            <returns>null if successful (or nothing needed to be done), else the exception that occurred</returns>
+        </member>
         <member name="T:SysWeaver.DummyPlatformTools">
             <summary>
             Fallback <see cref="T:SysWeaver.IPlatformTools"/> used when no platform specific implementation is available, most operations are no-ops that report "not supported".
@@ -19795,6 +20084,20 @@
             Does nothing.
             </summary>
             <param name="directoryName">Ignored.</param>
+            <returns>Always null (reported as success).</returns>
+        </member>
+        <member name="M:SysWeaver.DummyPlatformTools.FindExecutables(System.String)">
+            <summary>
+            Uses <see cref="T:SysWeaver.ExecutableFinder"/> for the OS that the process runs on (Windows executables on Windows, else Linux executables).
+            </summary>
+            <param name="folder">The folder.</param>
+            <returns>The executables, best guess first.</returns>
+        </member>
+        <member name="M:SysWeaver.DummyPlatformTools.MakeExecutable(System.String)">
+            <summary>
+            Does nothing.
+            </summary>
+            <param name="file">Ignored.</param>
             <returns>Always null (reported as success).</returns>
         </member>
         <member name="M:SysWeaver.DummyPlatformTools.GetStats">
@@ -19875,35 +20178,35 @@
             <param name="type">The message type (name).</param>
             <param name="value">The payload.</param>
         </member>
-        <member name="T:SysWeaver.PushMessagIntValue">
+        <member name="T:SysWeaver.PushMessageIntValue">
             <summary>
             A <see cref="T:SysWeaver.PushMessage"/> with an integer payload.
             </summary>
         </member>
-        <member name="F:SysWeaver.PushMessagIntValue.Value">
+        <member name="F:SysWeaver.PushMessageIntValue.Value">
             <summary>
             The payload.
             </summary>
             <remarks>Note that JavaScript clients can only represent integers up to 2^53 exactly.</remarks>
         </member>
-        <member name="M:SysWeaver.PushMessagIntValue.#ctor(System.String,System.Int64)">
+        <member name="M:SysWeaver.PushMessageIntValue.#ctor(System.String,System.Int64)">
             <summary>
             Create a message with an integer payload.
             </summary>
             <param name="type">The message type (name).</param>
             <param name="value">The payload.</param>
         </member>
-        <member name="T:SysWeaver.PushMessagNumberValue">
+        <member name="T:SysWeaver.PushMessageNumberValue">
             <summary>
             A <see cref="T:SysWeaver.PushMessage"/> with a floating point payload.
             </summary>
         </member>
-        <member name="F:SysWeaver.PushMessagNumberValue.Value">
+        <member name="F:SysWeaver.PushMessageNumberValue.Value">
             <summary>
             The payload.
             </summary>
         </member>
-        <member name="M:SysWeaver.PushMessagNumberValue.#ctor(System.String,System.Double)">
+        <member name="M:SysWeaver.PushMessageNumberValue.#ctor(System.String,System.Double)">
             <summary>
             Create a message with a floating point payload.
             </summary>
@@ -22671,6 +22974,117 @@
             A span lookup in the other known set implementations
             </summary>
             <returns>1 if found, 0 if not found, -1 if the set doesn't support span lookups</returns>
+        </member>
+        <member name="T:SysWeaver.SpanStringCache">
+            <summary>
+            A small, bounded and lock free cache of short strings, so that parsers that create strings from spans (json keys and values, binary data)
+            allocate a value that repeats (keys, names, codes, status words) only once instead of once per read.
+            </summary>
+            <remarks>
+            <para>
+            Two direct mapped tables (one for ASCII bytes, one for chars) of <see cref="F:SysWeaver.SpanStringCache.Slots"/> strings each: the hash of the content picks one slot, a hit compares the whole content
+            (a collision is only a miss, never a wrong string), a miss allocates the string. A string is only cached the second time its hash is the miss of its slot,
+            so strings that never repeat (ids, tokens, guids) are never kept alive or promoted by the GC.
+            </para>
+            <para>
+            Thread safe without locks (a reference or an int is read and written atomically, and a string never changes), the memory used is bounded
+            (at most 2 x <see cref="F:SysWeaver.SpanStringCache.Slots"/> strings of at most <see cref="F:SysWeaver.SpanStringCache.MaxLength"/> chars).
+            </para>
+            <para>
+            Why: allocations are slower on .NET 11 than on .NET 10 (6 - 15 % for small objects), a look up is cheaper than allocating the same short string.
+            Measured on json reading: 20 - 35 % fewer allocated bytes for typical documents, about 4 % slower for a document of only unique strings (the worst case).
+            </para>
+            <para>
+            A cached string stays reachable until its slot is reused, set <see cref="F:SysWeaver.SpanStringCache.Enabled"/> to false to never keep a parsed string alive after the parse result is gone
+            (ex: if parsed data contains secrets that must not stay in memory longer than the result).
+            </para>
+            </remarks>
+        </member>
+        <member name="F:SysWeaver.SpanStringCache.Enabled">
+            <summary>
+            True (the default) to use the cache, false to always allocate a new string (the users of the cache test this before calling it).
+            Used by the SysWeaver json reader (<c>JsonReader.CacheStrings</c> is the same setting) and the binary reader (<c>BinaryReaderInspector</c>).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.SpanStringCache.MaxLength">
+            <summary>
+            Strings longer than this (in chars) are never cached, callers should not call the cache for longer content (it's not checked)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.SpanStringCache.Slots">
+            <summary>
+            The number of slots per table (a power of two)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.SpanStringCache.GetAscii(System.Byte*,System.Int32)">
+            <summary>
+            Get a string with the content of some ASCII bytes (char codes less than 128), from the cache if possible.
+            </summary>
+            <param name="p">The first byte</param>
+            <param name="len">The number of bytes, 1 to <see cref="F:SysWeaver.SpanStringCache.MaxLength"/> (not checked)</param>
+            <returns>The string</returns>
+        </member>
+        <member name="M:SysWeaver.SpanStringCache.GetAscii(System.ReadOnlySpan{System.Byte})">
+            <summary>
+            Get a string with the content of some ASCII bytes (char codes less than 128), from the cache if possible.
+            </summary>
+            <param name="ascii">The bytes, 1 to <see cref="F:SysWeaver.SpanStringCache.MaxLength"/> (not checked)</param>
+            <returns>The string</returns>
+        </member>
+        <member name="M:SysWeaver.SpanStringCache.Get(System.ReadOnlySpan{System.Char})">
+            <summary>
+            Get a string with the content of some chars, from the cache if possible.
+            </summary>
+            <param name="chars">The chars, 1 to <see cref="F:SysWeaver.SpanStringCache.MaxLength"/> (not checked)</param>
+            <returns>The string</returns>
+        </member>
+        <member name="M:SysWeaver.SpanStringCache.Admit(System.String[],System.UInt32[],System.UInt32,System.String)">
+            <summary>
+            Cache the string if the same hash was the previous miss of the slot, else remember the hash
+            </summary>
+        </member>
+        <member name="M:SysWeaver.SpanStringCache.Hash(System.Byte*,System.Int32)">
+            <summary>
+            A fast hash of 1 to 64 bytes: the first 8, the last 8 and (for longer data) the middle bytes, and the length.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.SpanStringCache.HashLong(System.Byte*,System.Int32)">
+            <summary>
+            A fast sampling hash of more than 64 bytes: the first and last 16 bytes, 8 bytes at a quarter, half and three quarters of the data, and the length.
+            Not every byte contributes, so it's only usable where the content is compared on a hit (different content with the same samples is a miss, never a wrong string).
+            </summary>
+        </member>
+        <member name="T:SysWeaver.SpanStringCacheTable">
+            <summary>
+            A bounded, lock free cache of strings created from chars, with its own table and length limit (ex: the local urls of http requests).
+            The same design as <see cref="T:SysWeaver.SpanStringCache"/> (direct mapped, content compared on every hit, a string is cached the second time it's seen),
+            and it's also turned off by <see cref="F:SysWeaver.SpanStringCache.Enabled"/>.
+            </summary>
+            <remarks>
+            Content of at most 32 chars uses the fast hash of <see cref="T:SysWeaver.SpanStringCache"/>, longer content a sampling hash (the first, last and a few inner bytes).
+            The randomized <see cref="M:System.String.GetHashCode(System.ReadOnlySpan{System.Char})"/> made a hit of 64 - 128 chars 4 - 5 times slower than <see cref="M:System.String.Substring(System.Int32,System.Int32)"/>.
+            Content that only differs outside the samples shares a slot (misses, never a wrong string).
+            Measured on .NET 10 and .NET 11: a hit is 10 - 35 % faster than <see cref="M:System.String.Substring(System.Int32,System.Int32)"/> of the same 8 - 32 chars, and doesn't allocate.
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.SpanStringCacheTable.#ctor(System.Int32,System.Int32)">
+            <summary>
+            Create a cache.
+            </summary>
+            <param name="slots">The number of slots (rounded up to a power of two, at least 16), the max number of cached strings</param>
+            <param name="maxLength">Content longer than this (in chars) is never cached</param>
+        </member>
+        <member name="F:SysWeaver.SpanStringCacheTable.MaxLength">
+            <summary>
+            Content longer than this (in chars) is never cached
+            </summary>
+        </member>
+        <member name="M:SysWeaver.SpanStringCacheTable.Get(System.ReadOnlySpan{System.Char})">
+            <summary>
+            Get a string with the content of some chars, from the cache if possible (an empty span gives <see cref="F:System.String.Empty"/>).
+            </summary>
+            <param name="chars">The chars</param>
+            <returns>A string with the same content</returns>
         </member>
         <member name="T:SysWeaver.SpanStringExt">
             <summary>
@@ -26471,12 +26885,30 @@
             The amount of detail included in the text output.
             </summary>
         </member>
+        <member name="M:SysWeaver.TextMessageHandler.ToString">
+            <summary>
+            The handler type, mode and text style.
+            </summary>
+            <returns>A short text for debugging.</returns>
+        </member>
+        <member name="M:SysWeaver.TextMessageHandler.Add(SysWeaver.Message)">
+            <summary>
+            Renders the message as text (prepending a date line if needed) and passes it to <see cref="M:SysWeaver.TextMessageHandler.WriteText(System.String)"/>.
+            </summary>
+            <param name="message">The message to handle.</param>
+            <returns>The task returned by <see cref="M:SysWeaver.TextMessageHandler.WriteText(System.String)"/>.</returns>
+        </member>
         <member name="M:SysWeaver.TextMessageHandler.WriteText(System.String)">
             <summary>
             Write rendered text to the output.
             </summary>
             <param name="text">The text to write, already terminated by a new line (may contain multiple lines).</param>
             <returns>A task that completes when the text is written (must be completed on return in <see cref="F:SysWeaver.MessageHandler.Modes.NativeSync"/> mode).</returns>
+        </member>
+        <member name="M:SysWeaver.TextMessageHandler.OnFlush">
+            <summary>
+            Nothing to flush by default, override if the output is buffered.
+            </summary>
         </member>
         <member name="T:SysWeaver.TextTemplate">
             <summary>
@@ -28858,6 +29290,9 @@
         <member name="F:System.Text.RegularExpressions.Generated.Utilities.s_asciiLettersLowerAndDigitsAndDash">
             <summary>Supports searching for characters in or not in "-0123456789abcdefghijklmnopqrstuvwxyz".</summary>
         </member>
+        <member name="F:System.Text.RegularExpressions.Generated.Utilities.s_asciiLettersUpperAndDigits">
+            <summary>Supports searching for characters in or not in "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ".</summary>
+        </member>
         <member name="F:System.Text.RegularExpressions.Generated.Utilities.s_ascii_2241010100000000">
             <summary>Supports searching for characters in or not in "AEHNPX".</summary>
         </member>
@@ -28880,6 +29315,9 @@
             <summary>Supports searching for characters in or not in "0123456789:ABCDEFabcdef".</summary>
         </member>
         <member name="F:System.Text.RegularExpressions.Generated.Utilities.s_indexOfAnyStrings_OrdinalIgnoreCase_355DF36A3E614BE4849AFD8ED77387184735C4C38C31804262C1A615E3976840">
+            <summary>Supports searching for the specified strings.</summary>
+        </member>
+        <member name="F:System.Text.RegularExpressions.Generated.Utilities.s_indexOfAnyStrings_Ordinal_441DE343C76067C18D32AA83E29303EA04FFB59FA084CD4E98C5279EBC92951B">
             <summary>Supports searching for the specified strings.</summary>
         </member>
         <member name="F:System.Text.RegularExpressions.Generated.Utilities.s_indexOfString_2AF8CC752AABC4BC7CDB41E73BB2DC8B1DFBE4EF47D633E0C586157276570D50">

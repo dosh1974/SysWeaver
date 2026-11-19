@@ -79,7 +79,7 @@ namespace SysWeaver.Media
                 double w = width;
                 double h = height;
                 TextTemplate color = null;
-                String[] files = null;
+                //String[] files = null;
                 SvgFile[] bf = null;
                 SvgFile[] clip = null;
                 SvgCanvasGravity gravX = SvgCanvasGravity.Center;

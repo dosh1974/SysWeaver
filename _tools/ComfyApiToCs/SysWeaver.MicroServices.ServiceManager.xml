@@ -4,6 +4,11 @@
         <name>SysWeaver.MicroServices.ServiceManager</name>
     </assembly>
     <members>
+        <member name="T:SysWeaver.MicroService.ConfigEntry">
+            <summary>
+            A service entry in a configuration (a service type, an optional instance name and optional parameters)
+            </summary>
+        </member>
         <member name="F:SysWeaver.MicroService.ConfigEntry.Type">
             <summary>
             Fully qualified type name of the service type
@@ -14,14 +19,65 @@
             Optional name of the instance
             </summary>
         </member>
+        <member name="M:SysWeaver.MicroService.ConfigEntry.GetParams">
+            <summary>
+            Get the parameters object for the service
+            </summary>
+            <returns>The parameters, or null if the service has none</returns>
+        </member>
+        <member name="T:SysWeaver.MicroService.ConfigEntryOP`1">
+            <summary>
+            A service entry in a configuration with optional (nullable) typed parameters
+            </summary>
+            <typeparam name="T">The type of the parameters</typeparam>
+        </member>
         <member name="F:SysWeaver.MicroService.ConfigEntryOP`1.Params">
             <summary>
             Optional parameters
             </summary>
         </member>
+        <member name="M:SysWeaver.MicroService.ConfigEntryOP`1.#ctor">
+            <summary>
+            Create an entry without parameters
+            </summary>
+        </member>
+        <member name="M:SysWeaver.MicroService.ConfigEntryOP`1.#ctor(`0)">
+            <summary>
+            Create an entry with parameters
+            </summary>
+            <param name="p">The parameters</param>
+        </member>
+        <member name="M:SysWeaver.MicroService.ConfigEntryOP`1.GetParams">
+            <inheritdoc />
+        </member>
+        <member name="T:SysWeaver.MicroService.ConfigEntryP`1">
+            <summary>
+            A service entry in a configuration with typed parameters
+            </summary>
+            <typeparam name="T">The type of the parameters</typeparam>
+        </member>
         <member name="F:SysWeaver.MicroService.ConfigEntryP`1.Params">
             <summary>
             Parameters
+            </summary>
+        </member>
+        <member name="M:SysWeaver.MicroService.ConfigEntryP`1.#ctor">
+            <summary>
+            Create an entry with default parameters
+            </summary>
+        </member>
+        <member name="M:SysWeaver.MicroService.ConfigEntryP`1.#ctor(`0)">
+            <summary>
+            Create an entry with parameters
+            </summary>
+            <param name="p">The parameters</param>
+        </member>
+        <member name="M:SysWeaver.MicroService.ConfigEntryP`1.GetParams">
+            <inheritdoc />
+        </member>
+        <member name="T:SysWeaver.MicroService.EditFile">
+            <summary>
+            Identifies a file in an editor (base for the edit requests)
             </summary>
         </member>
         <member name="F:SysWeaver.MicroService.EditFile.Url">
@@ -32,6 +88,11 @@
         <member name="F:SysWeaver.MicroService.EditFile.Name">
             <summary>
             The name of the file (filename of url)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.MicroService.EditFileRequest">
+            <summary>
+            Describes the urls an editor uses to read, save and delete a file
             </summary>
         </member>
         <member name="F:SysWeaver.MicroService.EditFileRequest.Read">
@@ -49,9 +110,19 @@
             Optional, the url to use for deleting the file, argument should be EditFile
             </summary>
         </member>
+        <member name="T:SysWeaver.MicroService.EditSaveBinFile">
+            <summary>
+            Request to save a binary file in an editor
+            </summary>
+        </member>
         <member name="F:SysWeaver.MicroService.EditSaveBinFile.Content">
             <summary>
             The new content
+            </summary>
+        </member>
+        <member name="T:SysWeaver.MicroService.EditSaveTextFile">
+            <summary>
+            Request to save a text file in an editor
             </summary>
         </member>
         <member name="F:SysWeaver.MicroService.EditSaveTextFile.Content">
@@ -96,7 +167,7 @@
         </member>
         <member name="P:SysWeaver.MicroService.ServiceInfo.UseCount">
             <summary>
-            Number of times something have requested this serice
+            Number of times something has requested this service
             </summary>
         </member>
         <member name="P:SysWeaver.MicroService.ServiceInfo.StartDuration">
@@ -109,6 +180,12 @@
             <summary>
             Type of the parameters object (can be null)
             </summary>
+        </member>
+        <member name="M:SysWeaver.MicroService.ServiceInfo.GetUniqueName">
+            <summary>
+            Get a name that identifies this instance (the type name, followed by the instance name in brackets if it has one)
+            </summary>
+            <returns>The unique name</returns>
         </member>
         <member name="F:SysWeaver.MicroService.ServiceInfo.Instance">
             <summary>
@@ -172,14 +249,33 @@
         </member>
         <member name="E:SysWeaver.MicroService.ServiceManager.OnCreated">
             <summary>
-            Actions to perform when the service manager have been created
+            Actions to perform when the service manager has been created
             </summary>
+        </member>
+        <member name="P:SysWeaver.MicroService.ServiceManager.PerfMon">
+            <summary>
+            Performance monitor of the service manager
+            </summary>
+        </member>
+        <member name="M:SysWeaver.MicroService.ServiceManager.ToString">
+            <inheritdoc />
+        </member>
+        <member name="M:SysWeaver.MicroService.ServiceManager.GetManifestFileName">
+            <summary>
+            Find the service manifest file, "[ExecutableBase].Services.[Platform].json" is used if it exists, else "[ExecutableBase].Services.json"
+            </summary>
+            <returns>The file name, or null if no manifest file exists</returns>
         </member>
         <member name="M:SysWeaver.MicroService.ServiceManager.RestartProcess">
             <summary>
             Restart the process
             </summary>
             <returns>True if successful</returns>
+        </member>
+        <member name="F:SysWeaver.MicroService.ServiceManager.ConfigLastWriteTimeUtc">
+            <summary>
+            The last write time (UTC) of the manifest file that the services were registered from, default if no manifest file was used
+            </summary>
         </member>
         <member name="M:SysWeaver.MicroService.ServiceManager.Run(System.String,System.Action{SysWeaver.MicroService.ServiceManager})">
             <summary>
@@ -188,6 +284,43 @@
             <param name="name">Optional application name</param>
             <param name="runBeforeRegister">Optional method to call before registering services</param>
             <returns></returns>
+        </member>
+        <member name="M:SysWeaver.MicroService.ServiceManager.#ctor(System.Boolean,System.Action{SysWeaver.MicroService.ServiceManager},System.Action{SysWeaver.MicroService.ServiceManager})">
+            <summary>
+            Create a service manager
+            </summary>
+            <param name="registerFromManifestFile">True to register the services found in the manifest file (see <see cref="M:SysWeaver.MicroService.ServiceManager.GetManifestFileName"/>)</param>
+            <param name="runBeforeRegister">Optional action to run before the services are registered from the manifest file</param>
+            <param name="restartFn">Optional function that restarts the host process, used by <see cref="M:SysWeaver.MicroService.ServiceManager.RestartProcess"/></param>
+        </member>
+        <member name="M:SysWeaver.MicroService.ServiceManager.ReadManifest(System.String)">
+            <summary>
+            Read a manifest file
+            </summary>
+            <param name="file">The file to read, null to use <see cref="P:SysWeaver.MicroService.ServiceManager.ManifestFileName"/></param>
+            <returns>The entries in the file</returns>
+        </member>
+        <member name="M:SysWeaver.MicroService.ServiceManager.BuildManifest(SysWeaver.MicroService.ConfigEntry[])">
+            <summary>
+            Build the manifest (json) text for a set of entries
+            </summary>
+            <param name="configEntries">The entries</param>
+            <returns>The manifest json</returns>
+        </member>
+        <member name="P:SysWeaver.MicroService.ServiceManager.ManifestFileName">
+            <summary>
+            The manifest file that the services were registered from (null if none was used)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.MicroService.ServiceManager.Dispose">
+            <summary>
+            Dispose all owned services and release the resources used by the service manager
+            </summary>
+        </member>
+        <member name="F:SysWeaver.MicroService.ServiceManager.Tag">
+            <summary>
+            Tag used as prefix for service manager messages
+            </summary>
         </member>
         <member name="E:SysWeaver.MicroService.ServiceManager.OnServiceAdded">
             <summary>
@@ -552,6 +685,30 @@
             <param name="r">Parameters</param>
             <returns></returns>
         </member>
+        <member name="P:SysWeaver.MicroService.ServiceManager.IsPaused">
+            <summary>
+            True if the service manager is paused
+            </summary>
+        </member>
+        <member name="M:SysWeaver.MicroService.ServiceManager.Pause">
+            <summary>
+            Pause all services that implement <see cref="T:SysWeaver.IServicePausable"/> (in reverse registration order)
+            </summary>
+            <returns>True if the services were paused, false if already paused</returns>
+        </member>
+        <member name="M:SysWeaver.MicroService.ServiceManager.Resume">
+            <summary>
+            Resume all services that implement <see cref="T:SysWeaver.IServicePausable"/> (in registration order)
+            </summary>
+            <returns>True if the services were resumed, false if not paused</returns>
+        </member>
+        <member name="M:SysWeaver.MicroService.ServiceManager.DumpStats(System.String)">
+            <summary>
+            Dump the saved service stats and performance data as html tables (if any was saved)
+            </summary>
+            <param name="baseName">Base file name, "_Stats.html" and "_Performance.html" is appended</param>
+            <returns>A task that completes when the files are written</returns>
+        </member>
         <member name="M:SysWeaver.MicroService.ServiceManager.GetStats(System.Boolean)">
             <summary>
             Return all stats
@@ -636,6 +793,16 @@
             </summary>
             <param name="t"></param>
             <returns></returns>
+        </member>
+        <member name="F:SysWeaver.MicroService.ServiceManager.ServiceTypes">
+            <summary>
+            Types (interfaces) that mark a type as a service
+            </summary>
+        </member>
+        <member name="F:SysWeaver.MicroService.ServiceManager.ServiceAttributes">
+            <summary>
+            Attributes that mark a type as a service
+            </summary>
         </member>
         <member name="M:SysWeaver.MicroService.ServiceManager.CreateOneTimePad(System.String)">
             <summary>
@@ -725,6 +892,7 @@
             {2} is the delete url, argument should be EditFile
             </param>
             <returns>True if extension was added</returns>
+            <remarks>The viewer is also registered for all mime types of the extension (unless a viewer is already registered for the mime type), see <see cref="M:SysWeaver.MicroService.ServiceManager.GetMimeViewerFormat(System.String)"/></remarks>
         </member>
         <member name="M:SysWeaver.MicroService.ServiceManager.TryRemoveExtensionViewer(System.String,System.String@)">
             <summary>
@@ -737,6 +905,42 @@
             {2} is the delete url, argument should be EditFile
             </param>
             <returns>True if extension was removed</returns>
+            <remarks>The mime types that was registered by the extension are removed (and re-registered by another extension with the same mime type if one exists)</remarks>
+        </member>
+        <member name="M:SysWeaver.MicroService.ServiceManager.GetExtensionMimes(System.String)">
+            <summary>
+            Get all mime types (lower case, without any parameters) of a file extension: the mime type of the extension and any other mime type that lists the extension
+            </summary>
+            <param name="ext">The extension (lower case without the leading dot)</param>
+            <returns>The mime types</returns>
+        </member>
+        <member name="M:SysWeaver.MicroService.ServiceManager.NormalizeMime(System.String)">
+            <summary>
+            The mime type without parameters, in lower case, ex: "Text/Plain; charset=UTF-8" => "text/plain"
+            </summary>
+        </member>
+        <member name="M:SysWeaver.MicroService.ServiceManager.GetMimeViewerFormat(System.String)">
+            <summary>
+            Get a viewer url for a mime type (the viewers are registered by file extension, see <see cref="M:SysWeaver.MicroService.ServiceManager.TryAddExtensionViewer(System.String,System.String)"/>)
+            </summary>
+            <param name="mime">The mime type, ex: "image/png" or "text/markdown; charset=UTF-8" (case and parameters are ignored)</param>
+            <returns>
+            null if the mime type doesn't have a viewer, else the url format to use (from site root).
+            {0} is the read url (the caller is responsible for any url encoding).
+            </returns>
+        </member>
+        <member name="M:SysWeaver.MicroService.ServiceManager.GetMimeViewer(System.String,System.String)">
+            <summary>
+            Get the viewer url for some data of a mime type
+            </summary>
+            <param name="mime">The mime type, ex: "image/png" (case and parameters are ignored)</param>
+            <param name="read">The url to use for reading (inserted as is, the caller is responsible for any url encoding)</param>
+            <returns>The viewer url or null if the mime type doesn't have a viewer</returns>
+        </member>
+        <member name="F:SysWeaver.MicroService.ServiceManager.MimeViewers">
+            <summary>
+            Key is the mime type (lower case without parameters), value is the viewer url format and the extension that registered it
+            </summary>
         </member>
         <member name="M:SysWeaver.MicroService.ServiceManager.GetExtensionViewerFormat(System.String)">
             <summary>
@@ -793,6 +997,11 @@
             <param name="name">Name of the file</param>
             <param name="context"></param>
             <returns>The data contained is the table ref</returns>
+        </member>
+        <member name="F:SysWeaver.MicroService.ServiceManager.FileDeleter">
+            <summary>
+            Optional function used to delete files (returns the exception if it failed, null on success)
+            </summary>
         </member>
         <member name="T:SysWeaver.MicroService.ServiceManager.ProblemRow">
             <summary>
@@ -864,6 +1073,16 @@
             All failures are counted in the problems table (<see cref="M:SysWeaver.MicroService.ServiceManager.ProblemsTable(SysWeaver.Data.TableDataRequest,SysWeaver.Net.HttpServerRequest)"/>).
             </summary>
         </member>
+        <member name="T:SysWeaver.MicroService.ServiceManifest">
+            <summary>
+            Describes a service to create (type, optional instance name and optional parameters)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.MicroService.ServiceManifest.#ctor">
+            <summary>
+            Create an empty manifest
+            </summary>
+        </member>
         <member name="P:SysWeaver.MicroService.ServiceManifest.Type">
             <summary>
             Fully qualified type name of the service type
@@ -879,9 +1098,30 @@
             Optional parameters
             </summary>
         </member>
+        <member name="M:SysWeaver.MicroService.ServiceManifest.TryGetParamAs(System.Object@,System.Type)">
+            <summary>
+            Try to get the parameters as a specific type (deserializing it if it is a json element or node)
+            </summary>
+            <param name="a">The parameters as the requested type, null on failure</param>
+            <param name="pt">The requested type</param>
+            <returns>True if the parameters could be converted to the requested type</returns>
+        </member>
         <member name="T:SysWeaver.MicroService.CpuService">
             <summary>
-            Service that wait for the computer to get a LAN ip.
+            Service that controls the cpu usage of the process (priority class, priority boost and core affinity), the original settings are restored when disposed.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.MicroService.CpuService.#ctor(SysWeaver.MicroService.ServiceManager,SysWeaver.MicroService.CpuServiceParams)">
+            <summary>
+            Apply the cpu settings to the current process
+            </summary>
+            <param name="manager">The service manager</param>
+            <param name="p">The parameters, null to use the defaults</param>
+            <exception cref="T:System.Exception">If the affinity mask or the priority class is invalid</exception>
+        </member>
+        <member name="M:SysWeaver.MicroService.CpuService.Dispose">
+            <summary>
+            Restore the process settings that were changed by this service
             </summary>
         </member>
         <member name="M:SysWeaver.MicroService.CpuService.GetCoreMask(System.Int32)">
@@ -899,9 +1139,13 @@
             Controls the cpu usage
             </summary>
         </member>
+        <member name="M:SysWeaver.MicroService.CpuServiceParams.ToString">
+            <inheritdoc />
+        </member>
         <member name="F:SysWeaver.MicroService.CpuServiceParams.PriorityClass">
             <summary>
-            The process priority class, valid values are: Normal, Idle, High, RealTime, BelowNormal, AboveNormal
+            The process priority class, valid values are: Normal, Idle, High, RealTime, BelowNormal, AboveNormal.
+            If null or empty the priority class is not changed.
             </summary>
         </member>
         <member name="F:SysWeaver.MicroService.CpuServiceParams.PriorityBoost">
@@ -911,16 +1155,16 @@
         </member>
         <member name="F:SysWeaver.MicroService.CpuServiceParams.AffinityMask">
             <summary>
-            Specifies the affinity mask manually as a binary number.
+            Specifies the affinity mask manually as a binary number (if set, slicing is not used).
             Ex: "11110000", to use core 4 to 7, a better solution is to use core slicing:
-            If multiple services are deployed on the same machine it could be easier to divide the number oif cores into "slices" and then assign a slice index per service.
+            If multiple services are deployed on the same machine it could be easier to divide the number of cores into "slices" and then assign a slice index per service.
             This approach is agnostic to the number of cores available so the same config's should work good on any number of cores.
             </summary>
         </member>
         <member name="F:SysWeaver.MicroService.CpuServiceParams.SliceCount">
             <summary>
-            Specifies how many slices to split the number of available cores into.
-            If multiple services are deployed on the same machine it could be easier to divide the number oif cores into "slices" and then assign a slice index per service.
+            Specifies how many slices to split the number of available cores into (slicing is only used if this is greater than 1).
+            If multiple services are deployed on the same machine it could be easier to divide the number of cores into "slices" and then assign a slice index per service.
             This approach is agnostic to the number of cores available so the same config's should work good on any number of cores.
             Ex (Octa core machine):
               2 slices given 4 cores per slice.
@@ -929,9 +1173,14 @@
         </member>
         <member name="F:SysWeaver.MicroService.CpuServiceParams.SliceIndex">
             <summary>
-            What slice to use for this process.
-            If multiple services are deployed on the same machine it could be easier to divide the number oif cores into "slices" and then assign a slice index per service.
+            What slice to use for this process (modulo <see cref="F:SysWeaver.MicroService.CpuServiceParams.SliceCount"/>).
+            If multiple services are deployed on the same machine it could be easier to divide the number of cores into "slices" and then assign a slice index per service.
             This approach is agnostic to the number of cores available so the same config's should work good on any number of cores.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.MicroService.GetIncomingEmailRequest">
+            <summary>
+            Request for incoming emails
             </summary>
         </member>
         <member name="F:SysWeaver.MicroService.GetIncomingEmailRequest.LastId">
@@ -942,7 +1191,12 @@
         </member>
         <member name="F:SysWeaver.MicroService.GetIncomingEmailRequest.System">
             <summary>
-            If non-empty, only emails sent to this system is returned
+            If non-empty, only emails sent to this system are returned
+            </summary>
+        </member>
+        <member name="T:SysWeaver.MicroService.GetIncomingTextMessageRequest">
+            <summary>
+            Request for incoming text messages
             </summary>
         </member>
         <member name="F:SysWeaver.MicroService.GetIncomingTextMessageRequest.LastId">
@@ -953,7 +1207,7 @@
         </member>
         <member name="F:SysWeaver.MicroService.GetIncomingTextMessageRequest.System">
             <summary>
-            If non-empty, only messages sent to this system is returned
+            If non-empty, only messages sent to this system are returned
             </summary>
         </member>
         <member name="T:SysWeaver.MicroService.IEmailReceiverService">
@@ -1025,6 +1279,21 @@
             The id of the email that this is a reply to (if known)
             </summary>
         </member>
+        <member name="M:SysWeaver.MicroService.IncomingEmail.ToString">
+            <inheritdoc />
+        </member>
+        <member name="M:SysWeaver.MicroService.IncomingEmail.CopyFrom(SysWeaver.MicroService.IncomingEmail)">
+            <summary>
+            Copy all fields from another email
+            </summary>
+            <param name="from">The email to copy from</param>
+        </member>
+        <member name="M:SysWeaver.MicroService.IncomingEmail.Clone">
+            <summary>
+            Create a copy of this email
+            </summary>
+            <returns>The copy</returns>
+        </member>
         <member name="T:SysWeaver.MicroService.IncomingTextMessage">
             <summary>
             Represents an incoming text message
@@ -1084,6 +1353,21 @@
             <summary>
             A token that can be used when sending a reply (see <see cref="F:SysWeaver.MicroService.OutgoingTextMessage.ResponseToken"/>), content depends on the provider (can't be used across providers).
             </summary>
+        </member>
+        <member name="M:SysWeaver.MicroService.IncomingTextMessage.ToString">
+            <inheritdoc />
+        </member>
+        <member name="M:SysWeaver.MicroService.IncomingTextMessage.CopyFrom(SysWeaver.MicroService.IncomingTextMessage)">
+            <summary>
+            Copy all fields from another message
+            </summary>
+            <param name="from">The message to copy from</param>
+        </member>
+        <member name="M:SysWeaver.MicroService.IncomingTextMessage.Clone">
+            <summary>
+            Create a copy of this message
+            </summary>
+            <returns>The copy</returns>
         </member>
         <member name="T:SysWeaver.MicroService.ITextMessageEvents">
             <summary>
@@ -1150,9 +1434,22 @@
             Service that wait for the computer to get a LAN ip.
             </summary>
         </member>
+        <member name="M:SysWeaver.MicroService.NetworkService.#ctor(SysWeaver.MicroService.ServiceManager,SysWeaver.MicroService.NetworkServiceParams)">
+            <summary>
+            Wait for the computer to get a LAN ip (and optionally an internet connection)
+            </summary>
+            <param name="manager">The service manager</param>
+            <param name="p">The parameters, null to use the defaults</param>
+            <exception cref="T:System.Exception">If no LAN ip (or internet connection, if waited for) is found and the parameters say to fail</exception>
+        </member>
+        <member name="T:SysWeaver.MicroService.NetworkServiceParams">
+            <summary>
+            Parameters for the <see cref="T:SysWeaver.MicroService.NetworkService"/>
+            </summary>
+        </member>
         <member name="F:SysWeaver.MicroService.NetworkServiceParams.TimeOutSeconds">
             <summary>
-            Number of seconds to wait for a network connection
+            Number of seconds to wait for a LAN ip (at least 5 seconds is used)
             </summary>
         </member>
         <member name="F:SysWeaver.MicroService.NetworkServiceParams.FailIfNoIpFound">
@@ -1172,13 +1469,21 @@
         </member>
         <member name="F:SysWeaver.MicroService.NetworkServiceParams.InternetTimeOutSeconds">
             <summary>
-            Number of seconds to wait for a internet
+            Number of seconds to wait for an internet connection (only used if <see cref="F:SysWeaver.MicroService.NetworkServiceParams.WaitForInternet"/> is true, 0 or less skips the wait)
             </summary>
         </member>
         <member name="F:SysWeaver.MicroService.NetworkServiceParams.FailIfNoInternetFound">
             <summary>
             True to throw an exception when no internet is found
             </summary>
+        </member>
+        <member name="T:SysWeaver.MicroService.OutgoingTextMessage">
+            <summary>
+            A text message to send
+            </summary>
+        </member>
+        <member name="M:SysWeaver.MicroService.OutgoingTextMessage.ToString">
+            <inheritdoc />
         </member>
         <member name="F:SysWeaver.MicroService.OutgoingTextMessage.PhoneNumber">
             <summary>
@@ -1232,6 +1537,17 @@
             An optional reference of your choice, returned in the result and in status updates
             </summary>
         </member>
+        <member name="M:SysWeaver.MicroService.OutgoingTextMessage.Clone">
+            <summary>
+            Create a shallow copy of this message
+            </summary>
+            <returns>The copy</returns>
+        </member>
+        <member name="T:SysWeaver.MicroService.TextMessageExt">
+            <summary>
+            Extension methods for text messages
+            </summary>
+        </member>
         <member name="M:SysWeaver.MicroService.TextMessageExt.Send(SysWeaver.MicroService.ITextMessageSender,System.String,System.String,System.String,SysWeaver.MicroService.TextMessagePurpose)">
             <summary>
             Send a text message
@@ -1275,6 +1591,8 @@
             <summary>
             True if the status is final (no more updates are expected)
             </summary>
+            <param name="status">The status to check</param>
+            <returns>True if the status is <see cref="F:SysWeaver.MicroService.TextMessageStatuses.Read"/> or <see cref="F:SysWeaver.MicroService.TextMessageStatuses.Failed"/></returns>
         </member>
         <member name="T:SysWeaver.MicroService.TextMessageQueue`1">
             <summary>
@@ -1295,6 +1613,11 @@
             <param name="timeOut">The maximum time in milli seconds to wait for new items</param>
             <param name="maxPoll">The maximum number of items to return per poll</param>
             <param name="recentMinutes">Items added within this time are returned to pollers without a (known) cursor (the time the item was added is used, not the time of the item, since events can be delivered late)</param>
+        </member>
+        <member name="M:SysWeaver.MicroService.TextMessageQueue`1.Dispose">
+            <summary>
+            Release the resources used to wake up waiting pollers
+            </summary>
         </member>
         <member name="F:SysWeaver.MicroService.TextMessageQueue`1.Items">
             <summary>
@@ -1381,6 +1704,11 @@
             The delivery status of a message
             </summary>
         </member>
+        <member name="F:SysWeaver.MicroService.TextMessageStatuses.Unknown">
+            <summary>
+            The status is not known
+            </summary>
+        </member>
         <member name="F:SysWeaver.MicroService.TextMessageStatuses.Accepted">
             <summary>
             Accepted (queued) by the provider
@@ -1428,7 +1756,7 @@
         </member>
         <member name="F:SysWeaver.MicroService.TextMessageFailures.Blocked">
             <summary>
-            The recipient have blocked the sender or opted out
+            The recipient has blocked the sender or opted out
             </summary>
         </member>
         <member name="F:SysWeaver.MicroService.TextMessageFailures.OutsideWindow">
@@ -1466,6 +1794,9 @@
             A template (pre-registered message), required by some channels and countries
             </summary>
         </member>
+        <member name="M:SysWeaver.MicroService.TextMessageTemplate.ToString">
+            <inheritdoc />
+        </member>
         <member name="F:SysWeaver.MicroService.TextMessageTemplate.Name">
             <summary>
             The provider specific template name / id.
@@ -1487,6 +1818,9 @@
             <summary>
             The result of sending a message
             </summary>
+        </member>
+        <member name="M:SysWeaver.MicroService.TextMessageSendResult.ToString">
+            <inheritdoc />
         </member>
         <member name="F:SysWeaver.MicroService.TextMessageSendResult.Id">
             <summary>
@@ -1537,6 +1871,9 @@
             <summary>
             A change of the delivery status of a sent message
             </summary>
+        </member>
+        <member name="M:SysWeaver.MicroService.TextMessageStatusUpdate.ToString">
+            <inheritdoc />
         </member>
         <member name="F:SysWeaver.MicroService.TextMessageStatusUpdate.Id">
             <summary>
@@ -1598,6 +1935,12 @@
             The UTC time stamp of the status change
             </summary>
         </member>
+        <member name="M:SysWeaver.MicroService.TextMessageStatusUpdate.Clone">
+            <summary>
+            Create a shallow copy of this update
+            </summary>
+            <returns>The copy</returns>
+        </member>
         <member name="T:SysWeaver.MicroService.GetTextMessageStatusRequest">
             <summary>
             Request for status updates
@@ -1614,9 +1957,26 @@
             If non-empty, only updates of messages sent by this system are returned
             </summary>
         </member>
+        <member name="T:SysWeaver.WithServiceInfo">
+            <summary>
+            Base class for services that want to know their instance name and service info
+            </summary>
+        </member>
+        <member name="M:SysWeaver.WithServiceInfo.#ctor(SysWeaver.MicroService.ServiceManager,System.String)">
+            <summary>
+            Create a service base object
+            </summary>
+            <param name="manager">The service manager that the service is registered to</param>
+            <param name="defaultInstanceName">The instance name to use if the manager has no name for the instance, null or empty means "default"</param>
+        </member>
+        <member name="F:SysWeaver.WithServiceInfo.Manager">
+            <summary>
+            The service manager
+            </summary>
+        </member>
         <member name="P:SysWeaver.WithServiceInfo.InstanceName">
             <summary>
-            Get the name of the instance (if created by the manager).
+            Get the name of the instance (if created by the manager), the default instance name if it has no name.
             Can't be called in the constructor.
             </summary>
         </member>

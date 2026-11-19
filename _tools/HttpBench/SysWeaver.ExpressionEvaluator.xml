@@ -1,0 +1,1035 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>SysWeaver.ExpressionEvaluator</name>
+    </assembly>
+    <members>
+        <member name="T:SysWeaver.MicroService.CalcService">
+            <summary>
+            A web API service that evaluates expressions (without parameters) using the standard evaluators of <see cref="T:SysWeaver.Parser.ExpressionEvaluator"/>.
+            Invalid expressions throw an <see cref="T:System.ArgumentException"/>
+            </summary>
+        </member>
+        <member name="M:SysWeaver.MicroService.CalcService.Calc(System.String)">
+            <summary>
+            Evaluate the value of an expression using Double precision arithmetics
+            </summary>
+            <param name="expression">The expression to evaluate, ex: "5 * 12"</param>
+            <returns>The value of the expression</returns>
+        </member>
+        <member name="M:SysWeaver.MicroService.CalcService.CalcDecimal(System.String)">
+            <summary>
+            Evaluate the value of an expression using Decimal arithmetics
+            </summary>
+            <param name="expression">The expression to evaluate, ex: "5 * 12"</param>
+            <returns>The value of the expression</returns>
+        </member>
+        <member name="M:SysWeaver.MicroService.CalcService.CalcInteger(System.String)">
+            <summary>
+            Evaluate the value of an expression using Int64 arithmetics
+            </summary>
+            <param name="expression">The expression to evaluate, ex: "5 * 12"</param>
+            <returns>The value of the expression</returns>
+        </member>
+        <member name="M:SysWeaver.MicroService.CalcService.CalcUnsigned(System.String)">
+            <summary>
+            Evaluate the value of an expression using UInt64 arithmetics
+            </summary>
+            <param name="expression">The expression to evaluate, ex: "5 * 12"</param>
+            <returns>The value of the expression</returns>
+        </member>
+        <member name="T:SysWeaver.Parser.IExpressionEvaluator">
+            <summary>
+            Non generic access to an <see cref="T:SysWeaver.Parser.ExpressionEvaluator`1"/> (values are passed and returned as objects)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Parser.IExpressionEvaluator.ToValue(System.String)">
+            <summary>
+            Evaluate an expression without parameters
+            </summary>
+            <param name="expression">The expression, ex: "1 + 2 * 3"</param>
+            <returns>The (boxed) value of the expression, of the evaluator type</returns>
+        </member>
+        <member name="M:SysWeaver.Parser.IExpressionEvaluator.ToValue(System.String,System.Collections.Generic.IEnumerable{System.String},System.Object[])">
+            <summary>
+            Evaluate an expression with parameters
+            </summary>
+            <param name="expression">The expression, ex: "x * 2"</param>
+            <param name="parameters">The parameter names, the index of a name is the index of its value</param>
+            <param name="values">The parameter values, must be (boxed) values of exactly the evaluator type (they are unboxed, not converted)</param>
+            <returns>The (boxed) value of the expression, of the evaluator type</returns>
+        </member>
+        <member name="P:SysWeaver.Parser.IExpressionEvaluator.Operators">
+            <summary>
+            All operators (including the parentheses and the argument separator) known by this evaluator
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Parser.IExpressionEvaluator.Identifiers">
+            <summary>
+            All identifiers (functions and constants) known by this evaluator
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Parser.IExpressionEvaluator.ToTokens(System.String,System.Collections.Generic.IEnumerable{System.String},System.Boolean)">
+            <summary>
+            Tokenize an expression (no evaluation is done), useful for validation or syntax highlighting
+            </summary>
+            <param name="expression">The expression to tokenize</param>
+            <param name="parameters">The parameter names (null for none)</param>
+            <param name="allowUnknownIdentifiers">If true unknown identifiers are returned as operands, else an <see cref="T:SysWeaver.Parser.ExpressionParserException"/> is thrown</param>
+            <returns>The tokens (lazily): the token class, the start (inclusive) and end (exclusive) position and the text of the token</returns>
+        </member>
+        <member name="M:SysWeaver.Parser.IExpressionEvaluator.ToTokens(System.String,System.Boolean)">
+            <summary>
+            Tokenize an expression without parameters (no evaluation is done)
+            </summary>
+            <param name="expression">The expression to tokenize</param>
+            <param name="allowUnknownIdentifiers">If true unknown identifiers are returned as operands, else an <see cref="T:SysWeaver.Parser.ExpressionParserException"/> is thrown</param>
+            <returns>The tokens (lazily): the token class, the start (inclusive) and end (exclusive) position and the text of the token</returns>
+        </member>
+        <member name="M:SysWeaver.Parser.IExpressionEvaluator.ToTokens(System.String,System.Boolean,System.String[])">
+            <summary>
+            Tokenize an expression (no evaluation is done)
+            </summary>
+            <param name="expression">The expression to tokenize</param>
+            <param name="allowUnknownIdentifiers">If true unknown identifiers are returned as operands, else an <see cref="T:SysWeaver.Parser.ExpressionParserException"/> is thrown</param>
+            <param name="parameters">The parameter names</param>
+            <returns>The tokens (lazily): the token class, the start (inclusive) and end (exclusive) position and the text of the token</returns>
+        </member>
+        <member name="M:SysWeaver.Parser.IExpressionEvaluator.ObjectEvaluator(System.String,System.Collections.Generic.IEnumerable{System.String})">
+            <summary>
+            Compile an expression to a function taking the parameter values as objects.
+            The values are converted to the evaluator type using <see cref="M:System.Convert.ChangeType(System.Object,System.Type)"/> (strings are converted using the current culture)
+            </summary>
+            <param name="expression">The expression, ex: "x * 2"</param>
+            <param name="parameters">The parameter names, the index of a name is the index of its value (null for none)</param>
+            <returns>A function that evaluates the expression, the result is a boxed value of the evaluator type</returns>
+        </member>
+        <member name="M:SysWeaver.Parser.IExpressionEvaluator.ObjectEvaluator(System.String,System.String[])">
+            <summary>
+            Compile an expression to a function taking the parameter values as objects.
+            The values are converted to the evaluator type using <see cref="M:System.Convert.ChangeType(System.Object,System.Type)"/> (strings are converted using the current culture)
+            </summary>
+            <param name="expression">The expression, ex: "x * 2"</param>
+            <param name="parameters">The parameter names, the index of a name is the index of its value</param>
+            <returns>A function that evaluates the expression, the result is a boxed value of the evaluator type</returns>
+        </member>
+        <member name="T:SysWeaver.Parser.ExpressionEvaluator">
+            <summary>
+            The standard expression evaluators and helpers.
+            The standard evaluators support the operators "+ - * / %" (and unary "+ -"), parentheses, "," as the function argument separator,
+            and all public static functions, constant fields and read only properties of <see cref="T:System.Math"/> that only use the evaluator type,
+            with the name of the member (ex: "Sin", "Max", "PI"). Overloads are selected by the number of arguments (ex: "Log(8)" and "Log(8, 2)").
+            Function, constant and parameter names are case sensitive (ordinal comparison): "pi" is not "PI", so it can be used as a parameter name.
+            The <see cref="F:SysWeaver.Parser.ExpressionEvaluator.Double"/> and <see cref="F:SysWeaver.Parser.ExpressionEvaluator.Decimal"/> evaluators add "^" (power, right associative), "&lt;&lt;" and "&gt;&gt;" (multiply / divide by a power of 2).
+            The <see cref="F:SysWeaver.Parser.ExpressionEvaluator.Int64"/> and <see cref="F:SysWeaver.Parser.ExpressionEvaluator.UInt64"/> evaluators add the bit operators "&lt;&lt; &gt;&gt; &amp; ^ |" ("^" is XOR) and the unary "~" and "!" (both bitwise not).
+            Precedence (high to low): unary operators, "^" (power), "* / %", "+ -", "&lt;&lt; &gt;&gt;", "&amp;", "^" (XOR), "|" (the integer operators use the same order as C#).
+            Numbers are parsed with the invariant culture (the current culture is never used), "0x" (hexadecimal), "0b" (binary) and "0o" (octal) prefixes are supported (the prefixes are case insensitive).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Parser.ExpressionEvaluator.Double">
+            <summary>
+            Evaluator using Double arithmetics (IEEE semantics: 1/0 is infinity, 0/0 is NaN).
+            Constants: "E", "PI" and "Tau"
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Parser.ExpressionEvaluator.Int64">
+            <summary>
+            Evaluator using Int64 arithmetics (unchecked: overflows wrap around, division by zero throws a <see cref="T:System.DivideByZeroException"/> when evaluated)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Parser.ExpressionEvaluator.UInt64">
+            <summary>
+            Evaluator using UInt64 arithmetics (unchecked: overflows wrap around, division by zero throws a <see cref="T:System.DivideByZeroException"/> when evaluated).
+            The unary minus is not supported (use "0-x")
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Parser.ExpressionEvaluator.Decimal">
+            <summary>
+            Evaluator using Decimal arithmetics (overflows and division by zero throw when evaluated).
+            "x^y" is computed exactly (by repeated multiplication) when y is an integer, else using <see cref="M:System.Math.Pow(System.Double,System.Double)"/> on the values converted to Double.
+            "x&lt;&lt;y" is x * 2^y and "x&gt;&gt;y" is x / 2^y (computed the same way)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Parser.ExpressionEvaluator.Get(System.Type)">
+            <summary>
+            Get the standard evaluator to use for a numeric type:
+            <see cref="F:SysWeaver.Parser.ExpressionEvaluator.Double"/> for Single and Double, <see cref="F:SysWeaver.Parser.ExpressionEvaluator.Decimal"/> for Decimal,
+            <see cref="F:SysWeaver.Parser.ExpressionEvaluator.Int64"/> for the signed integer types and <see cref="F:SysWeaver.Parser.ExpressionEvaluator.UInt64"/> for the unsigned integer types
+            (the evaluator works on the 64-bit type, the caller must convert the result).
+            </summary>
+            <param name="type">The numeric type</param>
+            <returns>The evaluator to use</returns>
+            <exception cref="T:System.Collections.Generic.KeyNotFoundException">There is no evaluator for the type (ex: String, Boolean, Char, Int128)</exception>
+        </member>
+        <member name="T:SysWeaver.Parser.ExpressionTypeFlags">
+            <summary>
+            Options for an <see cref="T:SysWeaver.Parser.ExpressionEvaluator`1"/> (operators, identifiers and parameter names are always case sensitive)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Parser.ExpressionTypeFlags.IsNumeric">
+            <summary>
+            Add the numeric operators "+ - * / %" (and unary "+" and "-")
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Parser.ExpressionTypeFlags.IsDecimal">
+            <summary>
+            Add the operators "^" (power), "&lt;&lt;" and "&gt;&gt;" (multiply / divide by a power of 2), can't be combined with <see cref="F:SysWeaver.Parser.ExpressionTypeFlags.IsInteger"/>
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Parser.ExpressionTypeFlags.IsInteger">
+            <summary>
+            Add the bit operators "&lt;&lt; &gt;&gt; | &amp; ^" (XOR) and unary "~ !" (bitwise not), can't be combined with <see cref="F:SysWeaver.Parser.ExpressionTypeFlags.IsDecimal"/>
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Parser.ExpressionEvaluator`1">
+            <summary>
+            Parses text expressions and compiles them to linq expressions / delegates operating on the type T.
+            Parameters are named in the expression and passed as an array of T (the index of the name is the index of the value).
+            Parse errors throw an <see cref="T:System.ArgumentException"/>, usually an <see cref="T:SysWeaver.Parser.ExpressionParserException"/> with the position of the error.
+            Instances are thread safe (they are not modified after construction).
+            </summary>
+            <typeparam name="T">The operand type</typeparam>
+        </member>
+        <member name="M:SysWeaver.Parser.ExpressionEvaluator`1.Exp(System.Linq.Expressions.ParameterExpression@,System.String,System.Collections.Generic.IEnumerable{System.String},System.Boolean)">
+            <summary>
+            Parse an expression to a linq expression of type T, the parameters are read from an array of T
+            </summary>
+            <param name="inputParameters">Receives the parameter (of type T[]) that the expression reads the parameter values from (the same instance for all calls)</param>
+            <param name="expression">The expression, ex: "x * 2 + y"</param>
+            <param name="parameters">The parameter names (null for none), the index of a name is the index of its value in the array</param>
+            <param name="optimize">True to run the <see cref="T:SysWeaver.ExpressionOptimizer"/> on the result (constant folding etc; floating point "x + 0" is folded to "x", so x = -0 gives -0 instead of +0, see <see cref="M:SysWeaver.ExpressionOptimizer.Optimize(System.Linq.Expressions.Expression)"/>)</param>
+            <returns>The linq expression</returns>
+            <exception cref="T:System.ArgumentException">The expression is invalid (usually an <see cref="T:SysWeaver.Parser.ExpressionParserException"/> with the position of the error), or a parameter name is invalid, used twice or the name of a function / constant</exception>
+            <exception cref="T:System.ArgumentNullException">The expression is null (DEBUG builds only)</exception>
+        </member>
+        <member name="M:SysWeaver.Parser.ExpressionEvaluator`1.Exp(System.Linq.Expressions.ParameterExpression@,System.String,System.Boolean,System.String[])">
+            <summary>
+            Parse an expression to a linq expression of type T, the parameters are read from an array of T
+            </summary>
+            <param name="inputParameters">Receives the parameter (of type T[]) that the expression reads the parameter values from (the same instance for all calls)</param>
+            <param name="expression">The expression, ex: "x * 2 + y"</param>
+            <param name="optimize">True to run the <see cref="T:SysWeaver.ExpressionOptimizer"/> on the result (constant folding etc; floating point "x + 0" is folded to "x", so x = -0 gives -0 instead of +0, see <see cref="M:SysWeaver.ExpressionOptimizer.Optimize(System.Linq.Expressions.Expression)"/>)</param>
+            <param name="parameters">The parameter names, the index of a name is the index of its value in the array</param>
+            <returns>The linq expression</returns>
+            <exception cref="T:System.ArgumentException">The expression is invalid (usually an <see cref="T:SysWeaver.Parser.ExpressionParserException"/> with the position of the error), or a parameter name is invalid, used twice or the name of a function / constant</exception>
+            <exception cref="T:System.ArgumentNullException">The expression is null (DEBUG builds only)</exception>
+        </member>
+        <member name="M:SysWeaver.Parser.ExpressionEvaluator`1.Exp(System.String,System.Collections.Generic.IEnumerable{System.String},System.Collections.Generic.IEnumerable{System.Linq.Expressions.Expression},System.Boolean)">
+            <summary>
+            Parse an expression to a linq expression of type T, using the supplied linq expressions as the parameter values
+            (useful for embedding the expression into a larger linq expression)
+            </summary>
+            <param name="expression">The expression, ex: "x * 2 + y"</param>
+            <param name="parameters">The parameter names</param>
+            <param name="parameterValues">The linq expressions (of type T) to use for the parameters, the index of a name is the index of its value</param>
+            <param name="optimize">True to run the <see cref="T:SysWeaver.ExpressionOptimizer"/> on the result (constant folding etc; floating point "x + 0" is folded to "x", so x = -0 gives -0 instead of +0, see <see cref="M:SysWeaver.ExpressionOptimizer.Optimize(System.Linq.Expressions.Expression)"/>)</param>
+            <returns>The linq expression</returns>
+            <exception cref="T:System.ArgumentException">The expression is invalid (usually an <see cref="T:SysWeaver.Parser.ExpressionParserException"/> with the position of the error), or a parameter name is invalid, used twice or the name of a function / constant</exception>
+        </member>
+        <member name="M:SysWeaver.Parser.ExpressionEvaluator`1.Exp(System.String,System.String[],System.Linq.Expressions.Expression[],System.Boolean)">
+            <summary>
+            Parse an expression to a linq expression of type T, using the supplied linq expressions as the parameter values
+            (useful for embedding the expression into a larger linq expression)
+            </summary>
+            <param name="expression">The expression, ex: "x * 2 + y"</param>
+            <param name="parameters">The parameter names</param>
+            <param name="parameterValues">The linq expressions (of type T) to use for the parameters, the index of a name is the index of its value</param>
+            <param name="optimize">True to run the <see cref="T:SysWeaver.ExpressionOptimizer"/> on the result (constant folding etc; floating point "x + 0" is folded to "x", so x = -0 gives -0 instead of +0, see <see cref="M:SysWeaver.ExpressionOptimizer.Optimize(System.Linq.Expressions.Expression)"/>)</param>
+            <returns>The linq expression</returns>
+            <exception cref="T:System.ArgumentException">The expression is invalid (usually an <see cref="T:SysWeaver.Parser.ExpressionParserException"/> with the position of the error), or a parameter name is invalid, used twice or the name of a function / constant</exception>
+            <exception cref="T:System.ArgumentNullException">The expression is null (DEBUG builds only)</exception>
+        </member>
+        <member name="M:SysWeaver.Parser.ExpressionEvaluator`1.ObjectEvaluator(System.String,System.Collections.Generic.IEnumerable{System.String})">
+            <summary>
+            Compile an expression to a function taking the parameter values as objects.
+            The values are converted to T using <see cref="M:System.Convert.ChangeType(System.Object,System.Type)"/> (strings are converted using the current culture)
+            </summary>
+            <param name="expression">The expression, ex: "x * 2"</param>
+            <param name="parameters">The parameter names, the index of a name is the index of its value (null for none)</param>
+            <returns>A function that evaluates the expression, the result is a boxed T</returns>
+            <exception cref="T:System.ArgumentException">The expression is invalid (usually an <see cref="T:SysWeaver.Parser.ExpressionParserException"/> with the position of the error), or a parameter name is invalid, used twice or the name of a function / constant</exception>
+        </member>
+        <member name="F:SysWeaver.Parser.ExpressionEvaluator`1.IsBuiltInValueType">
+            <summary>
+            True if T is a primitive type or decimal (Convert.ChangeType returns the same value if the value already is a T)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Parser.ExpressionEvaluator`1.ConvertParameter(System.Object)">
+            <summary>
+            Same as (T)Convert.ChangeType(value, typeof(T)), but values that already are a (built in) T are just unboxed
+            </summary>
+            <param name="value">The value</param>
+            <returns>The value as a T</returns>
+        </member>
+        <member name="M:SysWeaver.Parser.ExpressionEvaluator`1.ObjectEvaluator(System.String,System.String[])">
+            <summary>
+            Compile an expression to a function taking the parameter values as objects.
+            The values are converted to T using <see cref="M:System.Convert.ChangeType(System.Object,System.Type)"/> (strings are converted using the current culture)
+            </summary>
+            <param name="expression">The expression, ex: "x * 2"</param>
+            <param name="parameters">The parameter names, the index of a name is the index of its value</param>
+            <returns>A function that evaluates the expression, the result is a boxed T</returns>
+            <exception cref="T:System.ArgumentException">The expression is invalid (usually an <see cref="T:SysWeaver.Parser.ExpressionParserException"/> with the position of the error), or a parameter name is invalid, used twice or the name of a function / constant</exception>
+        </member>
+        <member name="M:SysWeaver.Parser.ExpressionEvaluator`1.Evaluator(System.String,System.Collections.Generic.IEnumerable{System.String})">
+            <summary>
+            Compile an expression to a function
+            </summary>
+            <param name="expression">The expression, ex: "x * 2 + y"</param>
+            <param name="parameters">The parameter names (null for none), the index of a name is the index of its value in the array passed to the function</param>
+            <returns>A function that evaluates the expression, the array must contain (at least) one value per parameter (it may be null if there are no parameters)</returns>
+            <exception cref="T:System.ArgumentException">The expression is invalid (usually an <see cref="T:SysWeaver.Parser.ExpressionParserException"/> with the position of the error), or a parameter name is invalid, used twice or the name of a function / constant</exception>
+        </member>
+        <member name="M:SysWeaver.Parser.ExpressionEvaluator`1.Evaluator(System.String,System.String[])">
+            <summary>
+            Compile an expression to a function
+            </summary>
+            <param name="expression">The expression, ex: "x * 2 + y"</param>
+            <param name="parameters">The parameter names, the index of a name is the index of its value in the array passed to the function</param>
+            <returns>A function that evaluates the expression, the array must contain (at least) one value per parameter (it may be null if there are no parameters)</returns>
+            <exception cref="T:System.ArgumentException">The expression is invalid (usually an <see cref="T:SysWeaver.Parser.ExpressionParserException"/> with the position of the error), or a parameter name is invalid, used twice or the name of a function / constant</exception>
+        </member>
+        <member name="M:SysWeaver.Parser.ExpressionEvaluator`1.Value(System.String,System.Collections.Generic.IEnumerable{System.String},`0[])">
+            <summary>
+            Compile and evaluate an expression (compiling is comparatively slow, use <see cref="M:SysWeaver.Parser.ExpressionEvaluator`1.Evaluator(System.String,System.Collections.Generic.IEnumerable{System.String})"/> to evaluate an expression many times)
+            </summary>
+            <param name="expression">The expression, ex: "x * 2 + y"</param>
+            <param name="parameters">The parameter names (null for none), the index of a name is the index of its value</param>
+            <param name="values">The parameter values</param>
+            <returns>The value of the expression</returns>
+            <exception cref="T:System.ArgumentException">The expression is invalid (usually an <see cref="T:SysWeaver.Parser.ExpressionParserException"/> with the position of the error), or a parameter name is invalid, used twice or the name of a function / constant</exception>
+            <exception cref="T:System.IndexOutOfRangeException">There are fewer values than parameters</exception>
+            <exception cref="T:System.DivideByZeroException">An integer or decimal division by zero</exception>
+        </member>
+        <member name="M:SysWeaver.Parser.ExpressionEvaluator`1.#ctor(SysWeaver.Parser.ExpressionTypeFlags,SysWeaver.Parser.StringTokenizer{SysWeaver.Parser.ExpressionEvaluator{`0}.Token}.ValueReader,System.Collections.Generic.IEnumerable{System.Collections.Generic.KeyValuePair{System.Type,System.Boolean}})">
+            <summary>
+            Create a custom evaluator (the standard ones are in <see cref="T:SysWeaver.Parser.ExpressionEvaluator"/>)
+            </summary>
+            <param name="flags">The operators to add</param>
+            <param name="valueReader">The reader for numeric values, see <see cref="T:SysWeaver.Parser.ExpressionEvaluatorValueReader"/></param>
+            <param name="customTypes">Types whose public static members (that only use the type T) are made available (null for none):
+            methods with at least one parameter become functions, constant / read only fields and read only properties become constants.
+            The value is true to prefix the function and constant names with the type name (ex: "MathSin", "MathPI").
+            Overloads are selected by the number of arguments; if several types (or several methods) register the same name with the same number of arguments, the first one found is used.
+            All names are case sensitive</param>
+            <exception cref="T:System.ArgumentException">Both <see cref="F:SysWeaver.Parser.ExpressionTypeFlags.IsDecimal"/> and <see cref="F:SysWeaver.Parser.ExpressionTypeFlags.IsInteger"/> are set, or two constants (or a constant and a function) have the same name</exception>
+            <exception cref="T:System.ArgumentNullException">The value reader is null</exception>
+        </member>
+        <member name="M:SysWeaver.Parser.ExpressionEvaluator`1.ExceptionThrower.WithArgumentCount(SysWeaver.Parser.ExpressionEvaluator{`0}.Token,System.Int32)">
+            <summary>
+            Get the overload of a function taking a number of arguments, throws if there is none
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Parser.ExpressionEvaluator`1.Token">
+            <summary>
+            A parsed token of an expression (used by the value readers to create constant operands)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Parser.ExpressionEvaluator`1.Token.#ctor(System.Int32,System.Int32,`0)">
+            <summary>
+            Create a constant operand token
+            </summary>
+            <param name="start">The start position of the token in the expression (inclusive)</param>
+            <param name="end">The end position of the token in the expression (exclusive)</param>
+            <param name="value">The constant value</param>
+        </member>
+        <member name="F:SysWeaver.Parser.ExpressionEvaluator`1.Token.Start">
+            <summary>
+            The start position of the token in the expression (inclusive)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Parser.ExpressionEvaluator`1.Token.End">
+            <summary>
+            The end position of the token in the expression (exclusive)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Parser.ExpressionEvaluator`1.Token.Overloads">
+            <summary>
+            Functions only: the evaluation of the overloads indexed by the number of arguments (null if there is no overload with that number of arguments)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Parser.ExpressionEvaluator`1.Token.ToString">
+            <summary>
+            The class, precedence and unary creator of the token (for debugging)
+            </summary>
+            <returns>The text</returns>
+        </member>
+        <member name="F:SysWeaver.Parser.ExpressionEvaluator`1.PowerMethod">
+            <summary>
+            The method used for "^" (power), null to use the default (only exists for Double)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Parser.ExpressionEvaluator`1.ToValue(System.String)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Parser.ExpressionEvaluator`1.ToValue(System.String,System.Collections.Generic.IEnumerable{System.String},System.Object[])">
+            <inheritdoc/>
+            <exception cref="T:System.InvalidCastException">A value is not a boxed T</exception>
+        </member>
+        <member name="P:SysWeaver.Parser.ExpressionEvaluator`1.Operators">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Parser.ExpressionEvaluator`1.Identifiers">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Parser.ExpressionEvaluator`1.ToTokens(System.String,System.Collections.Generic.IEnumerable{System.String},System.Boolean)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Parser.ExpressionEvaluator`1.ToTokens(System.String,System.Boolean,System.String[])">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Parser.ExpressionEvaluator`1.ToTokens(System.String,System.Boolean)">
+            <inheritdoc/>
+        </member>
+        <member name="T:SysWeaver.Parser.DecimalMath">
+            <summary>
+            Decimal helpers used by the <see cref="F:SysWeaver.Parser.ExpressionEvaluator.Decimal"/> evaluator
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Parser.DecimalMath.Pow(System.Decimal,System.Decimal)">
+            <summary>
+            Raise a value to a power.
+            An integer exponent is computed exactly (by repeated squaring, a negative exponent gives 1 / x^-y),
+            other exponents use <see cref="M:System.Math.Pow(System.Double,System.Double)"/> on the values converted to Double
+            </summary>
+            <param name="x">The base</param>
+            <param name="y">The exponent</param>
+            <returns>x raised to the power y</returns>
+            <exception cref="T:System.OverflowException">The result is too large for a Decimal (or not a number)</exception>
+            <exception cref="T:System.DivideByZeroException">x is 0 and y is a negative integer</exception>
+        </member>
+        <member name="T:SysWeaver.Parser.ExpressionEvaluatorValueReader">
+            <summary>
+            The value readers of the standard evaluators (numbers are parsed with the invariant culture)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Parser.ExpressionEvaluatorValueReader.Double">
+            <summary>
+            Reads Double values (<see cref="T:SysWeaver.Parser.ValueReader.DoubleValueReader`1"/>)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Parser.ExpressionEvaluatorValueReader.Int64">
+            <summary>
+            Reads Int64 values (<see cref="T:SysWeaver.Parser.ValueReader.Int64ValueReader`1"/>)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Parser.ExpressionEvaluatorValueReader.UInt64">
+            <summary>
+            Reads UInt64 values (<see cref="T:SysWeaver.Parser.ValueReader.UInt64ValueReader`1"/>)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Parser.ExpressionEvaluatorValueReader.Decimal">
+            <summary>
+            Reads Decimal values (<see cref="T:SysWeaver.Parser.ValueReader.DecimalValueReader`1"/>)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Parser.ExpressionParserException">
+            <summary>
+            Thrown when an expression can't be parsed, contains the expression and the position of the error
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Parser.ExpressionParserException.ToString">
+            <summary>
+            The quoted expression, the position (if known) followed by a line that marks the first and last character of the error with a '^', and the base exception text
+            </summary>
+            <returns>A multi line text</returns>
+        </member>
+        <member name="M:SysWeaver.Parser.ExpressionParserException.#ctor(System.String,System.String,System.Int32,System.Int32,System.Exception,System.String)">
+            <summary>
+            Create an exception
+            </summary>
+            <param name="message">The error message</param>
+            <param name="expression">The expression that failed to parse</param>
+            <param name="startPosition">The position of the first character of the error (negative if unknown)</param>
+            <param name="endPosition">The position after the last character of the error (exclusive, -1 if unknown)</param>
+            <param name="inner">An optional inner exception</param>
+            <param name="argument">The parameter name, null for "expression"</param>
+        </member>
+        <member name="F:SysWeaver.Parser.ExpressionParserException.Expression">
+            <summary>
+            The expression that failed to parse
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Parser.ExpressionParserException.StartPosition">
+            <summary>
+            The position of the first character of the error (negative if unknown)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Parser.ExpressionParserException.EndPosition">
+            <summary>
+            The position after the last character of the error (exclusive, -1 if unknown)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Parser.PostfixEvaluator">
+            <summary>
+            Evaluates tokens in reverse polish notation (postfix), see <see cref="T:SysWeaver.Parser.ShuntingYard"/>
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Parser.PostfixEvaluator.FromRpn``2(System.Collections.Generic.IEnumerable{``1},System.Func{``1,System.Collections.Generic.Stack{``0},``0},System.Func{``1,System.Boolean},System.Action{System.String,System.Exception,``1})">
+            <summary>
+            Evaluate tokens in reverse polish notation using an operand stack
+            </summary>
+            <typeparam name="R">The result (operand) type</typeparam>
+            <typeparam name="T">The token type</typeparam>
+            <param name="rpnExpression">The tokens in postfix order</param>
+            <param name="calc">Computes the value of a token, for operators and functions it pops its arguments from the stack (the last argument is on top), for operands the stack is null</param>
+            <param name="canEvaluate">Returns true for operators and functions (tokens that take arguments from the stack), false for operands</param>
+            <param name="exceptionThrowerN">Called with a message, the inner exception and the token when <paramref name="calc"/> throws, it should throw.
+            If null an <see cref="T:System.ArgumentException"/> is thrown</param>
+            <returns>The value of the expression</returns>
+            <exception cref="T:System.ArgumentException">The expression didn't result in exactly one value (ex: it's empty or has two operands without an operator)</exception>
+        </member>
+        <member name="T:SysWeaver.Parser.TokenClasses">
+            <summary>
+            The class of a token
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Parser.TokenClasses.LeftAssociativeOperator">
+            <summary>
+            A left associative operator (a - b - c = (a - b) - c), also used for unary (prefix) operators
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Parser.TokenClasses.RightAssociativeOperator">
+            <summary>
+            A right associative operator (a ^ b ^ c = a ^ (b ^ c))
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Parser.TokenClasses.Operand">
+            <summary>
+            A value (constant or parameter)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Parser.TokenClasses.Function">
+            <summary>
+            A function (followed by its arguments in parentheses)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Parser.TokenClasses.OpenParentheses">
+            <summary>
+            An opening parenthesis
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Parser.TokenClasses.CloseParentheses">
+            <summary>
+            A closing parenthesis
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Parser.TokenClasses.ArgumentSeparator">
+            <summary>
+            The separator between function arguments
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Parser.ShuntingYard">
+            <summary>
+            The shunting-yard algorithm: converts infix tokens to reverse polish notation (postfix)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Parser.ShuntingYard.ReversePolishNotation``1(System.Collections.Generic.IEnumerable{``0},System.Func{``0,SysWeaver.Parser.TokenClasses},System.Func{``0,System.Int32},System.Func{``0,``0},System.Action{System.String,System.Exception,``0})">
+            <summary>
+            Convert infix tokens to reverse polish notation (postfix), lazily.
+            An operator at the start, after another operator, after an opening parenthesis or after an argument separator is a unary (prefix) operator,
+            it's replaced by the token returned by <paramref name="toUnary"/>.
+            Operators with a higher precedence are applied first.
+            </summary>
+            <typeparam name="T">The token type</typeparam>
+            <param name="tokens">The tokens in infix order</param>
+            <param name="getTokenClass">Get the class of a token</param>
+            <param name="getOperatorPrecedence">Get the precedence of an operator token (higher binds tighter)</param>
+            <param name="toUnary">Get the unary version of an operator token (may throw if the operator has no unary version)</param>
+            <param name="exceptionCasterN">Called with a message, an optional inner exception and the offending token when the input is invalid, it should throw.
+            If null an <see cref="T:System.ArgumentException"/> is thrown</param>
+            <returns>The tokens in postfix order, parentheses and argument separators are removed</returns>
+        </member>
+        <member name="M:SysWeaver.Parser.ShuntingYard.ReversePolishNotation``1(System.Collections.Generic.IEnumerable{``0},System.Func{``0,SysWeaver.Parser.TokenClasses},System.Func{``0,System.Int32},System.Func{``0,``0},System.Func{``0,System.Int32,``0},System.Action{System.String,System.Exception,``0})">
+            <summary>
+            Convert infix tokens to reverse polish notation (postfix), lazily.
+            An operator at the start, after another operator, after an opening parenthesis or after an argument separator is a unary (prefix) operator,
+            it's replaced by the token returned by <paramref name="toUnary"/>.
+            Operators with a higher precedence are applied first.
+            The arguments of a function call ("f(a, b)") are counted, and the function token is replaced by the token returned by <paramref name="withArgumentCount"/>
+            (a function that isn't followed by an opening parenthesis is returned as is).
+            </summary>
+            <typeparam name="T">The token type</typeparam>
+            <param name="tokens">The tokens in infix order</param>
+            <param name="getTokenClass">Get the class of a token</param>
+            <param name="getOperatorPrecedence">Get the precedence of an operator token (higher binds tighter)</param>
+            <param name="toUnary">Get the unary version of an operator token (may throw if the operator has no unary version)</param>
+            <param name="withArgumentCount">Get the version of a function token taking the given number of arguments (0 for "f()"), may throw if there is none.
+            If null the function tokens are returned as is</param>
+            <param name="exceptionCasterN">Called with a message, an optional inner exception and the offending token when the input is invalid, it should throw.
+            If null an <see cref="T:System.ArgumentException"/> is thrown</param>
+            <returns>The tokens in postfix order, parentheses and argument separators are removed</returns>
+        </member>
+        <member name="T:SysWeaver.Parser.IStringTokenizer">
+            <summary>
+            Character classification of a tokenizer (used by value readers to find the end of a value)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Parser.IStringTokenizer.IsOperatorChar(System.Char)">
+            <summary>
+            Check if a character is the first character of a registered operator
+            </summary>
+            <param name="c">The character</param>
+            <returns>True if an operator starts with this character</returns>
+        </member>
+        <member name="M:SysWeaver.Parser.IStringTokenizer.IsWhitespaceChar(System.Char)">
+            <summary>
+            Check if a character is a whitespace (one of the extra whitespaces, or a <see cref="M:System.Char.IsWhiteSpace(System.Char)"/> character if the default whitespaces are filtered)
+            </summary>
+            <param name="c">The character</param>
+            <returns>True if the character is a whitespace</returns>
+        </member>
+        <member name="T:SysWeaver.Parser.IStringTokenizerContext">
+            <summary>
+            The context passed to a value reader
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Parser.IStringTokenizerContext.Tokenizer">
+            <summary>
+            The tokenizer
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Parser.IStringTokenizerContext.Expression">
+            <summary>
+            The expression being parsed
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Parser.IStringTokenizerContext.TokenIndex">
+            <summary>
+            The index of the token being read (0 for the first token of the expression)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Parser.StringTokenizer`1">
+            <summary>
+            Splits an expression into tokens: registered operators, registered identifiers, parameters and values (read by a value reader).
+            Operators and identifiers are added once (setup), parsing is thread safe if the tokenizer isn't modified at the same time
+            </summary>
+            <typeparam name="T">The token type</typeparam>
+        </member>
+        <member name="T:SysWeaver.Parser.StringTokenizer`1.TokenCreator">
+            <summary>
+            Create a token
+            </summary>
+            <param name="start">The start position of the token in the expression (inclusive)</param>
+            <param name="end">The end position of the token in the expression (exclusive)</param>
+            <returns>The token</returns>
+        </member>
+        <member name="T:SysWeaver.Parser.StringTokenizer`1.IsToken">
+            <summary>
+            Check if there is a token at a position
+            </summary>
+            <param name="tokenizer">The tokenizer</param>
+            <param name="value">Receives the token if found</param>
+            <param name="index">The position to check, advanced past the token if found</param>
+            <param name="t">The expression</param>
+            <returns>True if a token was found</returns>
+        </member>
+        <member name="T:SysWeaver.Parser.StringTokenizer`1.ValueReader">
+            <summary>
+            Reads a value (anything that isn't an operator, identifier or parameter) from an expression
+            </summary>
+            <param name="context">The parsing context</param>
+            <param name="index">The start position of the value, must be advanced past the value</param>
+            <returns>The value token</returns>
+        </member>
+        <member name="M:SysWeaver.Parser.StringTokenizer`1.#ctor">
+            <summary>
+            Create a tokenizer.
+            Operators, identifiers and parameters are always matched case sensitively (ordinal comparison)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Parser.StringTokenizer`1.FilterDefaultWhitespaces">
+            <summary>
+            If true (default) all <see cref="M:System.Char.IsWhiteSpace(System.Char)"/> characters are skipped
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Parser.StringTokenizer`1.Whitespaces">
+            <summary>
+            Extra characters that are skipped as whitespaces
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Parser.StringTokenizer`1.Operators">
+            <summary>
+            All registered operators
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Parser.StringTokenizer`1.Identifiers">
+            <summary>
+            All registered identifiers
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Parser.StringTokenizer`1.AddOperator(System.String,SysWeaver.Parser.StringTokenizer{`0}.TokenCreator)">
+            <summary>
+            Register an operator.
+            An operator only matches if it's followed by the end of the expression, a character that can't be part of an operator, or another operator
+            </summary>
+            <param name="value">The operator text, can only contain characters that aren't letters, digits, '_' or whitespaces</param>
+            <param name="token">Creates the token for the operator</param>
+            <exception cref="T:System.ArgumentException">The operator is null, empty, contains an invalid character or is already added</exception>
+        </member>
+        <member name="M:SysWeaver.Parser.StringTokenizer`1.AddIdentifier(System.String,SysWeaver.Parser.StringTokenizer{`0}.TokenCreator)">
+            <summary>
+            Register an identifier (ex: a function or a constant).
+            An identifier only matches if it isn't followed by a letter, digit or '_'
+            </summary>
+            <param name="value">The identifier, must start with a letter, '@' or '_' followed by letters, digits or '_'</param>
+            <param name="token">Creates the token for the identifier</param>
+            <exception cref="T:System.ArgumentException">The identifier is null, empty, contains an invalid character or is already added</exception>
+        </member>
+        <member name="M:SysWeaver.Parser.StringTokenizer`1.IsOperatorChar(System.Char)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Parser.StringTokenizer`1.IsWhitespaceChar(System.Char)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Parser.StringTokenizer`1.GetParameters(System.Collections.Generic.IEnumerable{System.String},System.Func{System.String,System.Int32,SysWeaver.Parser.StringTokenizer{`0}.TokenCreator})">
+            <summary>
+            Build the parameter lookup used by <see cref="M:SysWeaver.Parser.StringTokenizer`1.Parse(System.String,SysWeaver.Parser.StringTokenizer{`0}.ValueReader,System.Collections.Generic.Dictionary{System.Char,System.Collections.Generic.List{SysWeaver.Parser.StringTokenizer{`0}.IsToken}},SysWeaver.Parser.StringTokenizer{`0}.TokenCreator)"/>
+            </summary>
+            <param name="parameters">The parameter names (null for none)</param>
+            <param name="paramaterTokenCreator">Gets the token creator for a parameter name and its index (null for no parameters)</param>
+            <returns>The parameter lookup (empty if any argument is null)</returns>
+            <exception cref="T:System.ArgumentException">A parameter name is invalid, used twice or is a registered identifier (case sensitive, ordinal comparison)</exception>
+        </member>
+        <member name="M:SysWeaver.Parser.StringTokenizer`1.Parse(System.String,SysWeaver.Parser.StringTokenizer{`0}.ValueReader,System.Collections.Generic.IEnumerable{System.String},System.Func{System.String,System.Int32,SysWeaver.Parser.StringTokenizer{`0}.TokenCreator},SysWeaver.Parser.StringTokenizer{`0}.TokenCreator)">
+            <summary>
+            Split an expression into tokens (lazily, errors are thrown when enumerating)
+            </summary>
+            <param name="expression">The expression</param>
+            <param name="valueReader">Reads values (anything that isn't whitespace, an operator, identifier or parameter, and doesn't start like an identifier or with an unknown operator character)</param>
+            <param name="parameters">The parameter names (null for none)</param>
+            <param name="paramaterTokenCreator">Gets the token creator for a parameter name and its index</param>
+            <param name="unknownIdentifierCreator">Creates tokens for unknown identifiers, if null an <see cref="T:SysWeaver.Parser.ExpressionParserException"/> is thrown for unknown identifiers</param>
+            <returns>The tokens</returns>
+            <exception cref="T:System.ArgumentException">A parameter name is invalid, used twice or is a registered identifier</exception>
+        </member>
+        <member name="M:SysWeaver.Parser.StringTokenizer`1.Parse(System.String,SysWeaver.Parser.StringTokenizer{`0}.ValueReader,System.Collections.Generic.Dictionary{System.Char,System.Collections.Generic.List{SysWeaver.Parser.StringTokenizer{`0}.IsToken}},SysWeaver.Parser.StringTokenizer{`0}.TokenCreator)">
+            <summary>
+            Split an expression into tokens (lazily, errors are thrown when enumerating).
+            At each position (after skipping whitespaces) operators are tried first, then identifiers, then parameters, then the value reader
+            </summary>
+            <param name="expression">The expression</param>
+            <param name="valueReader">Reads values (anything that isn't whitespace, an operator, identifier or parameter, and doesn't start like an identifier or with an unknown operator character)</param>
+            <param name="parameterList">The parameter lookup, see <see cref="M:SysWeaver.Parser.StringTokenizer`1.GetParameters(System.Collections.Generic.IEnumerable{System.String},System.Func{System.String,System.Int32,SysWeaver.Parser.StringTokenizer{`0}.TokenCreator})"/></param>
+            <param name="unknownIdentifierCreator">Creates tokens for unknown identifiers, if null an <see cref="T:SysWeaver.Parser.ExpressionParserException"/> is thrown for unknown identifiers</param>
+            <returns>The tokens</returns>
+        </member>
+        <member name="T:SysWeaver.Parser.StringTokenizerHelper">
+            <summary>
+            Character classes of the <see cref="T:SysWeaver.Parser.StringTokenizer`1"/>
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Parser.StringTokenizerHelper.IsValidIdentiferCharFirst(System.Char)">
+            <summary>
+            Check if a character can start an identifier: a letter, '@' or '_'
+            </summary>
+            <param name="c">The character</param>
+            <returns>True if valid</returns>
+        </member>
+        <member name="M:SysWeaver.Parser.StringTokenizerHelper.IsValidIdentiferCharRest(System.Char)">
+            <summary>
+            Check if a character can be part of an identifier (after the first character): a letter, a digit or '_'
+            </summary>
+            <param name="c">The character</param>
+            <returns>True if valid</returns>
+        </member>
+        <member name="M:SysWeaver.Parser.StringTokenizerHelper.IsValidOperatorChar(System.Char)">
+            <summary>
+            Check if a character can be part of an operator: anything except letters, digits, '_' and whitespaces
+            </summary>
+            <param name="c">The character</param>
+            <returns>True if valid</returns>
+        </member>
+        <member name="M:SysWeaver.Parser.StringTokenizerHelper.ValidateIdentifier(System.String,System.String)">
+            <summary>
+            Validate an identifier name
+            </summary>
+            <param name="value">The identifier</param>
+            <param name="argumentNameN">The parameter name to use in the exception, null for "value"</param>
+            <exception cref="T:System.ArgumentException">The identifier is null, empty or contains an invalid character</exception>
+        </member>
+        <member name="M:SysWeaver.Parser.StringTokenizerHelper.ValidateOperator(System.String)">
+            <summary>
+            Validate an operator
+            </summary>
+            <param name="value">The operator</param>
+            <exception cref="T:System.ArgumentException">The operator is null, empty or contains an invalid character</exception>
+        </member>
+        <member name="T:SysWeaver.Parser.ValueReader.DecimalValueReader`1">
+            <summary>
+            Reads Decimal values from an expression
+            </summary>
+            <typeparam name="T">The token type</typeparam>
+        </member>
+        <member name="M:SysWeaver.Parser.ValueReader.DecimalValueReader`1.#ctor(System.Func{System.Int32,System.Int32,System.Decimal,`0})">
+            <summary>
+            Create a reader using the invariant culture and NumberStyles.Float
+            </summary>
+            <param name="toValueCreator">Creates a token from the start position, end position and value</param>
+        </member>
+        <member name="M:SysWeaver.Parser.ValueReader.DecimalValueReader`1.#ctor(System.Func{System.Int32,System.Int32,System.Decimal,`0},System.IFormatProvider,System.Globalization.NumberStyles)">
+            <summary>
+            Create a reader
+            </summary>
+            <param name="toValueCreator">Creates a token from the start position, end position and value</param>
+            <param name="format">The format provider used for parsing</param>
+            <param name="style">The number styles used for parsing</param>
+        </member>
+        <member name="F:SysWeaver.Parser.ValueReader.DecimalValueReader`1.Format">
+            <summary>
+            The format provider used for parsing
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Parser.ValueReader.DecimalValueReader`1.Style">
+            <summary>
+            The number styles used for parsing
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Parser.ValueReader.DecimalValueReader`1.ToValueToken">
+            <summary>
+            Creates a token from the start position, end position and value
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Parser.ValueReader.DecimalValueReader`1.ReadValue(SysWeaver.Parser.IStringTokenizerContext,System.Int32@)">
+            <summary>
+            Read a value, it ends at a whitespace, an operator character or the end of the expression.
+            Values starting with "0x" (hexadecimal), "0b" (binary) or "0o" (octal) are parsed as unsigned 64-bit integers (see <see cref="M:SysWeaver.Parser.ValueReader.ValueReader.TryParse(System.UInt64@,System.String,System.String,System.Int32,System.Int32)"/>). A ',' is read as the decimal separator (it's part of the value only if the value is the first token of the expression, else it's the argument separator).
+            An exponent sign ('e+' / 'e-') is part of the value.
+            </summary>
+            <param name="context">The parsing context</param>
+            <param name="index">The start position of the value, receives the end position</param>
+            <returns>The value token</returns>
+            <exception cref="T:SysWeaver.Parser.ExpressionParserException">The text isn't a valid number</exception>
+        </member>
+        <member name="T:SysWeaver.Parser.ValueReader.DoubleValueReader`1">
+            <summary>
+            Reads Double values from an expression
+            </summary>
+            <typeparam name="T">The token type</typeparam>
+        </member>
+        <member name="M:SysWeaver.Parser.ValueReader.DoubleValueReader`1.#ctor(System.Func{System.Int32,System.Int32,System.Double,`0})">
+            <summary>
+            Create a reader using the invariant culture and NumberStyles.Float
+            </summary>
+            <param name="toValueCreator">Creates a token from the start position, end position and value</param>
+        </member>
+        <member name="M:SysWeaver.Parser.ValueReader.DoubleValueReader`1.#ctor(System.Func{System.Int32,System.Int32,System.Double,`0},System.IFormatProvider,System.Globalization.NumberStyles)">
+            <summary>
+            Create a reader
+            </summary>
+            <param name="toValueCreator">Creates a token from the start position, end position and value</param>
+            <param name="format">The format provider used for parsing</param>
+            <param name="style">The number styles used for parsing</param>
+        </member>
+        <member name="F:SysWeaver.Parser.ValueReader.DoubleValueReader`1.Format">
+            <summary>
+            The format provider used for parsing
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Parser.ValueReader.DoubleValueReader`1.Style">
+            <summary>
+            The number styles used for parsing
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Parser.ValueReader.DoubleValueReader`1.ToValueToken">
+            <summary>
+            Creates a token from the start position, end position and value
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Parser.ValueReader.DoubleValueReader`1.ReadValue(SysWeaver.Parser.IStringTokenizerContext,System.Int32@)">
+            <summary>
+            Read a value, it ends at a whitespace, an operator character or the end of the expression.
+            Values starting with "0x" (hexadecimal), "0b" (binary) or "0o" (octal) are parsed as unsigned 64-bit integers (see <see cref="M:SysWeaver.Parser.ValueReader.ValueReader.TryParse(System.UInt64@,System.String,System.String,System.Int32,System.Int32)"/>). A ',' is read as the decimal separator (it's part of the value only if the value is the first token of the expression, else it's the argument separator).
+            An exponent sign ('e+' / 'e-') is part of the value.
+            </summary>
+            <param name="context">The parsing context</param>
+            <param name="index">The start position of the value, receives the end position</param>
+            <returns>The value token</returns>
+            <exception cref="T:SysWeaver.Parser.ExpressionParserException">The text isn't a valid number</exception>
+        </member>
+        <member name="T:SysWeaver.Parser.ValueReader.Int64ValueReader`1">
+            <summary>
+            Reads Int64 values from an expression
+            </summary>
+            <typeparam name="T">The token type</typeparam>
+        </member>
+        <member name="M:SysWeaver.Parser.ValueReader.Int64ValueReader`1.#ctor(System.Func{System.Int32,System.Int32,System.Int64,`0})">
+            <summary>
+            Create a reader using the invariant culture and NumberStyles.Integer
+            </summary>
+            <param name="toValueCreator">Creates a token from the start position, end position and value</param>
+        </member>
+        <member name="M:SysWeaver.Parser.ValueReader.Int64ValueReader`1.#ctor(System.Func{System.Int32,System.Int32,System.Int64,`0},System.IFormatProvider,System.Globalization.NumberStyles)">
+            <summary>
+            Create a reader
+            </summary>
+            <param name="toValueCreator">Creates a token from the start position, end position and value</param>
+            <param name="format">The format provider used for parsing</param>
+            <param name="style">The number styles used for parsing</param>
+        </member>
+        <member name="F:SysWeaver.Parser.ValueReader.Int64ValueReader`1.Format">
+            <summary>
+            The format provider used for parsing
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Parser.ValueReader.Int64ValueReader`1.Style">
+            <summary>
+            The number styles used for parsing
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Parser.ValueReader.Int64ValueReader`1.ToValueToken">
+            <summary>
+            Creates a token from the start position, end position and value
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Parser.ValueReader.Int64ValueReader`1.ReadValue(SysWeaver.Parser.IStringTokenizerContext,System.Int32@)">
+            <summary>
+            Read a value, it ends at a whitespace, an operator character or the end of the expression.
+            Values starting with "0x" (hexadecimal), "0b" (binary) or "0o" (octal) are parsed as unsigned 64-bit integers (see <see cref="M:SysWeaver.Parser.ValueReader.ValueReader.TryParse(System.UInt64@,System.String,System.String,System.Int32,System.Int32)"/>).
+            </summary>
+            <param name="context">The parsing context</param>
+            <param name="index">The start position of the value, receives the end position</param>
+            <returns>The value token</returns>
+            <exception cref="T:SysWeaver.Parser.ExpressionParserException">The text isn't a valid number</exception>
+        </member>
+        <member name="T:SysWeaver.Parser.ValueReader.UInt64ValueReader`1">
+            <summary>
+            Reads UInt64 values from an expression
+            </summary>
+            <typeparam name="T">The token type</typeparam>
+        </member>
+        <member name="M:SysWeaver.Parser.ValueReader.UInt64ValueReader`1.#ctor(System.Func{System.Int32,System.Int32,System.UInt64,`0})">
+            <summary>
+            Create a reader using the invariant culture and NumberStyles.Integer
+            </summary>
+            <param name="toValueCreator">Creates a token from the start position, end position and value</param>
+        </member>
+        <member name="M:SysWeaver.Parser.ValueReader.UInt64ValueReader`1.#ctor(System.Func{System.Int32,System.Int32,System.UInt64,`0},System.IFormatProvider,System.Globalization.NumberStyles)">
+            <summary>
+            Create a reader
+            </summary>
+            <param name="toValueCreator">Creates a token from the start position, end position and value</param>
+            <param name="format">The format provider used for parsing</param>
+            <param name="style">The number styles used for parsing</param>
+        </member>
+        <member name="F:SysWeaver.Parser.ValueReader.UInt64ValueReader`1.Format">
+            <summary>
+            The format provider used for parsing
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Parser.ValueReader.UInt64ValueReader`1.Style">
+            <summary>
+            The number styles used for parsing
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Parser.ValueReader.UInt64ValueReader`1.ToValueToken">
+            <summary>
+            Creates a token from the start position, end position and value
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Parser.ValueReader.UInt64ValueReader`1.ReadValue(SysWeaver.Parser.IStringTokenizerContext,System.Int32@)">
+            <summary>
+            Read a value, it ends at a whitespace, an operator character or the end of the expression.
+            Values starting with "0x" (hexadecimal), "0b" (binary) or "0o" (octal) are parsed as unsigned 64-bit integers (see <see cref="M:SysWeaver.Parser.ValueReader.ValueReader.TryParse(System.UInt64@,System.String,System.String,System.Int32,System.Int32)"/>).
+            </summary>
+            <param name="context">The parsing context</param>
+            <param name="index">The start position of the value, receives the end position</param>
+            <returns>The value token</returns>
+            <exception cref="T:SysWeaver.Parser.ExpressionParserException">The text isn't a valid number</exception>
+        </member>
+        <member name="T:SysWeaver.Parser.ValueReader.ValueReader">
+            <summary>
+            Parsing of prefixed integer values (hexadecimal, octal and binary)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Parser.ValueReader.ValueReader.HexPrefix">
+            <summary>
+            The prefix of hexadecimal values (case insensitive)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Parser.ValueReader.ValueReader.OctPrefix">
+            <summary>
+            The prefix of octal values (case insensitive)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Parser.ValueReader.ValueReader.BinPrefix">
+            <summary>
+            The prefix of binary values (case insensitive)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Parser.ValueReader.ValueReader.IsHex(System.String)">
+            <summary>
+            Check if a value starts with the hexadecimal prefix (case insensitive)
+            </summary>
+            <param name="valueStr">The value text</param>
+            <returns>True if it starts with the prefix</returns>
+        </member>
+        <member name="M:SysWeaver.Parser.ValueReader.ValueReader.IsOct(System.String)">
+            <summary>
+            Check if a value starts with the octal prefix (case insensitive)
+            </summary>
+            <param name="valueStr">The value text</param>
+            <returns>True if it starts with the prefix</returns>
+        </member>
+        <member name="M:SysWeaver.Parser.ValueReader.ValueReader.IsBin(System.String)">
+            <summary>
+            Check if a value starts with the binary prefix (case insensitive)
+            </summary>
+            <param name="valueStr">The value text</param>
+            <returns>True if it starts with the prefix</returns>
+        </member>
+        <member name="M:SysWeaver.Parser.ValueReader.ValueReader.TryParse(System.UInt64@,System.String,System.String,System.Int32,System.Int32)">
+            <summary>
+            Parse a prefixed (hexadecimal, octal or binary) value.
+            Overflowing octal and binary values silently lose their high bits
+            </summary>
+            <param name="value">Receives the value</param>
+            <param name="valueStr">The value text</param>
+            <param name="orgString">The expression (used in exceptions)</param>
+            <param name="tokenStart">The start position of the value in the expression (used in exceptions)</param>
+            <param name="tokenEnd">The end position of the value in the expression (used in exceptions)</param>
+            <returns>True if the value has a prefix and was parsed, false if it has no prefix (or is shorter than 3 characters)</returns>
+            <exception cref="T:SysWeaver.Parser.ExpressionParserException">The value has a prefix but the rest isn't a valid number</exception>
+        </member>
+        <member name="T:SysWeaver.ExpressionOptimizer">
+            <summary>
+            A class that optimizes linq expressions
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ExpressionOptimizer.RemovedNodes">
+            <summary>
+            The number of nodes removed by the optimizer
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ExpressionOptimizer.MergedStaticNodes">
+            <summary>
+            The number of nodes that was merged
+            </summary>
+        </member>
+        <member name="M:SysWeaver.ExpressionOptimizer.Optimize(System.Linq.Expressions.Expression)">
+            <summary>
+            Optimizes a linq expression (repeated until nothing changes):
+            binary operations and static method calls with constant arguments are evaluated (constant folding),
+            "x + 0", "x - 0", "x * 1", "x / 1", "x | 0", "x ^ 0" become "x", "x * 0", "0 * x", "x &amp; 0" and "0 &lt;&lt; x" become 0, "0 - x", "x * -1" and "x / -1" become "-x" (not for unsigned types),
+            conversions to the same type are removed, conditionals with a constant test are replaced by the taken branch,
+            and nodes that are equal to a node seen before (by this or an earlier optimization) are replaced by that shared node (parameters are never merged).
+            For floating point types (Half, Single, Double) "x * 0", "0 * x" and "0 - x" are kept as is (x * 0 is NaN if x is NaN or infinite, 0 - 0 is +0 but -0 is -0).
+            The other floating point rules are kept, they differ from IEEE arithmetic only in the sign of a zero result (by design, expr-cov-17):
+            "x + 0" and "0 + x" give -0 for x = -0 (IEEE: -0 + +0 = +0), and "x - c" with a -0.0 constant c (also matched as 0) gives -0 for x = -0 (IEEE: +0).
+            NaN and infinities give the same result as the unoptimized expression; "x * 1", "1 * x", "x / 1", "x * -1", "-1 * x" and "x / -1" are exact (they're not folded for Half).
+            For Decimal the folded result has the same value, but may have a different scale (ex: 1.5m + 0.00m is 1.50m unoptimized, 1.5m optimized; 1.5m * 0m is 0.0m unoptimized, 0m optimized).
+            Constant folding runs the operation when optimizing, so exceptions (ex: an integer division by zero) are thrown by this method.
+            </summary>
+            <param name="e">The linq expression to optimize</param>
+            <returns>An optimized version of the expression</returns>
+            <exception cref="T:System.ArgumentNullException">The expression is null (DEBUG builds only)</exception>
+        </member>
+        <member name="M:SysWeaver.ExpressionOptimizer.NodeCount(System.Linq.Expressions.Expression)">
+            <summary>
+            Counts the number of nodes in the expression
+            </summary>
+            <param name="e">The linq expression to count nodes in</param>
+            <returns>The number of nodes found in the supplied linq expression (0 for null)</returns>
+        </member>
+    </members>
+</doc>

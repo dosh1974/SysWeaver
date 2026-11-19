@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace SysWeaver.Net
@@ -248,6 +249,32 @@ namespace SysWeaver.Net
         /// Exceptions are not thrown, they are returned as a 500 response with the exception message (sensitive information removed, see <see cref="ExceptionExt.SafeMessage"/>) as the body.</returns>
         public static async Task<ProxyData> ProxyRequest(HttpClient c, String url, ProxyData data)
         {
+            try
+            {
+                return await SendRequest(c, url, data).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                //  Sensitive information (internal host names, private ips etc) is removed from the message
+                var resData = Encoding.UTF8.GetBytes(ex.SafeMessage() + " [500]");
+                return new ProxyData(data.Method, new String[]
+                    {
+                        "Content-Length:" + resData.Length,
+                        "Content-Type:" + MimeTypeMap.PlainText
+                    }, resData, 500);
+            }
+        }
+
+        /// <summary>
+        /// Make a proxied request, exceptions (connection failures, time outs etc) are thrown.
+        /// </summary>
+        /// <param name="c">The http client to use</param>
+        /// <param name="url">The url to do the request against</param>
+        /// <param name="data">The input data (method, headers and body)</param>
+        /// <param name="cancel">An optional cancellation token (cancels the request including reading the body)</param>
+        /// <returns>The response (the whole body is read into memory)</returns>
+        public static async Task<ProxyData> SendRequest(HttpClient c, String url, ProxyData data, CancellationToken cancel = default)
+        {
             var httpMethod = data.Method;
             var method = new HttpMethod(httpMethod.ToString());
             using var localRequest = new HttpRequestMessage(method, url);
@@ -273,19 +300,9 @@ namespace SysWeaver.Net
                     else
                         h.TryAddWithoutValidation(key, value);
                 }
-                using var localResponse = await c.SendAsync(localRequest).ConfigureAwait(false);
-                var resData = await localResponse.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
+                using var localResponse = await c.SendAsync(localRequest, cancel).ConfigureAwait(false);
+                var resData = await localResponse.Content.ReadAsByteArrayAsync(cancel).ConfigureAwait(false);
                 return new ProxyData(data.Method, EncodeHeaders(localResponse.Headers, localResponse.Content?.Headers), resData, (int)localResponse.StatusCode);
-            }
-            catch (Exception ex)
-            {
-                //  Sensitive information (internal host names, private ips etc) is removed from the message
-                var resData = Encoding.UTF8.GetBytes(ex.SafeMessage() + " [500]");
-                return new ProxyData(data.Method, new String[]
-                    {
-                        "Content-Length:" + resData.Length,
-                        "Content-Type:" + MimeTypeMap.PlainText
-                    }, resData, 500);
             }
             finally
             {

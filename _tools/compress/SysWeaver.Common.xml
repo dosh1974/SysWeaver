@@ -7218,6 +7218,11 @@
             The filters, one array per filter row (with one filter per column)
             </summary>
         </member>
+        <member name="F:SysWeaver.Data.CurrencyTableDataRequest.Currency">
+            <summary>
+            The currency to use
+            </summary>
+        </member>
         <member name="T:SysWeaver.Data.TableDataRow">
             <summary>
             A single row in a <see cref="T:SysWeaver.Data.BaseTableData"/>.
@@ -10251,6 +10256,19 @@
             <returns>True if the value was added, false if a (non-expired) item with the key already exist (the value is not updated)</returns>
             <exception cref="T:System.ArgumentNullException"><paramref name="key"/> is null</exception>
             <remarks>An expired item (that haven't been pruned yet) is treated as missing (and is replaced).
+            Must not be called for the same key from within a value factory (dead lock).</remarks>
+        </member>
+        <member name="M:SysWeaver.FastMemCache`2.Update(`0,`1)">
+            <summary>
+            Update the value of an existing item (the expiration time is recomputed from the new value, same as <see cref="M:SysWeaver.FastMemCache`2.Set(`0,`1)"/> and <see cref="M:SysWeaver.FastMemCache`2.TryAdd(`0,`1)"/>)
+            </summary>
+            <param name="key">The key</param>
+            <param name="value">The new value</param>
+            <returns>True if the value was updated, false if no (non-expired) item with the key exist (nothing is added)</returns>
+            <exception cref="T:System.ArgumentNullException"><paramref name="key"/> is null</exception>
+            <remarks>An expired item (that haven't been pruned yet) is treated as missing (it's not updated).
+            An item that is being created asynchronously (a pending entry) is treated as existing and is replaced by the new value,
+            the result of the running update is not cached (callers awaiting that update still get its result).
             Must not be called for the same key from within a value factory (dead lock).</remarks>
         </member>
         <member name="M:SysWeaver.FastMemCache`2.TryGet(`0,`1@)">

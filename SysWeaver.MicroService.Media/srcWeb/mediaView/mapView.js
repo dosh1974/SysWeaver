@@ -25,8 +25,9 @@
  * and bidi characters removed), limited to MaxAppText characters (a title: plain text, no caption).
  * Outside the app shell (headless capture, a window of its own, another host) own pins and links may be any http(s) url
  * (a link opens in a new tab with noopener), as before.
- * Screenshot host (ScreenShotHost: isSupported / doIt): with a host the page uses no fades and calls
- * `doIt(0, 0, null)` 500 ms after the map frame loaded (same 3 argument call as before).
+ * Screenshot host (ScreenShotHost: isSupported / waitNetworkIdle / doIt): with a host the page uses no fades and, after the
+ * map frame loaded, waits until the network (all frames, the tiles of the cross origin map) has been idle for TilesIdleMs
+ * (at most TilesMaxWaitMs; a host without waitNetworkIdle: 500 ms) before calling `doIt(0, 0, null)`.
  * Online, the same requests as the original page: the map frame (OpenStreetMap, or Google with a key) is created at once;
  * an OpenStreetMap type asks the server nothing, a Google type without a `key` url parameter asks `Api/GetGoogleMapsKey`
  * (once per map view). Map tiles are an external data service (the one online part of the application); without internet
@@ -299,6 +300,43 @@ class MapView {
     }
 
     /**
+     * Screenshot: the time (ms) without network activity that means the map tiles are loaded (Google loads tiles in bursts).
+     * @type {number}
+     */
+    static TilesIdleMs = 750;
+
+    /**
+     * Screenshot: the longest time (ms) to wait for the map tiles.
+     * @type {number}
+     */
+    static TilesMaxWaitMs = 10000;
+
+    /**
+     * Wait until the map tiles are loaded and painted before the screenshot. The map frame is cross origin (its tiles can't be
+     * seen from here), so the host is asked to wait until the network (of all frames) is idle; a host without
+     * `waitNetworkIdle`, or a map that never gets quiet, falls back to the old fixed 500 ms wait.
+     * @param {object} shost The screenshot host.
+     * @returns {Promise<void>}
+     */
+    static async WaitTiles(shost) {
+        let idle = false;
+        try {
+            if (typeof shost.waitNetworkIdle === "function")
+                idle = !!(await shost.waitNetworkIdle(MapView.TilesIdleMs, MapView.TilesMaxWaitMs));
+        }
+        catch (e) {
+            console.warn("MapView: waiting for the network failed: " + e.message);
+        }
+        if (!idle)
+            await MapView.Delay(500);
+        //  Let the last tiles be decoded and painted (two frames; never hangs if frames aren't produced)
+        await Promise.race([
+            new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))),
+            MapView.Delay(200),
+        ]);
+    }
+
+    /**
      * Find the screenshot host (CefSharp binding, or the WebView2 host object).
      * @returns {Promise<object|null>} The host or null.
      */
@@ -467,7 +505,7 @@ class MapView {
                 await MapView.Delay(100);
                 b.classList.add("Show");
                 if (shost) {
-                    await MapView.Delay(500);
+                    await MapView.WaitTiles(shost);
                     await shost.doIt(0, 0, null);
                 }
             };

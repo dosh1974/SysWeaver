@@ -454,6 +454,157 @@
         <member name="M:SysWeaver.Compression.CompDeflateNET.DecompressAsync(System.ReadOnlyMemory{System.Byte},System.IO.Stream)">
             <inheritdoc/>
         </member>
+        <member name="T:SysWeaver.Compression.CompDeflateNETNew">
+            <summary>
+            A raw Deflate ("deflate") implementation using the .NET 11+ System.IO.Compression.DeflateEncoder / DeflateDecoder through <see cref="T:SysWeaver.Compression.CompStreamCodec`2"/>.
+            Only compiled for .NET 11 or later, and not registered by default.
+            </summary>
+            <remarks>
+            Uses zlib level 1 / 6 / 9 with a 15 bit window. The native encoders / decoders are pooled per level (see <see cref="T:SysWeaver.Compression.CompInstancePool`1"/>).
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.Compression.CompDeflateNETNew.Register">
+            <summary>
+            Call once to register this compression type to the compression manager
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Compression.CompDeflateNETNew.Instance">
+            <summary>
+            The instance of the compressor
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Compression.CompDeflateNETNew.SysWeaver#Compression#ICompType#Instance">
+            <summary>
+            Implements <see cref="P:SysWeaver.Compression.ICompType.Instance"/> (so it works through a generic type parameter), returns <see cref="F:SysWeaver.Compression.CompDeflateNETNew.Instance"/>
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompDeflateNETNew.ToString">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.CompDeflateNETNew.Name">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.CompDeflateNETNew.HttpCode">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.CompDeflateNETNew.Prio">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.CompDeflateNETNew.FileExtensions">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.CompDeflateNETNew.Quality">
+            <summary>
+            zlib quality (0-9) for each level
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Compression.CompDeflateNETNew.EncoderWindow">
+            <summary>
+            zlib window size (8-15)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Compression.CompDeflateNETNew.EncoderPools">
+            <summary>
+            The encoders and decoders are classes holding native state that is expensive to create, so they are pooled and reused
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Compression.CompDeflateNETNew.DeflateEncoder">
+            <summary>
+            A pooled .NET deflate encoder
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Compression.CompDeflateNETNew.DeflateEncoder.Completed">
+            <summary>
+            True when the encoder completed a stream (the last block was compressed).
+            Only completed encoders are reused, DeflateEncoder.Reset() doesn't reset an encoder that didn't complete a stream (.NET 11 RC1), the next stream is corrupted.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompDeflateNETNew.DeflateEncoder.Create(SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompDeflateNETNew.DeflateEncoder.GetMaxCompressedLength(System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompDeflateNETNew.DeflateEncoder.TryCompress(System.ReadOnlySpan{System.Byte},System.Span{System.Byte},System.Int32@,SysWeaver.Compression.CompEncoderLevels)">
+            <summary>
+            Not using DeflateEncoder.TryCompress since it creates (allocates) a new encoder on every call
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompDeflateNETNew.DeflateEncoder.Compress(System.ReadOnlySpan{System.Byte},System.Span{System.Byte},System.Int32@,System.Int32@,System.Boolean)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompDeflateNETNew.DeflateEncoder.Dispose">
+            <inheritdoc/>
+        </member>
+        <member name="T:SysWeaver.Compression.CompDeflateNETNew.DeflateDecoder">
+            <summary>
+            A pooled .NET deflate decoder
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompDeflateNETNew.DeflateDecoder.Create">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompDeflateNETNew.DeflateDecoder.TryDecompress(System.ReadOnlySpan{System.Byte},System.Span{System.Byte},System.Int32@)">
+            <summary>
+            Not using DeflateDecoder.TryDecompress since it creates (allocates) a new decoder on every call, the (pooled) streaming decoder is used instead
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Compression.CompDeflateNETNew.DeflateDecoder.NextHeaderSize">
+            <summary>
+            Concatenated raw deflate streams are not supported
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompDeflateNETNew.DeflateDecoder.BeginNext(System.ReadOnlySpan{System.Byte})">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompDeflateNETNew.DeflateDecoder.Decompress(System.ReadOnlySpan{System.Byte},System.Span{System.Byte},System.Int32@,System.Int32@)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompDeflateNETNew.DeflateDecoder.Dispose">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompDeflateNETNew.Compress(System.IO.Stream,System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompDeflateNETNew.Compress(System.IO.Stream,System.Span{System.Byte},SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompDeflateNETNew.Compress(System.ReadOnlySpan{System.Byte},System.Span{System.Byte},SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompDeflateNETNew.Compress(System.ReadOnlySpan{System.Byte},System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompDeflateNETNew.CompressAsync(System.IO.Stream,System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompDeflateNETNew.CompressAsync(System.IO.Stream,System.Memory{System.Byte},SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompDeflateNETNew.CompressAsync(System.ReadOnlyMemory{System.Byte},System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompDeflateNETNew.Decompress(System.IO.Stream,System.IO.Stream)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompDeflateNETNew.Decompress(System.IO.Stream,System.Span{System.Byte})">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompDeflateNETNew.Decompress(System.ReadOnlySpan{System.Byte},System.Span{System.Byte})">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompDeflateNETNew.Decompress(System.ReadOnlySpan{System.Byte},System.IO.Stream)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompDeflateNETNew.DecompressAsync(System.IO.Stream,System.IO.Stream)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompDeflateNETNew.DecompressAsync(System.IO.Stream,System.Memory{System.Byte})">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompDeflateNETNew.DecompressAsync(System.ReadOnlyMemory{System.Byte},System.IO.Stream)">
+            <inheritdoc/>
+        </member>
         <member name="T:SysWeaver.Compression.CompEncoderLevels">
             <summary>
             The compression effort, each implementation maps it to a format specific quality setting
@@ -723,6 +874,158 @@
             <inheritdoc/>
         </member>
         <member name="M:SysWeaver.Compression.CompGZipNET.DecompressAsync(System.ReadOnlyMemory{System.Byte},System.IO.Stream)">
+            <inheritdoc/>
+        </member>
+        <member name="T:SysWeaver.Compression.CompGZipNETNew">
+            <summary>
+            A GZip ("gzip") implementation using the .NET 11+ System.IO.Compression.GZipEncoder / GZipDecoder through <see cref="T:SysWeaver.Compression.CompStreamCodec`2"/>.
+            Only compiled for .NET 11 or later, and not registered by default.
+            </summary>
+            <remarks>
+            Uses zlib level 1 / 6 / 9 with a 15 bit window. The native encoders / decoders are pooled per level (see <see cref="T:SysWeaver.Compression.CompInstancePool`1"/>).
+            Concatenated gzip members are decompressed.
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.Compression.CompGZipNETNew.Register">
+            <summary>
+            Call once to register this compression type to the compression manager
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Compression.CompGZipNETNew.Instance">
+            <summary>
+            The instance of the compressor
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Compression.CompGZipNETNew.SysWeaver#Compression#ICompType#Instance">
+            <summary>
+            Implements <see cref="P:SysWeaver.Compression.ICompType.Instance"/> (so it works through a generic type parameter), returns <see cref="F:SysWeaver.Compression.CompGZipNETNew.Instance"/>
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompGZipNETNew.ToString">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.CompGZipNETNew.Name">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.CompGZipNETNew.HttpCode">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.CompGZipNETNew.Prio">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.CompGZipNETNew.FileExtensions">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.CompGZipNETNew.Quality">
+            <summary>
+            zlib quality (0-9) for each level
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Compression.CompGZipNETNew.EncoderWindow">
+            <summary>
+            zlib window size (8-15)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Compression.CompGZipNETNew.EncoderPools">
+            <summary>
+            The encoders and decoders are classes holding native state that is expensive to create, so they are pooled and reused
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Compression.CompGZipNETNew.GZipEncoder">
+            <summary>
+            A pooled .NET gzip encoder
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Compression.CompGZipNETNew.GZipEncoder.Completed">
+            <summary>
+            True when the encoder completed a stream (the last block was compressed).
+            Only completed encoders are reused, GZipEncoder.Reset() doesn't reset an encoder that didn't complete a stream (.NET 11 RC1), the next stream is corrupted.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompGZipNETNew.GZipEncoder.Create(SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompGZipNETNew.GZipEncoder.GetMaxCompressedLength(System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompGZipNETNew.GZipEncoder.TryCompress(System.ReadOnlySpan{System.Byte},System.Span{System.Byte},System.Int32@,SysWeaver.Compression.CompEncoderLevels)">
+            <summary>
+            Not using GZipEncoder.TryCompress since it creates (allocates) a new encoder on every call
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompGZipNETNew.GZipEncoder.Compress(System.ReadOnlySpan{System.Byte},System.Span{System.Byte},System.Int32@,System.Int32@,System.Boolean)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompGZipNETNew.GZipEncoder.Dispose">
+            <inheritdoc/>
+        </member>
+        <member name="T:SysWeaver.Compression.CompGZipNETNew.GZipDecoder">
+            <summary>
+            A pooled .NET gzip decoder
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompGZipNETNew.GZipDecoder.Create">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompGZipNETNew.GZipDecoder.TryDecompress(System.ReadOnlySpan{System.Byte},System.Span{System.Byte},System.Int32@)">
+            <summary>
+            Not using GZipDecoder.TryDecompress since it creates (allocates) a new decoder on every call, the (pooled) streaming decoder is used instead
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Compression.CompGZipNETNew.GZipDecoder.NextHeaderSize">
+            <summary>
+            Concatenated gzip members are valid gzip data (and supported by GZipStream), but the GZipDecoder stops after the first member
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompGZipNETNew.GZipDecoder.BeginNext(System.ReadOnlySpan{System.Byte})">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompGZipNETNew.GZipDecoder.Decompress(System.ReadOnlySpan{System.Byte},System.Span{System.Byte},System.Int32@,System.Int32@)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompGZipNETNew.GZipDecoder.Dispose">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompGZipNETNew.Compress(System.IO.Stream,System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompGZipNETNew.Compress(System.IO.Stream,System.Span{System.Byte},SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompGZipNETNew.Compress(System.ReadOnlySpan{System.Byte},System.Span{System.Byte},SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompGZipNETNew.Compress(System.ReadOnlySpan{System.Byte},System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompGZipNETNew.CompressAsync(System.IO.Stream,System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompGZipNETNew.CompressAsync(System.IO.Stream,System.Memory{System.Byte},SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompGZipNETNew.CompressAsync(System.ReadOnlyMemory{System.Byte},System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompGZipNETNew.Decompress(System.IO.Stream,System.IO.Stream)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompGZipNETNew.Decompress(System.IO.Stream,System.Span{System.Byte})">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompGZipNETNew.Decompress(System.ReadOnlySpan{System.Byte},System.Span{System.Byte})">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompGZipNETNew.Decompress(System.ReadOnlySpan{System.Byte},System.IO.Stream)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompGZipNETNew.DecompressAsync(System.IO.Stream,System.IO.Stream)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompGZipNETNew.DecompressAsync(System.IO.Stream,System.Memory{System.Byte})">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompGZipNETNew.DecompressAsync(System.ReadOnlyMemory{System.Byte},System.IO.Stream)">
             <inheritdoc/>
         </member>
         <member name="T:SysWeaver.Compression.CompHelpers">
@@ -1628,6 +1931,229 @@
             <inheritdoc/>
         </member>
         <member name="M:SysWeaver.Compression.PointerWriteStream.WriteAsync(System.ReadOnlyMemory{System.Byte},System.Threading.CancellationToken)">
+            <inheritdoc/>
+        </member>
+        <member name="T:SysWeaver.Compression.CompZStdNET">
+            <summary>
+            A ZStd ("zstd") implementation that compresses using the .NET <see cref="T:System.IO.Compression.ZstandardStream"/> (priority -1, not registered by default).
+            Decompression is forwarded to <see cref="T:SysWeaver.Compression.CompZStdNETNew"/>, since the stream silently accepts truncated data.
+            </summary>
+            <remarks>
+            Kept as a reference / benchmark implementation, <see cref="T:SysWeaver.Compression.CompZStdNETNew"/> is the one registered in the <see cref="T:SysWeaver.Compression.CompManager"/>.
+            The stream is created with a <see cref="T:System.IO.Compression.CompressionLevel"/> (see <see cref="M:SysWeaver.Compression.CompHelpers.GetStreamLevel(SysWeaver.Compression.CompEncoderLevels)"/>), so the ZStd quality differs from <see cref="T:SysWeaver.Compression.CompZStdNETNew"/>.
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZStdNET.Register">
+            <summary>
+            Call once to register this compression type to the compression manager
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Compression.CompZStdNET.Instance">
+            <summary>
+            The instance of the compressor
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Compression.CompZStdNET.SysWeaver#Compression#ICompType#Instance">
+            <summary>
+            Implements <see cref="P:SysWeaver.Compression.ICompType.Instance"/> (so it works through a generic type parameter), returns <see cref="F:SysWeaver.Compression.CompZStdNET.Instance"/>
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZStdNET.ToString">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.CompZStdNET.Name">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.CompZStdNET.HttpCode">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.CompZStdNET.Prio">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.CompZStdNET.FileExtensions">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZStdNET.Compress(System.IO.Stream,System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZStdNET.Compress(System.IO.Stream,System.Span{System.Byte},SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZStdNET.Compress(System.ReadOnlySpan{System.Byte},System.Span{System.Byte},SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZStdNET.Compress(System.ReadOnlySpan{System.Byte},System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZStdNET.CompressAsync(System.IO.Stream,System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZStdNET.CompressAsync(System.IO.Stream,System.Memory{System.Byte},SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZStdNET.CompressAsync(System.ReadOnlyMemory{System.Byte},System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZStdNET.Decompress(System.IO.Stream,System.IO.Stream)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZStdNET.Decompress(System.IO.Stream,System.Span{System.Byte})">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZStdNET.Decompress(System.ReadOnlySpan{System.Byte},System.Span{System.Byte})">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZStdNET.Decompress(System.ReadOnlySpan{System.Byte},System.IO.Stream)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZStdNET.DecompressAsync(System.IO.Stream,System.IO.Stream)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZStdNET.DecompressAsync(System.IO.Stream,System.Memory{System.Byte})">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZStdNET.DecompressAsync(System.ReadOnlyMemory{System.Byte},System.IO.Stream)">
+            <inheritdoc/>
+        </member>
+        <member name="T:SysWeaver.Compression.CompZStdNETNew">
+            <summary>
+            A Zstandard ("zstd") implementation using the .NET 11+ System.IO.Compression.ZstandardEncoder / ZstandardDecoder through <see cref="T:SysWeaver.Compression.CompStreamCodec`2"/>.
+            Only compiled for .NET 11 or later, and not registered by default.
+            </summary>
+            <remarks>
+            Uses zstd level 1 / 9 / 22. The native encoders / decoders are pooled per level (see <see cref="T:SysWeaver.Compression.CompInstancePool`1"/>).
+            Concatenated (and skippable) zstd frames are decompressed.
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZStdNETNew.Register">
+            <summary>
+            Call once to register this compression type to the compression manager
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Compression.CompZStdNETNew.Instance">
+            <summary>
+            The instance of the compressor
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Compression.CompZStdNETNew.SysWeaver#Compression#ICompType#Instance">
+            <summary>
+            Implements <see cref="P:SysWeaver.Compression.ICompType.Instance"/> (so it works through a generic type parameter), returns <see cref="F:SysWeaver.Compression.CompZStdNETNew.Instance"/>
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZStdNETNew.ToString">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.CompZStdNETNew.Name">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.CompZStdNETNew.HttpCode">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.CompZStdNETNew.Prio">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.CompZStdNETNew.FileExtensions">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.CompZStdNETNew.Quality">
+            <summary>
+            Zstandard quality (1-22) for each level
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Compression.CompZStdNETNew.EncoderPools">
+            <summary>
+            The encoders and decoders are classes holding native state that is expensive to create, so they are pooled and reused
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Compression.CompZStdNETNew.ZstdEncoder">
+            <summary>
+            A pooled .NET zstd encoder
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZStdNETNew.ZstdEncoder.Create(SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZStdNETNew.ZstdEncoder.GetMaxCompressedLength(System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZStdNETNew.ZstdEncoder.TryCompress(System.ReadOnlySpan{System.Byte},System.Span{System.Byte},System.Int32@,SysWeaver.Compression.CompEncoderLevels)">
+            <summary>
+            Not using ZstandardEncoder.TryCompress since it creates (allocates) a new encoder on every call
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZStdNETNew.ZstdEncoder.Compress(System.ReadOnlySpan{System.Byte},System.Span{System.Byte},System.Int32@,System.Int32@,System.Boolean)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZStdNETNew.ZstdEncoder.Dispose">
+            <inheritdoc/>
+        </member>
+        <member name="T:SysWeaver.Compression.CompZStdNETNew.ZstdDecoder">
+            <summary>
+            A pooled .NET zstd decoder
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZStdNETNew.ZstdDecoder.Create">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZStdNETNew.ZstdDecoder.TryDecompress(System.ReadOnlySpan{System.Byte},System.Span{System.Byte},System.Int32@)">
+            <summary>
+            Not using ZstandardDecoder.TryDecompress since it creates (allocates) a new decoder on every call, the (pooled) streaming decoder is used instead
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Compression.CompZStdNETNew.ZstdDecoder.NextHeaderSize">
+            <summary>
+            Concatenated zstd frames are valid zstd data
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZStdNETNew.ZstdDecoder.BeginNext(System.ReadOnlySpan{System.Byte})">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZStdNETNew.ZstdDecoder.Decompress(System.ReadOnlySpan{System.Byte},System.Span{System.Byte},System.Int32@,System.Int32@)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZStdNETNew.ZstdDecoder.Dispose">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZStdNETNew.Compress(System.IO.Stream,System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZStdNETNew.Compress(System.IO.Stream,System.Span{System.Byte},SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZStdNETNew.Compress(System.ReadOnlySpan{System.Byte},System.Span{System.Byte},SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZStdNETNew.Compress(System.ReadOnlySpan{System.Byte},System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZStdNETNew.CompressAsync(System.IO.Stream,System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZStdNETNew.CompressAsync(System.IO.Stream,System.Memory{System.Byte},SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZStdNETNew.CompressAsync(System.ReadOnlyMemory{System.Byte},System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZStdNETNew.Decompress(System.IO.Stream,System.IO.Stream)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZStdNETNew.Decompress(System.IO.Stream,System.Span{System.Byte})">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZStdNETNew.Decompress(System.ReadOnlySpan{System.Byte},System.Span{System.Byte})">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZStdNETNew.Decompress(System.ReadOnlySpan{System.Byte},System.IO.Stream)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZStdNETNew.DecompressAsync(System.IO.Stream,System.IO.Stream)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZStdNETNew.DecompressAsync(System.IO.Stream,System.Memory{System.Byte})">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZStdNETNew.DecompressAsync(System.ReadOnlyMemory{System.Byte},System.IO.Stream)">
             <inheritdoc/>
         </member>
         <member name="T:SysWeaver.Compression.ICompDecoder">

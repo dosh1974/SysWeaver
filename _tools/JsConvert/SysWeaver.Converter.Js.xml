@@ -1,0 +1,1958 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>SysWeaver.Converter.Js</name>
+    </assembly>
+    <members>
+        <member name="F:SysWeaver.Converter.Js.Analysis.BindingKind.ClassInner">
+            <summary>The inner (immutable) name binding of a class</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Analysis.BindingKind.FunctionName">
+            <summary>The name of a function expression (visible inside the function)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Analysis.ScopeKind.FunctionName">
+            <summary>Holds the name of a named function expression</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Analysis.ScopeKind.For">
+            <summary>The head of a for / for-in / for-of statement (let / const in the head)</summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Analysis.Reference">
+            <summary>
+            A reference to a binding (or a global)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Analysis.Reference.IsWrite">
+            <summary>True if the reference is assigned to (assignment, update, for-in/of target)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Analysis.Reference.Binding">
+            <summary>The binding, null for globals (unresolved)</summary>
+        </member>
+        <member name="P:SysWeaver.Converter.Js.Analysis.Binding.IsAssigned">
+            <summary>
+            True if any reference writes to the binding
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Analysis.Binding.Rename(System.String)">
+            <summary>
+            Rename the binding (all declarations and references)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Analysis.Scope.Node">
+            <summary>The node that owns this scope (ProgramNode, Function, BlockStmt, ForStmt, CatchClause, Class, SwitchStmt, StaticBlock)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Analysis.Scope.HasDynamic">
+            <summary>True if the scope contains a direct eval call or a with statement (bindings can be accessed dynamically)</summary>
+        </member>
+        <member name="P:SysWeaver.Converter.Js.Analysis.Scope.IsVarScope">
+            <summary>
+            True if this scope is a var scope (function, program or static block)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Analysis.ScopeAnalyzer">
+            <summary>
+            Builds the scope tree of a program and resolves all references
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Converter.Js.Analysis.ScopeAnalyzer.References">
+            <summary>All references (resolved or not)</summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Analysis.ScopeAnalyzer.Get(SysWeaver.Converter.Js.Ast.Node)">
+            <summary>
+            Get the scope that a node owns (null if it doesn't own a scope)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Analysis.ScopeAnalyzer.Analyze(SysWeaver.Converter.Js.Ast.Node)">
+            <summary>
+            Analyze a tree, the root can be a program or a function
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Analysis.ScopeAnalyzer.PatternNames(SysWeaver.Converter.Js.Ast.Expr,System.Collections.Generic.List{SysWeaver.Converter.Js.Ast.Identifier})">
+            <summary>
+            Collect the binding identifiers of a pattern
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Analysis.ScopeAnalyzer.BindingPattern(SysWeaver.Converter.Js.Ast.Expr,SysWeaver.Converter.Js.Analysis.Scope,SysWeaver.Converter.Js.Analysis.BindingKind)">
+            <summary>
+            Declare the names in a binding pattern, and visit the default values / computed keys
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Analysis.ScopeAnalyzer.AssignTarget(SysWeaver.Converter.Js.Ast.Expr)">
+            <summary>
+            Visit an assignment target (pattern with references)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Analysis.ScopeAnalyzer.HoistDeclarations(System.Collections.Generic.List{SysWeaver.Converter.Js.Ast.Stmt})">
+            <summary>
+            Hoist the declarations of a statement list into the current (block) scope and its var scope
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Analysis.ScopeAnalyzer.PatternDefaults(SysWeaver.Converter.Js.Ast.Expr)">
+            <summary>
+            Visit default values and computed keys in a pattern (without declaring)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Analysis.ScopeAnalyzer.Any(SysWeaver.Converter.Js.Ast.Node)">
+            <summary>
+            Visit any node (expressions, statements)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.AcornimaImporter">
+            <summary>
+            Converts an Acornima syntax tree to the converter syntax tree
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Ast.AcornimaImporter.Import(Acornima.Ast.Program,SysWeaver.Converter.Js.Diagnostics)">
+            <summary>
+            Import an Acornima program
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Ast.AcornimaImporter.Pattern(Acornima.Ast.Node)">
+            <summary>
+            Import a pattern (binding / assignment target)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.CommentAttacher">
+            <summary>
+            Attaches comments to the statements / class members that follow them.
+            Comments inside expressions are attached to the next statement (so they are moved before the statement they were in, or after it).
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.Comment">
+            <summary>
+            A comment attached to a statement or class member (printed before it)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Ast.Comment.IsBlock">
+            <summary>True for a block comment, false for a line comment</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Ast.Comment.Text">
+            <summary>The comment text (without the comment delimiters)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Ast.Comment.Start">
+            <summary>The source position of the comment (or -1)</summary>
+        </member>
+        <member name="P:SysWeaver.Converter.Js.Ast.Comment.IsLicense">
+            <summary>
+            True if this comment should be preserved when only license comments are kept (/*! ... */, @license or @preserve)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.Node">
+            <summary>
+            Base class of all nodes in the (mutable) syntax tree used by the converter.
+            Child nodes are rewritten in place using a Rewriter (see MapChildren).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Ast.Node.Start">
+            <summary>Start position (char index) in the original source, -1 for synthesized nodes</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Ast.Node.End">
+            <summary>End position (char index) in the original source, -1 for synthesized nodes</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Ast.Node.LeadingComments">
+            <summary>Comments that should be printed before this node (statements and class members)</summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Ast.Node.MapChildren(SysWeaver.Converter.Js.Ast.Rewriter)">
+            <summary>
+            Rewrite all child nodes using the supplied rewriter (the child references are replaced by the rewritten nodes)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Ast.Node.CopyLists">
+            <summary>
+            Called on a shallow copy, should replace all lists with copies (so that the copy can be modified)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Ast.Node.Clone``1">
+            <summary>
+            Create a deep copy of this node and all child nodes
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Ast.Node.DeepClone">
+            <summary>
+            Create a deep copy of this node and all child nodes
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Ast.Node.At``1(SysWeaver.Converter.Js.Ast.Node)">
+            <summary>
+            Copy the source position of another node (for diagnostics)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.Expr">
+            <summary>
+            Base class of all expressions (including patterns)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.Stmt">
+            <summary>
+            Base class of all statements
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.PrivateName">
+            <summary>
+            A private name (#name), Name excludes the #
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Ast.BigIntLiteral.Digits">
+            <summary>The decimal digits (no n suffix)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Ast.TemplateQuasi.Cooked">
+            <summary>The cooked value, null if the raw text contains an invalid escape sequence (only allowed in tagged templates)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Ast.TemplateQuasi.Raw">
+            <summary>The raw value (as written in the source, line endings normalized)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Ast.ArrayExpr.Elements">
+            <summary>Elements, null for holes, may contain SpreadElement</summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.Property">
+            <summary>
+            A property in an object literal or an object pattern
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Ast.Property.Value">
+            <summary>The value (a FunctionExpr for methods and accessors, a pattern in an ObjectPattern)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Ast.ObjectExpr.Properties">
+            <summary>Property or SpreadElement</summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.Function">
+            <summary>
+            A function (declaration, expression, arrow, method, accessor)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Ast.Function.Body">
+            <summary>The body (null for arrow functions with an expression body)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Ast.Function.ExprBody">
+            <summary>The expression body of an arrow function (Body is null)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Ast.Function.IsMethod">
+            <summary>True if this is a class or object method / accessor (can use super)</summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Ast.Function.EnsureBlockBody">
+            <summary>
+            Make sure that the function has a block body (converts arrow expression bodies to { return expr; })
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Converter.Js.Ast.Function.HasSimpleParams">
+            <summary>
+            True if all parameters are plain identifiers (no defaults, patterns or rest)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.Class">
+            <summary>
+            A class (declaration or expression)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Ast.Class.Members">
+            <summary>MethodDef, FieldDef or StaticBlock</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Ast.MethodDef.Kind">
+            <summary>"constructor", "method", "get" or "set"</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Ast.UpdateExpr.Op">
+            <summary>"++" or "--"</summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.BinaryExpr">
+            <summary>
+            Binary and logical (&amp;&amp;, ||, ??) expressions
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Ast.AssignExpr.Op">
+            <summary>The operator, ex: "=", "+=", "??="</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Ast.AssignExpr.Target">
+            <summary>The target (Identifier, MemberExpr or a pattern for "=")</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Ast.CallExpr.Optional">
+            <summary>True for an optional call (callee?.(args))</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Ast.MemberExpr.Property">
+            <summary>An Identifier (not computed), a PrivateName or any expression (computed)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Ast.MemberExpr.Optional">
+            <summary>True for an optional member access (obj?.prop)</summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.ChainExpr">
+            <summary>
+            Marks the extent of an optional chain (a?.b.c)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.MetaProperty">
+            <summary>
+            new.target or import.meta
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.ImportCall">
+            <summary>
+            A dynamic import: import(source, options)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Ast.ArrayPattern.Elements">
+            <summary>Patterns, null for holes, the last one may be a RestElement</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Ast.ObjectPattern.Properties">
+            <summary>Property (value is a pattern) or a RestElement (last)</summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.AssignPattern">
+            <summary>
+            A pattern with a default value (left = right)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.StatementList">
+            <summary>
+            A transient list of statements, used by rewriters to replace one statement with several (flattened into the parent list)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Ast.ProgramNode.TrailingComments">
+            <summary>Comments after the last statement</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Ast.BlockStmt.TrailingComments">
+            <summary>Comments after the last statement</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Ast.ExprStmt.Directive">
+            <summary>If this is a directive ("use strict"), the raw directive text (including quotes)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Ast.SwitchCase.Test">
+            <summary>The test, null for default</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Ast.CatchClause.Param">
+            <summary>The catch parameter (pattern), null for an optional catch binding</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Ast.ForStmt.Init">
+            <summary>A VarDecl, an expression or null</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Ast.ForInStmt.Left">
+            <summary>A VarDecl (with one declarator) or a pattern / member expression</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Ast.ForOfStmt.Left">
+            <summary>A VarDecl (with one declarator) or a pattern / member expression</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Ast.VarDeclarator.Id">
+            <summary>The binding (Identifier or pattern)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Ast.VarDecl.Kind">
+            <summary>"var", "let", "const", "using" or "await using"</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Ast.ImportSpec.Imported">
+            <summary>The imported name (Identifier or StringLiteral), only for Named</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Ast.ExportDefaultDecl.Declaration">
+            <summary>A FunctionDecl, ClassDecl (id may be null) or an ExprStmt</summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.Rewriter">
+            <summary>
+            Base class for tree rewriters.
+            Override Visit to change nodes, call base.Visit (or n.MapChildren(this)) to process the children.
+            A statement can be replaced with a StatementList (flattened into the parent list) or removed by returning null.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Ast.Rewriter.Rewrite(SysWeaver.Converter.Js.Ast.Node)">
+            <summary>
+            Rewrite a node (null safe)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Ast.Rewriter.Visit(SysWeaver.Converter.Js.Ast.Node)">
+            <summary>
+            Visit a node (never null), the default implementation rewrites all children and returns the node
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Ast.Rewriter.Expr(SysWeaver.Converter.Js.Ast.Expr)">
+            <summary>
+            Rewrite an expression (null safe)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Ast.Rewriter.Stmt(SysWeaver.Converter.Js.Ast.Stmt)">
+            <summary>
+            Rewrite a statement in a single statement position (null safe).
+            A StatementList is converted to a block, a removed statement to an empty statement.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Ast.Rewriter.Block(SysWeaver.Converter.Js.Ast.BlockStmt)">
+            <summary>
+            Rewrite a block (null safe), the result is always a block
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Ast.Rewriter.MapStatements(System.Collections.Generic.List{SysWeaver.Converter.Js.Ast.Stmt})">
+            <summary>
+            Rewrite a list of statements, StatementList's are flattened and removed (null) statements are removed
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Ast.Rewriter.MapList``1(System.Collections.Generic.List{``0})">
+            <summary>
+            Rewrite all nodes in a list (null entries, ex: array holes, are kept)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.Walker">
+            <summary>
+            A read only tree walker
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Ast.Walker.#ctor(System.Func{SysWeaver.Converter.Js.Ast.Node,System.Boolean},System.Action{SysWeaver.Converter.Js.Ast.Node})">
+            <summary>
+            Create a walker
+            </summary>
+            <param name="pre">Called before the children are visited, return false to skip the children</param>
+            <param name="post">Optionally called after the children are visited</param>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Ast.Walker.Walk(SysWeaver.Converter.Js.Ast.Node,System.Func{SysWeaver.Converter.Js.Ast.Node,System.Boolean},System.Action{SysWeaver.Converter.Js.Ast.Node})">
+            <summary>
+            Walk a tree
+            </summary>
+            <param name="root">The root node</param>
+            <param name="pre">Called before the children are visited, return false to skip the children</param>
+            <param name="post">Optionally called after the children are visited</param>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Ast.Walker.Any(SysWeaver.Converter.Js.Ast.Node,System.Func{SysWeaver.Converter.Js.Ast.Node,System.Boolean},System.Func{SysWeaver.Converter.Js.Ast.Node,System.Boolean})">
+            <summary>
+            Returns true if any node in the tree matches the predicate
+            </summary>
+            <param name="root">The root node</param>
+            <param name="match">The predicate</param>
+            <param name="enter">Optional, return false to not search the children of a node</param>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Helpers.JsHelpers">
+            <summary>
+            The runtime helper functions used by the transforms.
+            All helpers are written in ES5 (so they work on every target), names start with an underscore (ex: _defineProperty).
+            Most helpers are compatible with the Babel helpers of the same name.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Helpers.JsHelpers.Dependencies(System.String)">
+            <summary>
+            Get the helpers that a helper depends on
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Helpers.JsHelpers.GetSource(System.String)">
+            <summary>
+            Get the source of a helper (with the default names, ex: function _defineProperty(...) {...})
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Converter.Js.Helpers.JsHelpers.All">
+            <summary>
+            The names of all helpers (without the leading underscore)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Helpers.JsHelpers.Ordered(System.Collections.Generic.IEnumerable{System.String})">
+            <summary>
+            Get all helpers (and their dependencies) in dependency order (dependencies first)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Helpers.RegeneratorRuntime">
+            <summary>
+            The generator runtime used by the generator transform (ES5, works without Symbol).
+            The API is compatible with regenerator-runtime: mark, wrap, awrap, keys, values, async, AsyncIterator, isGeneratorFunction.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.JsHtmlConverter">
+            <summary>
+            Converts the JavaScript in html documents: inline script elements and (optionally) event handler attributes (onclick="...").
+            Scripts and attributes that don't need any transforms are left untouched.
+            Helpers used by the converted code are added once, in a new script element before the first converted script (unless the helper mode is External).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsHtmlConverter.Tag.End">
+            <summary>The position after the closing '&gt;'</summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.JsHtmlConverter.Convert(System.String,SysWeaver.Converter.Js.JsConverterParams)">
+            <summary>
+            Convert the scripts in an html document
+            </summary>
+            <param name="html">The html source</param>
+            <param name="p">The options</param>
+            <returns>The result, Code is the converted html (null if the conversion failed)</returns>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.JsHtmlConverter.WrapHandler(SysWeaver.Converter.Js.Ast.ProgramNode)">
+            <summary>
+            Event handler attribute code is the body of a function: it is parsed as a script that allows return (the wrapper marks the conversion as an event handler)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.JsHtmlConverter.IdentifierScan(System.String)">
+            <summary>
+            All identifier like tokens (over approximation, used to reserve names)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.JsHtmlConverter.ParseTag(System.String,System.Int32)">
+            <summary>
+            Parse a start tag at the position of a '&lt;', returns null if it isn't a start tag
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.JsSiteFileKind">
+            <summary>
+            The kind of a file in a site
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsSiteFileKind.Html">
+            <summary>An html page (inline scripts and event handlers are converted)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsSiteFileKind.Script">
+            <summary>A classic script (converted, parsed as a script or a module if that fails)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsSiteFileKind.Module">
+            <summary>An ES module (converted as a module)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsSiteFileKind.Css">
+            <summary>A style sheet (copied, its imports and urls are followed)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsSiteFileKind.Asset">
+            <summary>Any other file (images, fonts, json ...), copied</summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.JsSiteFile">
+            <summary>
+            A file of a site
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsSiteFile.Path">
+            <summary>The full path of the file</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsSiteFile.RelativePath">
+            <summary>The path relative to the site root (also the path in the output folder)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsSiteFile.Kind">
+            <summary>The kind of file</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsSiteFile.ReferencedBy">
+            <summary>The files that reference this file (full paths), empty for the html files that were supplied</summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.JsSiteParams">
+            <summary>
+            Options for collecting / cloning a site
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsSiteParams.SiteRoot">
+            <summary>
+            The root folder of the site: root relative urls ("/js/a.js") are resolved from here and the output keeps the paths relative to it.
+            If null, root relative urls are searched in the folder of the page and its parents, and the root is the common folder of all files.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsSiteParams.Assets">
+            <summary>
+            Also collect / copy other files used by the pages and style sheets (images, fonts, icons, manifests ...), not only scripts and style sheets
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsSiteParams.ScanStrings">
+            <summary>
+            Also follow string literals in scripts that are relative paths of existing .js / .mjs / .css files (ex: includeJs("lib.js")),
+            tried relative to the script, then relative to the pages
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsSiteParams.HelpersFile">
+            <summary>
+            When cloning with external helpers (JsConverterParams.Helpers = External): the helpers (and polyfills) are written to this file
+            (relative to the output folder) and a script element that loads it is added to every page before its first script
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsSiteParams.Overwrite">
+            <summary>
+            Allow the output folder to be the site root (the files are converted in place)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsSiteParams.Force">
+            <summary>
+            Always write the output files (by default a file is only written if its content changed)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.JsSiteResult">
+            <summary>
+            The result of collecting / cloning a site
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsSiteResult.Root">
+            <summary>The site root (full path)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsSiteResult.Files">
+            <summary>All files of the site (pages, scripts, style sheets and assets)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsSiteResult.Diagnostics">
+            <summary>Problems found while collecting (missing files, unparsable scripts, ...), File is set</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsSiteResult.Failed">
+            <summary>The number of files that couldn't be converted (only set by CloneAsync, the original is copied)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsSiteResult.Written">
+            <summary>The number of files that were written (only set by CloneAsync)</summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.JsSite">
+            <summary>
+            Collects the files used by html pages (scripts, style sheets and other files, including the files referenced by them)
+            and clones the site to a folder with all scripts converted.
+            Dependencies are found in: script / link / img / source / video / audio / track / input / embed / object elements, srcset, style elements and attributes,
+            css @import and url(), static and dynamic imports with literal urls, workers, importScripts and (optionally) string literals naming existing script / css files.
+            Dependencies that are created dynamically with computed urls can't be found, iframes / frames and links (a href) are not followed.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.JsSite.Collector.Resolve(System.String,System.String,System.String)">
+            <summary>
+            Resolve an url to a local path, null for external / data / empty urls
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.JsSite.Collector.RefExisting(System.String,System.Collections.Generic.IEnumerable{System.String},System.String,System.String,SysWeaver.Converter.Js.JsSiteFileKind)">
+            <summary>
+            Resolve a literal relative to the script folder, then the page folders, returns the first existing file
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.JsSite.Collector.Finish">
+            <summary>
+            Compute the root and the relative paths, files outside an explicit root are removed
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.JsSite.Collect(System.Collections.Generic.IEnumerable{System.String},SysWeaver.Converter.Js.JsSiteParams)">
+            <summary>
+            Collect all files used by some html pages
+            </summary>
+            <param name="htmlFiles">The pages</param>
+            <param name="sp">Options, null for the defaults</param>
+            <returns>The files (pages first, then in discovery order) and the problems found</returns>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.JsSite.InsertScript(System.String,System.String)">
+            <summary>
+            Insert a script element that loads a file before the first script of a page (or before the end of the head, or at the start)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.JsSite.CloneAsync(System.Collections.Generic.IEnumerable{System.String},System.String,SysWeaver.Converter.Js.JsConverterParams,SysWeaver.Converter.Js.JsSiteParams,System.Action{SysWeaver.Converter.Js.JsSiteFile,SysWeaver.Converter.Js.JsConvertResult,System.Boolean})">
+            <summary>
+            Clone the site of some html pages to a folder: pages and scripts are converted, style sheets and other files are copied.
+            Files that can't be converted are copied unchanged (and counted in Failed).
+            </summary>
+            <param name="htmlFiles">The pages</param>
+            <param name="outputFolder">The output folder (the files keep their paths relative to the site root)</param>
+            <param name="p">The conversion options</param>
+            <param name="sp">The site options, null for the defaults</param>
+            <param name="onFile">Optionally called for every file: the file, the conversion result (null for copied files), true if the output was written</param>
+            <returns>The files and all diagnostics (with File set)</returns>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.JsConvertResult">
+            <summary>
+            The result of a conversion
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsConvertResult.Code">
+            <summary>The converted code, null if the conversion failed</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsConvertResult.Diagnostics">
+            <summary>Errors, warnings and information</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsConvertResult.Helpers">
+            <summary>The names of the helpers that are used by the code (without the leading underscore, ex: "defineProperty")</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsConvertResult.Transformed">
+            <summary>The features that were transformed</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsConvertResult.Polyfills">
+            <summary>The polyfills that are used (BuiltIns = Polyfill), inlined unless the helper mode is External</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsConvertResult.Target">
+            <summary>The target that was used</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsConvertResult.IsModule">
+            <summary>True if the input was parsed as a module</summary>
+        </member>
+        <member name="P:SysWeaver.Converter.Js.JsConvertResult.Success">
+            <summary>True if the conversion succeeded (no errors, and no warnings if WarningsAsErrors is set)</summary>
+        </member>
+        <member name="P:SysWeaver.Converter.Js.JsConvertResult.HasWarnings">
+            <summary>True if there are any warnings</summary>
+        </member>
+        <member name="P:SysWeaver.Converter.Js.JsConvertResult.HasErrors">
+            <summary>True if there are any errors</summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.JsConverter">
+            <summary>
+            Converts modern JavaScript to older JavaScript versions (for old browsers), like Babel's preset-env.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsConverter.Version">
+            <summary>
+            The version of the converter (changes when the output might change)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.JsConverter.Convert(System.String,SysWeaver.Converter.Js.JsConverterParams)">
+            <summary>
+            Convert JavaScript code
+            </summary>
+            <param name="source">The source code</param>
+            <param name="p">The options, null to use the defaults</param>
+            <returns>The result (check Success, the converted code is in Code)</returns>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.JsConverter.GetFeatures(SysWeaver.Converter.Js.JsConverterParams,SysWeaver.Converter.Js.JsTarget@)">
+            <summary>
+            Get the feature set to transform for some options
+            </summary>
+            <exception cref="T:System.ArgumentException">Thrown if the target or a feature name is invalid</exception>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.JsConverter.ParseProgram(System.String,System.Nullable{System.Boolean},System.Boolean@,System.String@)">
+            <summary>
+            Parse source into a syntax tree (no comments), returns null if it can't be parsed
+            </summary>
+            <param name="source">The source</param>
+            <param name="module">True: module, false: script, null: script, then module if that fails</param>
+            <param name="isModule">True if parsed as a module</param>
+            <param name="error">The syntax error if the source can't be parsed</param>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.JsConverter.Convert(System.String,SysWeaver.Converter.Js.JsConverterParams,SysWeaver.Converter.Js.Diagnostics,System.Collections.Generic.HashSet{System.String},System.Boolean,System.Func{SysWeaver.Converter.Js.Ast.ProgramNode,SysWeaver.Converter.Js.Ast.ProgramNode})">
+            <summary>
+            Convert (internal), also used for html script blocks
+            </summary>
+            <param name="source">The source</param>
+            <param name="p">The options</param>
+            <param name="diag">The diagnostics collector</param>
+            <param name="reservedNames">Optional, names that must not be generated (ex: names used in other script blocks)</param>
+            <param name="htmlSafe">Make the output safe to embed in an html script element</param>
+            <param name="wrapper">Optional, used for html event handler attributes: the code is parsed as the body of a function</param>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.JsConverter.ValidationVersion(SysWeaver.Converter.Js.JsTarget,System.Collections.Generic.HashSet{SysWeaver.Converter.Js.JsFeature})">
+            <summary>
+            The EcmaScript version the output is validated with: the explicit EcmaScript limit of the target,
+            lowered if a feature that the target needs isn't transformed (excluded), int.MaxValue if no limit.
+            (A browser that lacks a single old feature, ex: safari 12 and template literals, doesn't lower it, that feature is transformed)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.JsConverter.Validate(System.String,System.Boolean,System.Int32,SysWeaver.Converter.Js.Diagnostics)">
+            <summary>
+            Validate the output by parsing it with the latest version (internal error check) and the target version
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.JsConverter.BuildHelpers(System.Collections.Generic.IEnumerable{System.String},System.Collections.Generic.Dictionary{System.String,System.String})">
+            <summary>
+            Parse helper sources into statements, renaming the helpers to the names used
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.JsConverter.GetHelpersSource(System.Collections.Generic.IEnumerable{System.String},System.Boolean,System.Collections.Generic.IEnumerable{System.String})">
+            <summary>
+            Get the source code of helpers (for use with JsHelperMode.External)
+            </summary>
+            <param name="helpers">The helper names (as returned in JsConvertResult.Helpers), dependencies are added automatically</param>
+            <param name="minify">Minify the output</param>
+            <param name="polyfills">Optional polyfills to include (as returned in JsConvertResult.Polyfills), they are added first</param>
+            <returns>The source code (ES5)</returns>
+        </member>
+        <member name="P:SysWeaver.Converter.Js.JsConverter.AllHelpers">
+            <summary>
+            The names of all available helpers
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Converter.Js.JsConverter.AllPolyfills">
+            <summary>
+            The names of all available polyfills
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.JsConverter.GetPolyfillsSource(System.Collections.Generic.IEnumerable{System.String},System.Boolean)">
+            <summary>
+            Get the (ES5) source of polyfills
+            </summary>
+            <param name="polyfills">The polyfill names (see AllPolyfills), dependencies are added automatically</param>
+            <param name="minify">Minify the output</param>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.JsHelperMode">
+            <summary>
+            How helper functions (ex: _defineProperty, _asyncToGenerator) are emitted
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsHelperMode.Inline">
+            <summary>The helpers that are used are added to the start of each converted file (or html script block)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsHelperMode.External">
+            <summary>The helpers are not added, they must be loaded separately (see JsConverter.GetHelpersSource), helpers are referenced by their default names (ex: _defineProperty)</summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.JsComments">
+            <summary>
+            Which comments to keep
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsComments.None">
+            <summary>Remove all comments</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsComments.License">
+            <summary>Keep license comments only (block comments starting with ! or containing @license or @preserve)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsComments.All">
+            <summary>Keep all comments (comments inside expressions are moved before the statement)</summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.JsSourceType">
+            <summary>
+            How to parse the source
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsSourceType.Auto">
+            <summary>Parse as a script, if that fails because of import / export statements, parse as a module</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsSourceType.Script">
+            <summary>A classic script</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsSourceType.Module">
+            <summary>An ES module</summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.JsBuiltIns">
+            <summary>
+            What to do with built-in functions (ex: Array.prototype.includes, Object.entries) that might not exist in the target
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsBuiltIns.Ignore">
+            <summary>Ignore built-ins</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsBuiltIns.Report">
+            <summary>Report (as information) built-ins that are used and might be missing in the target</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsBuiltIns.Polyfill">
+            <summary>Add polyfills for the built-ins that are used and might be missing in the target (only for the built-ins that have a polyfill)</summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.JsConverterParams">
+            <summary>
+            The options of the JavaScript converter
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsConverterParams.Target">
+            <summary>
+            The target to convert to, an EcmaScript version and/or browsers with versions, separated by ','.
+            Ex: "es5", "es2015", "es2017", "chrome 69", "chrome 69, safari 12", "es2015, firefox 60".
+            Browsers: chrome (also android / webview), edge, firefox, safari (also ios), opera, samsung, node and ie (same as es5).
+            "esnext" means no transforms.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsConverterParams.Include">
+            <summary>
+            Features to always transform (even if the target supports them), separated by ','.
+            Feature names: ClassStaticBlock, PrivateIn, PrivateMethods, ClassFields, LogicalAssignment, NumericSeparator, OptionalChaining, NullishCoalescing,
+            OptionalCatchBinding, AsyncGenerators, ObjectRestSpread, RegexDotAll, RegexNamedGroups, AsyncFunctions, Exponentiation, TemplateLiterals,
+            NewTarget, Classes, ArrowFunctions, Parameters, Destructuring, Spread, ShorthandProperties, ComputedProperties, ForOf, Generators,
+            BlockScoping, RegexUnicode, RegexSticky.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsConverterParams.Exclude">
+            <summary>
+            Features to never transform (even if the target doesn't support them), separated by ','.
+            See Include for the feature names.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsConverterParams.Loose">
+            <summary>
+            Loose mode: smaller and faster output that doesn't follow the specification in some edge cases:
+            class fields and methods are assigned (not defined), iterables are assumed to be arrays (or array like) in
+            spread, destructuring and for-of (no Symbol.iterator is required), template literals use + instead of String.prototype.concat.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsConverterParams.Helpers">
+            <summary>
+            How helper functions are emitted.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsConverterParams.Minify">
+            <summary>
+            Write minified output (only white space is removed, names are kept).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsConverterParams.Indent">
+            <summary>
+            The number of spaces to indent with (0 = use a tab), ignored when minifying.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsConverterParams.Comments">
+            <summary>
+            Which comments to keep.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsConverterParams.AsciiOnly">
+            <summary>
+            Only write ASCII characters (non-ASCII characters in strings, templates, regular expressions and identifiers are escaped).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsConverterParams.SourceType">
+            <summary>
+            How to parse the source.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsConverterParams.Validate">
+            <summary>
+            Validate the output by parsing it using the EcmaScript version of the target, a warning is reported if the output contains newer syntax.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsConverterParams.WarningsAsErrors">
+            <summary>
+            Treat warnings as errors (the conversion fails if there are warnings).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsConverterParams.BuiltIns">
+            <summary>
+            What to do with built-in functions (ex: Array.prototype.includes, Object.entries) that might not exist in the target.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsConverterParams.HtmlAttributes">
+            <summary>
+            Html files: also convert inline event handler attributes (ex: onclick="a?.b()").
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.JsConverterParams.Clone">
+            <summary>
+            Returns a copy of these options
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.JsDiagnosticLevel">
+            <summary>
+            The severity of a diagnostic message
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsDiagnosticLevel.Info">
+            <summary>Informational</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsDiagnosticLevel.Warning">
+            <summary>The output may not behave exactly like the input (or a construct couldn't be converted)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsDiagnosticLevel.Error">
+            <summary>The conversion failed</summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.JsDiagnostic">
+            <summary>
+            A diagnostic message from the converter
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsDiagnostic.Level">
+            <summary>The severity</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsDiagnostic.Message">
+            <summary>The message</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsDiagnostic.Line">
+            <summary>The (one based) line in the source, 0 if unknown</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsDiagnostic.Column">
+            <summary>The (one based) column in the source, 0 if unknown</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsDiagnostic.File">
+            <summary>The file the diagnostic is about, null if it's about the converted source (only set by JsSite)</summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Diagnostics">
+            <summary>
+            Collects diagnostics, translates source positions to lines and columns
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Diagnostics.#ctor(System.String,System.Int32)">
+            <summary>
+            Create a diagnostics collector
+            </summary>
+            <param name="source">The source text</param>
+            <param name="lineOffset">Added to all line numbers (used for scripts embedded in html)</param>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Diagnostics.AddAt(SysWeaver.Converter.Js.JsDiagnosticLevel,System.Int32,System.Int32,System.String)">
+            <summary>
+            Add a diagnostic with an explicit line / column (one based, line offset is applied)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.JsConvertException">
+            <summary>
+            Thrown when a conversion can't be completed (the error is also added to the diagnostics)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Output.JsWriter">
+            <summary>
+            Writes a syntax tree as JavaScript source code
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Output.JsWriter.Options">
+            <summary>
+            Writer options
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Output.JsWriter.Options.HtmlSafe">
+            <summary>Escape "&lt;/script" and "&lt;!--" so that the output can be embedded in an html script element</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Output.JsWriter.NoIn">
+            <summary>Set while writing the init part of a for statement (the in operator must be parenthesized)</summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Output.JsWriter.Write(SysWeaver.Converter.Js.Ast.ProgramNode,SysWeaver.Converter.Js.Output.JsWriter.Options)">
+            <summary>
+            Write a program
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Output.JsWriter.WriteExpr(SysWeaver.Converter.Js.Ast.Expr,SysWeaver.Converter.Js.Output.JsWriter.Options)">
+            <summary>
+            Write a single expression (debugging / tests)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Output.JsWriter.W(System.String)">
+            <summary>
+            Write a token, a space is inserted if required to separate it from the previous token
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Output.JsWriter.Flush">
+            <summary>
+            Write any pending indentation
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Output.JsWriter.S">
+            <summary>
+            A space (not when minifying)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Output.JsWriter.NL">
+            <summary>
+            A new line (not when minifying)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Output.JsWriter.ForceNL">
+            <summary>
+            A forced new line (also when minifying, used after line comments)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Output.JsWriter.Body(SysWeaver.Converter.Js.Ast.Stmt)">
+            <summary>
+            The body of a control statement (if, for, while ...)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Output.JsWriter.ExprStatementStart(SysWeaver.Converter.Js.Ast.Expr)">
+            <summary>
+            Write an expression at the start of an expression statement (parenthesized if it would be parsed as something else)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Output.JsWriter.Function(SysWeaver.Converter.Js.Ast.Function,System.Boolean)">
+            <summary>
+            Write a function declaration or expression (not methods)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Output.JsWriter.Method(System.String,System.Boolean,SysWeaver.Converter.Js.Ast.Expr,System.Boolean,SysWeaver.Converter.Js.Ast.Function)">
+            <summary>
+            Write a method (class or object), the key and the function
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Output.JsWriter.HasCallInChain(SysWeaver.Converter.Js.Ast.Expr)">
+            <summary>
+            True if the expression is (or starts with) a call in its member chain (new (a().b)() requires parens)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Output.JsWriter.Pattern(SysWeaver.Converter.Js.Ast.Expr)">
+            <summary>
+            Write a pattern (binding or assignment target)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Output.JsWriter.Number(System.Double)">
+            <summary>
+            Format a number as a JavaScript numeric literal
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Output.JsWriter.Quote(System.String)">
+            <summary>
+            Quote a string as a JavaScript string literal
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Output.JsWriter.Quote(System.String,System.Boolean,System.Boolean)">
+            <summary>
+            Quote a string as a JavaScript string literal
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.JsFeature">
+            <summary>
+            The language features that can be transformed (lowered) by the converter.
+            Each feature can be included or excluded explicitly using its name.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsFeature.ClassStaticBlock">
+            <summary>Class static initialization blocks: static { ... } (ES2022)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsFeature.PrivateIn">
+            <summary>Private brand checks: #x in obj (ES2022)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsFeature.PrivateMethods">
+            <summary>Private methods and accessors: #m() { } (ES2022)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsFeature.ClassFields">
+            <summary>Public and private class fields, static and instance: x = 1; static #y = 2; (ES2022)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsFeature.LogicalAssignment">
+            <summary>Logical assignment operators: a ||= b, a &amp;&amp;= b, a ??= b (ES2021)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsFeature.NumericSeparator">
+            <summary>Numeric separators: 1_000_000 (ES2021, always removed by the code generator)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsFeature.OptionalChaining">
+            <summary>Optional chaining: a?.b, a?.[b], a?.(b) (ES2020)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsFeature.NullishCoalescing">
+            <summary>Nullish coalescing: a ?? b (ES2020)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsFeature.OptionalCatchBinding">
+            <summary>Optional catch binding: try { } catch { } (ES2019)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsFeature.AsyncGenerators">
+            <summary>Async generator functions and for await (ES2018)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsFeature.ObjectRestSpread">
+            <summary>Object rest and spread properties: { ...a }, const { a, ...rest } = obj (ES2018)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsFeature.RegexDotAll">
+            <summary>The regular expression dotAll flag: /./s (ES2018)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsFeature.RegexNamedGroups">
+            <summary>Regular expression named capture groups: /(?&lt;year&gt;\d{4})/ (ES2018)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsFeature.AsyncFunctions">
+            <summary>Async functions and await (ES2017)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsFeature.Exponentiation">
+            <summary>The exponentiation operator: a ** b, a **= b (ES2016)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsFeature.TemplateLiterals">
+            <summary>Template literals and tagged templates (ES2015)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsFeature.NewTarget">
+            <summary>The new.target meta property (ES2015)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsFeature.Classes">
+            <summary>Classes (ES2015)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsFeature.ArrowFunctions">
+            <summary>Arrow functions (ES2015)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsFeature.Parameters">
+            <summary>Default and rest parameters (ES2015)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsFeature.Destructuring">
+            <summary>Destructuring (ES2015)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsFeature.Spread">
+            <summary>Spread in calls, new and array literals (ES2015)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsFeature.ShorthandProperties">
+            <summary>Shorthand properties and methods in object literals (ES2015)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsFeature.ComputedProperties">
+            <summary>Computed property names in object literals (ES2015)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsFeature.ForOf">
+            <summary>for ... of loops (ES2015)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsFeature.Generators">
+            <summary>Generator functions (ES2015)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsFeature.BlockScoping">
+            <summary>let, const and block scoped functions (ES2015)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsFeature.RegexUnicode">
+            <summary>The regular expression unicode flag: /\u{1F600}/u (ES2015)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsFeature.RegexSticky">
+            <summary>The regular expression sticky flag: /a/y (ES2015)</summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.JsFeatureInfo">
+            <summary>
+            Browser support data for a feature
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsFeatureInfo.Es">
+            <summary>The EcmaScript version (year) that introduced the feature (5 is ES5, 2015 is ES2015)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsFeatureInfo.Support">
+            <summary>The first version of a browser that supports the feature, by browser name</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsFeatureInfo.All">
+            <summary>
+            All features in the order they are transformed (newest first)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.JsTarget">
+            <summary>
+            A conversion target: an EcmaScript version and/or a list of browsers (with versions).
+            A feature is transformed if the EcmaScript version doesn't include it or if any of the browsers doesn't support it.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsTarget.EsVersion">
+            <summary>
+            The EcmaScript version (5, 2015, 2016 ...) the output must conform to, int.MaxValue if no limit
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsTarget.Browsers">
+            <summary>
+            The browsers (normalized: chrome, firefox, safari, edge) and the lowest version that must be supported
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsTarget.Text">
+            <summary>
+            The text this target was created from
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.JsTarget.EsLimit">
+            <summary>
+            The explicit EcmaScript version limit (5, 2015, 2016 ...) of the target, int.MaxValue if only browsers are specified.
+            Unlike EsVersion this isn't lowered because a browser lacks a single feature.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.JsTarget.NeedsTransform(SysWeaver.Converter.Js.JsFeature)">
+            <summary>
+            Returns true if the feature should be transformed for this target
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Converter.Js.JsTarget.Features">
+            <summary>
+            All features that should be transformed (in transform order)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Converter.Js.JsTarget.SupportsModules">
+            <summary>
+            True if the target supports ES modules (import / export)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.JsTarget.Parse(System.String)">
+            <summary>
+            Parse a target, ex: "es5", "es2017", "chrome 69", "chrome 69, safari 12", "es2015, firefox 60".
+            Supported browsers: chrome (also: android, webview, chromium), edge, firefox (ff), safari (ios), opera, samsung, node and ie (same as es5).
+            A version can be written as "chrome69", "chrome 69" or "chrome >= 69".
+            "esnext" or an empty string means no transforms.
+            </summary>
+            <param name="text">The target text, items separated by ',' or ';'</param>
+            <returns>The target</returns>
+            <exception cref="T:System.ArgumentException">Thrown if the target is invalid</exception>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Transforms.AsyncPassBase">
+            <summary>
+            Shared code for the async function and async generator transforms
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.AsyncPassBase.LowerForAwait(SysWeaver.Converter.Js.Ast.ForOfStmt,System.String)">
+            <summary>
+            Lower a for await loop to a for loop using _asyncIterator and await (Babel compatible)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.AsyncPassBase.DeclaresAny(SysWeaver.Converter.Js.Ast.BlockStmt,SysWeaver.Converter.Js.Ast.VarDecl)">
+            <summary>
+            True if a block declares (let / const / class / function) any of the names in a declaration
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Transforms.AsyncPassBase.BodyRewriter">
+            <summary>
+            Rewrites the body of an async function / async generator that is moved into a generator function
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.AsyncPassBase.CaptureNewTarget">
+            <summary>
+            Capture new.target in the closest non-arrow function (var _newtarget = new.target), returns null at the top level
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.AsyncPassBase.Wrap(SysWeaver.Converter.Js.Ast.Function,System.String,System.Boolean)">
+            <summary>
+            Convert an async function (or async generator) to a regular function that calls a helper with a generator:
+            function f(a) { return helper(function* (a) { ... }).apply(this, arguments); }
+            Arrow functions: (a) => helper(function* () { ... }).call(this)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Transforms.AsyncGeneratorsPass">
+            <summary>
+            ES2018: async generator functions and for await
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Transforms.AsyncFunctionsPass">
+            <summary>
+            ES2017: async functions and await
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Transforms.BlockScopingPass">
+            <summary>
+            ES2015: let, const and block scoped function declarations.
+            Bindings are renamed where converting them to var would change the meaning, loops with closures that capture
+            per-iteration bindings are converted to a _loop function (like Babel).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Transforms.BlockScopingPass.LoopInfo.Head">
+            <summary>Bindings declared in the loop head (let / const)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Transforms.BlockScopingPass.Wrap">
+            <summary>Loops that must be wrapped in a _loop function</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Transforms.BlockScopingPass.OriginalVars">
+            <summary>Declarations that were var in the source (they are hoisted out of _loop functions)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Transforms.BlockScopingPass.LoopHeads">
+            <summary>Declarations in for-in / for-of heads (can't have an initializer)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Transforms.BlockScopingPass.ConstWrites">
+            <summary>Identifiers that are writes to const bindings</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Transforms.BlockScopingPass.LoopDepth">
+            <summary>Nesting depth of loops in the current function (let without init in loops get = void 0)</summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.BlockScopingPass.HoistBlockFunctions(SysWeaver.Converter.Js.Ast.ProgramNode)">
+            <summary>
+            Convert function declarations in blocks to let (strict) / var (sloppy) declarations at the start of the block
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.BlockScopingPass.RenameConflicts(SysWeaver.Converter.Js.Analysis.ScopeAnalyzer)">
+            <summary>
+            Rename block scoped bindings that would conflict with other bindings / references after being converted to var
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.BlockScopingPass.FindLoops(SysWeaver.Converter.Js.Analysis.ScopeAnalyzer)">
+            <summary>
+            Find loops with per-iteration bindings that are captured by closures
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.BlockScopingPass.WrapLoop(SysWeaver.Converter.Js.Ast.Stmt,System.String,SysWeaver.Converter.Js.Transforms.BlockScopingPass.LoopInfo,SysWeaver.Converter.Js.Ast.Stmt)">
+            <summary>
+            Wrap a loop body in a _loop function
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Transforms.BlockScopingPass.FlowRewriter">
+            <summary>
+            Rewrites the body of a loop that is moved into a function
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Transforms.BlockScopingPass.FlowRewriter.InnerLoops">
+            <summary>Nesting of loops / switches inside the body (unlabeled break / continue target them)</summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.BlockScopingPass.FlowRewriter.ToString">
+            <summary>
+            for (var x ...) heads: the declaration is hoisted
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Transforms.BuiltIns">
+            <summary>
+            Detects built-in objects and methods (ex: Promise, Object.entries, "".padStart) that might be missing in the target,
+            reports them and optionally adds polyfills (ES5 code, guarded, non-enumerable).
+            Instance methods are detected by name (the type of the object is unknown), ex: x.includes(...) matches both Array and String includes.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Transforms.BuiltIns.Info.Key">
+            <summary>For Static: "Object.entries", for Proto: the property name (ex: "includes"), for Global: the global name</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Transforms.BuiltIns.Info.Polyfill">
+            <summary>The polyfill name, null if there is no polyfill</summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.BuiltIns.Ordered(System.Collections.Generic.IEnumerable{System.String})">
+            <summary>
+            Order polyfills (dependencies first)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.BuiltIns.BuildPolyfills(System.Collections.Generic.IEnumerable{System.String})">
+            <summary>
+            Parse the polyfills into statements
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Converter.Js.Transforms.BuiltIns.AllPolyfills">
+            <summary>
+            The names of all polyfills
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.BuiltIns.GetPolyfill(System.String)">
+            <summary>
+            Get the (ES5) source of a polyfill
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Transforms.Checks">
+            <summary>
+            Reports constructs that can't be transformed for the target
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Transforms.ClassesPass">
+            <summary>
+            ES2015: classes (Babel compatible output using _createClass, _inherits, _callSuper)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.ClassesPass.Lower(SysWeaver.Converter.Js.Ast.Class)">
+            <summary>
+            Lower a class to an immediately invoked function
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.ClassesPass.DerivedConstructor(SysWeaver.Converter.Js.Ast.Function,System.String,SysWeaver.Converter.Js.Ast.Stmt)">
+            <summary>
+            A derived class constructor: super() => _this = _callSuper(this, C, [args]), this => _this
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Transforms.ClassesPass.DerivedRewriter">
+            <summary>
+            Rewrites a derived constructor body (and its arrow functions)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.ClassesPass.ReplaceSuper(SysWeaver.Converter.Js.Ast.Function,System.String,System.Int32)">
+            <summary>
+            Replace super.x in a method (and its arrow functions)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Transforms.ClassFeaturesPass">
+            <summary>
+            ES2022: class fields (public / private, instance / static), private methods and accessors, static blocks and private brand checks (#x in obj)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Transforms.ClassFeaturesPass.PrivInfo.Storage">
+            <summary>Field: the WeakMap (instance) or the box (static), Method: the function</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Transforms.ClassFeaturesPass.PrivInfo.Brand">
+            <summary>The brand WeakSet (instance methods / accessors)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Transforms.ClassFeaturesPass.PrivInfo.ClassRef">
+            <summary>The class reference (static elements)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Transforms.ClassFeaturesPass.PrivEnv">
+            <summary>
+            The private names of the classes being transformed (innermost last)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.ClassFeaturesPass.Lookup(System.String)">
+            <summary>
+            Classes that are not transformed (their private names shadow outer transformed names)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.ClassFeaturesPass.PrivateRead(SysWeaver.Converter.Js.Transforms.ClassFeaturesPass.PrivInfo,SysWeaver.Converter.Js.Ast.Expr,SysWeaver.Converter.Js.Ast.Node)">
+            <summary>
+            The value of obj.#name (read only)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.ClassFeaturesPass.PrivateTarget(SysWeaver.Converter.Js.Transforms.ClassFeaturesPass.PrivInfo,SysWeaver.Converter.Js.Ast.Expr,SysWeaver.Converter.Js.Ast.Node)">
+            <summary>
+            A member expression that can be read and written (used for all private member expressions that are not calls)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Transforms.ClassFeaturesPass.Lowered.Before">
+            <summary>Statements before the class (storage declarations, private method functions)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Transforms.ClassFeaturesPass.Lowered.After">
+            <summary>Statements after the class (static initialization)</summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.ClassFeaturesPass.HasYieldOrAwait(SysWeaver.Converter.Js.Ast.Node)">
+            <summary>
+            True if a node contains yield or await outside of functions (can't be moved into an arrow function)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.ClassFeaturesPass.PushShadow(SysWeaver.Converter.Js.Ast.Class)">
+            <summary>
+            Push the private names of a class that isn't lowered (they shadow names of outer classes)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.ClassFeaturesPass.StaticBlocksToFields(SysWeaver.Converter.Js.Ast.Class)">
+            <summary>
+            Convert static blocks to private static fields: static #_ = (() => { ... })();
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.ClassFeaturesPass.Lower(SysWeaver.Converter.Js.Ast.Class,System.String,System.Boolean)">
+            <summary>
+            Lower a class (the class node is modified)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.ClassFeaturesPass.FieldInit(SysWeaver.Converter.Js.Ast.FieldDef,SysWeaver.Converter.Js.Ast.Expr,SysWeaver.Converter.Js.Ast.Expr,SysWeaver.Converter.Js.Ast.Expr,System.Collections.Generic.Dictionary{System.String,SysWeaver.Converter.Js.Transforms.ClassFeaturesPass.PrivInfo},System.Boolean)">
+            <summary>
+            The initialization of a field
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.ClassFeaturesPass.AddInstanceInits(SysWeaver.Converter.Js.Ast.Class,SysWeaver.Converter.Js.Ast.MethodDef@,System.Collections.Generic.List{SysWeaver.Converter.Js.Ast.Expr})">
+            <summary>
+            Add the instance initializers to the constructor (creates one if needed)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Transforms.ClassFeaturesPass.SuperCallRewriter">
+            <summary>
+            Adds the initializers after super() calls (not in nested non-arrow functions)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.ClassFeaturesPass.ReplaceThis(SysWeaver.Converter.Js.Ast.Node,System.String)">
+            <summary>
+            Replace this with the class reference (static initializers), not inside non-arrow functions or nested class bodies
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.ClassFeaturesPass.ReplaceSuper(SysWeaver.Converter.Js.Ast.Node,System.String,System.Int32,System.String)">
+            <summary>
+            Replace super property accesses with helper calls (for code moved out of the class)
+            </summary>
+            <param name="n">The node (function or expression)</param>
+            <param name="classRef">The class</param>
+            <param name="flags">1 = instance (home object is the prototype), 0 = static</param>
+            <param name="thisRef">The this value, null to use this</param>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Transforms.Es2015">
+            <summary>
+            Shared ES2015 utilities
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.Es2015.IsValidName(System.String)">
+            <summary>
+            True if the name can be used as a function name (valid identifier, not reserved)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.Es2015.References(SysWeaver.Converter.Js.Ast.Function,System.String)">
+            <summary>
+            True if a function references an identifier with the name (so the function can't be named that without shadowing)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.Es2015.TryName(SysWeaver.Converter.Js.Ast.Function,SysWeaver.Converter.Js.Ast.Expr,System.Boolean)">
+            <summary>
+            Name a function (function expression for a method / property) if safe: the name is valid and not referenced inside the function
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Transforms.Es2015.LexicalRewriter">
+            <summary>
+            Walks a function body (not nested non-arrow functions) and replaces nodes
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.Es2015.Prepend(SysWeaver.Converter.Js.Ast.Function,System.Collections.Generic.IEnumerable{SysWeaver.Converter.Js.Ast.Stmt})">
+            <summary>
+            Insert statements at the start of a function body (after directives)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Transforms.TemplateLiteralsPass">
+            <summary>
+            ES2015: template literals
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Transforms.NewTargetPass">
+            <summary>
+            ES2015: new.target
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Transforms.NewTargetPass.Stack">
+            <summary>The closest non-arrow function and how new.target is computed in it</summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Transforms.ArrowFunctionsPass">
+            <summary>
+            ES2015: arrow functions
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Transforms.ObjectLiteralsPass">
+            <summary>
+            ES2015: shorthand properties, methods, computed property names and super in object literals
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Transforms.SpreadPass">
+            <summary>
+            ES2015: spread in calls, new and array literals
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.SpreadPass.ToArray(System.Collections.Generic.List{SysWeaver.Converter.Js.Ast.Expr})">
+            <summary>
+            Build an array expression from a list with spread elements: [a].concat(_toConsumableArray(b), [c])
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Transforms.ForOfPass">
+            <summary>
+            ES2015: for ... of
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Transforms.GeneratorsPass">
+            <summary>
+            ES2015: generator functions, lowered to a state machine (regenerator style) using the _regeneratorRuntime helper.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Transforms.GeneratorsPass.PendingMarks">
+            <summary>The mark statements to add at the start of the current statement list</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Transforms.GeneratorsPass.OuterRef">
+            <summary>The expression that references the outer (marked) function of a generator</summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Transforms.GeneratorLowering">
+            <summary>
+            Lowers one generator function (in place)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Transforms.GeneratorLowering.Vars">
+            <summary>Hoisted variable names (declared in the outer function)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Transforms.GeneratorLowering.Functions">
+            <summary>Hoisted function declarations</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Transforms.GeneratorLowering.Temps">
+            <summary>Temporaries that are only assigned once (safe to read after a yield)</summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Transforms.GeneratorLowering.DeclRewriter">
+            <summary>
+            Replaces declarations with assignments (the names are hoisted), moves function declarations to the outer function
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Transforms.GeneratorLowering.LeapFinder">
+            <summary>
+            Finds "leaps": yield, return and break / continue that jump out of the statement
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.GeneratorLowering.Emitter.Unmarked">
+            <summary>
+            A location at the current position that doesn't start a new case
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.GeneratorLowering.Emitter.LeapTo(SysWeaver.Converter.Js.Transforms.GeneratorLowering.Loc,SysWeaver.Converter.Js.Transforms.GeneratorLowering.Entry,System.String)">
+            <summary>
+            Jump to a break / continue location, through finally blocks if needed
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.GeneratorLowering.Emitter.Save(SysWeaver.Converter.Js.Ast.Expr)">
+            <summary>
+            Store a value in a temporary (if it isn't safe to read later)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.GeneratorLowering.Emitter.Kids(System.Collections.Generic.List{SysWeaver.Converter.Js.Ast.Expr})">
+            <summary>
+            Explode a list of child expressions (in evaluation order), values that are followed by a yield are stored in temporaries
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.GeneratorLowering.Emitter.X(SysWeaver.Converter.Js.Ast.Expr,System.Boolean)">
+            <summary>
+            Explode an expression: statements are emitted for the parts that contain yield, the returned expression is the value
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Transforms.ObjectRestSpreadPass">
+            <summary>
+            ES2018: object spread ({ ...a }) and object rest in destructuring (const { a, ...rest } = obj)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.ObjectRestSpreadPass.HasObjectRest(SysWeaver.Converter.Js.Ast.Expr)">
+            <summary>
+            True if a pattern contains an object pattern with a rest element
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.ObjectRestSpreadPass.LowerDecl(SysWeaver.Converter.Js.Ast.VarDecl)">
+            <summary>
+            Lower a declaration with object rest patterns into declarations without them
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.ObjectRestSpreadPass.Expand(SysWeaver.Converter.Js.Ast.Expr,SysWeaver.Converter.Js.Ast.Expr,System.Collections.Generic.List{System.ValueTuple{SysWeaver.Converter.Js.Ast.Expr,SysWeaver.Converter.Js.Ast.Expr}},System.Boolean)">
+            <summary>
+            Expand a pattern with object rest into a list of (target, value) pairs without object rest at the top level
+            </summary>
+            <param name="pattern">The pattern</param>
+            <param name="value">The value (evaluated once)</param>
+            <param name="outp">The output</param>
+            <param name="isDecl">True if the output is used in a declaration (temps are declared in the declaration), false for assignments (temps are vars)</param>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Transforms.OptionalChainingPass">
+            <summary>
+            ES2020: optional chaining (a?.b, a?.[b], a?.(b)) and nullish coalescing (a ?? b)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Transforms.OptionalChain">
+            <summary>
+            Lowers an optional chain to conditional expressions
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.OptionalChain.Flatten(SysWeaver.Converter.Js.Ast.Expr,System.Collections.Generic.List{SysWeaver.Converter.Js.Ast.Expr},SysWeaver.Converter.Js.Ast.Expr@)">
+            <summary>
+            True if an expression (inside a ChainExpr) contains optional links
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.OptionalChain.Lower(SysWeaver.Converter.Js.Ast.Expr,System.Func{System.String,SysWeaver.Converter.Js.Ast.Identifier},System.Boolean,System.Boolean)">
+            <summary>
+            Lower an optional chain (the expression inside a ChainExpr)
+            </summary>
+            <param name="e">The chain expression (MemberExpr / CallExpr with optional links)</param>
+            <param name="temp">Creates a temporary variable</param>
+            <param name="loose">Use == null instead of === null || === void 0</param>
+            <param name="isDelete">The chain is the operand of delete (the result is true if short circuited)</param>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Transforms.ParametersPass">
+            <summary>
+            ES2015: default and rest parameters (destructuring parameters are moved into the body)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Transforms.DestructuringPass">
+            <summary>
+            ES2015: destructuring (declarations, assignments, parameters, catch and for-in / for-of heads)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.DestructuringPass.LowerDecl(SysWeaver.Converter.Js.Ast.VarDecl)">
+            <summary>
+            Lower a declaration with patterns
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.DestructuringPass.AssignExpand(SysWeaver.Converter.Js.Ast.AssignExpr,System.Boolean)">
+            <summary>
+            Expand an assignment with a pattern target to a list of simple assignments
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.DestructuringPass.Assigns(SysWeaver.Converter.Js.Ast.Expr,System.String)">
+            <summary>
+            True if a pattern assigns to a name
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.DestructuringPass.Expand(SysWeaver.Converter.Js.Ast.Expr,SysWeaver.Converter.Js.Ast.Expr,System.Collections.Generic.List{System.ValueTuple{SysWeaver.Converter.Js.Ast.Expr,SysWeaver.Converter.Js.Ast.Expr}},System.Func{System.String,SysWeaver.Converter.Js.Ast.Identifier},System.Boolean)">
+            <summary>
+            Expand a pattern into (target, value) pairs, targets are identifiers or member expressions
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Transforms.Pass">
+            <summary>
+            Base class of transform passes.
+            Tracks the current var scope (program, function, static block) so that temporary variables can be declared.
+            Override Transform (call Children(n) to process the children).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.Pass.Run(SysWeaver.Converter.Js.Ast.ProgramNode)">
+            <summary>
+            Run the pass on a program
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Transforms.Pass.TempScope.Owner">
+            <summary>ProgramNode, Function or StaticBlock</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Transforms.Pass.TempScope.Prologue">
+            <summary>Statements to add at the start of the scope (after the temps)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Transforms.Pass.Scope">
+            <summary>The current var scope</summary>
+        </member>
+        <member name="P:SysWeaver.Converter.Js.Transforms.Pass.CurrentFunction">
+            <summary>
+            The current function (null at the top level), arrow functions included
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.Pass.Transform(SysWeaver.Converter.Js.Ast.Node)">
+            <summary>
+            Transform a node, the default implementation processes the children
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.Pass.Children(SysWeaver.Converter.Js.Ast.Node)">
+            <summary>
+            Process the children of a node (function parameters are processed in the parent scope)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.Pass.DirectiveCount(System.Collections.Generic.List{SysWeaver.Converter.Js.Ast.Stmt})">
+            <summary>
+            The number of directives at the start of a statement list
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.Pass.Temp(System.String)">
+            <summary>
+            Create a temporary variable in the current var scope
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.Pass.GlobalTemp(System.String)">
+            <summary>
+            Create a temporary variable in the top level (program) scope
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.Pass.Memo(SysWeaver.Converter.Js.Ast.Expr,SysWeaver.Converter.Js.Ast.Expr@,SysWeaver.Converter.Js.Ast.Expr@,System.String)">
+            <summary>
+            Memoize an expression that will be used twice.
+            If the expression is simple (no side effects) both are copies of it, else first is "(_t = e)" and second is "_t".
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.Pass.MemoLhs(SysWeaver.Converter.Js.Ast.Expr,SysWeaver.Converter.Js.Ast.Expr@,SysWeaver.Converter.Js.Ast.Expr@)">
+            <summary>
+            Memoize an assignment target that is used twice (read and write), the first use contains the memoization assignments.
+            Ex: a[b()] becomes (_a = a)[_b = b()] and _a[_b].
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.Pass.Warn(SysWeaver.Converter.Js.Ast.Node,System.String)">
+            <summary>
+            Add a warning
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.Pass.Error(SysWeaver.Converter.Js.Ast.Node,System.String)">
+            <summary>
+            Add an error
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.Pass.Helper(System.String)">
+            <summary>
+            Get a helper identifier
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Transforms.B">
+            <summary>
+            Syntax tree builders and utilities
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.B.KeyExpr(SysWeaver.Converter.Js.Ast.Expr,System.Boolean)">
+            <summary>
+            A key expression for a property name (string literal for identifiers)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.B.Seq(SysWeaver.Converter.Js.Ast.Expr[])">
+            <summary>
+            Build a sequence expression (flattens nested sequences, returns the single expression if only one)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.B.IsNullish(SysWeaver.Converter.Js.Ast.Expr,SysWeaver.Converter.Js.Ast.Expr)">
+            <summary>
+            "x === null || x === void 0" (with two copies of x)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.B.IsNotNullish(SysWeaver.Converter.Js.Ast.Expr,SysWeaver.Converter.Js.Ast.Expr)">
+            <summary>
+            "x !== null &amp;&amp; x !== void 0" (with two copies of x)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.B.IsSimple(SysWeaver.Converter.Js.Ast.Expr)">
+            <summary>
+            True if an expression is free of side effects and cheap, so it can be evaluated twice
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.B.IsConstant(SysWeaver.Converter.Js.Ast.Expr)">
+            <summary>
+            True if an expression is a literal (or undefined) and has no side effects
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.B.NameHint(SysWeaver.Converter.Js.Ast.Expr)">
+            <summary>
+            A name hint for a temporary that holds the value of an expression
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.B.Block(System.Collections.Generic.List{SysWeaver.Converter.Js.Ast.Stmt})">
+            <summary>
+            Wrap statements in a block if there are more than one
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.B.Iife(System.Collections.Generic.List{SysWeaver.Converter.Js.Ast.Stmt},System.Boolean)">
+            <summary>
+            An immediately invoked function: (function () { body }).call(this) or (function () { body })()
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.B.StatementsOf(SysWeaver.Converter.Js.Ast.Stmt)">
+            <summary>
+            Returns the statements in a statement (block contents or the single statement)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Transforms.Pipeline">
+            <summary>
+            Creates the transform passes in the order they must run (newest features first, so that each pass lowers the output of the previous passes)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Transforms.RegexPass">
+            <summary>
+            Regular expressions: the u flag (ES2015, lowered like regexpu), the y flag (ES2015, converted to a RegExp constructor call),
+            the s flag (ES2018) and named capture groups (ES2018).
+            Also reports regular expression features that can't be converted (lookbehind, unicode property escapes, the d and v flags, modifiers).
+            Handles regular expression literals and RegExp("pattern", "flags") / new RegExp(...) calls with string literal arguments.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.RegexPass.Process(System.String,System.String,SysWeaver.Converter.Js.Ast.Expr,System.Boolean)">
+            <summary>
+            Process a regular expression, returns the replacement node or null if unchanged
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Transforms.RegexInfo">
+            <summary>
+            Information about a regular expression pattern (from a light weight scan)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Transforms.RegexInfo.Names">
+            <summary>Named groups (name to group number), in order</summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Transforms.RegexRewriter">
+            <summary>
+            Regular expression pattern scanning and rewriting
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.RegexRewriter.Scan(System.String,System.Boolean)">
+            <summary>
+            Scan a pattern
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.RegexRewriter.SkipClass(System.String,System.Int32,System.Boolean,SysWeaver.Converter.Js.Transforms.RegexInfo)">
+            <summary>
+            Skip a character class, returns the index of the closing ]
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.RegexRewriter.LowerSimple(System.String,System.Boolean,System.Boolean,System.Boolean,SysWeaver.Converter.Js.Transforms.RegexInfo)">
+            <summary>
+            Rewrite a pattern without lowering the u flag: dotAll and / or named groups
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.RegexRewriter.RewriteReplacement(System.String,SysWeaver.Converter.Js.Transforms.RegexInfo)">
+            <summary>
+            Replace $&lt;name&gt; in a replacement string with $N
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Transforms.UnicodeRegexLowering">
+            <summary>
+            Lowers a pattern with the u flag to a pattern without it (like regexpu)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Transforms.UnicodeRegexLowering.CaseWarning">
+            <summary>True if case insensitive matching of non-ASCII characters might behave differently</summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.UnicodeRegexLowering.Lower(System.String,System.Boolean,System.Boolean,System.Boolean,SysWeaver.Converter.Js.Transforms.RegexInfo,System.Boolean@)">
+            <summary>
+            Lower a pattern, throws FormatException if the pattern can't be parsed
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Transforms.UnicodeRegexLowering.CpSet">
+            <summary>A set of code points as sorted, non overlapping ranges</summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.UnicodeRegexLowering.AtomChar(System.Int32)">
+            <summary>A BMP code point as an atom (outside a class)</summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.UnicodeRegexLowering.ClassChar(System.Int32)">
+            <summary>A BMP code point inside a class</summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.UnicodeRegexLowering.EmitSet(System.Text.StringBuilder,SysWeaver.Converter.Js.Transforms.UnicodeRegexLowering.CpSet)">
+            <summary>
+            Emit a set, returns true if the output is a single atom (can be quantified)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.UnicodeRegexLowering.ReadUnicodeEscape">
+            <summary>
+            Parse \u escapes (after the u), combines surrogate pairs
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.UnicodeRegexLowering.CharEscape(System.Boolean,SysWeaver.Converter.Js.Transforms.UnicodeRegexLowering.CpSet@)">
+            <summary>
+            Parse an escape (after the backslash) that is a character or a set (\d etc), returns -1 for a set
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.UnicodeRegexLowering.EmitChar(System.Text.StringBuilder,System.Int32)">
+            <summary>
+            Emit a code point, returns true if it was written as more than one atom (surrogate pair)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.UnicodeRegexLowering.Group(System.Text.StringBuilder)">
+            <summary>
+            Parse a group, returns true if it can be quantified
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Transforms.LogicalAssignmentPass">
+            <summary>
+            ES2021: logical assignment (a ||= b, a &amp;&amp;= b, a ??= b)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Transforms.ExponentiationPass">
+            <summary>
+            ES2016: the exponentiation operator (a ** b, a **= b)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Transforms.OptionalCatchBindingPass">
+            <summary>
+            ES2019: optional catch binding (catch { })
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Transforms.TransformContext">
+            <summary>
+            State shared by all transform passes of one conversion
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Transforms.TransformContext.Names">
+            <summary>All identifier names that are in use (source + generated)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Transforms.TransformContext.HelperNames">
+            <summary>Helper default name (without _) to the name used in the output</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Transforms.TransformContext.UsedHelpers">
+            <summary>The helpers that are used, in the order they were first requested</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Transforms.TransformContext.Transformed">
+            <summary>The features that were actually transformed (something changed)</summary>
+        </member>
+        <member name="F:SysWeaver.Converter.Js.Transforms.TransformContext.Polyfills">
+            <summary>The polyfills to add (by name)</summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.TransformContext.Needs(SysWeaver.Converter.Js.JsFeature)">
+            <summary>
+            True if the feature should be transformed
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.TransformContext.Did(SysWeaver.Converter.Js.JsFeature)">
+            <summary>
+            Mark a feature as transformed
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.TransformContext.IsUsed(System.String)">
+            <summary>
+            True if a name is in use
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.TransformContext.Reserve(System.String)">
+            <summary>
+            Reserve a name (so that it isn't generated)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.TransformContext.UniqueName(System.String)">
+            <summary>
+            Generate a unique identifier name (not used anywhere in the file), ex: "_ref", "_ref2"
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Converter.Js.Transforms.TransformContext.Helper(System.String)">
+            <summary>
+            Get an identifier for a helper function (the helper is added to the output)
+            </summary>
+            <param name="name">The helper name, ex: "defineProperty"</param>
+        </member>
+    </members>
+</doc>

@@ -61,6 +61,33 @@
             compressing the original file with a warning
             </summary>
         </member>
+        <member name="F:SysWeaver.CompressParams.JsTarget">
+            <summary>
+            If set, .js / .mjs files (and html files, see JsInHtml) are converted to this JavaScript target with SysWeaver.Converter.Js (after minimizing, before compressing),
+            ex: "es5", "es2017", "chrome 69", "chrome 69, safari 12".
+            The output is minified without comments and polyfills are added for missing built-ins.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CompressParams.JsInclude">
+            <summary>
+            JavaScript features to always transform (even if JsTarget supports them), separated by ',' (see JsConvert / SysWeaver.Converter.Js for the feature names).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CompressParams.JsExclude">
+            <summary>
+            JavaScript features to never transform (even if JsTarget doesn't support them), separated by ','.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CompressParams.JsInHtml">
+            <summary>
+            If true (and JsTarget is set), the inline scripts and event handlers of .html / .htm / .xhtml files are converted too.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CompressParams.JsCacheKey">
+            <summary>
+            The cache key of the JavaScript conversion step
+            </summary>
+        </member>
         <member name="T:SysWeaver.CompressProgram">
             <summary>
             Shader optimization (.glsl / .frag).
@@ -126,6 +153,12 @@
         <member name="F:SysWeaver.CompressProgram.ToolMinimizeShaders">
             <summary>
             https://github.com/laurentlb/shader-minifier
+            </summary>
+        </member>
+        <member name="M:SysWeaver.CompressProgram.GetJsConverted(System.String,System.String,System.String,SysWeaver.CompressParams)">
+            <summary>
+            Convert a JavaScript (or html) file to the JsTarget (cached), returns null or a negative size if the conversion failed.
+            Diagnostics (warnings and errors) are printed in the canonical "origin : warning code : text" form (MSBuild).
             </summary>
         </member>
         <member name="F:SysWeaver.CompressProgram.MouseCommentRx">

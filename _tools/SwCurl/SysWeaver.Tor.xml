@@ -4,5 +4,25 @@
         <name>SysWeaver.Tor</name>
     </assembly>
     <members>
+        <member name="T:SysWeaver.Tor.TorHttpClient">
+            <summary>
+            An <see cref="T:System.Net.Http.HttpClient"/> that makes its requests through the Tor network (Tor is downloaded and started when the first client is created)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Tor.TorHttpClient.Proxy">
+            <summary>
+            The (socks5) proxy that goes through Tor
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Tor.TorHttpClient.Create(System.Boolean)">
+            <summary>
+            Create a client that uses Tor
+            </summary>
+            <param name="autoDecompress">True to automatically decompress responses</param>
+            <returns>The client (dispose it when done)</returns>
+        </member>
+        <member name="M:SysWeaver.Tor.TorHttpClient.Dispose(System.Boolean)">
+            <inheritdoc />
+        </member>
     </members>
 </doc>

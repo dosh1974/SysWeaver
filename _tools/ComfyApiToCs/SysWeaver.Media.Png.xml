@@ -1,0 +1,659 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>SysWeaver.Media.Png</name>
+    </assembly>
+    <members>
+        <member name="T:SysWeaver.Media.Png.PngChunk">
+            <summary>
+            Represents a png chunk
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.Png.PngChunk.#ctor(System.UInt32,System.UInt32,System.Byte[],System.UInt32)">
+            <summary>
+            Create a chunk with all values given (nothing is validated)
+            </summary>
+            <param name="length">The length of the chunk data in bytes</param>
+            <param name="id">The chunk type, see <see cref="T:SysWeaver.Media.Png.PngChunkIds"/></param>
+            <param name="data">The chunk data</param>
+            <param name="crc32">The crc of the chunk type and data</param>
+        </member>
+        <member name="M:SysWeaver.Media.Png.PngChunk.#ctor(System.UInt32,System.UInt32,System.Byte[])">
+            <summary>
+            Create a chunk, the <see cref="F:SysWeaver.Media.Png.PngChunk.Crc32"/> is computed from the id and the whole data array (if length is greater than 0)
+            </summary>
+            <param name="length">The length of the chunk data in bytes</param>
+            <param name="id">The chunk type, see <see cref="T:SysWeaver.Media.Png.PngChunkIds"/></param>
+            <param name="data">The chunk data</param>
+        </member>
+        <member name="M:SysWeaver.Media.Png.PngChunk.ToString">
+            <summary>
+            The chunk type as text and hex, and the length. Ex: "IHDR [0x49484452] @ 13"
+            </summary>
+            <returns>A description of the chunk</returns>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngChunk.Length">
+            <summary>
+            The length of the chunk data in bytes (as read or given, see <see cref="M:SysWeaver.Media.Png.PngTools.WriteChunk(System.IO.Stream,SysWeaver.Media.Png.PngChunk)"/>)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngChunk.Id">
+            <summary>
+            The chunk type (4 ASCII chars, big endian), see <see cref="T:SysWeaver.Media.Png.PngChunkIds"/>
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngChunk.Data">
+            <summary>
+            The chunk data
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngChunk.Crc32">
+            <summary>
+            The crc of the chunk (as read from the file, given or computed), not validated
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Media.Png.PngChunkIds">
+            <summary>
+            Well known png chunk types as 32-bit integers (as used by <see cref="F:SysWeaver.Media.Png.PngChunk.Id"/>)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngChunkIds.IHDR">
+            <summary>
+            IHDR chunk as a 32-bit integer
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngChunkIds.PLTE">
+            <summary>
+            PLTE chunk as a 32-bit integer
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngChunkIds.IDAT">
+            <summary>
+            IDAT chunk as a 32-bit integer
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngChunkIds.IEND">
+            <summary>
+            IEND chunk as a 32-bit integer
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngChunkIds.tRNS">
+            <summary>
+            tRNS chunk as a 32-bit integer
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngChunkIds.tEXt">
+            <summary>
+            tEXt chunk (Latin-1 text) as a 32-bit integer
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngChunkIds.zTXt">
+            <summary>
+            zTXt chunk (compressed Latin-1 text) as a 32-bit integer
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngChunkIds.iTXt">
+            <summary>
+            iTXt chunk (international UTF-8 text) as a 32-bit integer
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.Png.PngChunkIds.Get(System.String)">
+            <summary>
+            Convert a chunk name as a string to the 32 bit value (the first char in the most significant byte, as stored in a png file).
+            Only the first 4 chars are used, and only the low 8 bits of each char.
+            </summary>
+            <param name="s">The chunk name, ex: "IHDR"</param>
+            <returns>The chunk name as a 32-bit integer</returns>
+            <exception cref="T:System.IndexOutOfRangeException">The string is shorter than 4 chars</exception>
+            <exception cref="T:System.NullReferenceException">The string is null</exception>
+        </member>
+        <member name="T:SysWeaver.Media.Png.PngImageInfo">
+            <summary>
+            The information in a png IHDR chunk (see <see cref="M:SysWeaver.Media.Png.PngTools.DecodeIHDR(SysWeaver.Media.Png.PngChunk)"/>), and some values computed from it
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngImageInfo.Width">
+            <summary>
+            Width of the image in pixels
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngImageInfo.Height">
+            <summary>
+            Height of the image in pixels
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngImageInfo.BitDepth">
+            <summary>
+            Bits per sample (channel) or palette index: 1, 2, 4, 8 or 16
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngImageInfo.ColorType">
+            <summary>
+            The png color type, see <see cref="F:SysWeaver.Media.Png.PngTools.Grayscale"/>, <see cref="F:SysWeaver.Media.Png.PngTools.Rgb"/>, <see cref="F:SysWeaver.Media.Png.PngTools.Indexed"/>, <see cref="F:SysWeaver.Media.Png.PngTools.GrayscaleAlpha"/> and <see cref="F:SysWeaver.Media.Png.PngTools.Rgba"/>
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngImageInfo.CompressionMethod">
+            <summary>
+            The compression method (0 is the only one defined)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngImageInfo.FilterMethod">
+            <summary>
+            The filter method (0 is the only one defined)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngImageInfo.InterlaceMethodMethod">
+            <summary>
+            The interlace method: 0 for none, 1 for Adam7
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngImageInfo.ChannelCount">
+            <summary>
+            Computed: the number of channels (samples per pixel) of the color type, not written by <see cref="M:SysWeaver.Media.Png.PngImageInfo.ToChunk"/>
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngImageInfo.Pitch">
+            <summary>
+            Computed: the number of bytes in a scanline (excluding the filter byte), not written by <see cref="M:SysWeaver.Media.Png.PngImageInfo.ToChunk"/>
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngImageInfo.PixelBytes">
+            <summary>
+            Computed: the number of bytes per pixel, rounded up (at least 1), not written by <see cref="M:SysWeaver.Media.Png.PngImageInfo.ToChunk"/>
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngImageInfo.SizeIDAT">
+            <summary>
+            The size of the IHDR chunk data in bytes (the name is a misnomer)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.Png.PngImageInfo.ToChunk">
+            <summary>
+            Create an IHDR chunk from the values (Width and Height are written big endian, as required by png)
+            </summary>
+            <returns>The IHDR chunk</returns>
+        </member>
+        <member name="T:SysWeaver.Media.Png.PngKeywords">
+            <summary>
+            The predefined png text keywords, used by <see cref="M:SysWeaver.Media.Png.PngTools.CreateInformationChunk(SysWeaver.Media.Png.PngKeywords,System.String)"/>.
+            The keyword written is the name with a space before each inner capital letter, ex: CreationTime is written as "Creation Time"
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngKeywords.Title">
+            <summary>
+            Short (one line) title or caption for image
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngKeywords.Author">
+            <summary>
+            Name of image's creator
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngKeywords.Description">
+            <summary>
+            Description of image (possibly long)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngKeywords.Copyright">
+            <summary>
+            Copyright notice
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngKeywords.CreationTime">
+            <summary>
+            Time of original image creation
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngKeywords.Software">
+            <summary>
+            Software used to create the image
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngKeywords.Disclaimer">
+            <summary>
+            Legal disclaimer
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngKeywords.Warning">
+            <summary>
+            Warning of nature of content
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngKeywords.Source">
+            <summary>
+            Device used to create the image
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngKeywords.Comment">
+            <summary>
+            Miscellaneous comment
+            XML:com.adobe.xmp   
+            Extensible Metadata Platform (XMP) information, formatted as required by the XMP specification [XMP]. 
+            The use of iTXt, with Compression Flag set to 0, and both Language Tag and Translated Keyword set to the null string, are recommended for XMP compliance.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngKeywords.Collection">
+            <summary>
+            Name of a collection to which the image belongs. An image may belong to one or more collections, each named by a separate text chunk.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Media.Png.PngTools">
+            <summary>
+            Portable PNG loader, decodes to 32-bit argb Byte array only.
+            Do NOT support interlaced images - otherwise covers all files in the PngSuite: http://www.schaik.com/pngsuite/
+            It's verified against the WIC png codec and agrees with a MSE of zero for all files except 16-bit per pixel gray scale images (the PNG WIC doesn't seem to support 16 bpp grayscale images at all).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.Png.PngTools.IsPng(System.ReadOnlySpan{System.Byte})">
+            <summary>
+            Determine if some data seems to be a png file (by inspecting the first 8 bytes)
+            </summary>
+            <param name="data">The data to test</param>
+            <returns>True if the data header matches a png header (false if the data is shorter than 8 bytes)</returns>
+        </member>
+        <member name="M:SysWeaver.Media.Png.PngTools.ReadChunks(System.String)">
+            <summary>
+            Read all png chunks from a png file (up to and including the IEND chunk)
+            </summary>
+            <param name="pngFile">The name of the png file</param>
+            <returns>The png chunks in the file</returns>
+            <exception cref="T:System.IO.IOException">The header isn't a png header, a chunk is longer than the remaining data, or the file is truncated (<see cref="T:System.IO.EndOfStreamException"/>)</exception>
+        </member>
+        <member name="M:SysWeaver.Media.Png.PngTools.ReadChunks(System.IO.Stream)">
+            <summary>
+            Read all png chunks from a png file stream (up to and including the IEND chunk).
+            The chunks are read lazily (while enumerating), the chunk CRC's are read but not validated.
+            The stream must be seekable (Position and Length are used), and it's disposed when the enumeration ends.
+            </summary>
+            <param name="pngFile">The png file stream</param>
+            <returns>The png chunks in the file</returns>
+            <exception cref="T:System.IO.IOException">The header isn't a png header, a chunk is longer than the remaining data, or the stream is truncated (<see cref="T:System.IO.EndOfStreamException"/>)</exception>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngTools.CrcSlice8Table">
+            <summary>
+            The tables for a "slicing by 8" crc computation (8 bytes per step): 8 tables of 256 entries, the first one is <see cref="F:SysWeaver.Media.Png.PngTools.CrcTable"/>,
+            table k is the crc of a byte followed by k zero bytes
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.Png.PngTools.CalcCrc32(System.Byte[],System.Int64,System.Int64,System.UInt32)">
+            <summary>
+            Helper method to compute the Crc32 checksum (the standard CRC-32 used by png and zip, polynomial 0xEDB88320).
+            </summary>
+            <param name="data">Data</param>
+            <param name="offset">Offset in the data</param>
+            <param name="len">Length to compute for (clamped to the end of the data)</param>
+            <param name="crc">Initial crc, pass the result of a previous call to continue a computation (0 to start a new one)</param>
+            <returns>The Crc32 check sum for the specified range</returns>
+        </member>
+        <member name="M:SysWeaver.Media.Png.PngTools.CalcCrc32(System.ReadOnlySpan{System.Byte},System.UInt32)">
+            <summary>
+            Helper method to compute the Crc32 checksum (the standard CRC-32 used by png and zip, polynomial 0xEDB88320).
+            </summary>
+            <param name="data">Data</param>
+            <param name="crc">Initial crc, pass the result of a previous call to continue a computation (0 to start a new one)</param>
+            <returns>The crc32 for the data</returns>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngTools.VectorizedCrcMinLength">
+            <summary>
+            Shorter data is computed faster with slicing by 8 (System.IO.Hashing only vectorizes 64 bytes or more, and has a higher fixed cost)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.Png.PngTools.CalcChunkCrc32(System.UInt32,System.ReadOnlySpan{System.Byte})">
+            <summary>
+            Compute the crc of a chunk: the chunk type (big endian) followed by the data
+            </summary>
+            <param name="id">The chunk type</param>
+            <param name="data">The chunk data</param>
+            <returns>The crc32</returns>
+        </member>
+        <member name="M:SysWeaver.Media.Png.PngTools.SlicingBy8(System.ReadOnlySpan{System.Byte},System.UInt32)">
+            <summary>
+            Compute the Crc32 checksum using "slicing by 8"
+            </summary>
+            <param name="data">Data</param>
+            <param name="crc">Initial crc, the result of a previous computation (0 to start a new one)</param>
+            <returns>The crc32 for the data</returns>
+        </member>
+        <member name="M:SysWeaver.Media.Png.PngTools.CalcAdler32(System.ReadOnlySpan{System.Byte},System.Int32,System.Int32,System.UInt32)">
+            <summary>
+            Helper method to compute the Adler32 checksum.
+            </summary>
+            <param name="data">Data</param>
+            <param name="offset">Offset in the data</param>
+            <param name="len">Length to compute for (clamped to the end of the data)</param>
+            <param name="crc">Initial checksum, pass the result of a previous call to continue a computation (1 to start a new one)</param>
+            <returns>The Adler32 checksum for the specified range</returns>
+        </member>
+        <member name="M:SysWeaver.Media.Png.PngTools.CalcAdler32(System.ReadOnlySpan{System.Byte},System.UInt32)">
+            <summary>
+            Helper method to compute the Adler32 checksum.
+            </summary>
+            <param name="data">Data</param>
+            <param name="crc">Initial checksum, pass the result of a previous call to continue a computation (1 to start a new one)</param>
+            <returns>The Adler32 checksum for the data</returns>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngTools.AdlerMaxBlock">
+            <summary>
+            The largest number of bytes that can be added before the sums must be reduced (modulo 65521) without overflowing 32 bits,
+            also when the initial sums are not reduced (up to 65535): 65535 + 5552 * 65535 + 255 * 5552 * 5553 / 2 = 4294773495 (the zlib NMAX)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.Png.PngTools.Adler32Blocks(System.ReadOnlySpan{System.Byte},System.UInt32)">
+            <summary>
+            Compute the Adler32 checksum of some (non-empty) data, the modulo is only computed once per block of <see cref="F:SysWeaver.Media.Png.PngTools.AdlerMaxBlock"/> bytes,
+            the result is the same as reducing the sums after every byte (the reduced sums are returned)
+            </summary>
+            <param name="data">Data, must not be empty</param>
+            <param name="crc">Initial checksum</param>
+            <returns>The Adler32 checksum</returns>
+        </member>
+        <member name="M:SysWeaver.Media.Png.PngTools.MakePng(System.Collections.Generic.IEnumerable{SysWeaver.Media.Png.PngChunk},System.ReadOnlySpan{System.Byte},System.Byte,System.Byte)">
+            <summary>
+            Helper method to make a new png file (as bytes) from some png chunks, but replacing the image data with manipulated IDAT data (good when loading / manipulating a file)
+            </summary>
+            <param name="chunks">Chunks (from an existing file)</param>
+            <param name="newData">The new IDAT data, this is just the raw scanline data (including the filter byte)</param>
+            <param name="a">The first zlib header byte (CMF, 120 = deflate with a 32K window)</param>
+            <param name="b">The second zlib header byte (FLG, a * 256 + b must be a multiple of 31)</param>
+            <returns>Png file data</returns>
+        </member>
+        <member name="M:SysWeaver.Media.Png.PngTools.MakePng(System.Collections.Generic.IEnumerable{SysWeaver.Media.Png.PngChunk},SysWeaver.Media.Png.PngChunk)">
+            <summary>
+            Helper method to make a new png file (as bytes) from some png chunks, but replacing the image data with manipulated IDAT chunk (good when loading / manipulating a file)
+            </summary>
+            <param name="chunks">Chunks (from an existing file)</param>
+            <param name="newDataChunk">The new IDAT chunk</param>
+            <returns>Png file data</returns>
+        </member>
+        <member name="M:SysWeaver.Media.Png.PngTools.MakePng(System.Collections.Generic.IEnumerable{SysWeaver.Media.Png.PngChunk})">
+            <summary>
+            Helper method to make a new png file (as bytes) from some png chunks
+            </summary>
+            <param name="chunks">Chunks (from an existing file)</param>
+            <returns>Png file data</returns>
+        </member>
+        <member name="M:SysWeaver.Media.Png.PngTools.WriteChunks(System.String,System.Collections.Generic.IEnumerable{SysWeaver.Media.Png.PngChunk},System.ReadOnlySpan{System.Byte},System.Byte,System.Byte,System.IO.Compression.CompressionLevel)">
+            <summary>
+            Helper method to write a new png file from some png chunks, but replacing the image data with manipulated IDAT data (good when loading / manipulating a file)
+            </summary>
+            <param name="pngFile">The name of the destination file</param>
+            <param name="chunks">Chunks (from an existing file)</param>
+            <param name="newData">The new IDAT data, this is just the raw scanline data (including the filter byte)</param>
+            <param name="a">The first zlib header byte (CMF, 120 = deflate with a 32K window)</param>
+            <param name="b">The second zlib header byte (FLG, a * 256 + b must be a multiple of 31)</param>
+            <param name="comp">The deflate compression level (no compression by default)</param>
+        </member>
+        <member name="M:SysWeaver.Media.Png.PngTools.WriteChunks(System.IO.Stream,System.Collections.Generic.IEnumerable{SysWeaver.Media.Png.PngChunk},System.ReadOnlySpan{System.Byte},System.Byte,System.Byte,System.IO.Compression.CompressionLevel)">
+            <summary>
+            Helper method to write a new png file from some png chunks, but replacing the image data with manipulated IDAT data (good when loading / manipulating a file)
+            </summary>
+            <param name="pngFile">The destination stream</param>
+            <param name="chunks">Chunks (from an existing file)</param>
+            <param name="newData">The new IDAT data, this is just the raw scanline data (including the filter byte)</param>
+            <param name="a">The first zlib header byte (CMF, 120 = deflate with a 32K window)</param>
+            <param name="b">The second zlib header byte (FLG, a * 256 + b must be a multiple of 31)</param>
+            <param name="comp">The deflate compression level (no compression by default)</param>
+        </member>
+        <member name="M:SysWeaver.Media.Png.PngTools.WriteChunks(System.String,System.Collections.Generic.IEnumerable{SysWeaver.Media.Png.PngChunk},SysWeaver.Media.Png.PngChunk)">
+            <summary>
+            Helper method to write a new png file from some png chunks, but replacing the image data with manipulated IDAT chunk (good when loading / manipulating a file)
+            </summary>
+            <param name="pngFile">The name of the destination file</param>
+            <param name="chunks">Chunks (from an existing file)</param>
+            <param name="newDataChunk">The new IDAT chunk</param>
+        </member>
+        <member name="M:SysWeaver.Media.Png.PngTools.WriteChunks(System.IO.Stream,System.Collections.Generic.IEnumerable{SysWeaver.Media.Png.PngChunk},SysWeaver.Media.Png.PngChunk)">
+            <summary>
+            Helper method to write a new png file from some png chunks, but replacing the image data with manipulated IDAT chunk (good when loading / manipulating a file).
+            The first IDAT chunk is replaced by <paramref name="newDataChunk"/>, any other IDAT chunks are removed.
+            </summary>
+            <param name="pngFile">The destination stream</param>
+            <param name="chunks">Chunks (from an existing file)</param>
+            <param name="newDataChunk">The new IDAT chunk, null removes all IDAT chunks</param>
+        </member>
+        <member name="M:SysWeaver.Media.Png.PngTools.WriteChunks(System.String,System.Collections.Generic.IEnumerable{SysWeaver.Media.Png.PngChunk})">
+            <summary>
+            Helper method to write a new png file (as bytes) from some png chunks
+            </summary>
+            <param name="pngFile">The name of the destination file</param>
+            <param name="chunks">Chunks (from an existing file)</param>
+        </member>
+        <member name="M:SysWeaver.Media.Png.PngTools.WriteChunks(System.IO.Stream,System.Collections.Generic.IEnumerable{SysWeaver.Media.Png.PngChunk})">
+            <summary>
+            Helper method to write a new png file from some png chunks: the png header followed by the chunks (written using <see cref="M:SysWeaver.Media.Png.PngTools.WriteChunk(System.IO.Stream,SysWeaver.Media.Png.PngChunk)"/>)
+            </summary>
+            <param name="pngFile">The destination stream</param>
+            <param name="chunks">Chunks (from an existing file)</param>
+        </member>
+        <member name="M:SysWeaver.Media.Png.PngTools.WriteChunk(System.IO.Stream,SysWeaver.Media.Png.PngChunk)">
+            <summary>
+            Write a single png chunk (length, id, data and crc, big endian).
+            The length written is the length of <see cref="F:SysWeaver.Media.Png.PngChunk.Data"/> and the crc is computed from the id and data
+            (<see cref="F:SysWeaver.Media.Png.PngChunk.Length"/> and <see cref="F:SysWeaver.Media.Png.PngChunk.Crc32"/> are ignored).
+            </summary>
+            <param name="pngFile">The destination stream</param>
+            <param name="c">Chunk</param>
+        </member>
+        <member name="M:SysWeaver.Media.Png.PngTools.DecodeArgb(System.Int32@,System.Int32@,System.IO.Stream,System.Boolean)">
+            <summary>
+            Read (decode) a png image into 32-bit pixels (8 bits per channel).
+            All color types and bit depths of the png specification are supported, 16-bit channels are truncated to 8 bits.
+            Transparency (tRNS) is applied, other ancillary chunks are skipped. Chunk CRC's are not validated.
+            Interlaced images are not supported.
+            The stream must be seekable (Position and Length are used).
+            </summary>
+            <param name="width">The png image width</param>
+            <param name="height">The png image height</param>
+            <param name="pngFile">The stream containg the png image</param>
+            <param name="leaveOpen">True to leave the stream open</param>
+            <returns>The bytes in Blue, Green, Red, Alpha order, rows top to bottom with no padding (stride = width * 4).
+            Null if an IEND chunk is found before any IDAT chunk</returns>
+            <exception cref="T:System.IO.IOException">Invalid or unsupported png data (including an indexed image without a palette or with an index outside the palette), or the stream is truncated (<see cref="T:System.IO.EndOfStreamException"/>)</exception>
+            <exception cref="T:System.NotSupportedException">The image is interlaced</exception>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngTools.Red">
+            <summary>
+            The byte offset of the red channel in a pixel returned by <see cref="M:SysWeaver.Media.Png.PngTools.DecodeArgb(System.Int32@,System.Int32@,System.IO.Stream,System.Boolean)"/>
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngTools.Green">
+            <summary>
+            The byte offset of the green channel in a pixel returned by <see cref="M:SysWeaver.Media.Png.PngTools.DecodeArgb(System.Int32@,System.Int32@,System.IO.Stream,System.Boolean)"/>
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngTools.Blue">
+            <summary>
+            The byte offset of the blue channel in a pixel returned by <see cref="M:SysWeaver.Media.Png.PngTools.DecodeArgb(System.Int32@,System.Int32@,System.IO.Stream,System.Boolean)"/>
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngTools.Alpha">
+            <summary>
+            The byte offset of the alpha channel in a pixel returned by <see cref="M:SysWeaver.Media.Png.PngTools.DecodeArgb(System.Int32@,System.Int32@,System.IO.Stream,System.Boolean)"/>
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngTools.Grayscale">
+            <summary>
+            Png color type: grayscale
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngTools.Rgb">
+            <summary>
+            Png color type: RGB (truecolor)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngTools.Indexed">
+            <summary>
+            Png color type: indexed (palette)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngTools.GrayscaleAlpha">
+            <summary>
+            Png color type: grayscale with alpha
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngTools.Rgba">
+            <summary>
+            Png color type: RGBA (truecolor with alpha)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.Png.PngTools.DecodeIHDR(SysWeaver.Media.Png.PngChunk)">
+            <summary>
+            Decodes the information in the IHDR chunk (and computes ChannelCount, PixelBytes and Pitch from it).
+            The values are not validated, except the color type.
+            </summary>
+            <param name="ihdr">The IHDR chunk</param>
+            <returns>The decoded image information</returns>
+            <exception cref="T:System.IO.IOException">The color type is unknown (greater than 6), or the chunk data is shorter than 13 bytes (<see cref="T:System.IO.EndOfStreamException"/>)</exception>
+        </member>
+        <member name="M:SysWeaver.Media.Png.PngTools.GetFilters(System.IO.Stream,SysWeaver.Media.Png.PngImageInfo,System.Boolean)">
+            <summary>
+            Get the filters used (one per row)
+            </summary>
+            <param name="s">Stream containing the raw (uncompressed) image data, including the filter byte, starting at the current position</param>
+            <param name="info">Information about the image (only Height and Pitch are used)</param>
+            <param name="leaveOpen">True to leave the input stream open</param>
+            <returns>An array with the filter used, one per row</returns>
+            <exception cref="T:System.IO.EndOfStreamException">The stream ends before the filter byte of the last row</exception>
+        </member>
+        <member name="M:SysWeaver.Media.Png.PngTools.GetFilters(System.Byte[],SysWeaver.Media.Png.PngImageInfo,System.Int32)">
+            <summary>
+            Get the filters used (one per row)
+            </summary>
+            <param name="imageData">Data containing raw (uncompressed) image data including the filter byte</param>
+            <param name="info">Information about the image (only Height and Pitch are used)</param>
+            <param name="offset">Offset into the data for the first filter byte</param>
+            <returns>An array with the filter used, one per row</returns>
+            <exception cref="T:System.IndexOutOfRangeException">The data is too short</exception>
+        </member>
+        <member name="M:SysWeaver.Media.Png.PngTools.UnfilterData(System.IO.Stream,SysWeaver.Media.Png.PngImageInfo,System.Boolean,System.Boolean)">
+            <summary>
+            Takes some filtered raw data (inlcuding the filter byte) and decodes it (make it all use filter 0, none).
+            The stream is read to the end, it must contain exactly <see cref="F:SysWeaver.Media.Png.PngImageInfo.Height"/> scanlines.
+            </summary>
+            <param name="stream">The raw image data (first) byte is the filter of the first row</param>
+            <param name="info">Information about the image (only Height, Pitch and PixelBytes are used)</param>
+            <param name="leaveOpen">True to leave the input stream open</param>
+            <param name="keepFilterByte">If true, the original filter byte is kept, else the filter byte of every row is set to 0 (none)</param>
+            <returns>Unfiltered raw image data (including the filter byte)</returns>
+            <exception cref="T:System.IO.IOException">The data contains more or less scanlines than the image height, an unknown filter type, or a truncated scanline (<see cref="T:System.IO.EndOfStreamException"/>)</exception>
+        </member>
+        <member name="M:SysWeaver.Media.Png.PngTools.DecodeAndUnfilterData(System.IO.Stream,SysWeaver.Media.Png.PngImageInfo,System.Boolean,System.Boolean)">
+            <summary>
+            Decompresses the data found in the IDAT header and unfilters it (see <see cref="M:SysWeaver.Media.Png.PngTools.UnfilterData(System.IO.Stream,SysWeaver.Media.Png.PngImageInfo,System.Boolean,System.Boolean)"/>)
+            </summary>
+            <param name="stream">The data found in an IDAT header without the header (2 bytes) and footer (4 bytes), i.e. the raw deflate data</param>
+            <param name="info">Information about the image</param>
+            <param name="leaveOpen">True to leave the input stream open</param>
+            <param name="keepFilterByte">If true, the original filter byte is kept, else the filter byte of every row is set to 0 (none)</param>
+            <returns>Unfiltered raw image data (including the filter byte)</returns>
+            <exception cref="T:System.IO.IOException">See <see cref="M:SysWeaver.Media.Png.PngTools.UnfilterData(System.IO.Stream,SysWeaver.Media.Png.PngImageInfo,System.Boolean,System.Boolean)"/></exception>
+            <exception cref="T:System.IO.InvalidDataException">The deflate data is invalid</exception>
+        </member>
+        <member name="M:SysWeaver.Media.Png.PngTools.DecodeAndUnfilterIDAT(System.IO.Stream,SysWeaver.Media.Png.PngImageInfo,System.Boolean)">
+            <summary>
+            Decompresses the data found in the IDAT header and unfilters it (see <see cref="M:SysWeaver.Media.Png.PngTools.UnfilterData(System.IO.Stream,SysWeaver.Media.Png.PngImageInfo,System.Boolean,System.Boolean)"/>).
+            The filter byte of every row is set to 0 (none).
+            </summary>
+            <param name="idat">The data found in an IDAT header (the zlib stream: a 2 byte header, the deflate data and a 4 byte footer), from the current position to the end of the stream.
+            The stream must be seekable (Length is used). The zlib header and footer are skipped, not validated</param>
+            <param name="info">Information about the image</param>
+            <param name="leaveOpen">True to leave the input stream open</param>
+            <returns>Unfiltered raw image data (including the filter byte)</returns>
+            <exception cref="T:System.IO.InvalidDataException">The data is shorter than 6 bytes, or the deflate data is invalid</exception>
+            <exception cref="T:System.IO.IOException">See <see cref="M:SysWeaver.Media.Png.PngTools.UnfilterData(System.IO.Stream,SysWeaver.Media.Png.PngImageInfo,System.Boolean,System.Boolean)"/></exception>
+        </member>
+        <member name="M:SysWeaver.Media.Png.PngTools.SetCreationTimeInfo(System.DateTime)">
+            <summary>
+            Create an information chunk with the original creation time (a "Creation Time" text chunk, ex: "2024-05-06T07:08:09.123Z")
+            </summary>
+            <param name="creationTime">The creation time, converted to UTC (a time of kind Unspecified is treated as local time)</param>
+            <returns>A chunk that can be added</returns>
+        </member>
+        <member name="M:SysWeaver.Media.Png.PngTools.CreateInformationChunk(SysWeaver.Media.Png.PngKeywords,System.String)">
+            <summary>
+            Create an information chunk that can be added to a png
+            </summary>
+            <param name="info">The well known information to set</param>
+            <param name="value">The value to set it to</param>
+            <returns>A chunk that can be added</returns>
+        </member>
+        <member name="M:SysWeaver.Media.Png.PngTools.GetCompressed(System.ReadOnlySpan{System.Byte})">
+            <summary>
+            Compress some data into a zlib stream (a 2 byte header 0x78 0x9c, the deflate data (smallest size) and the big endian Adler32 checksum of the data)
+            </summary>
+            <param name="data">The data to compress</param>
+            <returns>The zlib stream (a new buffer, owned by the caller)</returns>
+        </member>
+        <member name="M:SysWeaver.Media.Png.PngTools.CreateInformationChunk(System.String,System.String)">
+            <summary>
+            Create an information chunk that can be added to a png.
+            An ASCII value is stored in a tEXt chunk, or a zTXt chunk if compression saves more than 2 bytes.
+            A value with non-ASCII chars is stored as UTF-8 in an iTXt chunk (empty language tag and translated keyword), compressed if that saves more than 6 bytes.
+            </summary>
+            <param name="keyword">The keyword to set, use well known tags via the PngInfos overload unless you know what you're doing</param>
+            <param name="value">The value to set it to</param>
+            <returns>A chunk that can be added</returns>
+            <exception cref="T:System.ArgumentException">The keyword contains non-ASCII chars, or isn't [1, 79] chars long</exception>
+            <exception cref="T:System.ArgumentNullException">The keyword or value is null</exception>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngTools.FilterIndexNone">
+            <summary>
+            Png filter type: None
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngTools.FilterIndexSub">
+            <summary>
+            Png filter type: Sub
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngTools.FilterIndexUp">
+            <summary>
+            Png filter type: Up
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngTools.FilterIndexAverage">
+            <summary>
+            Png filter type: Average
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.Png.PngTools.FilterIndexPaeth">
+            <summary>
+            Png filter type: Paeth
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.Png.PngTools.ApplyFilterToScanline(System.Byte[],System.Int32,System.Int32,System.Byte[],System.Int32,System.Int32,System.Int32,System.Int32,System.Int32)">
+            <summary>
+            Applying a png filter to a scanline
+            </summary>
+            <param name="dest">The destination buffer</param>
+            <param name="destOffset">The offset to write the filtered scanline, starting with the filter byte</param>
+            <param name="bytesPerRow">Number of bytes per row, including the filter byte</param>
+            <param name="src">The source bytes</param>
+            <param name="srcOffset">The offset to read the first source byte of the unfiltered scanline (do not point to any filter byte, none is required)</param>
+            <param name="srcPitch">The number of bytes from one source scanline to the next</param>
+            <param name="y">The current row, used to determine special cases for the first scanline</param>
+            <param name="filter">[0, 4] The filter to apply: 0:None, 1:Sub, 2:Up, 3:Average, 4:Paeth</param>
+            <param name="bytesPerPixel">Bytes per pixel (rounded up to at least 1 byte for bit depths less than 8)</param>
+            <exception cref="T:System.ArgumentOutOfRangeException">The filter is not [0, 4] (the filter byte is written to dest before the exception is thrown)</exception>
+        </member>
+        <member name="M:SysWeaver.Media.Png.PngTools.InRange(System.Byte[],System.Int64,System.Int32)">
+            <summary>
+            Check if a non-empty range is inside an array
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.Png.PngTools.SubtractBytes(System.Span{System.Byte},System.ReadOnlySpan{System.Byte},System.ReadOnlySpan{System.Byte})">
+            <summary>
+            d[i] = (Byte)(a[i] - b[i]) (wrapping), vectorized
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.Png.PngTools.Paeth(System.Byte,System.Byte,System.Byte)">
+            <summary>
+            The png Paeth predictor
+            </summary>
+            <param name="a">The byte to the left</param>
+            <param name="b">The byte above</param>
+            <param name="c">The byte above and to the left</param>
+            <returns>The one of a, b or c that is closest to a + b - c (ties are resolved in the order a, b, c)</returns>
+        </member>
+    </members>
+</doc>

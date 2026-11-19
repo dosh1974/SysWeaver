@@ -321,7 +321,8 @@ function homeUptime(list, start) {
 /**
  * The application version tile from the template attributes main.Home[data-appversion] (EnvInfo.AppVersion: AppInfoParams.AppVersion
  * from the *.Services.json, else the version of the executable) and [data-appbuild] (EnvInfo.AppBuildTime: UTC "yyyy-MM-dd HH:mm:ss").
- * The tile shows the version without a "+<source revision>" suffix, the build date below; the tool tip has the full version and the build time.
+ * The tile shows the version without a "+<source revision>" suffix and the build date (local time) below; the tool tip has the full version
+ * and the build time. The build line is left out when the build time is unknown (single file apps).
  * Nothing is added when the page was not templated (ex: ?raw).
  * @param {HTMLElement} main The page (main.Home).
  * @param {HTMLElement} list The KPI row.
@@ -335,28 +336,17 @@ function homeVersion(main, list) {
     let tip = _T("Application version {0}", v, "Tool tip of the application version on the home page.{0} is replaced with the full version text");
     const k = homeKpi({ Icon: "layers", Label: _TF("Version", "Label of the application version tile on the home page") });
     k.Value.textContent = short;
+    const built = homeParseUtc(ds.appbuild);
+    if (built) {
+        k.Sub.textContent = _T("Built {0}", Sw.Format.DateTime(built, { dateStyle: "medium" }), "Sub line of the application version tile on the home page.{0} is replaced with the date the application was built (the last write time of its main file)");
+        tip += "\n" + _T("Built {0}", Sw.Format.DateTime(built, { dateStyle: "full", timeStyle: "medium" }), "Tool tip line of the application version tile on the home page.{0} is replaced with the date and time the application was built (the last write time of its main file)");
+    }
     k.E.title = tip;
     list.append(k.E);
 }
 
 /**
- * The build time tile from the template attribute main.Home[data-appbuild] (EnvInfo.AppBuildTime: the last write time of the main module
- * file, UTC "yyyy-MM-dd HH:mm:ss"), shown in local time. Nothing is added when unknown (single file apps, ?raw).
- * @param {HTMLElement} main The page (main.Home).
- * @param {HTMLElement} list The KPI row.
- */
-function homeBuildTime(main, list) {
-    const d = homeParseUtc(main.dataset.appbuild);
-    if (!d)
-        return;
-    const k = homeKpi({ Icon: "calendar", Label: _TF("Build time", "Label of the tile with the time the application was built (the last write time of its main file) on the home page") });
-    k.Value.textContent = Sw.Format.DateTime(d, { dateStyle: "medium", timeStyle: "short" });
-    k.E.title = _T("The main file of the application was written {0}", Sw.Format.DateTime(d, { dateStyle: "full", timeStyle: "medium" }), "Tool tip of the build time tile on the home page.{0} is replaced with the date and time");
-    list.append(k.E);
-}
-
-/**
- * May the signed in user see the service facts of the home page (uptime, version, build time)? Ops, Admin, Dev and Debug only.
+ * May the signed in user see the service facts of the home page (uptime, version and build date)? Ops, Admin, Dev and Debug only.
  * @returns {Promise<boolean>}
  */
 async function homeMaySeeFacts() {
@@ -998,7 +988,7 @@ async function homeMain() {
         const sTile = plan.S ? homeServicesTile(true) : null;
         if (sTile)
             kpis.append(sTile.E);
-        //  Uptime, version and build time: Ops, Admin, Dev and Debug only (their place is kept, filled when the user is known)
+        //  Uptime and version (with the build date): Ops, Admin, Dev and Debug only (their place is kept, filled when the user is known)
         const factsAt = document.createComment("facts");
         kpis.append(factsAt);
         homeMaySeeFacts().then(ok => {
@@ -1011,7 +1001,6 @@ async function homeMain() {
             if (start)
                 homeUptime(tmp, start);
             homeVersion(main, tmp);
-            homeBuildTime(main, tmp);
             factsAt.replaceWith(...tmp.childNodes);
         });
         const pTile = plan.P ? homeProblemsTile(true) : null;
