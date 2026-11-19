@@ -172,8 +172,8 @@ namespace SysWeaver.EmailReader
             var folder = Folder == null ? client.Inbox : await client.GetFolderAsync(Folder, cancel).ConfigureAwait(false);
             await folder.OpenAsync(FolderAccess.ReadWrite, cancel).ConfigureAwait(false);
             var moveTo = AfterRead == ImapAfterRead.Move ? await client.GetFolderAsync(MoveTo, cancel).ConfigureAwait(false) : null;
-            var idle = UseIdle && client.Capabilities.HasFlag(ImapCapabilities.Idle);
-            var uidPlus = client.Capabilities.HasFlag(ImapCapabilities.UidPlus);
+            var idle = UseIdle && client.Capabilities.Contains(ImapCapability.Idle);
+            var uidPlus = client.Capabilities.Contains(ImapCapability.UidPlus);
             Msg?.AddMessage(MessageLevels.Debug, $"{LogPrefix}Reading {folder.FullName.ToQuoted()} at {Server.ToQuoted()}{(idle ? " using IDLE" : " every " + (PollInterval / 1000) + " seconds")}");
             if (folder.UidValidity != UidValidity)
             {

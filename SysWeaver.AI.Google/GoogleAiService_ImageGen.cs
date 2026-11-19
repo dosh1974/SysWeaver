@@ -80,7 +80,7 @@ namespace SysWeaver.AI
         {
             using var _ = await (ImageGenLock?.Lock() ?? AsyncLock.NoLock).ConfigureAwait(false);
             using var __ = PerfMon.Track(nameof(ImageGenerate));
-            var model = String.IsNullOrEmpty(p.Model) ? DefaultImageModel : p.Model;
+            var model = await GetImageModel(p.Model, false).ConfigureAwait(false);
             ReadOnlyMemory<Byte> png;
             if (IsImagen(model))
             {
@@ -103,7 +103,7 @@ namespace SysWeaver.AI
                 var img = GetImage(r);
                 png = ToPng(img.Data, img.MimeType);
             }
-            return AiImageTools.AddPngInfo(png, String.Concat(model, ' ', p.Aspect, p.Large ? " Large" : ""), p.Prompt, p.Title, request);
+            return AiImageTools.AddPngInfo(png, String.Concat(model, ' ', p.Aspect, p.Large ? " Large" : ""), p.Prompt, p.Title, request?.Session?.Auth?.NickName);
         }
 
         /// <summary>
@@ -119,7 +119,7 @@ namespace SysWeaver.AI
         {
             using var _ = await (ImageGenLock?.Lock() ?? AsyncLock.NoLock).ConfigureAwait(false);
             using var __ = PerfMon.Track(nameof(ImageEdit));
-            var model = String.IsNullOrEmpty(p.Model) ? DefaultImageModel : p.Model;
+            var model = await GetImageModel(p.Model, true).ConfigureAwait(false);
             if (IsImagen(model))
                 throw new Exception("Image editing is not supported by the model " + model.ToQuoted() + ", use a gemini image model");
             var file = await AiImageTools.LoadImage(p.SourceImage, request).ConfigureAwait(false);
@@ -135,7 +135,7 @@ namespace SysWeaver.AI
             var r = await Client.Models.GenerateContentAsync(model, content, CreateImageConfig(model, p)).ConfigureAwait(false);
             var img = GetImage(r);
             var png = ToPng(img.Data, img.MimeType);
-            return AiImageTools.AddPngInfo(png, String.Concat(model, ' ', p.Aspect, p.Large ? " Large" : ""), p.Prompt, p.Title, request);
+            return AiImageTools.AddPngInfo(png, String.Concat(model, ' ', p.Aspect, p.Large ? " Large" : ""), p.Prompt, p.Title, request?.Session?.Auth?.NickName);
         }
 
         #region Image tools

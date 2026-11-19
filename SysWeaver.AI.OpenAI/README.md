@@ -24,6 +24,7 @@ The OpenAI provider for [SysWeaver.AI](../SysWeaver.AI/README.md), built on the 
 - Tool calling of annotated service methods, plus the default tools of [SysWeaver.AI](../SysWeaver.AI/README.md)
 - Native stateless completion (`Complete`) with caller defined tools and image / file parts, using the API selected by `DefaultChatApi` (Responses: `instructions` + input items, function call / output items, nothing stored; Chat Completions: system, user, assistant tool calls and tool messages), with streaming (`onText`), tool choice, max tokens, temperature and reasoning (when the model supports them)
 - Image generation and editing tools (available to users with the `Debug` or `Content` role)
+- `IAiImageGenService` and `IAiImageEditService`: the size closest to the requested size that the model supports (any size on gpt-image-2 and later), transparency on models that support it (a transparency capable model is selected if needed), the negative prompt is appended to the prompt
 - Token encoding/decoding with TiktokenSharp (token files are cached on disc)
 - Model tables (`Debug/AI/Models` menu) and debug APIs (chat, image generation and editing, token encode/decode)
 - Configurable endpoint, organization and project, network timeout and concurrency limits for chats and image generation

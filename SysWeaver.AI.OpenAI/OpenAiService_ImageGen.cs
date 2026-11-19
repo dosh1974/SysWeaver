@@ -115,7 +115,7 @@ namespace SysWeaver.AI
         {
             using var _ = await (ImageGenLock?.Lock() ?? AsyncLock.NoLock).ConfigureAwait(false);
             using var __ = PerfMon.Track(nameof(ImageGenerate));
-            var model = p.Model ?? DefaultImageModel;
+            var model = await GetImageModel(p.Model, false, p.Background == AiImageBackgrounds.Transparent).ConfigureAwait(false);
             var client = CreateImageClient(model);
             ImageGenerationOptions options = null;
             if (ModelGenOptions.TryGetValue(model, out var fn))
@@ -133,7 +133,7 @@ namespace SysWeaver.AI
             GeneratedImage image;
             image = await client.GenerateImageAsync(p.Prompt, options).ConfigureAwait(false);
 
-            return AiImageTools.AddPngInfo(image.ImageBytes.ToMemory(), String.Concat(model, ' ', options.Quality, ' ', options.Style), p.Prompt, p.Title, request);
+            return AiImageTools.AddPngInfo(image.ImageBytes.ToMemory(), String.Concat(model, ' ', options.Quality, ' ', options.Style), p.Prompt, p.Title, request?.Session?.Auth?.NickName);
         }
 
 
@@ -151,7 +151,7 @@ namespace SysWeaver.AI
         {
             using var _ = await (ImageGenLock?.Lock() ?? AsyncLock.NoLock).ConfigureAwait(false);
             using var __ = PerfMon.Track(nameof(ImageEdit));
-            var model = p.Model ?? DefaultImageModel;
+            var model = await GetImageModel(p.Model, true, p.Background == AiImageBackgrounds.Transparent).ConfigureAwait(false);
             var client = CreateImageClient(model);
             ImageEditOptions options = null;
             if (ModelEditOptions.TryGetValue(model, out var fn))
@@ -170,7 +170,7 @@ namespace SysWeaver.AI
                 image = await client.GenerateImageEditAsync(ms, file.Name, p.Prompt, options).ConfigureAwait(false);
             }
 
-            return AiImageTools.AddPngInfo(image.ImageBytes.ToMemory(), String.Concat(model, ' ', options.Quality), p.Prompt, p.Title, request);
+            return AiImageTools.AddPngInfo(image.ImageBytes.ToMemory(), String.Concat(model, ' ', options.Quality), p.Prompt, p.Title, request?.Session?.Auth?.NickName);
         }
 
         static readonly GeneratedImageBackground[] Backgrounds = 

@@ -154,7 +154,7 @@ namespace SysWeaver.EmailReader
             await client.AuthenticateAsync(User, Password, cancel).ConfigureAwait(false);
             var count = client.Count;
             IList<String> uids = null;
-            if ((count > 0) && client.Capabilities.HasFlag(Pop3Capabilities.UIDL))
+            if ((count > 0) && client.Capabilities.Contains(Pop3Capability.UIDL))
                 uids = await client.GetMessageUidsAsync(cancel).ConfigureAwait(false);
             //  Forget emails that are no longer on the server
             if ((uids != null) || (count <= 0))

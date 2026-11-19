@@ -328,7 +328,7 @@ namespace SysWeaver.AI
                 var source = String.Concat("ComfyUI ", r.Workflow, " seed ", r.Seed.ToString());
                 if (p.Steps > 0)
                     source = String.Concat(source, " steps ", p.Steps.ToString());
-                r.Data = AiImageTools.AddPngInfo(r.Data, source, p.Prompt, null, request).ToArray();
+                r.Data = AiImageTools.AddPngInfo(r.Data, source, p.Prompt, null, request?.Session?.Auth?.NickName).ToArray();
             }
             return r;
         }

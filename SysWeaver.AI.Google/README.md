@@ -24,6 +24,7 @@ The Google provider for [SysWeaver.AI](../SysWeaver.AI/README.md), built on the 
 - Tool calling of annotated service methods, plus the default tools of [SysWeaver.AI](../SysWeaver.AI/README.md); thought signatures are preserved in the conversation history
 - Native stateless completion (`Complete`) with caller defined tools and image / file parts: system instruction, user / model contents, function calls and function responses (matched by id or name), tool config (auto / none / any), streaming (`onText`), max tokens, temperature and thinking; tool result images are multimodal function responses on Gemini 3+ (parts after the function responses on older models); thought signatures are returned in `AiCompletionToolCall.Signature`
 - Image generation and editing tools using Gemini image models, and image generation using Imagen models (available to users with the `Debug` or `Content` role)
+- `IAiImageGenService` and `IAiImageEditService`: the closest supported aspect ratio and resolution (1K, 2K or 4K where supported), the negative prompt is appended to the prompt, transparency isn't supported
 - Model tables (`Debug/AI/Models` menu) and debug APIs (chat, token counting, image generation and editing)
 - Gemini Developer API or Vertex AI (`VertexAI`, `Project`, `Location`), configurable endpoint, API version, network timeout and concurrency limits for chats and image generation
 

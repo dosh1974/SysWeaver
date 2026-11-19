@@ -65,7 +65,37 @@ namespace SysWeaver.AI
                 foreach (var f in taskFolders)
                     if (!String.IsNullOrWhiteSpace(f))
                         AddWorkflows(f);
+            //  Image defaults (IAiImageGenService and IAiImageEditService)
+            DefaultImageWidth = p.DefaultImageWidth > 0 ? p.DefaultImageWidth : 1280;
+            DefaultImageHeight = p.DefaultImageHeight > 0 ? p.DefaultImageHeight : 720;
+            InitDefaultWorkflow(ComfyTaskTypes.TextToImage, p.DefaultTextToImage);
+            InitDefaultWorkflow(ComfyTaskTypes.ImagesToImage, p.DefaultImagesToImage);
         }
+
+        /// <summary>
+        /// Set a configured default workflow, if it's not available (yet), the first workflow (in alphabetical order) is used until it is (see GetDefaultWorkflow)
+        /// </summary>
+        void InitDefaultWorkflow(ComfyTaskTypes type, String name)
+        {
+            if (String.IsNullOrWhiteSpace(name))
+                return;
+            name = name.Trim();
+            Volatile.Write(ref TaskDefaults[(int)type], name);
+            var wf = GetTaskWorkflow(name);
+            if ((wf != null) && (wf.Type == type))
+                return;
+            Msg?.AddMessage(MessageLevels.Warning, $"{MsgPrefix}The default {type} workflow {name.ToQuoted()} isn't available, using {(GetDefaultWorkflow(type)?.ToQuoted() ?? "none")} instead");
+        }
+
+        /// <summary>
+        /// The width in pixels of an image created using IAiImageGenService.TextToImage or IAiImageEditService.ImageToImage when no width is specified
+        /// </summary>
+        public readonly int DefaultImageWidth;
+
+        /// <summary>
+        /// The height in pixels of an image created using IAiImageGenService.TextToImage or IAiImageEditService.ImageToImage when no height is specified
+        /// </summary>
+        public readonly int DefaultImageHeight;
 
         readonly bool AnnotateSubgraphInputs;
         readonly bool FetchUiWorkflows;

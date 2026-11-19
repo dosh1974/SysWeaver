@@ -46,6 +46,7 @@ namespace SysWeaver.AI
         {
             DefaultChatModel = "gpt-4.1";
             DefaultImageModel = "dall-e-3";
+            DefaultImageEditModel = "gpt-image-2";
         }
 
         #region API setup

@@ -61,6 +61,28 @@ namespace SysWeaver.AI
         /// </summary>
         public String[] TaskWorkflowFolders;
 
+        /// <summary>
+        /// The name of the default text to image workflow (used when no workflow / model is specified).
+        /// If null, empty or not available (anymore), the first text to image workflow in alphabetical order is used.
+        /// </summary>
+        public String DefaultTextToImage;
+
+        /// <summary>
+        /// The name of the default images to image (image edit) workflow (used when no workflow / model is specified).
+        /// If null, empty or not available (anymore), the first images to image workflow in alphabetical order is used.
+        /// </summary>
+        public String DefaultImagesToImage;
+
+        /// <summary>
+        /// The default width in pixels of an image created using IAiImageGenService.TextToImage or IAiImageEditService.ImageToImage (used when no width is specified).
+        /// </summary>
+        public int DefaultImageWidth = 1280;
+
+        /// <summary>
+        /// The default height in pixels of an image created using IAiImageGenService.TextToImage or IAiImageEditService.ImageToImage (used when no height is specified).
+        /// </summary>
+        public int DefaultImageHeight = 720;
+
         #endregion// Workflows
 
         #region Subgraphs

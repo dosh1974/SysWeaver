@@ -2675,6 +2675,106 @@
     }
 
     /**
+     * The control values chosen per effect (the controls panel of the viewer), in localStorage["SysWeaver.Media.EffectControls"]:
+     * JSON { "<effect address>": { V: { "<channel 0..3>": value 0..1 }, T: last change (ms) } }, the most recently changed MaxEntries
+     * effects. An effect is known by its address (no fragment); one without a lasting address (a blob: / data: url, a local file) isn't
+     * remembered. Writes are delayed a moment (a slider drag changes the value many times a second).
+     */
+    const EffectControls = {
+        /** @type {string} Storage key. */
+        Key: "SysWeaver.Media.EffectControls",
+        /** @type {number} The most effects remembered (the oldest changes are dropped). */
+        MaxEntries: 200,
+        /** @type {?object} The map (read once). */
+        Map: null,
+        /** @type {number} The delayed write. */
+        Timer: 0,
+
+        /**
+         * @param {?object} p A player of an effect.
+         * @returns {?string} The address of its effect, null when it has no lasting one.
+         */
+        IdOf(p) {
+            const u = p && typeof p.Url === "string" ? p.Url : "";
+            if (!u)
+                return null;
+            try {
+                const x = new URL(u, document.baseURI);
+                if (x.protocol !== "http:" && x.protocol !== "https:")
+                    return null;
+                x.hash = "";
+                return x.href;
+            }
+            catch {
+                return null;
+            }
+        },
+
+        /** @returns {object} The map. */
+        All() {
+            const t = EffectControls;
+            if (!t.Map) {
+                let m = null;
+                try {
+                    m = JSON.parse(Sw.Storage.Get(t.Key) || "null");
+                }
+                catch {
+                    m = null;
+                }
+                t.Map = m && typeof m === "object" && !Array.isArray(m) ? m : {};
+            }
+            return t.Map;
+        },
+
+        /**
+         * @param {?object} p A player of an effect.
+         * @returns {?Object<string, number>} The remembered values by channel ("0".."3"), null if none.
+         */
+        Get(p) {
+            const id = EffectControls.IdOf(p);
+            const e = id ? EffectControls.All()[id] : null;
+            return e && e.V && typeof e.V === "object" ? e.V : null;
+        },
+
+        /**
+         * Remember the values of an effect.
+         * @param {?object} p A player of an effect.
+         * @param {Object<string, number>} values The values by channel.
+         */
+        Set(p, values) {
+            const t = EffectControls;
+            const id = t.IdOf(p);
+            if (!id)
+                return;
+            const m = t.All();
+            m[id] = { V: values, T: Date.now() };
+            clearTimeout(t.Timer);
+            t.Timer = setTimeout(() => t.Flush(), 300);
+            //  (a change right before the page closes is written then)
+            if (!t.OnHide) {
+                t.OnHide = () => t.Timer && t.Flush();
+                window.addEventListener("pagehide", t.OnHide);
+            }
+        },
+
+        /** Write the map now (the oldest effects dropped past MaxEntries). */
+        Flush() {
+            const t = EffectControls;
+            clearTimeout(t.Timer);
+            t.Timer = 0;
+            const m = t.All();
+            const keys = Object.keys(m);
+            if (keys.length > t.MaxEntries)
+                for (const k of keys.sort((a, b) => (m[a].T || 0) - (m[b].T || 0)).slice(0, keys.length - t.MaxEntries))
+                    delete m[k];
+            Sw.Storage.Set(t.Key, JSON.stringify(m));
+        },
+
+        /** @type {?function():void} The pagehide listener (added with the first change). */
+        OnHide: null,
+    };
+
+    /**
      * The Sw pop-ups (menus, dialogs, toasts, hints): in full screen they are inside the player (Sw.FullScreen.OverlayRoot), so the
      * player's own clicks and keys skip them and the controls stay while one is open.
      * @type {string}
@@ -2724,6 +2824,7 @@
      * @param {string} o.StateKey The storage key of the position and the collapsed state.
      * @param {number} [o.DefaultX] The default place: 0 = left .. 1 = right (default 1).
      * @param {string} [o.Class] An extra class of the panel.
+     * @param {boolean} [o.Resizable] True: the panel can be resized by its bottom right corner, the size is remembered too (W, H in px).
      * @returns {{E:HTMLElement, Body:HTMLElement, Place:function():void, Show:function(boolean):void}} The panel (hidden at first), its
      *   body (the content goes there), Place (after the content changed size) and Show.
      */
@@ -2742,8 +2843,15 @@
                 s = null;
             }
             const f = v => typeof v === "number" && isFinite(v) ? Math.max(0, Math.min(1, v)) : null;
-            return { X: f(s && s.X), Y: f(s && s.Y), Collapsed: !!(s && s.Collapsed) };
+            const px = v => typeof v === "number" && isFinite(v) && v >= 64 ? Math.round(v) : null;
+            return { X: f(s && s.X), Y: f(s && s.Y), W: px(s && s.W), H: px(s && s.H), Collapsed: !!(s && s.Collapsed) };
         })();
+        //  A resizable panel (the corner grip, media.css media-stats-resizable): its remembered size (px, clamped into the player by CSS)
+        if (o.Resizable) {
+            panel.classList.add("media-stats-resizable");
+            if (state.W)
+                panel.style.width = state.W + "px";
+        }
         const save = () => Sw.Storage.Set(o.StateKey, JSON.stringify(state));
         /** The margin (px) the panel keeps from the edges of the player. */
         const margin = 8;
@@ -2782,6 +2890,9 @@
             collapseB.SetIcon(on ? "down" : "up");
             collapseB.SetTitle(on ? o.ExpandTitle : o.CollapseTitle);
             collapseB.E.setAttribute("aria-expanded", String(!on));
+            //  (collapsed: only the title bar, not the chosen height)
+            if (o.Resizable)
+                panel.style.height = !on && state.H ? state.H + "px" : "";
             save();
             place();
         };
@@ -2840,6 +2951,24 @@
         //  (the player resized, full screen: the same share of the free room)
         if (typeof ResizeObserver !== "undefined")
             new ResizeObserver(() => place()).observe(view);
+        //  Resized by its grip (the browser sets the inline width / height): the size is remembered, the panel keeps its place (its share
+        //  of the free room is taken again from where it is)
+        if (o.Resizable && typeof ResizeObserver !== "undefined") {
+            let saveTimer = 0;
+            new ResizeObserver(() => {
+                if (panel.hidden || state.Collapsed)
+                    return;
+                const w = parseFloat(panel.style.width), h = parseFloat(panel.style.height);
+                const nw = isFinite(w) ? Math.round(w) : state.W, nh = isFinite(h) ? Math.round(h) : state.H;
+                if (nw === state.W && nh === state.H)
+                    return;
+                state.W = nw;
+                state.H = nh;
+                move(panel.offsetLeft, panel.offsetTop);
+                clearTimeout(saveTimer);
+                saveTimer = setTimeout(save, 250);
+            }).observe(panel);
+        }
         setCollapsed(state.Collapsed);
         return {
             E: panel,
@@ -3184,6 +3313,7 @@
             CloseTitle: _TF("Close the statistics (I)", "Tool tip of the close button of the statistics panel of the media viewer"),
             OnClose: () => setStats(false),
             StateKey: StatsPanelKey,
+            Resizable: true,
         }) : null;
         const panel = stats ? stats.E : null;
         if (stats && player0.Stats)
@@ -3210,6 +3340,7 @@
             StateKey: ControlsPanelKey,
             DefaultX: 0,
             Class: "media-controls-panel",
+            Resizable: true,
         }) : null;
         /** @type {boolean} The controls panel is wanted (shown when the effect has controls). */
         let ctlOn = Sw.Storage.Get(ControlsKey) === "true";
@@ -3242,6 +3373,15 @@
             ctlEditor = null;
             ctl.Body.replaceChildren();
             if (ctlDefs.length) {
+                //  The values chosen for this effect before (EffectControls) win over its defaults and settings
+                const saved = EffectControls.Get(p);
+                if (saved && ctlDefs.some(d => typeof saved[d.Index] === "number")) {
+                    const c = p.GetControls();
+                    for (const d of ctlDefs)
+                        if (typeof saved[d.Index] === "number")
+                            c[d.Index] = Math.max(0, Math.min(1, saved[d.Index]));
+                    p.SetControls(c);
+                }
                 const values = typeof p.GetControls === "function" ? p.GetControls() : [];
                 ctlEditor = new Sw.PropertyEditor({
                     Defs: ctlDefs.map(d => ({ Key: "c" + d.Index, Label: d.Name, Type: "float", Min: 0, Max: 1, Step: 0.001, Default: d.Default, Map: d.Map || undefined, Desc: d.Desc || undefined })),
@@ -3270,6 +3410,8 @@
             const c = p.GetControls();
             c[i] = v;
             p.SetControls(c);
+            //  Remembered for this effect (the controls it names; a reset to the default is remembered too, it wins over a setting)
+            EffectControls.Set(p, Object.fromEntries(ctlDefs.map(d => [d.Index, c[d.Index]])));
         };
 
         const playB = b("play", _TF("Play", "Tool tip of the play button of the media viewer"), togglePlay, { Shortcut: "Space" });

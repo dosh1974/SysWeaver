@@ -1,4 +1,7 @@
-﻿namespace SysWeaver.AI
+﻿using System;
+using static SysWeaver.MessageHandler;
+
+namespace SysWeaver.AI
 {
     /// <summary>
     /// A predefined set of images that can be shown and used in projects.
@@ -16,7 +19,7 @@
         /// Don't use unless the user expclitly asks for the application icon.
         /// </summary>
         ApplicationIcon,
-        
+
         /// <summary>
         /// The avatar image of the AI agent.
         /// This is the image that is shown as YOU, the agent.
@@ -48,6 +51,10 @@
         /// </summary>
         TeasingSmiley,
     }
+
+
+
+
 
 
 }

@@ -207,6 +207,20 @@ public static class ShaderParser
     static readonly Regex MainImageRx = new(@"\bvoid\s+mainImage\s*\(", RegexOptions.Compiled);
     static readonly Regex MainRx = new(@"\bvoid\s+main\s*\(", RegexOptions.Compiled);
     static readonly Regex Texture2DRx = new(@"\btexture2D\b", RegexOptions.Compiled);
+    /// <summary>A GLSL ES 3.00 texture() call (an Ew snippet that samples, EwAudio2, or ShaderToy code)</summary>
+    static readonly Regex TextureCallRx = new(@"\btexture\s*\(", RegexOptions.Compiled);
+    /// <summary>The shader maps texture itself ("#define texture texture2D" or a function like macro)</summary>
+    static readonly Regex TextureDefineRx = new(@"#[ \t]*define[ \t]+texture\b", RegexOptions.Compiled);
+
+    /// <summary>
+    /// GLSL ES 1.00 has no texture(), only texture2D(): a body that calls texture() (the EwAudio2 snippet's EwAudioGet... functions, ShaderToy
+    /// code) gets "#define texture texture2D" (as the media player does for ShaderToy shaders without WebGL 2), unless it maps texture itself
+    /// </summary>
+    static bool NeedsTextureDefine(string body)
+    {
+        var code = CommentRx.Replace(body, " ");
+        return TextureCallRx.IsMatch(code) && !TextureDefineRx.IsMatch(code);
+    }
     static readonly Regex UniformRx = new(@"\buniform\s+(?:(?:lowp|mediump|highp)\s+)?\w+\s+(\w+)", RegexOptions.Compiled);
     static readonly Regex CommentRx = new(@"/\*.*?\*/|//[^\n]*", RegexOptions.Compiled | RegexOptions.Singleline);
     static readonly Regex PrecisionRx = new(@"\bprecision\s+\w+\s+float\b", RegexOptions.Compiled);
@@ -1166,6 +1180,8 @@ void main()
                     sb.Append("#extension GL_EXT_shader_texture_lod : enable\n");
                 sb.Append("#define texture2DLod texture2DLodEXT\n");
             }
+            if (NeedsTextureDefine(body))
+                sb.Append("#define texture texture2D\n");
         }
         if (own)
         {
@@ -1217,6 +1233,8 @@ void main()
             sb.Append("#define texture2D texture\n");
         if (es3 && fx.UsesLod)
             sb.Append("#define texture2DLod textureLod\n");
+        if (!es3 && NeedsTextureDefine(body))
+            sb.Append("#define texture texture2D\n");
         var code = export ? CommentRx.Replace(body, " ") : null;
         foreach (var (name, decl) in ShaderToyUniforms)
             if (!fx.Uniforms.Contains(name) && (code == null || name == "iResolution" || Regex.IsMatch(code, @"\b" + name + @"\b")))

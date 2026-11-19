@@ -37,8 +37,9 @@ namespace SysWeaver.AI
         /// <param name="msg">Message host (if null the service manager is used)</param>
         /// <param name="defaultName">The name of the chat provider if not specified in the parameters</param>
         /// <param name="defaultChatModel">The default chat model if not specified in the parameters</param>
-        /// <param name="defaultImageModel">The default image model if not specified in the parameters</param>
-        protected AiServiceBase(ServiceManager sm, AiServiceParams p, IMessageHost msg, String defaultName, String defaultChatModel, String defaultImageModel)
+        /// <param name="defaultImageModel">The default image model (text to image) if not specified in the parameters</param>
+        /// <param name="defaultImageEditModel">The default image edit model (image to image) if not specified in the parameters, null to use the default image model</param>
+        protected AiServiceBase(ServiceManager sm, AiServiceParams p, IMessageHost msg, String defaultName, String defaultChatModel, String defaultImageModel, String defaultImageEditModel = null)
         {
             msg = msg ?? sm;
             Msg = msg;
@@ -60,6 +61,15 @@ namespace SysWeaver.AI
             if (String.IsNullOrEmpty(m))
                 m = defaultImageModel;
             DefaultImageModel = m;
+
+            m = p.DefaultImageEditModel;
+            if (String.IsNullOrEmpty(m))
+                m = defaultImageEditModel;
+            if (String.IsNullOrEmpty(m))
+                m = DefaultImageModel;
+            DefaultImageEditModel = m;
+            DefaultImageWidth = p.DefaultImageWidth > 0 ? p.DefaultImageWidth : 1280;
+            DefaultImageHeight = p.DefaultImageHeight > 0 ? p.DefaultImageHeight : 720;
 
             ImageGenLock = p.MaxConcurrentImages > 0 ? new AsyncLock(p.MaxConcurrentImages) : null;
             ChatLock = p.MaxConcurrentChats > 0 ? new AsyncLock(p.MaxConcurrentChats) : null;
@@ -94,9 +104,24 @@ namespace SysWeaver.AI
         public AiReasoning DefaultReasoning { get; }
 
         /// <summary>
-        /// The model used when supplying an empty model (can be configured)
+        /// The model used for image generation (text to image) when supplying an empty model (can be configured)
         /// </summary>
         public String DefaultImageModel { get; }
+
+        /// <summary>
+        /// The model used for image editing (image to image) when supplying an empty model (can be configured)
+        /// </summary>
+        public String DefaultImageEditModel { get; }
+
+        /// <summary>
+        /// The width in pixels of a generated image when no width is specified (can be configured)
+        /// </summary>
+        public int DefaultImageWidth { get; }
+
+        /// <summary>
+        /// The height in pixels of a generated image when no height is specified (can be configured)
+        /// </summary>
+        public int DefaultImageHeight { get; }
 
         /// <summary>
         /// Optional lock used to limit the number of concurrent chat requests

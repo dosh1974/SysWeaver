@@ -38,6 +38,7 @@ namespace SysWeaver.AI
         {
             DefaultChatModel = "gemini-3.8-flash";
             DefaultImageModel = "gemini-3.1-flash-lite-image";
+            DefaultImageEditModel = "gemini-3.1-flash-lite-image";
         }
 
         #region API setup

@@ -36,7 +36,7 @@ namespace SysWeaver.AI
         internal const String ServiceName = "OpenAI";
 
         OpenAiService(ServiceManager sm, OpenAiParams p, IMessageHost msg, int _)
-            : base(sm, p, msg, ServiceName, "gpt-4.1", "dall-e-3")
+            : base(sm, p, msg, ServiceName, "gpt-4.1", "dall-e-3", "gpt-image-2")
         {
             msg = Msg;
             DefaultTier = p.DefaultTier;

@@ -21,9 +21,14 @@ namespace SysWeaver.AI
         AiReasoning DefaultReasoning { get; }
 
         /// <summary>
-        /// The model used for image generation when not supplying a model (can be configured)
+        /// The model used for image generation (text to image) when not supplying a model (can be configured)
         /// </summary>
         String DefaultImageModel { get; }
+
+        /// <summary>
+        /// The model used for image editing (image to image) when not supplying a model (can be configured)
+        /// </summary>
+        String DefaultImageEditModel { get; }
 
         /// <summary>
         /// Get the large language models (chat / text generation) available from the API (cached, updated at most every 5 minutes)

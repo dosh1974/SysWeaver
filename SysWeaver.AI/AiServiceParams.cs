@@ -88,9 +88,28 @@ namespace SysWeaver.AI
         #region Image
 
         /// <summary>
-        /// The default model to use for image generation
+        /// The default model to use for image generation (text to image).
+        /// If null or empty the service default is used.
+        /// If the model isn't available from the API (anymore), the most suitable available model is used instead.
         /// </summary>
         public String DefaultImageModel;
+
+        /// <summary>
+        /// The default model to use for image editing (image to image).
+        /// If null or empty the service default is used.
+        /// If the model isn't available from the API (anymore), the most suitable available model is used instead.
+        /// </summary>
+        public String DefaultImageEditModel;
+
+        /// <summary>
+        /// The default width in pixels of a generated image (used when no width is specified).
+        /// </summary>
+        public int DefaultImageWidth = 1280;
+
+        /// <summary>
+        /// The default height in pixels of a generated image (used when no height is specified).
+        /// </summary>
+        public int DefaultImageHeight = 720;
 
         /// <summary>
         /// Maximum number of concurrent images being generated at the same time

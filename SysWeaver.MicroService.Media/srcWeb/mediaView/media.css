@@ -663,10 +663,37 @@ Media-View.MediaChrome.MediaDropping {
         display: none;
     }
 
-    /* The controls panel (the same floating window): the sliders of the effect's live controls need a little more room */
-    .media-controls-panel {
-        width: min(30em, calc(100% - 16px));
+    /* A resizable panel (FloatingPanel o.Resizable): the browser's corner grip; the chosen size (inline width / height) stays inside
+       the player and can't get smaller than a usable panel; collapsed: no grip (only the title bar shows) */
+    .media-stats-resizable {
+        resize: both;
+        min-width: min(16em, calc(100% - 16px));
+        min-height: 6em;
+        max-width: calc(100% - 16px);
     }
+
+        .media-stats-resizable.media-stats-collapsed {
+            resize: none;
+            min-height: 0;
+        }
+
+    /* The controls panel (the same floating window): room for a slider row (name, slider, number, mapped value, reset) */
+    .media-controls-panel {
+        width: min(36em, calc(100% - 16px));
+    }
+
+        /* The rows fit the panel (no horizontal scroll): the name column and the slider shrink with it */
+        .media-controls-panel .media-stats-body {
+            overflow-x: hidden;
+        }
+
+        .media-controls-panel .sw-props {
+            --sw-label-w: clamp(5rem, 30%, 11rem);
+        }
+
+        .media-controls-panel .sw-prop-value .sw-slider {
+            min-width: 2em;
+        }
 
 /* The title bar: the drag handle (the title), Collapse and Close */
 .media-stats-head {
