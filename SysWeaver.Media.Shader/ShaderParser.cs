@@ -1002,22 +1002,33 @@ public static class ShaderParser
         "GL_OES_standard_derivatives", "GL_EXT_shader_texture_lod", "GL_EXT_frag_depth", "GL_EXT_draw_buffers",
     };
 
-    const string WebGL2Suffix =
+    // The pixel scale (set by the page, 0 if not = 1): the effect is drawn as on a canvas with 1 / scale of the pixels (its sizes in
+    // pixels are scale times larger on the canvas), ex: a frame effect drawn sharp on a 4K screen with the sizes it has on a 1080p one
+    const string PixelScale =
+@"
+uniform float effectSaverPixelScale;
+vec2 effectSaverFragCoord()
+{
+    return effectSaverPixelScale > 0.0 ? gl_FragCoord.xy / effectSaverPixelScale : gl_FragCoord.xy;
+}
+";
+
+    const string WebGL2Suffix = PixelScale +
 @"
 void main()
 {
     vec4 c = vec4(0.0, 0.0, 0.0, 1.0);
-    mainImage(c, gl_FragCoord.xy);
+    mainImage(c, effectSaverFragCoord());
     effectSaverFragColor = vec4(c.rgb, 1.0);
 }
 ";
 
-    const string WebGL1Suffix =
+    const string WebGL1Suffix = PixelScale +
 @"
 void main()
 {
     vec4 c = vec4(0.0, 0.0, 0.0, 1.0);
-    mainImage(c, gl_FragCoord.xy);
+    mainImage(c, effectSaverFragCoord());
     gl_FragColor = vec4(c.rgb, 1.0);
 }
 ";
@@ -1037,22 +1048,22 @@ vec4 effectSaverApplyBlend(vec4 c)
 }
 ";
 
-    const string WebGL2AlphaSuffix = AlphaBlend +
+    const string WebGL2AlphaSuffix = PixelScale + AlphaBlend +
 @"
 void main()
 {
     vec4 c = vec4(0.0);
-    mainImage(c, gl_FragCoord.xy);
+    mainImage(c, effectSaverFragCoord());
     effectSaverFragColor = effectSaverApplyBlend(c);
 }
 ";
 
-    const string WebGL1AlphaSuffix = AlphaBlend +
+    const string WebGL1AlphaSuffix = PixelScale + AlphaBlend +
 @"
 void main()
 {
     vec4 c = vec4(0.0);
-    mainImage(c, gl_FragCoord.xy);
+    mainImage(c, effectSaverFragCoord());
     gl_FragColor = effectSaverApplyBlend(c);
 }
 ";

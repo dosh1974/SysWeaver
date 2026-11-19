@@ -90,3 +90,10 @@
     .sw-edit-mobile .sw-edit-datetime > .sw-edit-input.sw-edit-date {
         flex-basis: calc(100% - var(--sw-control-h) - 6px);
     }
+
+/* A numbered value of a list in a form (EditTypeCollection, ExpandObjects): a muted number on the line of the item buttons */
+.sw-edit-mobile .sw-edit-numbered .sw-edit-label {
+    font-weight: 400;
+    color: var(--sw-text-2);
+    font-variant-numeric: tabular-nums;
+}

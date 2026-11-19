@@ -144,5 +144,6 @@
   <Project Path="SysWeaver.TableData/SysWeaver.TableData.csproj" />
   <Project Path="SysWeaver.Tor/SysWeaver.Tor.csproj" />
   <Project Path="SysWeaver.Translation.Google/SysWeaver.Translation.Google.csproj" />
+  <Project Path="SysWeaver.Translation.Mock/SysWeaver.Translation.Mock.csproj" />
   <Project Path="SysWeaver.WebBrowser/SysWeaver.WebBrowser.csproj" />
 </Solution>

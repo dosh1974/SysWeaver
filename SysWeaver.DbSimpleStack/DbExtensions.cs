@@ -202,6 +202,8 @@ namespace SysWeaver.Db
                 }
                 prog.Add(Expression.Assign(Expression.Property(obj, f.PropertyInfo), read));
 
+                //  (the null tests read the column at the offset too: a test of column i read the wrong column, a null string after it
+                //  threw "Unable to cast DBNull to String")
                 read = DbCacheReadReader.GetOffset(f.FieldType, i);
                 if (f.IsNullable)
                 {
@@ -209,19 +211,19 @@ namespace SysWeaver.Db
                     {
                         var nt = typeof(Nullable<>).MakeGenericType(f.FieldType);
                         if (f.FieldType == dt)
-                            read = Expression.Condition(DbCacheReadReader.IsNull(i), Expression.Constant(null, nt), Expression.Convert(Expression.Call(DbCacheReadReader.FixDateTimeMethod, read), nt));
+                            read = Expression.Condition(DbCacheReadReader.IsNullOffset(i), Expression.Constant(null, nt), Expression.Convert(Expression.Call(DbCacheReadReader.FixDateTimeMethod, read), nt));
                         else
-                            read = Expression.Condition(DbCacheReadReader.IsNull(i), Expression.Constant(null, nt), Expression.Convert(read, nt));
+                            read = Expression.Condition(DbCacheReadReader.IsNullOffset(i), Expression.Constant(null, nt), Expression.Convert(read, nt));
                     }
                     else
-                        read = Expression.Condition(DbCacheReadReader.IsNull(i), Expression.Constant(null, read.Type), read);
+                        read = Expression.Condition(DbCacheReadReader.IsNullOffset(i), Expression.Constant(null, read.Type), read);
                 }
                 else
                 {
                     if (f.FieldType == dt)
                         read = Expression.Call(DbCacheReadReader.FixDateTimeMethod, read);
                     if (!f.FieldType.IsValueType)
-                        read = Expression.Condition(DbCacheReadReader.IsNull(i), Expression.Constant(null, read.Type), read);
+                        read = Expression.Condition(DbCacheReadReader.IsNullOffset(i), Expression.Constant(null, read.Type), read);
                 }
                 progOffset.Add(Expression.Assign(Expression.Property(obj, f.PropertyInfo), read));
 

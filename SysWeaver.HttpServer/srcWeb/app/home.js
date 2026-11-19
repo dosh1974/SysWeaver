@@ -175,9 +175,15 @@ function homeAppStart(main) {
  */
 function homeGreeting(main) {
     const g = main.querySelector(".HomeGreeting");
-    const nick = String(main.dataset.nick || "").trim();
-    if (!g || !nick || nick.indexOf("${") >= 0)
+    if (!g)
         return;
+    const nick = String(main.dataset.nick || "").trim();
+    //  (signed out: the server leaves the name of an unknown variable, ex: "@Session.NickName")
+    if (!nick || nick.indexOf("${") >= 0 || /^[@#]?Session\./.test(nick)) {
+        if (/Session\./.test(g.textContent))
+            g.textContent = _T("Welcome.", "Greeting on the home page when nobody is signed in");
+        return;
+    }
     const h = new Date().getHours();
     g.textContent = h < 5 || h >= 18
         ? _T("Good evening, {0}.", nick, "Greeting on the home page in the evening (18:00 - 05:00).{0} is replaced with the name of the signed in user")
@@ -329,13 +335,37 @@ function homeVersion(main, list) {
     let tip = _T("Application version {0}", v, "Tool tip of the application version on the home page.{0} is replaced with the full version text");
     const k = homeKpi({ Icon: "layers", Label: _TF("Version", "Label of the application version tile on the home page") });
     k.Value.textContent = short;
-    const d = homeParseUtc(ds.appbuild);
-    if (d) {
-        tip += "\n" + _T("Built {0}", Sw.Format.DateTime(d, { dateStyle: "medium", timeStyle: "short" }), "Tool tip line of the application version on the home page.{0} is replaced with the date and time the application was built");
-        k.Sub.textContent = _T("Build {0}", Sw.Format.DateText(d), "Sub line of the application version tile on the home page.{0} is replaced with the date the application was built");
-    }
     k.E.title = tip;
     list.append(k.E);
+}
+
+/**
+ * The build time tile from the template attribute main.Home[data-appbuild] (EnvInfo.AppBuildTime: the last write time of the main module
+ * file, UTC "yyyy-MM-dd HH:mm:ss"), shown in local time. Nothing is added when unknown (single file apps, ?raw).
+ * @param {HTMLElement} main The page (main.Home).
+ * @param {HTMLElement} list The KPI row.
+ */
+function homeBuildTime(main, list) {
+    const d = homeParseUtc(main.dataset.appbuild);
+    if (!d)
+        return;
+    const k = homeKpi({ Icon: "calendar", Label: _TF("Build time", "Label of the tile with the time the application was built (the last write time of its main file) on the home page") });
+    k.Value.textContent = Sw.Format.DateTime(d, { dateStyle: "medium", timeStyle: "short" });
+    k.E.title = _T("The main file of the application was written {0}", Sw.Format.DateTime(d, { dateStyle: "full", timeStyle: "medium" }), "Tool tip of the build time tile on the home page.{0} is replaced with the date and time");
+    list.append(k.E);
+}
+
+/**
+ * May the signed in user see the service facts of the home page (uptime, version, build time)? Ops, Admin, Dev and Debug only.
+ * @returns {Promise<boolean>}
+ */
+async function homeMaySeeFacts() {
+    try {
+        return await Sw.Access.Can("Ops,Admin,Dev,Debug");
+    }
+    catch {
+        return false;
+    }
 }
 
 /**
@@ -968,10 +998,22 @@ async function homeMain() {
         const sTile = plan.S ? homeServicesTile(true) : null;
         if (sTile)
             kpis.append(sTile.E);
-        const start = homeAppStart(main);
-        if (start)
-            homeUptime(kpis, start);
-        homeVersion(main, kpis);
+        //  Uptime, version and build time: Ops, Admin, Dev and Debug only (their place is kept, filled when the user is known)
+        const factsAt = document.createComment("facts");
+        kpis.append(factsAt);
+        homeMaySeeFacts().then(ok => {
+            if (!ok) {
+                factsAt.remove();
+                return;
+            }
+            const tmp = document.createElement("div");
+            const start = homeAppStart(main);
+            if (start)
+                homeUptime(tmp, start);
+            homeVersion(main, tmp);
+            homeBuildTime(main, tmp);
+            factsAt.replaceWith(...tmp.childNodes);
+        });
         const pTile = plan.P ? homeProblemsTile(true) : null;
         if (pTile)
             kpis.append(pTile.E);

@@ -60,6 +60,9 @@
             changed = true;
             showCurrent();
             Sw.InterOp.Post("UserImageChanged");
+            //  (the choice is saved: nothing to discard when the dialog closes now)
+            if (dlg && dlg.SetDirty)
+                dlg.SetDirty(false);
         };
 
         let useButton = null;
