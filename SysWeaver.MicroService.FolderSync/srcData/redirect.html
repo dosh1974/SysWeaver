@@ -12,7 +12,8 @@
     <script>
         async function main() {
             const getVersionUrl = "${$GetVersion}";
-            const src = "${$Url}";
+            //  The framed page gets the query string and hash of this page (its url parameters)
+            const src = "${$Url}" + location.search + location.hash;
             const autoReload = parseInt("${$AutoReload}");
             const f = document.createElement("iframe");
             f.src = src;

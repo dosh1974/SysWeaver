@@ -11,7 +11,7 @@
 
 ## Purpose
 
-For remote folders served on the web with the `IFramePage` swap method, [`FolderSyncService`](../FolderSyncService.cs) reads this template (resource `data.redirect.html`) into a `TextTemplate` with `${...}` placeholders. For each page listed in the folder's `HtmlShims` (default `index.html`), `AddIFrame` in [`FolderSyncService.Remote.cs`](../FolderSyncService.Remote.cs) fills in the variables and registers the result as a static page at the original path. The page shows the real, versioned page (`<folder>_<version>/<file>`) in a full-window iframe and copies its title. When version checking is enabled for the folder, it compares the folder version (`FolderSync/GetFolderVersion`) either on an interval (`AutoReload`) or when the framed page posts a `CheckVersion` message, and reloads on a change.
+For remote folders served on the web with the `IFramePage` swap method, [`FolderSyncService`](../FolderSyncService.cs) reads this template (resource `data.redirect.html`) into a `TextTemplate` with `${...}` placeholders. For each page listed in the folder's `HtmlShims` (default `index.html`), `AddIFrame` in [`FolderSyncService.Remote.cs`](../FolderSyncService.Remote.cs) fills in the variables and registers the result as a static page at the original path. The page shows the real, versioned page (`<folder>_<version>/<file>`) in a full-window iframe, with the shim's own query string and hash appended (so url parameters reach the real page), and copies its title. When version checking is enabled for the folder, it compares the folder version (`FolderSync/GetFolderVersion`) either on an interval (`AutoReload`) or when the framed page posts a `CheckVersion` message, and reloads on a change.
 
 ## How it is built
 
