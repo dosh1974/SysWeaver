@@ -16,9 +16,6 @@
 	<PackageReference Include="AutoMapper" Version="17.0.0" />
 	<PackageReference Include="FastText.Native.Linux" Version="1.0.115" />
 	<PackageReference Include="FastText.Native.Windows" Version="1.0.115" />
-	<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="11.0.0" />
-
-
   </ItemGroup>
 
   <ItemGroup>
