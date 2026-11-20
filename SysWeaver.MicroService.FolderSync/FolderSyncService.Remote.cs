@@ -33,7 +33,7 @@ namespace SysWeaver.MicroService
             vars["Url"] = String.Concat("../", fn.Substring(fn.LastIndexOf('/') + 1), '_', version, '/', file);
             if (x.VersionCheck)
             {
-                vars["GetVersion"] = String.Concat(toRoot, "FolderSync/GetFolderVersion?\'", x.Name, "\'");
+                vars["GetVersion"] = String.Concat(toRoot, "FolderSync/GetFolderVersion?\"", x.Name, "\"");
                 vars["AutoReload"] = x.AutoReload <= 0 ? "0" : ("" + (x.AutoReload * 1000));
             }else
             {

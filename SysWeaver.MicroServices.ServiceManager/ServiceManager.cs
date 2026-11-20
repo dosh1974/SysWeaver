@@ -1984,7 +1984,7 @@ namespace SysWeaver.MicroService
         [WebApiAuth(Roles.Ops)]
         [WebApiClientCache(1)]
         [WebApiRequestCache(1, WebApiCaches.Globally)]
-        [WebApiCompression("br:Balanced, deflate:Balanced, gzip:Balanced")]
+        [WebApiCompression(WebDefaults.DynamicCompression)]
         [WebMenuTable(null, "Monitoring/{0}", "Statistics", null, "IconTableStats", 13)]
         public Task<TableData> StatsTable(TableDataRequest r, HttpServerRequest context) => TableDataTools.Get(context, r, 1000, GetStats());
 
@@ -1997,7 +1997,7 @@ namespace SysWeaver.MicroService
         [WebApiAuth(Roles.Ops)]
         [WebApiClientCache(1)]
         [WebApiRequestCache(1)]
-        [WebApiCompression("br:Balanced, deflate:Balanced, gzip:Balanced")]
+        [WebApiCompression(WebDefaults.DynamicCompression)]
         [WebMenuTable(null, "Monitoring/{0}", "Scheduled tasks", null, "icons/clock.svg", 31)]
         public TableData SchedulerTable(TableDataRequest r) => TableDataTools.Get(r, 2000, Scheduler.AllScheduled, "Scheduled tasks").WithCard("+task@services/cards");
 
@@ -2016,7 +2016,7 @@ namespace SysWeaver.MicroService
         [WebApiAuth(Roles.OpsDev)]
         [WebApiClientCache(1)]
         [WebApiRequestCache(1)]
-        [WebApiCompression("br:Balanced, deflate:Balanced, gzip:Balanced")]
+        [WebApiCompression(WebDefaults.DynamicCompression)]
         [WebMenuTable(null, "Monitoring/{0}", "Performance", null, "IconTablePerformance", 10)]
         public TableData PerfTable(TableDataRequest r, HttpServerRequest context)
         {
@@ -2039,7 +2039,6 @@ namespace SysWeaver.MicroService
         [WebApiAuth(Roles.Ops)]
         [WebApiClientCache(30)]
         [WebApiRequestCache(30)]
-        [WebApiCompression("br:Balanced, deflate:Balanced, gzip:Balanced")]
         [WebMenuTable(null, "Monitoring/{0}", "Performance monitors", null, "IconTablePerfSystem", 11)]
         public TableData PerfSystemsTable(TableDataRequest r, HttpServerRequest context)
         {

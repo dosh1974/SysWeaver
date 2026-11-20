@@ -99,7 +99,7 @@ namespace SysWeaver.Net
         /// <summary>
         /// The default compression preference.
         /// </summary>
-        public const String DefaultMethods = "br:Fast, deflate:Fast, gzip:Fast";
+        public const String DefaultMethods = WebDefaults.DynamicCompression;
 
         /// <summary>
         /// Get a (shared) instance for a comma separated list of compression methods and levels.

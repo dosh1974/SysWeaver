@@ -27,7 +27,7 @@ namespace SysWeaver.MicroService
             Service = service;
             Syncher = syncher;
             Auth = Authorization.GetRequiredTokens(service.SyncAuth ?? p.SyncAuth ?? Roles.Debug);
-            Options = new RequestOptions(5, 4, 32, "br:Balanced,deflate:Balanced,gzip:Balanced", String.Join(',', Auth));
+            Options = new RequestOptions(5, 4, 32, WebDefaults.CachedCompression, String.Join(',', Auth));
             Current = current;
             Master = master;
         }

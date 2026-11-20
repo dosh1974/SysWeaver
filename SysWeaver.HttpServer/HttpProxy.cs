@@ -71,7 +71,7 @@ namespace SysWeaver.Net
         /// </summary>
         /// <param name="p">The parameters</param>
         /// <exception cref="Exception">Thrown if there are no end points, or an end point has an empty web root or no source</exception>
-        public HttpProxy(HttpProxyParams p) : this(p, nameof(HttpProxy))
+        public HttpProxy(HttpProxyParams p) : this(p, $"{nameof(HttpProxy)} {p.SourceServer}")
         {
         }
 

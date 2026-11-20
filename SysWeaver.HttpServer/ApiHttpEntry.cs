@@ -45,11 +45,11 @@ namespace SysWeaver.Net
         /// <summary>
         /// Default compression preference for methods with a positive (global) request cache duration, favours ratio since the result is compressed once and reused.
         /// </summary>
-        public const String DefaultCachedCompression = "br:Best, deflate:Best, gzip:Best";
+        public const String DefaultCachedCompression = WebDefaults.CachedCompression;
         /// <summary>
         /// Default compression preference for uncached (or per session cached) methods, favours speed.
         /// </summary>
-        public const String DefaultCompression = "br:Balanced, deflate:Balanced, gzip:Balanced";
+        public const String DefaultCompression = WebDefaults.DynamicCompression;
         /// <summary>
         /// Default prefix of the <see cref="Location"/> text.
         /// </summary>

@@ -24,13 +24,14 @@ namespace SysWeaver.Net.IsoDataModule
                 return;
             var lwt = AsmTime;
             var etag = AsmETag;
+            var comp = HttpCompressionPriority.GetSupportedEncoders(WebDefaults.StaticCompression);
             data.AddText("iso_data/languages.js",
                 "[IsoData]",
                 GetLanguageCode(),
                 "text/javascript; charset=UTF-8",
                 null,
                 30,
-                HttpCompressionPriority.GetSupportedEncoders("br:Balanced,deflate:Balanced,gzip:Balanced"), 
+                comp, 
                 false, 
                 lwt, 
                 etag);
@@ -41,7 +42,7 @@ namespace SysWeaver.Net.IsoDataModule
                 "text/javascript; charset=UTF-8",
                 null,
                 30,
-                HttpCompressionPriority.GetSupportedEncoders("br:Balanced,deflate:Balanced,gzip:Balanced"),
+                comp,
                 false,
                 lwt,
                 etag);
@@ -52,7 +53,7 @@ namespace SysWeaver.Net.IsoDataModule
                 "text/javascript; charset=UTF-8",
                 null,
                 30,
-                HttpCompressionPriority.GetSupportedEncoders("br:Balanced,deflate:Balanced,gzip:Balanced"),
+                comp,
                 false,
                 lwt,
                 etag);
@@ -62,7 +63,7 @@ namespace SysWeaver.Net.IsoDataModule
                 "text/javascript; charset=UTF-8",
                 null,
                 30,
-                HttpCompressionPriority.GetSupportedEncoders("br:Balanced,deflate:Balanced,gzip:Balanced"),
+                comp,
                 false,
                 lwt,
                 etag);

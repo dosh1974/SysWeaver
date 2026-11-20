@@ -81,7 +81,7 @@ namespace SysWeaver.MicroService
                 GetTemplate("embed"),
                 GetTemplate("img"),
             ];
-            EmbedComp = HttpCompressionPriority.GetSupportedEncoders("br:Balanced,deflate:Balanced,gzip:Balanced");
+            EmbedComp = HttpCompressionPriority.GetSupportedEncoders(WebDefaults.CachedCompression);
             PerUserHandler = manager.TryGet<IUserStoragePerUserHandler>();
             Retention = p.Retention ?? new UserStorageDataRetention();
         //  Add file repos

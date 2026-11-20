@@ -94,8 +94,8 @@ namespace SysWeaver.Chat
         /// </summary>
         internal String DataViewsOf;
 
-        static readonly HttpCompressionPriority Comp = HttpCompressionPriority.GetSupportedEncoders("br:Balanced, deflate:Balanced, gzip:Balanced");
-        static readonly ICompType CompType = CompManager.GetFromHttp("br") ?? CompManager.GetFromHttp("deflate") ?? CompManager.GetFromHttp("gzip");
+        static readonly HttpCompressionPriority Comp = HttpCompressionPriority.GetSupportedEncoders(WebDefaults.CachedCompression);
+        static readonly ICompType CompType = CompManager.GetFromHttp("br") ?? CompManager.GetFromHttp("zstd") ?? CompManager.GetFromHttp("deflate") ?? CompManager.GetFromHttp("gzip");
 
         /// <summary>
         /// Add a file to this message from a "data:...;base64," url, or from plain text (used as UTF8 and compressed) if it isn't a base64 data url.

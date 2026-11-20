@@ -545,7 +545,7 @@ namespace SysWeaver.MicroService
         [WebApiAuth(Roles.OpsDev)]
         [WebApiClientCache(1)]
         [WebApiRequestCache(1)]
-        [WebApiCompression("br:Balanced, deflate:Balanced, gzip:Balanced")]
+        [WebApiCompression(WebDefaults.DynamicCompression)]
         [WebMenuTable(null, "Monitoring/{0}", "Recent log entries", null, "IconTableLog", 1)]
         public TableData LogTable(TableDataRequest r) => TableDataTools.Get(r, 1000, Manager.Messages);
 

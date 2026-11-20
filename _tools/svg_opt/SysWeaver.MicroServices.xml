@@ -486,26 +486,6 @@
                 Best = Best compression, often too slow for on the fly.
             </summary>
         </member>
-        <member name="T:SysWeaver.MicroService.WebApiCompress">
-            <summary>
-            Common compression priority strings for <see cref="T:SysWeaver.MicroService.WebApiCompressionAttribute"/>
-            </summary>
-        </member>
-        <member name="F:SysWeaver.MicroService.WebApiCompress.Best">
-            <summary>
-            Best compression level for all supported methods
-            </summary>
-        </member>
-        <member name="F:SysWeaver.MicroService.WebApiCompress.Balanced">
-            <summary>
-            Balanced compression level for all supported methods
-            </summary>
-        </member>
-        <member name="F:SysWeaver.MicroService.WebApiCompress.Fast">
-            <summary>
-            Fast compression level for all supported methods
-            </summary>
-        </member>
         <member name="T:SysWeaver.MicroService.WebApiOptionalAttribute">
             <summary>
             Put this attribute on a method to invoke a member to check if the api is available or not

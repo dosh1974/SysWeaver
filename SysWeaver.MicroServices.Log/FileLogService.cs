@@ -55,7 +55,7 @@ namespace SysWeaver.MicroService
         [WebApi(nameof(LogFile) + ".txt")]
         [WebApiAuth(Roles.AdminOps)]
         [WebApiRawText]
-        [WebApiCompression(WebApiCompress.Balanced)]
+        [WebApiCompression(WebDefaults.DynamicCompression)]
         [WebApiClientCache(5)]
         [WebApiRequestCache(4)]
         public async Task<ReadOnlyMemory<Byte>> LogFile()

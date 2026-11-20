@@ -101,7 +101,6 @@ namespace SysWeaver.MicroService
         [WebApiAuth(Roles.OpsDev)]
         [WebApiClientCache(1)]
         [WebApiRequestCache(1, WebApiCaches.Globally)]
-        [WebApiCompression("br:Balanced, deflate:Balanced, gzip:Balanced")]
         [WebMenuTable(null, "Monitoring/{0}", "Problems", "How often each part of the system failed, when and why (not every failure is logged)", "IconTableStats", 3)]
         public Task<TableData> ProblemsTable(TableDataRequest r, HttpServerRequest context) => TableDataTools.Get(context, r, 1000, GetProblems(), "Problems");
 

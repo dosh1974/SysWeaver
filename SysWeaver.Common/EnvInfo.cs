@@ -347,7 +347,8 @@ namespace SysWeaver
         ///             "AppName" = Application name.
         ///             "AppDisplayName" = Application display name.
         ///             "AppDescription" = Application description name.
-        ///             "AppVersion" = Application version (see <see cref="AppVersion"/>), "AppBuildTime" = build time (UTC) of the executable.
+        ///             "AppVersion" = Application version (see <see cref="AppVersion"/>).
+        ///             "AppBuildTime" = build time (UTC) of the executable.
         ///             "AppStart" = Application start time (UTC) formatted using "yyyy-MM-dd HH:mm:ss".
         ///             "AppAssemblyName" = Application assembly name (typically the exe name), "ExchangeRateService".
         ///             "AppGuid" = A unique guid for this application, ex: "{CFBEDD92-341E-4EDB-96EB-C8305974EE29}".

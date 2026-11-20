@@ -46,7 +46,7 @@ namespace SysWeaver.Net
         ///     Best = Best compression, often to slow for on the fly.
         /// Can be overridden per method using <see cref="SysWeaver.MicroService.WebApiCompressionAttribute"/>.
         /// </summary>
-        public String Compression = "zstd:Fast, deflate:Fast, gzip:Fast, br:Fast";
+        public String Compression = WebDefaults.DynamicCompression;
         
         /// <summary>
         /// Default API compression for methods that are cached server side, typically can have better compression, specifying order of preference and quality.
@@ -59,7 +59,7 @@ namespace SysWeaver.Net
         ///     Balanced = Better compression (typically use for larger data).
         ///     Best = Best compression, often to slow for on the fly.
         /// </summary>
-        public String CachedCompression = "zstd:Balanced, deflate:Balanced, gzip:Balanced, br:Balanced";
+        public String CachedCompression = WebDefaults.CachedCompression;
 
         /// <summary>
         /// Enable performance monitoring of API calls (see <see cref="ApiHttpServerModule.PerfMon"/>).

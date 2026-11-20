@@ -40,28 +40,7 @@ namespace SysWeaver.MicroService
         ///     Best = Best compression, often too slow for on the fly.
         /// </summary>
         public readonly String Compression;
-
-
-        
-    }
-
-    /// <summary>
-    /// Common compression priority strings for <see cref="WebApiCompressionAttribute"/>
-    /// </summary>
-    public static class WebApiCompress
-    {
-        /// <summary>
-        /// Best compression level for all supported methods
-        /// </summary>
-        public const String Best = "br:Best,deflate:Best,gzip:Best";
-        /// <summary>
-        /// Balanced compression level for all supported methods
-        /// </summary>
-        public const String Balanced = "br:Balanced,deflate:Balanced,gzip:Balanced";
-        /// <summary>
-        /// Fast compression level for all supported methods
-        /// </summary>
-        public const String Fast = "br:Fast,deflate:Fast,gzip:Fast";
+       
     }
 
 }

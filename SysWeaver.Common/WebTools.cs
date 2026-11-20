@@ -2,21 +2,22 @@
 using System.Net.Http.Headers;
 using System.Net.Http;
 using System.Net;
-using System.Collections.Generic;
 using System.Collections.Concurrent;
-using System.Threading.Tasks;
-
-// https://github.com/SimpleStack/simplestack.orm
-
 
 
 namespace SysWeaver
 {
+
+
     /// <summary>
     /// Helpers to create and share http clients, and to create html
     /// </summary>
     public static partial class WebTools
     {
+
+
+
+
         /// <summary>
         /// User agent to use for HttpClient's
         /// </summary>

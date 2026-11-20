@@ -28587,6 +28587,21 @@
             Copy the items of a set with more than 8 unique keys (see <see cref="M:SysWeaver.ValueKeyTable`1.CanUse(System.Int32,System.Collections.Generic.IEqualityComparer{`0})"/>)
             </summary>
         </member>
+        <member name="F:SysWeaver.WebDefaults.DynamicCompression">
+            <summary>
+            Default compression methods to use for one-off data (ex: returning API data that isn't cached at all).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.WebDefaults.CachedCompression">
+            <summary>
+            Default compression methods to use for cached data (ex: returning API data that is cached in memory for some limited time).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.WebDefaults.StaticCompression">
+            <summary>
+            Default compression methods to use for static data (ex: static data that never changes for the process duration or is stored on disc etc).
+            </summary>
+        </member>
         <member name="T:SysWeaver.WebPath">
             <summary>
             Helpers for web paths (urls like "https://example.com/a/b.html" or local paths like "/a/b.html" and "a/../b.html")
