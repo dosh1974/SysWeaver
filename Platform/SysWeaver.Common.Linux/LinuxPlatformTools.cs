@@ -165,28 +165,6 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Make a directory, everything in it and everything created in it later, readable and writable by all users
-        /// (mimics the Windows implementation that grants "Everyone" full control, inherited by all files and sub directories).
-        /// This makes files and folders created by a service (ex: running as root) modifiable by users and vice versa.
-        /// </summary>
-        /// <param name="folder">The full path to the directory.</param>
-        /// <returns>null if successful, else the exception that occurred (also tracked in the stats).</returns>
-        /// <remarks>
-        /// <para>The directory and all existing files and sub directories (recursively) get read and write access for owner, group and others (like "chmod -R a+rwX"):
-        /// directories get rwx for all and the setgid bit (so new entries inherit the group), files keep their execute bits
-        /// (if any execute bit is set, it's set for all).
-        /// Entries that already have the required bits aren't touched. Symbolic links are skipped (never followed).
-        /// The sticky bit is never set, so users can modify and delete each others files.</para>
-        /// <para>Files and directories created later (by any user, regardless of their umask) are made modifiable by everyone using POSIX default ACL's:
-        /// "setfacl -R -P -d -m u::rwx,g::rwx,o::rwx,m::rwx" is run on the directory (new files get rw for all, new directories rwx for all and the same default ACL).
-        /// If setfacl isn't installed (package "acl") or fails (ex: the file system doesn't support ACL's), the mode bits (and setgid) are still applied,
-        /// but an exception describing the problem is returned (files created later then get the permissions given by the creator's umask).</para>
-        /// <para>Only the owner of an entry (or root) may change its permissions, entries that can't be changed are reported in the returned exception (the rest is still processed).</para>
-        /// <para>A directory that was successfully set up (including the default ACL) is remembered for the lifetime of the process,
-        /// calling it again for that directory or any directory inside it returns null without doing anything.</para>
-        /// <para>Granting everyone write access makes the folder writable by any local user, only use it for data that isn't security sensitive.</para>
-        /// </remarks>
-        /// <summary>
         /// Find the files that are ELF executables or scripts ("#!"), any name (shared library names, *.so and *.so.[version], are skipped), see <see cref="ExecutableFinder"/>.
         /// </summary>
         /// <param name="folder">The folder (not recursive).</param>
