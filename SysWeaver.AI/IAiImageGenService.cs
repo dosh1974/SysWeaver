@@ -16,5 +16,13 @@ namespace SysWeaver.AI
         /// <exception cref="System.ArgumentNullException">The prompt is null</exception>
         /// <exception cref="System.Exception">The image couldn't be created (ex: the model refused or the service failed)</exception>
         Task<MemoryFile> TextToImage(TextToImagePrompt prompt);
+
+        /// <summary>
+        /// Get the models that can create an image from a text prompt, use <see cref="AiImageModel.Id"/> as <see cref="TextToImagePrompt.Model"/>.
+        /// For ComfyUI these are the text to image workflows.
+        /// </summary>
+        /// <returns>The available models (may be empty)</returns>
+        /// <exception cref="System.Exception">The models couldn't be fetched (ex: the service is unavailable)</exception>
+        Task<AiImageModel[]> GetImageModels();
     }
 }

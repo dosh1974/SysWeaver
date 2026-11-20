@@ -62,6 +62,55 @@ namespace SysWeaver.AI
         }
 
         /// <summary>
+        /// Get the text to image workflows (the model id is the workflow name), the default workflow first.
+        /// </summary>
+        /// <returns>The text to image workflows</returns>
+        public Task<AiImageModel[]> GetImageModels()
+            => Task.FromResult(GetWorkflowModels(ComfyTaskTypes.TextToImage, (w, name, desc) => new AiImageModel
+            {
+                Id = w.Name,
+                Name = name,
+                Description = desc,
+                Owner = "ComfyUI",
+            }));
+
+        /// <summary>
+        /// Get the images to image (image edit) workflows (the model id is the workflow name), the default workflow first.
+        /// </summary>
+        /// <returns>The images to image workflows</returns>
+        public Task<AiImageEditModel[]> GetImageEditModels()
+            => Task.FromResult(GetWorkflowModels(ComfyTaskTypes.ImagesToImage, (w, name, desc) => new AiImageEditModel
+            {
+                Id = w.Name,
+                Name = name,
+                Description = desc,
+                Owner = "ComfyUI",
+                MaxSourceImages = w.FileCount,
+            }));
+
+        T[] GetWorkflowModels<T>(ComfyTaskTypes type, Func<ComfyTaskWorkflow, String, String, T> create)
+        {
+            var names = GetWorkflows(type);
+            var def = GetDefaultWorkflow(type);
+            var res = new System.Collections.Generic.List<T>(names.Count);
+            foreach (var n in names)
+            {
+                var w = GetTaskWorkflow(n);
+                if (w == null)
+                    continue;
+                var model = w.ModelName;
+                var name = String.IsNullOrEmpty(model) ? null : String.Concat(model, " (", w.Name, ')');
+                var desc = String.Concat(w.Type.ToString(), " workflow", String.IsNullOrEmpty(model) ? "" : (" using " + model), ", parameters: ", String.Join(", ", w.Parameters));
+                var m = create(w, name, desc);
+                if (String.Equals(n, def, StringComparison.OrdinalIgnoreCase))
+                    res.Insert(0, m);
+                else
+                    res.Add(m);
+            }
+            return res.ToArray();
+        }
+
+        /// <summary>
         /// Return the file of a result or throw the error, a png image gets information chunks (the prompt, the workflow and seed)
         /// </summary>
         static MemoryFile ToImageFile(ComfyResult r, ComfyParams p)

@@ -360,8 +360,9 @@ class MediaPlayer {
                 return new MediaPlayerVideo(data, mediaParams);
             case MediaTypes.Audio:
                 //  (the effect's media line "audio2": the rich 512 x 64 texture, see Create)
+                //  (made by CreateSync, the kind is not known yet: null, read from the effect's source when its texture is made)
                 if (fx)
-                    return MediaPlayer.#WithSound(mediaParams.Effect, mediaParams.EffectParams, data, mediaParams, !!mediaParams.EffectAudio2);
+                    return MediaPlayer.#WithSound(mediaParams.Effect, mediaParams.EffectParams, data, mediaParams, ("EffectAudio2" in mediaParams) ? !!mediaParams.EffectAudio2 : null);
                 return new MediaPlayerAudio(data, mediaParams);
             case MediaTypes.YouTube:
                 return new MediaPlayerYoutube(data, mediaParams);
@@ -407,12 +408,21 @@ class MediaPlayer {
      * @param {object} effectParams The effect params.
      * @param {string} sound Url of the sound.
      * @param {object|null} soundParams The audio params (MediaPlayerParamsAudio: Volume, StartAt, EndAt), null = defaults.
-     * @param {boolean} [audio2] The rich 512 x 64 audio2 texture (the effect's media line), else ShaderToy's 512 x 2.
+     * @param {boolean|null} [audio2] The rich 512 x 64 audio2 texture (the effect's media line), else ShaderToy's 512 x 2; null = not known
+     *   yet (CreateSync: the media line of the effect's source decides when the texture is made, the source is loaded by then).
      * @returns {MediaPlayerEffect} The player.
      */
     static #WithSound(effect, effectParams, sound, soundParams, audio2) {
         const media = new MediaPlayerAudio(sound, soundParams);
-        return new MediaPlayerEffect(effect, effectParams, gl => new MediaPlayerAudioTexture(gl, media, !!audio2), media);
+        let p = null;
+        const rich = () => {
+            if ((audio2 !== null) && (audio2 !== undefined))
+                return !!audio2;
+            const line = p && (typeof p.Src === "string") ? MediaPlayer.MediaLine(p.Src) : null;
+            return !!line && line.Kind === "audio2";
+        };
+        p = new MediaPlayerEffect(effect, effectParams, gl => new MediaPlayerAudioTexture(gl, media, rich()), media);
+        return p;
     }
 
     /**

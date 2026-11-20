@@ -173,6 +173,41 @@
     font-size: var(--sw-text-sm);
 }
 
+/* The description of the selected item (markdown): small, scrolls when long */
+.sw-mpick-desc {
+    font-size: var(--sw-text-sm);
+    max-height: 14rem;
+    overflow: auto;
+    overflow-wrap: anywhere;
+    /* (a long text shows it scrolls: a thin edge at the bottom) */
+    border-bottom: 1px solid var(--sw-border);
+    padding-bottom: 4px;
+}
+
+.sw-mpick-desc :is(h1, h2, h3, h4, h5, h6) {
+    font-size: 1em;
+    font-weight: 600;
+    margin: 0 0 4px;
+}
+
+.sw-mpick-desc a {
+    padding: 0;
+}
+
+.sw-mpick-desc :is(p, ul, ol, table) {
+    margin: 0 0 6px;
+}
+
+.sw-mpick-desc table {
+    border-collapse: collapse;
+}
+
+.sw-mpick-desc :is(th, td) {
+    border: 1px solid var(--sw-border);
+    padding: 1px 6px;
+    text-align: left;
+}
+
 .sw-mpick-drop {
     display: flex;
     flex-direction: column;

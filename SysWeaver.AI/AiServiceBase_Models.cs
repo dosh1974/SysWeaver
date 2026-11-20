@@ -56,6 +56,25 @@ namespace SysWeaver.AI
             => (await ModelCache.GetOrUpdate(FetchModels).ConfigureAwait(false)).ImageModels;
 
         /// <summary>
+        /// Get the image edit (image to image) models available from the API (cached, updated at most every 5 minutes).
+        /// These are the image models that <see cref="RateImageModel"/> accepts for editing.
+        /// </summary>
+        /// <returns>The available models</returns>
+        public async Task<AiImageEditModel[]> GetImageEditModels()
+        {
+            var models = await GetImageModels().ConfigureAwait(false);
+            var res = new System.Collections.Generic.List<AiImageEditModel>(models.Length);
+            foreach (var m in models)
+            {
+                var id = m?.Id;
+                if (String.IsNullOrEmpty(id) || (RateImageModel(id, true, false) < 0))
+                    continue;
+                res.Add(AiImageEditModel.From(m));
+            }
+            return res.ToArray();
+        }
+
+        /// <summary>
         /// Rate how suitable an image model is, used to select a model when the default image model isn't available (anymore).
         /// </summary>
         /// <param name="model">The model id (as returned by GetImageModels)</param>

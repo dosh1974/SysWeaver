@@ -2332,7 +2332,8 @@
             const out = kind === "background" ? [] : [{ Value: "", Label: _TF("No effect", "Choice of the effect of a picture in the media editor"), Icon: "close" }];
             //  A sound: null = the default effect of the viewer (MV.DefaultAudioEffect), "" = none
             if (kind === "audio" && MV.DefaultAudioEffect) {
-                const dn = Sw.Format.BeautifyName(MediaName(TEffect, MV.DefaultAudioEffect).replace(/\.glsl$/i, ""));
+                //  (no trailing dot or space: "Default (Corridor )" had one)
+                const dn = String(Sw.Format.BeautifyName(MediaName(TEffect, MV.DefaultAudioEffect).replace(/\.glsl$/i, "").replace(/[.\s]+$/, ""))).trim();
                 out.unshift({ Value: null, Label: _T("Default ({0})", dn, "Choice of the effect of a sound in the media editor: the default effect, {0} is its name"), Icon: "sparkle" });
             }
             for (const [g, folder, hint] of groups)
@@ -2584,6 +2585,15 @@
                     return t.Restore(JSON.stringify({ Type: t.Type, Data: t.Data, Props: JSON.parse(t.Saved) }));
                 },
             });
+            //  Opened from a host page ("back" in the url, ex: a media of a question): a way back to it (a change not saved yet is asked
+            //  about by the page's leave question)
+            if (Sw.Url.Has("back") && (history.length > 1)) {
+                const back = new Sw.Button({
+                    Text: _TF("Back", "Button of the media editor opened from another page: back to that page"), Icon: "left", Kind: "ghost",
+                    OnClick: () => history.back(),
+                });
+                t.Foot.append(back.E);
+            }
             t.Foot.append(revert.E, t.SaveB.E);
             t.Foot.hidden = false;
         }

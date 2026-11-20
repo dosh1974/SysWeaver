@@ -42,7 +42,7 @@ namespace SysWeaver.AI
             EndPoint = new Uri(ep, UriKind.Absolute);
             var apiKey = p.GetApiKey(false);
             if (!String.IsNullOrEmpty(apiKey))
-                Auth = new AuthenticationHeaderValue(String.IsNullOrEmpty(p.AuthScheme) ? "Bearer" : p.AuthScheme, apiKey);
+                Auth = MakeAuth(p.AuthScheme, apiKey);
             ComfyUiToken = String.IsNullOrEmpty(p.ComfyUiToken) ? null : p.ComfyUiToken;
             UploadWorkflows = p.UploadWorkflows;
             var folder = p.WorkflowFolder;
@@ -110,6 +110,24 @@ namespace SysWeaver.AI
         readonly IMessageHost Msg;
         readonly HttpClient Http;
         readonly AuthenticationHeaderValue Auth;
+
+        /// <summary>
+        /// The authorization header for an api key: a key of the form "user:password" (or "user:hash") is sent as basic auth
+        /// (base64 encoded) when the scheme is "Bearer" (the default) or "Basic"; any other key is sent as it is with the scheme.
+        /// (A bearer token or an already encoded basic token never contains ':', base64 has no ':')
+        /// </summary>
+        /// <param name="scheme">The configured scheme, null or empty = "Bearer"</param>
+        /// <param name="apiKey">The api key</param>
+        /// <returns>The header value</returns>
+        internal static AuthenticationHeaderValue MakeAuth(String scheme, String apiKey)
+        {
+            scheme = String.IsNullOrEmpty(scheme) ? "Bearer" : scheme;
+            var basic = String.Equals(scheme, "Basic", StringComparison.OrdinalIgnoreCase);
+            if ((basic || String.Equals(scheme, "Bearer", StringComparison.OrdinalIgnoreCase)) && (apiKey.IndexOf(':') > 0))
+                return new AuthenticationHeaderValue("Basic", Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(apiKey)));
+            return new AuthenticationHeaderValue(scheme, apiKey);
+        }
+
         readonly String ComfyUiToken;
         readonly bool UploadWorkflows;
 

@@ -18,7 +18,7 @@
  * - Files: files to upload at once (ex: files dropped on the host's media field).
  * - Count: page size (default 48). More files load when the list is scrolled to its end (and with "Show more").
  * An item: { Name, Thumb (image url), Type (MediaTypes: Image 0, Video 1, Audio 2, YouTube 3, Effect 4), Url (for the player, relative to
- * the page), Title (tool tip), Info (one line under the player), Badge (optional short text on the tile, ex: "Video 0:32"), Width, Height
+ * the page), Title (tool tip), Info (one line under the player), Desc (optional description, markdown, under Info), Badge (optional short text on the tile, ex: "Video 0:32"), Width, Height
  * (optional: the player keeps this aspect ratio, else 16:9; audio gets a short player), Value (anything the app needs back) }. The promise
  * resolves with the chosen item (Value included) or null when cancelled. "Open in a new tab" shows the selected media in MediaView.html.
  */
@@ -97,8 +97,11 @@
             },
         });
         openTab.E.hidden = true;
+        //  (an item's description, markdown, under the info line: Sw.Markdown when there, else plain text)
+        const desc = el("div", "sw-mpick-desc");
+        desc.hidden = true;
         stage.append(empty, frame);
-        right.append(stage, name, info, openTab.E);
+        right.append(stage, name, info, desc, openTab.E);
         frame.hidden = true;
         body.append(tabBar, el("div", "sw-mpick-main"));
         body.lastChild.append(left, right);
@@ -131,6 +134,15 @@
             openTab.E.hidden = !item;
             name.textContent = item ? item.Name : "";
             info.textContent = item ? (item.Info || "") : "";
+            const dText = item && item.Desc ? String(item.Desc).trim() : "";
+            desc.hidden = !dText;
+            desc.replaceChildren();
+            if (dText) {
+                if (Sw.Markdown && Sw.Markdown.Set)
+                    Sw.Markdown.Set(desc, dText).catch(() => { desc.textContent = dText; });
+                else
+                    desc.textContent = dText;
+            }
             if (item)
                 frame.src = viewUrl(item, true);
             else
@@ -214,13 +226,41 @@
             const head = el("div", "sw-mpick-head");
             head.append(bar);
             left.append(head);
-            if (kinds)
-                head.append(new Sw.Segmented({
+            let kindSeg = null;
+            if (kinds) {
+                kindSeg = new Sw.Segmented({
                     Items: kinds, Value: kind, Small: true, Class: "sw-mpick-kinds",
                     Label: _T("Kind of media", "Accessible name of the kind filter of the media picker"),
                     OnChange: v => { kind = v; remember(); load(true); },
-                }).E);
+                });
+                head.append(kindSeg.E);
+            }
             left.append(grid, state, moreBtn.E);
+            //  Nothing found: say so; when a kind is chosen (it is remembered between openings) say which, with a button that shows every kind
+            const showEmpty = () => {
+                state.replaceChildren();
+                if (grid.childElementCount)
+                    return;
+                const allKind = kinds ? kinds[0].Value : undefined;
+                const filtered = kinds && (kind !== allKind);
+                const kindText = filtered ? ((kinds.find(k => k.Value === kind) || {}).Text || "") : "";
+                const msg = el("span");
+                msg.textContent = text
+                    ? (filtered ? _T("Nothing matches the search in {0}.", kindText, "Media picker: the search found nothing among the files of the chosen kind, {0} is the kind (ex: Effects)") : _T("Nothing matches the search.", "Media picker: the search found nothing"))
+                    : (filtered ? _T("There are no {0} here yet.", kindText, "Media picker: no files of the chosen kind, {0} is the kind (ex: Effects)") : _T("There are no files here yet.", "Media picker: the library is empty"));
+                state.append(msg);
+                if (filtered)
+                    state.append(" ", new Sw.Button({
+                        Text: _T("Show every kind", "Media picker: button shown when nothing is found among the files of the chosen kind, it shows the files of every kind"), Kind: "ghost", Small: true,
+                        OnClick: () => {
+                            kind = allKind;
+                            if (kindSeg)
+                                kindSeg.Set(kind, true);
+                            remember();
+                            load(true);
+                        },
+                    }).E);
+            };
             async function load(reset) {
                 if (!reset && (busy || !more))
                     return;
@@ -243,7 +283,7 @@
                     row += items.length;
                     more = !!(r && r.More);
                     moreBtn.E.hidden = !more;
-                    state.textContent = grid.childElementCount ? "" : (text ? _T("Nothing matches the search.", "Media picker: the search found nothing") : _T("There are no files here yet.", "Media picker: the library is empty"));
+                    showEmpty();
                 }
                 catch (e) {
                     if (my === seq)

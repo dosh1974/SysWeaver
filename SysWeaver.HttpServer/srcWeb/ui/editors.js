@@ -334,7 +334,7 @@
                     const only = new Sw.NumberBox({ Step: step, Value: S(val), AriaLabel: aria, OnChange: x => comp(x, true) });
                     return { Slider: { E: null }, Box: only, Set: x => only.Set(S(x), true) };
                 }
-                const box = new Sw.NumberBox({ Step: step, Value: S(val), AriaLabel: aria, Min: d.Type === "int" ? S(d.Min) : undefined, OnChange: x => slider.Set(x, false, true) });
+                const box = new Sw.NumberBox({ Step: step, Value: S(val), AriaLabel: aria, Min: d.Type === "int" ? S(d.Min) : undefined, OnChange: x => { slider.Set(x, false, true); const c = slider.Get(); if (c !== x) setTimeout(() => box.Set(c, true), 0); } }); // (a typed number outside the range: the box shows what the slider kept, after its own commit)
                 const slider = new Sw.Slider({
                     Min: S(d.Min ?? 0), Max: S(d.Max ?? 1), Step: d.Type === "int" ? Math.max(1, S(d.Step || 1)) : step, Log: !!d.Log, Value: S(val), Default: S(def),
                     Center: d.Log ? S(def) : undefined, Label: aria,

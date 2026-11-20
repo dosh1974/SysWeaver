@@ -18,7 +18,8 @@ namespace SysWeaver.AI
         public String EndPoint = "http://127.0.0.1:8188";
 
         /// <summary>
-        /// The authorization scheme used when an api key is supplied
+        /// The authorization scheme used when an api key is supplied.
+        /// An api key of the form "user:password" (or "user:hash") is sent as basic auth (base64 encoded for you) when this is "Bearer" or "Basic".
         /// </summary>
         public String AuthScheme = "Bearer";
 
