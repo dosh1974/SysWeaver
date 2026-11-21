@@ -161,46 +161,45 @@ namespace SysWeaver.Net
         public void AddMethod(Object o, MethodInfo method, String url = null, String root = null)
         {
             //  Handle the optional attribute (dynamically exclude some API's, depending on config etc)
-            var check = method.GetCustomAttribute<WebApiOptionalAttribute>(true)?.MemberName;
-            if (check != null)
-            {
-                var ot = o.GetType();
-                var fi = ot.GetField(check, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-                if (fi != null)
-                {
-                    if (fi.FieldType != typeof(Boolean))
-                        throw new Exception(check.ToQuoted() + " in " + ot.FullName.ToQuoted() + " must be a Boolean field for use with the " + nameof(WebApiOptionalAttribute).ToQuoted() + " attribute");
-                    if (!((Boolean)fi.GetValue(o)))
-                        return;
-                } else
-                {
-                    var pi = ot.GetProperty(check, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-                    if (pi != null)
-                    {
-                        if (pi.PropertyType != typeof(Boolean))
-                            throw new Exception(check.ToQuoted() + " in " + ot.FullName.ToQuoted() + " must be a Boolean property for use with the " + nameof(WebApiOptionalAttribute).ToQuoted() + " attribute");
-                        if (!((Boolean)pi.GetValue(o)))
-                            return;
-                    }
-                    else
-                    {
-                        var mi = ot.GetMethod(check, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, Array.Empty<Type>());
-                        if (mi != null)
-                        {
-                            if (mi.ReturnType != typeof(Boolean))
-                                throw new Exception(check.ToQuoted() + " in " + ot.FullName.ToQuoted() + " must be return Boolean for use with the " + nameof(WebApiOptionalAttribute).ToQuoted() + " attribute");
-                            if (!((Boolean)mi.Invoke(o, null)))
-                                return;
-                        }
-                        else
-                        {
-                            throw new Exception(check.ToQuoted() + " is not a valid member in " + ot.FullName.ToQuoted() + " for use with the " + nameof(WebApiOptionalAttribute).ToQuoted() + " attribute");
-                        }
-                    }
-                }
-            }
+            if (!IsEnabled(o, method))
+                return;
             var baseUrl = GetBaseUrl(method, url, root);
             InternalAddEndPoint(o, method, baseUrl);
+        }
+
+        /// <summary>
+        /// Check if an API method is enabled, i.e. it has no <see cref="WebApiOptionalAttribute"/> or the named boolean field, property or parameterless method on <paramref name="o"/> is true.
+        /// </summary>
+        /// <param name="o">The instance that the method is invoked on.</param>
+        /// <param name="method">The method.</param>
+        /// <returns>True if the method should be exposed.</returns>
+        /// <exception cref="Exception">The <see cref="WebApiOptionalAttribute"/> member is missing or isn't boolean.</exception>
+        public static bool IsEnabled(Object o, MethodInfo method)
+        {
+            var check = method.GetCustomAttribute<WebApiOptionalAttribute>(true)?.MemberName;
+            if (check == null)
+                return true;
+            var ot = o.GetType();
+            var fi = ot.GetField(check, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            if (fi != null)
+            {
+                if (fi.FieldType != typeof(Boolean))
+                    throw new Exception(check.ToQuoted() + " in " + ot.FullName.ToQuoted() + " must be a Boolean field for use with the " + nameof(WebApiOptionalAttribute).ToQuoted() + " attribute");
+                return (Boolean)fi.GetValue(o);
+            }
+            var pi = ot.GetProperty(check, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            if (pi != null)
+            {
+                if (pi.PropertyType != typeof(Boolean))
+                    throw new Exception(check.ToQuoted() + " in " + ot.FullName.ToQuoted() + " must be a Boolean property for use with the " + nameof(WebApiOptionalAttribute).ToQuoted() + " attribute");
+                return (Boolean)pi.GetValue(o);
+            }
+            var mi = ot.GetMethod(check, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, Array.Empty<Type>());
+            if (mi == null)
+                throw new Exception(check.ToQuoted() + " is not a valid member in " + ot.FullName.ToQuoted() + " for use with the " + nameof(WebApiOptionalAttribute).ToQuoted() + " attribute");
+            if (mi.ReturnType != typeof(Boolean))
+                throw new Exception(check.ToQuoted() + " in " + ot.FullName.ToQuoted() + " must be return Boolean for use with the " + nameof(WebApiOptionalAttribute).ToQuoted() + " attribute");
+            return (Boolean)mi.Invoke(o, null);
         }
 
         /// <summary>
