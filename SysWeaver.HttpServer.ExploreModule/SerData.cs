@@ -19,7 +19,7 @@ namespace SysWeaver.Net.ExploreModule
         }
 
         /// <summary>
-        /// The name of the compression implementation
+        /// The name of the serializer implementation
         /// </summary>
         public readonly String Name;
 
@@ -42,13 +42,13 @@ namespace SysWeaver.Net.ExploreModule
         public readonly String Mime;
 
         /// <summary>
-        /// If the serializer is text-based, this is the econding to use
+        /// If the serializer is text-based, this is the encoding to use
         /// </summary>
         [TableDataEncoding]
         public readonly String Encoding;
 
         /// <summary>
-        /// The priority (quality) of the compressor, if multiple compressors are available the one with the highest priority is returned by the compression manager
+        /// The priority of the serializer, if multiple serializers are registered for the same extension the one with the highest priority is returned by the serializer manager
         /// </summary>
         public readonly int Prio;
     }

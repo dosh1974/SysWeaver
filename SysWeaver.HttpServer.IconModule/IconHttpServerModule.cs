@@ -13,9 +13,15 @@ namespace SysWeaver.Net.IconModule
 {
 
 
+    /// <summary>
+    /// Registers the embedded icons (folder, virtual folder and API icons, country flags) in the static data module and generates the
+    /// icons of file extensions (<see cref="ExtPrefix"/>) and mime types (<see cref="MimePrefix"/>) on the first request, from a document
+    /// template labelled with the extension and coloured by the mime type. Generated icons are cached and added to the static data module.
+    /// </summary>
     public sealed class IconHttpServerModule : IHttpServerModule, IPerfMonitored
     {
 
+        /// <inheritdoc/>
         public PerfMonitor PerfMon { get; private set; } = new PerfMonitor(nameof(IconHttpServerModule));
 
         /// <summary>
@@ -54,8 +60,16 @@ namespace SysWeaver.Net.IconModule
         /// </summary>
         public readonly string FlagPrefix;
 
+        /// <summary>
+        /// The extension, mime type and flag prefixes (only requests below these reach <see cref="Handler"/>), null if a prefix is empty.
+        /// </summary>
         public String[] OnlyForPrefixes { get; init; }
 
+        /// <summary>
+        /// Create the module and register the embedded icons in the static data module.
+        /// </summary>
+        /// <param name="dataModule">The static data module that serves the icons (embedded and generated).</param>
+        /// <param name="p">Optional parameters, null to use the defaults.</param>
         public IconHttpServerModule(StaticDataHttpServerModule dataModule, IconHttpServerModuleParams p = null)
         {
             var pp = p ?? new IconHttpServerModuleParams();
@@ -491,6 +505,12 @@ namespace SysWeaver.Net.IconModule
             }
         }
 
+        /// <summary>
+        /// Generate the icon of a requested file extension or mime type svg (below <see cref="ExtPrefix"/> / <see cref="MimePrefix"/>) that
+        /// isn't registered yet, add it to the static data module and let that module serve it.
+        /// </summary>
+        /// <param name="context">The request.</param>
+        /// <returns>The handler of the static data module, or null if the request isn't for a missing extension or mime type icon.</returns>
         public IHttpRequestHandler Handler(HttpServerRequest context)
         {
             var l = context.LocalUrl;
@@ -548,6 +568,11 @@ namespace SysWeaver.Net.IconModule
         readonly ConcurrentDictionary<String, String>.AlternateLookup<ReadOnlySpan<Char>> MimeCacheLookup;
         readonly ConcurrentDictionary<String, String>.AlternateLookup<ReadOnlySpan<Char>> ExtCacheLookup;
 
+        /// <summary>
+        /// Get the svg icon of a file extension (a specific icon where one is available, else the generated document icon), cached.
+        /// </summary>
+        /// <param name="ext">The file extension, without the dot, ex: "pdf".</param>
+        /// <returns>The svg text.</returns>
         public String GetFromExt(String ext)
         {
             if (ExtCache.TryGetValue(ext, out var val))
@@ -563,6 +588,12 @@ namespace SysWeaver.Net.IconModule
             return val;
         }
 
+        /// <summary>
+        /// Get the svg icon of a mime type (a specific icon where one is available, else the generated document icon labelled with the
+        /// sub type), cached.
+        /// </summary>
+        /// <param name="mime">The mime type, ex: "text/plain".</param>
+        /// <returns>The svg text.</returns>
         public String GetFromMime(String mime)
         {
             if (MimeCache.TryGetValue(mime, out var val))

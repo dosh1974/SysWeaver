@@ -11,9 +11,10 @@ namespace SysWeaver.Compression
 {
 
     /// <summary>
-    /// The default GZip ("gzip", extensions "gz" and "gzip") implementation (priority 0, registered by default), using the .NET <see cref="GZipStream"/>.
+    /// A GZip ("gzip", extensions "gz" and "gzip") implementation (priority 0) using the .NET <see cref="GZipStream"/>.
     /// </summary>
     /// <remarks>
+    /// Registered by default only when built for a target before .NET 11, <see cref="CompGZipNETNew"/> is registered instead on .NET 11 or later.
     /// Uses <see cref="CompHelpers.GetStreamLevel(CompEncoderLevels)"/> to map the level.
     /// Concatenated gzip members are decompressed (as supported by <see cref="GZipStream"/>).
     /// Truncated data is detected using <see cref="CompInflaterState"/> (reflection on the .NET internals), so it throws an <see cref="InvalidDataException"/> instead of returning partial data.

@@ -812,7 +812,7 @@
                 onFirst();
             }
             catch (ex) {
-                //  The inbox requires a role (FakeEmailParams.Auth, default Ops / Debug / Dev): a refusal is final, show the shared
+                //  The inbox can require a role (FakeEmailParams.Auth, default null = open to anyone): a refusal is final, show the shared
                 //  "not allowed" state instead of retrying (a user that is not signed in is sent to the sign in page by Sw.Net)
                 if (Sw.Access && Sw.Access.IsDenied(ex)) {
                     showDenied(ex);

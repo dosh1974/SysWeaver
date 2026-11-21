@@ -36,6 +36,9 @@ flowchart LR
 - [`IRemoteApi`](IRemoteApi.cs) — optional base interface of remote API contracts
 - [`RemoteEndPointAttribute`](RemoteEndPointAttribute.cs) — path template and verb, plus `RemotePathPrefixAttribute`
 - [`RemoteTimeoutAttribute`](RemoteTimeoutAttribute.cs) — time-out, cache and `ParamAsObject` attributes
+- [`RemoteSerializerAttribute`](RemoteSerializerAttribute.cs) — serializer override (optionally a different serializer for the request payload)
+- [`HttpEndPointTypes`](HttpEndPointTypes.cs) — the HTTP verbs
+- [`RemoteParam`](RemoteParam.cs) — serializer name constants
 
 ## Using it
 

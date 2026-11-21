@@ -31,13 +31,16 @@ flowchart LR
 - `TableChart` API: charts any table-data API (key and value columns) the caller is allowed to use
 - `PerformanceChart`: a debug menu item graphing active and peak method calls
 - Chart export through exporters contributed by other services (`IHaveChartExporters`); when a user storage service is present, charts can also be saved as private, protected or public links
-- AI tools (`BuildChart`, `DisplayChart` and advanced variants taking a full `ChartJsConfig`) so assistants can produce charts in chat
+- AI tools (`BuildChart`, `DisplayChart` and the advanced variants `BuildAdvancedChart` / `DisplayAdvancedChart` taking a full `ChartJsConfig`) so assistants can produce charts in chat; only `BuildChart` is also offered to MCP clients (the others are `[AiHideMcp]`)
+- Chat link handler (`IChatStoreLinkHandler.HandleLink`): a `chart/chart.html?q=...` link from a chat is stored as a chart file in the user storage (private, protected or public)
 
 ## Key components
 
 - [`ChartJsService`](ChartJsService.cs) — the micro service: chart APIs, table charts, exporter registry and AI tools
 - [`ChartJsConfig`](ChartJsConfig.cs) — root of the typed Chart.js configuration model
 - [`Chart`](Chart.cs) — simplified chart description used by the AI tools
+- [`TableChartParams`](TableChartParams.cs) — input of the `TableChart` API (table API, key and value columns, table request options)
+- [`UserStorageChartExporter`](UserStorageChartExporter.cs) — the private / protected / public link exporters (only with a user storage service)
 
 ## Using it
 
@@ -63,4 +66,4 @@ flowchart LR
 - **Project:** [`SysWeaver.MicroService.ChartJs.csproj`](SysWeaver.MicroService.ChartJs.csproj)
 - **Builds on:** [SysWeaver.Serialization.NewtonsoftJson](../Serialization/SysWeaver.Serialization.NewtonsoftJson/README.md), [SysWeaver.MicroServices.ServiceManager](../SysWeaver.MicroServices.ServiceManager/README.md)
 - **Used by:** [SysWeaver.MicroService.ChartJs.Excel](../SysWeaver.MicroService.ChartJs.Excel/README.md), [SysWeaver.MicroService.ServerManager](../SysWeaver.MicroService.ServerManager/README.md), [ExchangeRateService](https://github.com/dosh1974/SysWeaver.Services/blob/main/ExchangeRateService/README.md)
-- **Third-party:** Chart.js, chartjs-plugin-datalabels, Hammer.js and canvas2svg (bundled browser scripts)
+- **Third-party:** Chart.js, chartjs-plugin-datalabels and canvas2svg (bundled browser scripts; Hammer.js is bundled but not loaded)

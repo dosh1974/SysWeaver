@@ -2,14 +2,14 @@
  * @file SimpleAuth.js - the SimpleAuthorizer pages of SysWeaver.Auth.Core (served as auth/SimpleAuth.js).
  *
  * Entry points (globals, body onload; also on `Sw.SimpleAuth`):
- *  - pwdGenMain (auth/index.html, menu Debug/SimpleAuth/GenPwd; a Sw.PageLayout form page with Sw.Card + Sw.TextBox + Sw.Form):
+ *  - pwdGenMain (auth/index.html, menu Admin/GenPwd; a Sw.PageLayout form page with Sw.Card + Sw.TextBox + Sw.Form):
  *    enter a user name and a password (generator, the
  *    server's fixed policy, leak check) and get the configuration line "user : b64(sha256(password|salt))" with the
  *    per user salt of Api/debug/simpleAuth/GetAuthSalt; copy button.
- *  - keyManMain (auth/KeyMan.html, menu Debug/SimpleAuth/KeyMan): the API keys ("name:key"), masked by default with a
+ *  - keyManMain (auth/KeyMan.html, menu Admin/KeyMan): the API keys ("name:key"), masked by default with a
  *    per key "Show the key" toggle: copy, download a credentials file "<name>_<AppName>.txt", remove (confirmed), create
- *    (dialog: name of letters, digits, '_', '-'; the new key is copied to the clipboard). Copy toasts and tool tips never
- *    show the secret ('Key "name" copied to the clipboard.'), and a key's copy toast is closed when the key is removed.
+ *    (dialog: name of letters, digits, '_', '-'; the new key is copied to the clipboard). The copy announcement and tool tips never
+ *    show the secret ('The API key "name"'; only a create shows a toast), and that toast is closed when the key is removed.
  *    The list refreshes every 30 s (unchanged items are kept). This page
  *    reloads on user changes (it doesn't call IgnoreUserChanges).
  *
@@ -266,7 +266,7 @@
         if (!await Sw.Dialog.Confirm(
             _TF("Remove key", "The title of a confirmation dialog that is shown when a user wants to remove an API key"),
             _T("The key \"{0}\" will be removed!", name, "First line of the text of a confirmation dialog that is shown when a user wants to remove an API key. {0} is replaced with the name (identifier) of the API key") + "\n" +
-            _TF("You won't be able to restore it with the same password, ever!", "Second line of the text of a confirmation dialog that is shown when a user wants to remove an API key") + "\n\n" +
+            _TF("Services and scripts that use it stop working at once, and a removed key can't be restored.", "Second line of the text of a confirmation dialog that is shown when a user wants to remove an API key: the consequence (a key is not a password)") + "\n\n" +
             _TF("Are you sure?", "Last line of the text of a confirmation dialog that is shown when a user wants to remove an API key"),
             _TF("Yes, remove it!", "The text of a button on a confirmation dialog that when pressed will remove an API key"),
             {
@@ -458,7 +458,7 @@
                 },
             });
             toolPage(page, _TF("API keys", "The title of a table containing all API keys available on a server"),
-                _TF("Keys that let services and scripts call this service. A key is only shown when you ask for it.", "One line description below the title of the API key management page"), [create.E]);
+                _TF("Keys that let services and scripts call this service. Anyone who has a key can call it, so keep keys as safe as passwords.", "One line description below the title of the API key management page"), [create.E]);
             //  Opened alone, the tab keeps the page's own title ("API key management", as before; the heading says "API keys" as the
             //  old table header did). In the app shell the heading and the title are the menu item's name.
             if (!Sw.Page.IsEmbedded && docTitle)
@@ -478,7 +478,11 @@
                 const row = U.Buttons(null);
                 const secret = kv.substring(i + 1);
                 //  The key is masked until revealed (people looking at the screen, screen sharing)
-                const keyLine = el("div.auth-item-line.sw-mono.auth-key.auth-key-masked", { text: "•".repeat(Math.min(24, Math.max(8, secret.length))) });
+                //  (the dots are hidden from screen readers, which hear "Key hidden" instead of two dozen bullets)
+                const masked = () => [
+                    el("span", { text: "•".repeat(Math.min(24, Math.max(8, secret.length))), attrs: { "aria-hidden": "true" } }),
+                    el("span.sw-sr-only", { text: _TF("Key hidden", "Screen reader text of a masked API key (shown as dots until Show the key is pressed)") })];
+                const keyLine = el("div.auth-item-line.sw-mono.auth-key.auth-key-masked", null, ...masked());
                 const li = el("li.auth-item", null,
                     el("div.auth-item-name", { text: name, title: _TF("This is typically the name of the service that will use this API key", "The tool tip description of a column that contains the names (identifiers) of API keys available on a server") }),
                     keyLine,
@@ -488,22 +492,26 @@
                     Title: _T("Show the key of \"{0}\"", name, "The tool tip description of a toggle button that shows (or hides again) an API key that is masked by default. {0} is replaced with the name of the API-key"),
                     OnClick: b => {
                         const show = b.Pressed;
-                        keyLine.textContent = show ? secret : "•".repeat(Math.min(24, Math.max(8, secret.length)));
+                        keyLine.textContent = show ? secret : "•".repeat(8);
+                        if (!show)
+                            keyLine.replaceChildren(...masked());
                         keyLine.classList.toggle("auth-key-masked", !show);
                         b.SetIcon(show ? "eyeOff" : "eye");
                     },
                 });
-                reveal.E.setAttribute("aria-label", _T("Show the key of {0}", name, "Accessible name of a toggle button that shows an API key that is masked by default, {0} is the name of the key"));
+                reveal.E.setAttribute("aria-label", _T("Show the key of \"{0}\"", name, "Accessible name of a toggle button that shows an API key that is masked by default, {0} is the name of the key"));
                 U.Button(row, {
                     Icon: "IconCopy", Small: true,
                     Title: _T("Copy the key of \"{0}\" to the clipboard", name, "The tool tip description of a button that when pressed will copy an API-key to the clipboard. {0} is replaced with the name of the API-key (the key itself is never shown in the tool tip)"),
                     OnClick: () => copyKey(kv),
                 });
-                U.Button(row, {
+                const download = U.Button(row, {
                     Icon: "IconDownload", Small: true,
-                    Title: _TF("Download a credentials file, ready to use", "The tool tip description of a button that when pressed will download an API-key in a text file"),
+                    Title: _TF("Download a credentials file, ready to use (it holds the key as plain text: keep the file as safe as a password)", "The tool tip description of a button that when pressed will download an API-key in a text file"),
                     OnClick: () => Sw.Net.DownloadText(name + "_" + appName[0] + ".txt", "# API credentials for accessing the " + appName[1] + " service at " + baseUrl + "\n\n" + kv + "\n"),
                 });
+                //  (the name says which key, as Show / Copy / Remove; the plain text warning stays in the tool tip)
+                download.E.setAttribute("aria-label", _T("Download the credentials file of \"{0}\"", name, "Accessible name of the button that downloads the credentials file of an API key. {0} is the name of the key"));
                 U.Button(row, {
                     Icon: "IconRemove", Small: true, Kind: "danger", Class: "auth-remove-key",
                     Title: _T("Remove the key for \"{0}\"", name, "The tool tip description of a button that when pressed will remove an API-key from a service. {0} is replaced with the name (identifier) of the API-key that will be removed"),

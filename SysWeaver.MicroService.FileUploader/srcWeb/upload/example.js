@@ -1,5 +1,5 @@
 /**
- * @file Script of the upload example / debug page (upload/Example.html, menu "Debug/FileUploader/Upload file").
+ * @file Script of the upload example / debug page (upload/Example.html, menu "Debug/FileUploader/File upload test").
  * Loaded with a static `<script defer>` after ../sw/core.js, ../sw/ui.js and ../common/fileUploader.js; started by
  * `<body onload="exampleMain()">`.
  *

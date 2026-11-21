@@ -37,6 +37,7 @@ The service requires at least one `IIpLocationSource` and optionally uses one `I
 ## Key components
 
 - [`IpLocationService`](IpLocationService.cs) - the service: cache, source failover and retries
+- [`IpLocationParams`](IpLocationParams.cs) - service parameters: the memory cache time and the retry rounds and waits
 - [`IIpLocationSource`](Sources/IIpLocationSource.cs) - the source plug-in contract
 - [`IIpLocationCache`](Caches/IIpLocationCache.cs) - the cache plug-in contract, implemented by [`IpLocationMemoryCache`](Caches/IpLocationMemoryCache.cs)
 - [`IpLocation`](IpLocation.cs) - the result (country, region, city, coordinates, autonomous system, source)

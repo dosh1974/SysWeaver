@@ -22,6 +22,8 @@ namespace SysWeaver.MicroService
         public SignUpService(ServiceManager manager)
         {
             Am = manager.Get<UserManagerService>();
+            //  The sign up api exists now: the user manager may offer its sign up methods (SignUp.html, the sign in page)
+            Am.EnableSignUp();
         }
 
         readonly UserManagerService Am;

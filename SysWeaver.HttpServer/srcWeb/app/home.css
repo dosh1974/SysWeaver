@@ -76,7 +76,8 @@ img.UserImage {
 .HomeStatus {
     gap: 6px;
     max-width: 100%;
-    white-space: nowrap;
+    /* (wraps when the header is too narrow, ex: a phone at a large text size: it scrolled the page sideways) */
+    white-space: normal;
     overflow: hidden;
     text-overflow: ellipsis;
 }

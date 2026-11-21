@@ -801,7 +801,8 @@ html.sw-table-padded:has(body.sw-table-pagebody) {
     font-size: 90%;
     color: var(--sw-fg);
     background: var(--sw-surface-sunken);
-    border: 1px solid var(--sw-border);
+    /* (the input border of .sw-input: --sw-border was 1.2:1, WCAG 1.4.11 asks 3:1 for the edge of a field) */
+    border: 1px solid var(--sw-border-strong);
     border-radius: var(--sw-radius);
     padding: 2px 6px;
     outline: none;
@@ -1446,8 +1447,8 @@ html.sw-table-padded:has(body.sw-table-pagebody) {
     border: none;
 }
 
-/* The header row and the filter rows are hidden in the card layout: the card tool bar (div.sw-table-cardbar, "Sort" and "Filter"
-   buttons opening a menu / dialog with the same options) replaces them, so the cards get the height */
+/* The header row and the filter rows are hidden in the card layout: the Sort and Filter buttons of the tool bar (table.js
+   BuildToolbar, opening a menu / dialog with the same options) replace them, so the cards get the height */
 .sw-table-cards .sw-table-grid > thead, .sw-table-cards .sw-table-grid > tbody.sw-table-filters {
     display: none;
 }
@@ -1466,6 +1467,11 @@ html.sw-table-padded:has(body.sw-table-pagebody) {
     border-bottom: 1px solid var(--sw-border);
     background: color-mix(in srgb, var(--sw-bg) 94%, var(--sw-accent1));
 }
+
+    /* Sort and Filter are in the tool bar now (new pages): an empty bar was a 5 px strip with a second hairline under the tool bar */
+    .sw-table-cards .sw-table-cardbar:empty {
+        display: none;
+    }
 
 /* Sort and Filter: two equal halves of the bar, content centred, a thin line between them */
 .sw-table-cardbtn {
@@ -1587,9 +1593,47 @@ html.sw-table-padded:has(body.sw-table-pagebody) {
     padding: 4px 4px 8px;
 }
 
-/* (phone portrait: the page has no side margins there, sw-table-narrow; the cards keep the phone gutter of the rest of the layout) */
+/* (phone portrait: the page has no side margins there, sw-table-narrow; the cards keep the phone gutter of the rest of the layout,
+   except on a narrow window where Sw.Bleed (ui/page.js) moves them over it to the window edges) */
 .sw-table-narrow.sw-table-cards .sw-table-grid > tbody.sw-table-body {
     padding-inline: 12px;
+}
+
+/* The card layout frame at a window edge (Sw.Bleed, ui/page.js: phones; the frame is moved over the page padding or the page has
+   none): the cards touch that edge (no gutter), the bars above and below keep their texts on the page padding line */
+.sw-table-cards.sw-edge-l .sw-table-grid > tbody.sw-table-body {
+    padding-left: 0;
+}
+
+.sw-table-cards.sw-edge-r .sw-table-grid > tbody.sw-table-body {
+    padding-right: 0;
+}
+
+.sw-table.sw-edge-l > :is(.sw-table-toolbar, .sw-table-chips, .sw-table-cardbar, .sw-table-foot) {
+    padding-left: var(--sw-page-px, 16px);
+}
+
+.sw-table.sw-edge-r > :is(.sw-table-toolbar, .sw-table-chips, .sw-table-cardbar, .sw-table-foot) {
+    padding-right: var(--sw-page-px, 16px);
+}
+
+/* A narrow table (no side borders) that stays inside the page padding (not at a window edge, ex: in a tab panel that clips): its
+   bars start on the content line, as the page title above (a 12 px inset looked misaligned without the border that justified it) */
+.sw-table-narrow:not(.sw-edge-l) > :is(.sw-table-toolbar, .sw-table-chips, .sw-table-foot) {
+    padding-left: 0;
+}
+
+.sw-table-narrow:not(.sw-edge-r) > :is(.sw-table-toolbar, .sw-table-chips) {
+    padding-right: 0;
+}
+
+/* Phones: the stand alone table page has no side padding (its body clips, a table moved over the padding was cut off): the table
+   touches the window edges and its bars keep the texts on the page padding line (the rules above, Sw.Bleed edge classes) */
+@media (max-width: 599px) {
+    html:is(.sw-table-alone, .sw-table-padded):has(body.sw-table-pagebody) {
+        padding-left: 0;
+        padding-right: 0;
+    }
 }
 
 .sw-table-cards .sw-table-body tr {
@@ -1601,6 +1645,16 @@ html.sw-table-padded:has(body.sw-table-pagebody) {
     border: 1px solid var(--sw-border);
     border-radius: var(--sw-radius);
 }
+
+    /* A card at the window edge (Sw.Bleed, ui/page.js: phones): the texts start on the page padding line, as the rest of the page
+       (the page padding minus the cell padding below) */
+    .sw-table-cards .sw-table-body tr.sw-edge-l {
+        padding-left: max(0px, calc(var(--sw-page-px, 16px) - 10px));
+    }
+
+    .sw-table-cards .sw-table-body tr.sw-edge-r {
+        padding-right: max(0px, calc(var(--sw-page-px, 16px) - 10px));
+    }
 
 .sw-table-cards .sw-table-body td, .sw-table-cards .sw-table-body tr:nth-child(2n) td {
     display: flex;
@@ -1771,6 +1825,11 @@ html.sw-table-padded:has(body.sw-table-pagebody) {
     .sw-table-cards .sw-table-body tr:hover {
         border-color: var(--sw-accent1);
     }
+
+        /* A card at the window edge has no side border (Sw.Bleed): a tone step tells the hover too */
+        .sw-table-cards .sw-table-body tr:is(.sw-edge-l, .sw-edge-r):hover {
+            background: color-mix(in srgb, var(--sw-bg), var(--sw-fg) 4%);
+        }
 }
 
 /* Compact cards (table.js CompactCard): a closed card of a wide table shows its first values (.sw-table-extra: the rest) and a
@@ -1959,10 +2018,19 @@ html.sw-table-padded:has(body.sw-table-pagebody) {
     }
 }
 
-/* Phones (portrait: the top bar shows the title) and low screens (landscape phones: the rows need the height) have no page header */
+/* Phones (portrait: the top bar shows the title) and low screens (landscape phones: the rows need the height) show no page header;
+   it stays for screen readers (the page h1, WCAG 2.4.6) */
 @media (max-width: 599px), (max-height: 500px) {
     .sw-table-ph {
-        display: none;
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        margin: -1px;
+        padding: 0;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+        border: 0;
     }
 }
 
@@ -1984,10 +2052,11 @@ html.sw-table-padded:has(body.sw-table-pagebody) {
     container: swtabletools / inline-size;
 }
 
+    /* (the minimum is at most 30 % of the tool bar: at a large text size 7rem pushed the tools out of the window) */
     .sw-table-toolbar > .sw-table-search {
         flex: 0 1 18rem;
         width: auto;
-        min-width: 7rem;
+        min-width: min(7rem, 30cqi);
     }
 
 .sw-table-tspacer {
@@ -1995,11 +2064,15 @@ html.sw-table-padded:has(body.sw-table-pagebody) {
     min-width: 0;
 }
 
+/* (the tools wrap to a second line only when they don't fit, ex: a large text size on a narrow window; they never leave the window) */
 .sw-table-ttools {
-    flex: none;
+    flex: 0 1 auto;
     display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
     align-items: center;
     gap: 2px;
+    min-width: 0;
 }
 
 .sw-table-toolbar .sw-button.sw-table-tbtn {
@@ -2269,9 +2342,15 @@ html.sw-table-padded:has(body.sw-table-pagebody) {
     display: flex;
     align-items: center;
     gap: var(--sw-space-4, 16px);
-    min-width: 0;
+    /* (at least the range text "1-3 of 3": at a large text size it was cut to "1-3 o"; the foot wraps instead, see below) */
+    min-width: min(100%, max-content);
     overflow: hidden;
 }
+
+    /* The foot wraps when the range and the paging controls don't fit on one line (large text sizes) */
+    .sw-table-foot:has(> .sw-table-fleft) {
+        flex-wrap: wrap;
+    }
 
 .sw-table-range {
     flex: none;
@@ -3428,8 +3507,7 @@ html.sw-table-padded:has(body.sw-table-pagebody) {
     }
 
     .sw-table-toolbar > .sw-table-search {
-        flex: 1 1 auto;
-        min-width: 9rem;
+        flex: 1 1 6rem;
     }
 
     .sw-table-tspacer {

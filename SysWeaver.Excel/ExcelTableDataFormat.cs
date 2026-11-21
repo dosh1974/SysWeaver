@@ -483,15 +483,33 @@ namespace SysWeaver.Excel
         #region Type 
 
 
+        /// <summary>
+        /// Excel number format for integers (thousand separators, negative values in red, zero in blue)
+        /// </summary>
         public const String TypeInteger = @"#,##0;[Red]-#,##0;[Blue]0";
 
+        /// <summary>
+        /// Excel number format for decimal numbers (two decimals, thousand separators, negative values in red, zero in blue)
+        /// </summary>
         public const String TypeDecimal = @"#,##0.00;[Red]-#,##0.00;[Blue]0.00";
 
+        /// <summary>
+        /// Excel number format for date and time values
+        /// </summary>
         public const String TypeDateTime = @"YYYY-MM-DD hh:mm:ss;[Red]\-";
 
+        /// <summary>
+        /// Excel number format for date only values
+        /// </summary>
         public const String TypeDateOnly = @"YYYY-MM-DD;[Red]\-";
+        /// <summary>
+        /// Excel number format for time only values
+        /// </summary>
         public const String TypeTimeOnly = @"hh:mm:ss;[Red]\-";
 
+        /// <summary>
+        /// Excel number format for text ("@")
+        /// </summary>
         public const String TypeGeneric = "@";
 
 

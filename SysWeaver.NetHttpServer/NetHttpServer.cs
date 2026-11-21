@@ -283,7 +283,8 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Stop listening for requests. Ongoing requests are asked to cancel and given about 3 seconds to complete.
+        /// Stop listening for requests. Ongoing requests are asked to cancel and given about 3 seconds before the listener stops,
+        /// then this waits until the request handlers completed, at most <see cref="SecondsToWait"/> seconds.
         /// </summary>
         /// <returns>False if the server wasn't started.</returns>
         public bool Stop()

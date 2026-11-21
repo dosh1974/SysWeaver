@@ -1,5 +1,5 @@
 /**
- * @file smShared.js - helpers shared by the ServerManager pages (server.js, keys.js, serviceInfo.js, versionInfo.js).
+ * @file smShared.js - helpers shared by the ServerManager pages (server.js, services.js, keys.js, serviceInfo.js, versionInfo.js).
  * Classic script, loaded with `<script defer>` after ../sw/core.js and ../sw/ui.js (and before the page script).
  * No side effects at load time besides defining the single global `SmShared`.
  *
@@ -7,7 +7,7 @@
  * - chart / metrics urls (chart tiles are iframes of ../chart/chart.html fetching ../ServerManager/<api>),
  * - a flicker free child reconciler for polled lists (`ChildUpdater`),
  * - upload targets on top of common/fileUploader.js (`UploadTarget`; only the public `fileUploaderSetup` is used),
- * - small DOM helpers (`TimeCell`),
+ * - small helpers (`TimeCell`, `Lines`, `DangerTitle`, `BaseName`),
  * - Design v2 page parts on the shared ui components: `KpiSub` (KPI level as a badge), `UploadButton` (an upload / drop button), `FillTable` (a live table in a fill page).
  *
  * Conventions: chart API names follow the C# pattern `Get<X>Chart`, `Get<X>HistoryShortChart`, `Get<X>HistoryChart`,

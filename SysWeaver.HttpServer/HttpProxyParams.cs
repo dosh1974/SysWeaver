@@ -103,6 +103,10 @@ namespace SysWeaver.Net
     }
 
 
+    /// <summary>
+    /// One forwarded folder of a <see cref="HttpProxy"/>: the local web root, the remote source folder and optional overrides of the
+    /// settings of the parent <see cref="HttpProxyParams"/> (null uses the parent's value).
+    /// </summary>
     public sealed class HttpProxyEndPoint
     {
         /// <summary>

@@ -27,29 +27,33 @@ namespace SysWeaver.MicroService
             AllowSignUp = p.AllowSignUp;
             TextSender = manager.Get<ITextMessageSender>(p.Instance);
 
+            //  The defaults are the WhatsApp texts of srcData (*WhatsApp.md); the messages without one (the e-mail ones, header and footer)
+            //  use the text message (SMS) texts. (A name that is no file / resource is used as the template text itself, so a wrong
+            //  default name was sent as the message.)
             var m = Messages;
-            m[(int)UserManagerComOps.Invite] = new (p.Invite ?? "data.InviteNotification.md");
-            m[(int)UserManagerComOps.SignUp] = new(p.SignUp ?? "data.SignUpNotification.md");
-            m[(int)UserManagerComOps.DeleteUser] = new(p.DeleteUser ?? "data.DeleteUserNotification.md");
-            m[(int)UserManagerComOps.ResetPassword] = new(p.ResetPassword ?? "data.ResetPasswordNotification.md");
-            m[(int)UserManagerComOps.AddPassword] = new(p.AddPassword ?? "data.AddPasswordNotification.md");
-            m[(int)UserManagerComOps.DeletePassword] = new(p.DeletePassword ?? "data.DeletePasswordNotification.md");
+            m[(int)UserManagerComOps.Invite] = new (p.Invite ?? "data.InviteWhatsApp.md");
+            m[(int)UserManagerComOps.SignUp] = new(p.SignUp ?? "data.SignUpWhatsApp.md");
+            m[(int)UserManagerComOps.DeleteUser] = new(p.DeleteUser ?? "data.DeleteUserWhatsApp.md");
+            m[(int)UserManagerComOps.ResetPassword] = new(p.ResetPassword ?? "data.ResetPasswordWhatsApp.md");
+            m[(int)UserManagerComOps.AddPassword] = new(p.AddPassword ?? "data.AddPasswordWhatsApp.md");
+            m[(int)UserManagerComOps.DeletePassword] = new(p.DeletePassword ?? "data.DeletePasswordWhatsApp.md");
 
-            m[(int)UserManagerComOps.AddEmail] = new(p.AddEmail ?? "data.AddEmailNotification.md");
-            m[(int)UserManagerComOps.ChangeEmail] = new(p.ChangeEmail ?? "data.ChangeEmailNotification.md");
+            m[(int)UserManagerComOps.AddEmail] = new(p.AddEmail ?? "data.AddEmailText.txt");
+            m[(int)UserManagerComOps.ChangeEmail] = new(p.ChangeEmail ?? "data.ChangeEmailText.txt");
 
-            m[(int)UserManagerComOps.AddEmailNoCode] = new(p.AddEmailNoCode ?? "data.AddEmailNoCodeNotification.md");
-            m[(int)UserManagerComOps.ChangeEmailNoCode] = new(p.ChangeEmailNoCode ?? "data.ChangeEmailNoCodeNotification.md");
+            m[(int)UserManagerComOps.AddEmailNoCode] = new(p.AddEmailNoCode ?? "data.AddEmailNoCodeText.txt");
+            m[(int)UserManagerComOps.ChangeEmailNoCode] = new(p.ChangeEmailNoCode ?? "data.ChangeEmailNoCodeText.txt");
 
-            m[(int)UserManagerComOps.DeletedEmail] = new(p.DeletedEmail ?? "data.DeletedEmailNotification.md");
+            m[(int)UserManagerComOps.DeletedEmail] = new(p.DeletedEmail ?? "data.DeletedEmailText.txt");
 
-            m[(int)UserManagerComOps.AddPhone] = new(p.AddWhatsApp ?? "data.AddWhatsAppNotification.md");
-            m[(int)UserManagerComOps.ChangePhone] = new(p.ChangeWhatsApp ?? "data.ChangeWhatsAppNotification.md");
-            m[(int)UserManagerComOps.DeletedPhone] = new(p.DeletedWhatsApp ?? "data.DeletedWhatsAppNotification.md");
+            m[(int)UserManagerComOps.AddPhone] = new(p.AddWhatsApp ?? "data.AddPhoneWhatsApp.md");
+            m[(int)UserManagerComOps.ChangePhone] = new(p.ChangeWhatsApp ?? "data.ChangePhoneWhatsApp.md");
+            m[(int)UserManagerComOps.DeletedPhone] = new(p.DeletedWhatsApp ?? "data.DeletedPhoneWhatsApp.md");
+            m[(int)UserManagerComOps.ForcedResetPassword] = new(p.ForcedResetPassword ?? "data.ForcedResetPasswordWhatsApp.md");
 
 
-            Footer = new(p.Footer ?? "data.FooterNotification.md");
-            Header = new(p.Header ?? "data.HeaderNotification.md");
+            Footer = new(p.Footer ?? "data.FooterText.txt");
+            Header = new(p.Header ?? "data.HeaderText.txt");
 
         }
 
@@ -77,6 +81,9 @@ namespace SysWeaver.MicroService
         {
             bool haveLang = messages != null;
             var m = haveLang ? messages.GetWhatsApp(ops.ToString()) : Messages[(int)ops];
+            //  Localized message folders made before the forced reset template existed: use the reset template (as SmsComs)
+            if ((m == null) && haveLang && (ops == UserManagerComOps.ForcedResetPassword))
+                m = messages.GetWhatsApp(nameof(UserManagerComOps.ResetPassword));
             if (m == null)
                 throw new Exception("Undefined text message " + ops);
             PhonePrefix.GetValidatedPhoneNumber(out var name, out var isoCountry, out var pre, out var num, target);

@@ -20,6 +20,7 @@ It is one of the interchangeable *internal* translators (`IInternalTranslator`, 
 ## Key features
 
 - Translates by requesting the mobile translation page and extracting the result
+- The supported source and target languages are read from the language lists of the page, in the background when the service starts
 - In-memory cache per retention level (short, medium, long durations configurable)
 - When rate limited (HTTP 429) it can switch to the Tor network for a while (`UseTor`, `UseTorFor`), using the Tor client of [SysWeaver.Tor](../SysWeaver.Tor/README.md) when available; retries failed requests (`Retry`)
 - Statistics on Tor usage and performance monitoring

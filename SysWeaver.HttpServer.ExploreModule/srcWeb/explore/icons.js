@@ -182,7 +182,7 @@
                 Text: _TF("Try another part of the file or class name.", "Text of the empty state of the icon gallery when no icon matches the filter text"),
             });
             const box = new Sw.TextBox({
-                Placeholder: _TF("Filter icons..", "Placeholder of the filter box of the icon gallery"),
+                Placeholder: _TF("Filter icons...", "Placeholder of the filter box of the icon gallery"),
                 Title: _TF("Show only the icons whose file or class name contains this text", "Tool tip of the filter box of the icon gallery"),
                 Icon: "search",
                 Clear: true,
@@ -228,8 +228,8 @@
                 el("span", { text: _TF("Size", "Label of the slider that sets the size of the icons in the icon gallery") }), slider.E);
             //  Design v2 page: header (title, what it is) + the tool bar + the grid, left aligned (ui/page.css)
             const header = Sw.PageHeader({
-                //  (the original page title, lower case: S5-B-1; in the app shell the header shows the menu name)
-                Title: _TF("icons", "Title of the icon gallery page (the original page title)"),
+                //  (in the app shell the header shows the menu name)
+                Title: _TF("Icons", "Title of the icon gallery page"),
                 Description: path
                     ? _T("Icons in {0}. Select an icon to copy its class name or url.", path, "Description of the icon gallery page for a folder given in the link, {0} is the folder")
                     : _TF("The icon files of this service and the built in icons. Select an icon to copy its class name or url.", "Description of the icon gallery page"),

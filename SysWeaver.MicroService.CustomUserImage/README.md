@@ -38,22 +38,29 @@ flowchart LR
 ## Key components
 
 - [`CustomUserImageService`](CustomUserImageService.cs) — upload repository and user image handler
-- [`ImageRepoService`](ImageRepoService.cs) — container of general [`ImageRepo`](ImageRepo.cs) upload repositories
+- [`CustomUserImageParams`](CustomUserImageParams.cs) — repository key, sizes, format, background colour, storage scope and auth
+- [`ImageRepoService`](ImageRepoService.cs) — container of general [`ImageRepo`](ImageRepo.cs) upload repositories ([`ImageRepoParams`](ImageRepoParams.cs))
+- [`ImageSize`](ImageSize.cs) — one output of an `ImageRepo`: name, size, fit / fill, format and quality
 
 ## Using it
 
 ```json
 [
   { "Type": "SysWeaver.MicroService.CustomUserImageService, SysWeaver.MicroService.CustomUserImage",
-    "Params": { "Sizes": [ -64, 512 ] } }
+    "Params": { "Sizes": [ -64, 512 ] } },
+  { "Type": "SysWeaver.MicroService.ImageRepoService, SysWeaver.MicroService.CustomUserImage",
+    "Params": { "Repos": [ { "Key": "Gallery", "UploadAuth": "",
+      "Sizes": [ { "Name": "{0}_thumb", "Width": 256, "Ext": ".jpg" } ] } ] } }
 ]
 ```
 
-A negative size is served with the public auth, a positive with the private auth.
+A negative size is served with the public auth (`PublicAuth`, default: no auth), a positive with the private auth (`PrivateAuth`, default `""`: any logged in user). Uploaded pictures are served by `AuthManagerService` as `auth/UserImages/<user>/...`.
 
 ## Limitations and considerations
 
 - Requires the file uploader service; image processing costs CPU on upload
+- One picture per user; a new upload replaces all sizes. Uploads of the same file (same hash) are reported as already uploaded
+- `ImageSize.Name` must be set (the default `"{0}"` is rejected when the service starts) and `ImageSize.Ext` must be `.png` or `.jpg`; other extensions are only detected when an image is uploaded
 
 ## Relationships
 

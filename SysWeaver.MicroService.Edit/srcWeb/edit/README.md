@@ -73,7 +73,7 @@ A type name that is neither registered nor known by the server (`edit/GetTypeInf
 div.sw-edit.sw-edit-root[.sw-edit-desktop|.sw-edit-mobile][.sw-edit-noborder][.sw-edit-collapsed]
   div.sw-edit-head          title row (Options.Title): expand button, menu button, title (copy on click), header extras
   div.sw-edit-body          member rows
-    div.sw-edit-row[data-member]   .sw-edit-label > .sw-edit-name | .sw-edit-icon | .sw-edit-value
+    div.sw-edit-row[data-member]   .sw-edit-label > .sw-edit-name | .sw-edit-icon | .sw-edit-value (> div.sw-edit-desc with Options.Descriptions)
     div.sw-edit-data        nested content (objects, collection items: div.sw-edit-entry > .sw-edit-entryvalue > child editor)
 ```
 
@@ -91,6 +91,8 @@ Root editors without a forced style switch between the desktop and the mobile la
 | `CleanMenu` / `CleanReadOnlyMenu` | no (a menu button per member) | no | no | no | Embedded values with member menus |
 
 **`ExpandObjects` (default `false`, opt in, forms for people).** Nested objects that exist (a page's Title / Text / Media, a quiz's Layout / Options) start expanded as normal grouped fields instead of a collapsed row with a one line summary (the summary is hidden while open; the expand button still collapses it; a `null` object stays "Set a value"). It reaches every nested editor and the items of collections, and the values of a list of plain values are numbered "1", "2" in a narrow column (class `sw-edit-numbered`, instead of "[0]", "[1]"), their controls are named "<list name> 1" for assistive technology and the hint of a value is shown once on the list ("each 1 to 256 characters"). Combine with `PlainHints: true`, `Title: false`, `CanExpand: false`.
+
+**`Descriptions` (default `false`, opt in).** The summary of every member (its code comment, `member.Summary`, whitespace collapsed) is shown as a visible line `div.sw-edit-desc` under its value (the field), and the member's inputs point to it (`aria-describedby`) and no longer use it as their placeholder (a placeholder is cut off, hidden by a value and no help on touch: UX guide FRM-1, WCAG 3.3.2). The API page (`explore/api.html`) turns it on for the parameters.
 
 **In a card.** An editor placed directly in a card body (`Sw.Card`: `section.sw-card > div.sw-card-body > editor.Element`) uses the card as its frame, with any options (Design v2, no card in a card): it gets `sw-edit-incard` (no own frame), and when the card has a title its title row (the editor menu: copy / paste / JSON / set default of the whole value, and its drag / drop) moves into the card's tools (`.sw-edit-head-incard`: the menu button only; the card title names the value). Nothing else changes (rows, hints, Dev tool tips). The class `sw-edit-framed` on `editor.Element` before it is shown keeps the old framed look; an editor with `CanExpand` and `IsExpanded: false` keeps its own title row (the expand button). `card.SetTools(...)` after the editor was shown replaces the tools, so add card tools first.
 
@@ -238,7 +240,7 @@ What the framework does for a plug-in (a handler that is not one of the editor's
 
 ### Menus, clipboard, drag and drop
 
-- Desktop layout: drag the split between the names and the values to change the width of the names (every editor on the page, stored in local storage `SysWeaver.Edit.LabelWidth`); double click it for the automatic width. The hint line under a name (type and constraints) is dimmed.
+- Desktop layout: drag the split between the names and the values to change the width of the names (every editor on the page, stored in local storage `SysWeaver.Edit.LabelWidth`); double click it for the automatic width. The hint line under a name (type and constraints) is smaller and in the quiet text colour (not dimmed with opacity, which failed the 4.5:1 contrast).
 - Member menu: click / tap the title, right click (title or the background of the value cell), long press (touch), the context menu key or Shift+F10 anywhere in the row, or the optional menu button (`Options.MenuIcon`). Items: Set default (with the default as hint), Copy (disabled for passwords), Paste (the clipboard is read when the menu opens; the hint previews the value, the tooltip explains why it is disabled), handler items, Copy name (Dev: Copy member name / Copy type name).
 - Reset button: an editable member with a string, number, boolean or date default, or a null default (not passwords, objects or lists) gets a reset icon at the right end of its value cell, the same place for every type (the menu's Set default). It is only visible while the value differs from the default (a null string counts as ""); its place is kept while invisible, so the field next to it keeps its size (class `sw-edit-reset-off`), see `Sw.Edit.AddResetButton`.
 - Object menu (title row menu button, long press / right click on the title row): Set default, Copy (JSON with `$type`), Paste, editor supplied items (collection items).
@@ -340,7 +342,7 @@ One `UndoStack` per editor tree. Changes are recorded with dotted paths (`Edit.M
 
 | File | API |
 |---|---|
-| Edit.js (EditOptions.js is a compatibility stub) | `Sw.Edit.Options` (`EditOptions`, usable before `Ready`): `Title`, `Dev`, `ReadOnly`, `CanExpand`, `IsExpanded`, `KeyName`, `Border`, `ExpandAllCollections`, `ExpandObjects`, `MenuIcon`, `MenuIconClass`, `MenuColorClass`, `AddToHeader`, `MarkChanged` (a member that is not at its default gets `sw-edit-changed`: an accent name and a dot), plus `Name`, `UndoStack`; `Clone()`; presets |
+| Edit.js (EditOptions.js is a compatibility stub) | `Sw.Edit.Options` (`EditOptions`, usable before `Ready`): `Title`, `Dev`, `ReadOnly`, `CanExpand`, `IsExpanded`, `KeyName`, `Border`, `ExpandAllCollections`, `ExpandObjects`, `MenuIcon`, `MenuIconClass`, `MenuColorClass`, `AddToHeader`, `TypeHints` (the hint line under the names), `PlainHints` (hints for people), `Summary` (a one line summary of an object after its title, `span.sw-edit-summary`), `MarkChanged` (a member that is not at its default gets `sw-edit-changed`: an accent name and a dot), `Descriptions` (see "Options and presets"), plus `Name`, `UndoStack`; `Clone()`; presets |
 | UndoStack.js | `Invoke`, `Undo`, `Redo`, `CanUndo`, `CanRedo`, `UndoTitle`, `RedoTitle`, `OnChange(fn)`, `Clear`, `Pos`, `Ops` |
 | EditDesktop.js / EditMobile.js | `Sw.Edit.Layouts.Desktop/Mobile`: `AddTypeInfo(editor, head, type, title, options)`, `AddMember(obj, editor, body, member, title, options, isLast)`; classes `EditDesktop`, `EditMobile` |
 | EditCollectionArray.js / EditCollectionMap.js | `Sw.Edit.Collections.Array/Map` (`EditCollectionArray.Inst`, `EditCollectionMap.Inst`): `Indexed`, `createVal`, `countVal`, `getVal`, `setVal`, `getKeyName`, `keys`, `iterate` (old name `íterate`), `onKeys`, `addVal`, `removeVal`, `insertAt` (+ arrays: `insertAfter`, `move`; maps: `hasKey`) |
@@ -359,7 +361,7 @@ One `UndoStack` per editor tree. Changes are recorded with dotted paths (`Edit.M
 | `.sw-edit-body`, `.sw-edit-row`, `.sw-edit-label`, `.sw-edit-name`, `.sw-edit-icon`, `.sw-edit-value`, `.sw-edit-data`, `.sw-edit-entry`, `.sw-edit-entryvalue` | Rows |
 | `.sw-edit-ro` (`.EditReadOnly`), `.sw-hide`, `.sw-edit-error`, `.sw-edit-expanded`, `.sw-edit-draggable`, `.sw-edit-drop` | States |
 | `.sw-edit-input`, `.sw-edit-multiline`, `.sw-edit-number` (`--sw-edit-number-w` 9rem minimum, `--sw-edit-number-len` set by `FitNumberBox`, `--sw-edit-number-max` 20rem; `--sw-edit-chars` is no longer used; other widths: `--sw-edit-field-w`, `--sw-edit-text-w`, see "Widths"), `.sw-edit-roselect`, `.sw-edit-robool`, `.sw-edit-language-ro`, `.sw-edit-langcode-input`, `.sw-edit-typeerror`, `.sw-edit-formfoot-readonly`, `.sw-edit-hasslider`, `.sw-edit-datetime`, `.sw-edit-select`, `.sw-edit-flags`, `.sw-edit-info`, `.sw-edit-language`, `.sw-edit-langsel` | Editors |
-| `.sw-edit-typehint` > `.sw-edit-hintpart`, `.sw-edit-fielderror`, `.sw-edit-haserror`, `--sw-edit-rule` | Hint line parts, the validation message under a field, the row hairline |
+| `.sw-edit-typehint` > `.sw-edit-hintpart`, `.sw-edit-desc`, `.sw-edit-fielderror`, `.sw-edit-haserror`, `--sw-edit-rule` | Hint line parts, the member description under a field (option `Descriptions`), the validation message under a field, the row hairline |
 | `.sw-edit-incard`, `.sw-edit-cardtitled`, `.sw-edit-head-incard`, `.sw-edit-framed` (opt out) | An editor directly in a card body (see "Options and presets") |
 | `.EditBoolean`, `.EditTrue`, `.EditObject`, `.EditContainer`, `.EditSlider`, `.DataRow` | Old hook classes kept on value cells |
 | `.SysWeaverEditIcon*` | Legacy mask icon classes |

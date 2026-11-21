@@ -49,9 +49,6 @@ namespace SysWeaver.MicroService
     /// <summary>
     /// A request for a Google Maps image as a jpeg
     /// </summary>
-    /// <summary>
-    /// A request for a Google Maps image as a jpeg
-    /// </summary>
     public class GetGoogleMapJpegRequest : GetGoogleMapRequest
     {
         /// <summary>

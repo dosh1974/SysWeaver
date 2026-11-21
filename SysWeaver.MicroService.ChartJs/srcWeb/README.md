@@ -18,7 +18,7 @@ Everything in here is served by the HTTP server under the same relative path, so
 The `EmbedLocal` target of [`SysWeaver.MicroService.ChartJs.csproj`](../SysWeaver.MicroService.ChartJs.csproj) runs before each build (tools in [`_tools`](../../_tools/README.md)):
 
 1. `SvgOpt.exe -Compare .\WebCompare -RemoveFill -RemoveSize` optimises `chart/icons/*.svg` into a temporary `chart/icons/.opt/` folder (deleted first); fills are removed because the icons are used as CSS masks.
-2. `Compress.exe -Methods br` writes Brotli compressed copies of the optimised icons to `web/chart/icons`, of the `chart/*` files to `web/chart`, and of `chart/external/` (recursively) to `web/chart/external`.
+2. `Compress.exe -Methods br` writes Brotli compressed copies of the optimised icons to `web/chart/icons`, of the `chart/*` files to `web/chart`, and of `chart/external/` (recursively) to `web/chart/external`. The vendored `external/` files are compressed with `-OptimizeWebFiles false`, so they are not minified again (see [`external/`](chart/external/README.md)).
 3. All `web/**/*.br` files are embedded as resources.
 
 ## Contents

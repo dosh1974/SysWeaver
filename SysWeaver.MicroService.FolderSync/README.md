@@ -34,8 +34,9 @@ flowchart TB
 - **Managed folders**: each push becomes a new version folder next to the active one; versions can be activated, removed, compressed (CDC) and are pruned after `RemoveBackupsDays`; optional commands run on new folder, activation and deactivation; `AllowPull` also exposes the folder as a shared folder
 - **Shared folders**: clients pull them chunk by chunk and can long-poll (`WaitUntilSharedFolderHasChanged`) for a new version
 - **Remote folders**: pulled from another server and optionally served as a web folder, with a swap method (`IFramePage`, `HttpRedirect`, `None`) so browsers never mix files from two versions; old versions are deleted after `DeleteAfterHours`
-- Binary upload/download endpoints (`FolderSync/`, `FolderSyncCdc/`, `FolderSyncCdcChunks/`, `FolderSyncCdcPullChunks/`) for efficient file and chunk transfer
-- Operator tables for managed, shared and remote folders, browsable folder contents, audited push operations
+- Binary POST endpoints for efficient transfer: whole files (`FolderSync/{JobId}/{file}`), chunk lists and missing chunks (`FolderSyncCdc/`, `FolderSyncCdcChunks/`) when pushing, chunk data (`FolderSync/GetChunks`) when pulling
+- Operations menu tables for managed, shared and remote folders (Admin / Ops), each with a card view (`srcWeb/foldersync/cards.html`); managed folder versions can be activated and removed from the table (touch, verify, expand and compress are C# methods, used by the server manager); browsable folder contents; audited push operations
+- Code hooks on `FsManagedFolder`: `OnNewFolderAsync`, `OnActivateAsync`, `OnDeactivateAsync` and `OnSwapAsync` (takes over the swap, ex: when the swapping process runs from the active folder, as [SysWeaver.MicroService.ServerManager](../SysWeaver.MicroService.ServerManager/README.md) does); folders can also be added and removed at runtime (`AddManagedFolder`, `AddSharedFolder`, `AddRemoteFolder`, `Remove...`)
 
 ## Key components
 
@@ -65,6 +66,7 @@ flowchart TB
 | Folder | Content |
 |---|---|
 | [`srcData/`](srcData/README.md) | The iframe shim page template for remote web folders |
+| [`srcWeb/`](srcWeb/README.md) | Card templates of the folder tables |
 
 ## Relationships
 

@@ -20,7 +20,12 @@ Collage shaders sample the collage image (`tex`) and animate its tiles using `ti
 | Item | Description |
 |---|---|
 | [`index.html`](index.html) | Renders a collage image with a chosen collage effect |
+| [`3D_stripes.glsl`](3D_stripes.glsl) | Upright stripes, one atlas column each, moving in opposite directions with faded edges |
 | [`3d-tiles.glsl`](3d-tiles.glsl) | Tiles spread over several planes, zooming in 3D |
+| [`Arcane_Fortune_Reels.glsl`](Arcane_Fortune_Reels.glsl) | A five reel slot machine spinning the collage pictures |
+| [`Cover_Flow_Carousel.glsl`](Cover_Flow_Carousel.glsl) | A 3D cover flow carousel on a glossy, transparent stage |
+| [`Film_Ribbon.glsl`](Film_Ribbon.glsl) | Glossy 3D film strips scrolling across a transparent background, one picture per frame |
+| [`Neon_Data_Rain.glsl`](Neon_Data_Rain.glsl) | Pictures raining down in a neon scene that fades into fog |
 | [`Scroll.glsl`](Scroll.glsl) | Scrolling tiles |
 | [`Stripes.glsl`](Stripes.glsl) | Tiles presented in stripes (the default) |
 | [`Wheel.glsl`](Wheel.glsl) | Scrolling tiles with shadows and vignetting |

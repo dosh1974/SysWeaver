@@ -846,7 +846,7 @@
                 Call: t => UM.AddEmail(t),
             },
             Label: _TF("New email address", "Label for an input field where the user should enter a new email address"),
-            Placeholder: _TF("Enter your new email address", "Placeholder text for an input field where the user should enter a new email address"),
+            Placeholder: _TF("name@example.com", "Example email address shown in an empty email box"),
             ButtonText: _TF("Verify email address", "Text on a button that when clicked will send a verfication message to an email address"),
             ButtonTitle: _TF("Send verification instructions to the new email address", "Tool tip description for a button that when clicked will send a verfication message to an email address"),
             ButtonIcon: "IconAuthEmail",
@@ -1000,8 +1000,8 @@
                 After: (pg, link) => U.Done(pg, {
                     Title: _TF("Your account is deleted", "Heading of the delete account page after the account was deleted"),
                     Text: link && link.Account
-                        ? _T("{0} and all data stored for it were removed, and you are signed out. You can use this site as a visitor, or sign up again.", link.Account, "Text of the delete account page after the account was deleted.{0} is replaced with the user name of the account")
-                        : _TF("Your account and all data stored for it were removed, and you are signed out. You can use this site as a visitor, or sign up again.", "Text of the delete account page after the account was deleted, when the account name is not known"),
+                        ? _T("{0} and the data stored for it were removed, and you are signed out.", link.Account, "Text of the delete account page after the account was deleted.{0} is replaced with the user name of the account")
+                        : _TF("Your account and the data stored for it were removed, and you are signed out.", "Text of the delete account page after the account was deleted, when the account name is not known"),
                 }),
                 //  One click never deletes: a danger dialog that names the account (the link's account, from the check on load), and the
                 //  account name (or "delete" when it is not known, ex: a typed code) must be typed. No request for the name (Admin N40:
@@ -1012,7 +1012,7 @@
                         Title: _TF("Delete your account?", "Title of the confirmation dialog of the delete account page"),
                         ItemLabel: _TF("Account:", "Label before the account name in the confirmation dialog of the delete account page"),
                         Item: name || undefined,
-                        Text: _TF("Your account, its sign in methods and all data stored for it are removed. You can't sign in with it again.", "Text of the confirmation dialog of the delete account page"),
+                        Text: _TF("Your account, its sign in methods and the data stored for it are removed (logs kept for security are not part of the account). You can't sign in with it again.", "Text of the confirmation dialog of the delete account page"),
                         Confirm: name || _TF("delete", "The word to type to confirm the deletion of an account when the account name is not known"),
                         OkText: _TF("Delete account", "Text on a button that when pressed will delete the a user's account"),
                         OkIcon: "IconAuthDeleteAccount",
@@ -1084,7 +1084,8 @@
                         _TF("Sign up using your email address", "Tool tip description on a tab header for a tab where the user should enter a valid email address in order to sign up"));
                     const f = new U.Field(page, {
                         Label: _TF("Email", "Text of a tab header for a tab where the user should enter a valid email address in order to sign up"),
-                        Placeholder: _TF("Enter your email address", "Placeholder text on an input box where users are expected to enter their email address"),
+                        //  (an example, not a second copy of the instruction under the box: UX guide FRM-1)
+                        Placeholder: _TF("name@example.com", "Example email address shown in the empty email box of the sign up page"),
                         Type: "email", AutoComplete: "email", InputMode: "email", Name: "email", OnInput: () => update(),
                     });
                     f.Check = sequenced(A.EmailError);
@@ -1108,6 +1109,10 @@
                 Text: _TF("Sign up", "Text on a button that when pressed will sign up to a service using the supplied user id (phone number or email address)"),
                 Icon: "IconAuthPost", Submit: true, Disabled: fillFirst(),
             }, page);
+            //  A way back for people who already have an account (the page was a dead end: no link at all)
+            page.Box.append(el("p.auth-text.auth-muted.auth-signin-link", null,
+                _TF("Already have an account?", "Text before the sign in link at the bottom of the sign up page"), " ",
+                el("a", { href: "Login.html", text: _TF("Sign in", "Link at the bottom of the sign up page that opens the sign in page") })));
             //  The tool tip says how the code comes: by e-mail or by text message (the method shown)
             const buttonTitles = methods.map(m => m === "Email"
                 ? _TF("Send a code to your email address to create your account", "Tool tip of the sign up button when signing up with an email address")
@@ -1166,6 +1171,8 @@
             });
             //  What a user id can be here: the user name, and e-mail / phone only when the server can reach them (Sw.Auth.UserIdHint)
             A.UserIdHint().then(h => user.Input.title = h, () => { });
+            //  The label says what to type (ex: "Email or user name"), so no instruction in the box
+            A.UserIdLabel().then(l => { user.Box.SetLabel(l); user.Input.placeholder = ""; }, () => { });
             const status = new U.Status(page);
             const buttons = U.Buttons(page);
             const button = U.Button(buttons, {
@@ -1200,9 +1207,24 @@
                     });
                 },
             }, page);
+            //  The message of an empty user id box says what to type, as the label (Sw.Auth.UserIdLabel)
+            let idMissing = _TF("Enter your user name", "Message when the user id box of the forgot password page is empty, on a site where only user names can be used");
+            A.UserIdKinds().then(k => {
+                if (k.Email && k.Phone)
+                    idMissing = _TF("Enter your email, phone or user name", "Message when the user id box of the forgot password page is empty, on a site where it can be an email address, a phone number or a user name");
+                else if (k.Email)
+                    idMissing = _TF("Enter your email or user name", "Message when the user id box of the forgot password page is empty, on a site where it can be an email address or a user name");
+                else if (k.Phone)
+                    idMissing = _TF("Enter your phone or user name", "Message when the user id box of the forgot password page is empty, on a site where it can be a phone number or a user name");
+                //  (the status line may already show the first text)
+                update();
+            }, () => { });
             const update = liveValidation(status, button, async () => A.Trim(user.Get())
                 ? { Error: null }
-                : { Error: _TF("Enter a valid user id", "Message letting users know that they are expected to enter their user id in an input field"), Field: user, Neutral: true }, [user]);
+                : { Error: idMissing, Field: user, Neutral: true }, [user]);
+            //  A way back for people who remembered their password (the page was a dead end)
+            page.Box.append(el("p.auth-text.auth-muted.auth-signin-link", null,
+                el("a", { href: "Login.html", text: _TF("Back to sign in", "Link at the bottom of the forgot password page that opens the sign in page") })));
             page.OnSubmit = () => submit({
                 Status: status, Update: update, Focus: user,
                 Failed: _TF("Failed to send password reset instructions.", "Error message displayed when the server failed to sent password reset instructions"),
@@ -1286,7 +1308,7 @@
                         _TF("Send the invitation by email", "Tool tip of the email tab on the invite user page"));
                     const f = new U.Field(page, {
                         Label: _TF("Email", "Label text for an input field where the user should supply an email address"),
-                        Placeholder: _TF("Email address of the person to invite", "Placeholder text for an input field where the user should supply an email address"),
+                        Placeholder: _TF("name@example.com", "Example email address shown in the empty email box of the invite user page (the person to invite)"),
                         Type: "email", AutoComplete: "off", InputMode: "email", Name: "invite-email", Draft: { Context: "invite.email", Dirty: false }, OnInput: changed,
                     });
                     f.Check = async v => Sw.Format.IsValidEmail(v) ? null : _TF("Enter a valid email", "Message to let users know that they should enter a valid email address in the input field");
@@ -1327,7 +1349,7 @@
             }
             const nameTitle = _TF("An optional username that can be used to sign in, instead of the email address", "Tool tip description on an input field where the user can enter a username");
             const name = new U.Field(page, {
-                Label: _TF("Username", "Label text for an input field where the user can enter an optional username"),
+                Label: _TF("User name", "Label text for an input field where the user can enter an optional user name (the same words as the Users table column)"),
                 Placeholder: _TF("An optional username", "Placeholder text for an input field where the user can enter an optional username"),
                 Hint: nameTitle, AutoComplete: "off", Name: "invite-name", Draft: { Context: "invite.name", Dirty: false }, OnInput: () => built && markDirty(),
             });

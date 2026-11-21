@@ -20,7 +20,8 @@ The interfaces only declare the HTTP contract using [SysWeaver.Remote](../SysWea
 ## Key features
 
 - `IIpApiCom.GetIpInfo(address)` — GET `json/{ip}` on ip-api.com, returning a typed `IpApiResponse` (location, time zone, currency, ISP, proxy/mobile/hosting flags)
-- JSON serialization and a 15 second response cache declared on the interface
+- JSON serialization declared on the interface and a 15 second response cache on the method
+- `GetIpInfo` is also marked `[WebApi]`, so a registered client is published by the HTTP server like a local service
 
 ## Key components
 

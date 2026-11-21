@@ -1,5 +1,5 @@
 ﻿/*
- * ui/code.css - SysWeaver UI library (Sw) styles, part 5 of 6: the code editor (Sw.CodeEditor, ui/code.js, loaded on demand).
+ * ui/code.css - SysWeaver UI library (Sw) styles, part 5 of 7: the code editor (Sw.CodeEditor, ui/code.js, loaded on demand).
  *
  * Colors: --sw-code-* (derived from the theme, a light variant for the light scheme), the background --sw-code-bg, line height --sw-code-lh.
  * Token classes of the highlighter: c comment, k keyword, t type, f function, v variable, n number, p preprocessor, s / sc / sx snippets,

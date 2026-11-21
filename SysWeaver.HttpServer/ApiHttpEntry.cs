@@ -887,7 +887,7 @@ namespace SysWeaver.Net
             }
 
 
-            var location = String.Concat(locationPrefix, "using mapped to method \"", method.Name, "\" in type \"", method.DeclaringType?.Name, '"');
+            var location = String.Concat(locationPrefix, "mapped to the method \"", method.Name, "\" of the type \"", method.DeclaringType?.Name, '"');
 
 
             var e = new ApiHttpEntry(ioParams, perfMonitor, o, method, get ?? getAsync, post ?? postAsync, rawMime, rawIsTranslated, url, 

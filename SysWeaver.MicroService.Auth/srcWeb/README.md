@@ -30,4 +30,4 @@ The `EmbedLocal` target of [`SysWeaver.MicroService.Auth.csproj`](../SysWeaver.M
 ## Relationships
 
 - **Part of:** [SysWeaver.MicroService.Auth](../README.md)
-- **Uses:** `common/common.js` and `common/theme.css` from [SysWeaver.HttpServer](../../SysWeaver.HttpServer/README.md)
+- **Uses:** `sw/core.js`, `sw/ui.js`, `sw/ui.css` and `common/theme.css` from [SysWeaver.HttpServer](../../SysWeaver.HttpServer/README.md)

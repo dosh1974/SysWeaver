@@ -17,7 +17,7 @@ This folder holds the browser side of the passkey service. It has no files of it
 
 The `EmbedLocal` target in [`SysWeaver.MicroService.PassKey.csproj`](../SysWeaver.MicroService.PassKey.csproj) runs before each build:
 
-1. `SvgOpt.exe -Compare .\WebCompare -RemoveFill -RemoveSize` optimises `icons/*.svg` into the temporary `icons/.opt/` folder (not in git). The optimiser writes a before/after comparison page using [`WebCompare.html`](../WebCompare.html).
+1. `SvgOpt.exe -Compare .\WebCompare -RemoveFill -RemoveSize` optimises `icons/*.svg` into the temporary `icons/.opt/` folder (not in git). The optimiser writes a before/after comparison page, `WebCompare.html` in the project folder (generated, ignored by git).
 2. `Compress.exe -Methods br` compresses the optimised icons into `web/icons` and everything in `auth/` into `web/auth`.
 3. Every `web/**/*.br` file is embedded as a resource and served as `icons/...` and `auth/...` relative to the site root.
 

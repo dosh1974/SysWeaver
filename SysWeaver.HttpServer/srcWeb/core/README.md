@@ -49,9 +49,13 @@ The core is wire compatible with the old `common/common.js`: old and new windows
 | [`theme.js`](theme.js) | `Sw.Theme`, theme globals | Theme resolution, apply, derived color variables, custom themes, OS scheme following; starts itself when evaluated (the theme half of the old `SysWeaverInit`: `css` flag, apply, theme messages) |
 | [`legacy_session.js`](legacy_session.js) | `SessionManager`, `InterOp`, `SysWeaverInit` ... | The legacy messaging names of the old common.js (part of `sw/session.js`, `common/common.js` and `sw/compat.js`, not of `sw/core.js`) |
 | [`page.js`](page.js) | `Sw.Page` | Loading protocol, navigation, reload, editor / viewer lookup, interaction and scroll tracking |
+| [`activity.js`](activity.js) | `Sw.Activity` | Background work in one list (the model of the shell's activity list; a small list of its own on a page without the shell), see [Sw.Activity](#swactivity-activityjs---background-work-ux-guide-fbk-4) |
+| [`draft.js`](draft.js) | `Sw.Draft` | Drafts of typed text that was not sent or saved, kept in local storage and offered again, see [Sw.Draft](#swdraft-draftjs---drafts-of-unsent-text-ux-guide-saf-11) |
 | [`access.js`](access.js) | `Sw.Access`, `Sw.Page.ShowNotAllowed` | What the signed in user may do (auth tokens vs api info), guarded actions, the shared "not allowed" state |
 | [`init.js`](init.js) | `Sw.Init` | The full core extras of the start up: page state on reload, interaction and scroll tracking, the app script (runs automatically) |
-| [`sessiontest.html`](sessiontest.html), [`sessiontest_theme.html`](sessiontest_theme.html) | test pages | Stand-alone test of `sw/session.js` (and `sw/session.js` + `sw/theme.js`): live state, message log, checks (`window.SwSessionTest`) |
+| [`region.js`](region.js) | `Sw.FormatRegion` | Not bundled: loaded on demand by `format.js` (once per browser and time zone) to detect the date and time locale of the viewer's region from the time zone and the browser languages (stored in localStorage `SysWeaver.FormatLocaleAuto`) |
+| [`sessiontest.html`](sessiontest.html), [`sessiontest_theme.html`](sessiontest_theme.html), [`sessiontest.js`](sessiontest.js) | test pages | Stand-alone test of `sw/session.js` (and `sw/session.js` + `sw/theme.js`): live state, message log, checks (`window.SwSessionTest`) |
+| [`contracttest.html`](contracttest.html), [`contracttest.js`](contracttest.js), [`contractmock.js`](contractmock.js) | test page | The core contract test (see "Contract test page" below): one test per documented core api, requests answered by the mocks of `contractmock.js` (`window.SwContractTest`, `window.SwContractMock`) |
 
 ## Relationships
 

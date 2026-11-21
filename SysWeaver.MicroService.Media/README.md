@@ -19,7 +19,7 @@ Present media attractively in the browser — previews, slideshows, signage-styl
 flowchart LR
   Svc["MediaService"] --> Pages["mediaView pages<br/>preview, view, map, effect libraries"]
   Svc --> Player["mediaPlayer scripts<br/>image, video, audio, text, YouTube"]
-  Player --> Fx["GLSL effects<br/>image, background, collage, counter"]
+  Player --> Fx["GLSL effects<br/>image, background, collage, counter, audio"]
   Thumb["Thumbnail.Web"] --> Svc
 ```
 
@@ -27,9 +27,10 @@ flowchart LR
 
 ## Key features
 
-- Embedded web application (`mediaView/`, `mediaPlayer/`): media view and preview pages, a map view and a text effect demo
-- Libraries of GLSL image, background, collage and counter effects, listed by the API (`GetImageEffects`, `GetBackgroundEffects`, `GetCollageEffects`, `GetCounterEffects`)
+- Embedded web application (`mediaView/`, `mediaPlayer/`): media view and preview pages, a media editor, a media picker, a map view and a text effect demo
+- Libraries of GLSL image, background, collage, counter and audio effects, listed by the API (`GetImageEffects`, `GetBackgroundEffects`, `GetCollageEffects`, `GetCounterEffects`, `GetAudioEffects`)
 - `BuildEffect`: builds an Effect Weaver effect (Ew snippets, vertex stage, iMouse controls) for the player with [SysWeaver.Media.Shader](../SysWeaver.Media.Shader/README.md), the same code Effect Weaver uses, so these effects play like in Effect Weaver
+- `ResolveEffectMedia`: resolves the media an effect names in its `//  media:` line (ex: Effect Weaver stock media) through the registered `IEffectMediaResolver` services
 - Registered as the extension viewer for image, video, audio and `.glsl` files (`mediaView/MediaView.html`)
 - Debug menu entries (developers only) for browsing the effect libraries and demos
 - Optional Google Maps key (`MediaParams.GoogleMapsKey`) for the map demo, exposed to developers only

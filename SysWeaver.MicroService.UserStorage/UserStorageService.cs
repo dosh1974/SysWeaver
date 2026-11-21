@@ -917,7 +917,7 @@ namespace SysWeaver.MicroService
         /// Delete a stored file
         /// </summary>
         /// <param name="url">The url of the file</param>
-        /// <param name="context"></param>
+        /// <param name="context">The request context (the file must belong to the logged in user, unless the user has a Debug or Admin token)</param>
         /// <returns>True when the file was deleted (never false: a file that is not found is a 409 with the reason, so the client can show why nothing was done)</returns>
         /// <exception cref="HttpResponseException">409: the file was not found (it may already be deleted)</exception>
         [WebApi]
@@ -1064,7 +1064,7 @@ namespace SysWeaver.MicroService
         /// Get all files stored by the logged in user
         /// </summary>
         /// <param name="r">Parameters</param>
-        /// <param name="context"></param>
+        /// <param name="context">The request context</param>
         /// <returns>Table data with the files</returns>
         [WebApi]
         [WebApiAuth]
@@ -1180,7 +1180,7 @@ namespace SysWeaver.MicroService
         /// Delete a stored url
         /// </summary>
         /// <param name="url">The url</param>
-        /// <param name="context"></param>
+        /// <param name="context">The request context (the url must belong to the logged in user, unless the user has a Debug or Admin token)</param>
         /// <returns>True when the url was deleted (never false: a url that is not found is a 409 with the reason, so the client can show why nothing was done)</returns>
         /// <exception cref="HttpResponseException">409: the url was not found (it may already be deleted)</exception>
         [WebApi]
@@ -1298,7 +1298,7 @@ namespace SysWeaver.MicroService
         /// Get all urls stored by the logged in user
         /// </summary>
         /// <param name="r">Parameters</param>
-        /// <param name="context"></param>
+        /// <param name="context">The request context</param>
         /// <returns>Table data with the urls</returns>
         [WebApi]
         [WebApiAuth]

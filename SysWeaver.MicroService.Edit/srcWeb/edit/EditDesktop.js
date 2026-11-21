@@ -12,7 +12,8 @@
  *   div.sw-edit-label > span.sw-edit-name   (title: click / long press / right click = member menu, drag source, drop target)
  *   div.sw-edit-icon                        (menu button when Options.MenuIcon, item buttons)
  *   div.sw-edit-value                       (the handler's editor; click / right click on its background = member menu;
- *                                            div.sw-edit-split: the draggable split, see Sw.Edit.AddSplit)
+ *                                            div.sw-edit-split: the draggable split, see Sw.Edit.AddSplit;
+ *                                            div.sw-edit-desc: the member summary under the field, option Descriptions)
  * div.sw-edit-data                       (optional full width row for nested editors: objects, collections)
  * ```
  */
@@ -101,6 +102,21 @@
             if (ret.Title)
                 label.title = ret.Title + "\n" + label.title;
             name.BaseTitle = label.title;
+            //  Descriptions (option): the member summary as a visible line under the value (help text under its field; in the label
+            //  column it was a narrow, tall block; a placeholder is cut off, hidden by a value and never shown as help on touch: UX guide
+            //  FRM-1, WCAG 3.3.2); the inputs of the member point to it, the summary is no longer their placeholder
+            const summary = options.Descriptions && member.Summary ? ("" + member.Summary).replace(/\s+/g, " ").trim() : "";
+            if (summary) {
+                const id = "sw-edit-desc-" + (++descSeq);
+                value.append(el("div.sw-edit-desc", { id, text: summary }));
+                const first = ("" + member.Summary).split("\n")[0];
+                //  (every control of the value: text boxes, switches, sliders, pickers, and the buttons of a collection / object row)
+                for (const i of value.querySelectorAll("input, textarea, select, button, [role=switch], [role=slider], [role=combobox], [role=spinbutton]")) {
+                    i.setAttribute("aria-describedby", ((i.getAttribute("aria-describedby") || "") + " " + id).trim());
+                    if (i.placeholder && i.placeholder === first)
+                        i.placeholder = "";
+                }
+            }
             if (!ret.DataRow && data)
                 ret.DataRow = data;
             ret.Icon = icon;
@@ -120,6 +136,9 @@
             return ret;
         }
     }
+
+    /** Ids of the description lines (option Descriptions) */
+    let descSeq = 0;
 
     Sw.Edit.Layouts.Desktop = new EditDesktop();
     Sw.Edit.LayoutDesktop = EditDesktop;

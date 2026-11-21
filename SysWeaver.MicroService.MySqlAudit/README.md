@@ -20,19 +20,20 @@ flowchart LR
   Call["call to an audited API"] --> Srv["HTTP server"]
   Srv -->|"begin / end / exception"| Audit["MySqlApiAuditService"]
   Audit --> DB[("MySQL")]
-  Audit --> Tables["Debug/Audit tables"]
+  Audit --> Tables["Admin / Audit tables"]
 ```
 
 ## Key features
 
 - Records each audited call with its (optionally filtered) input, result or exception, the signed in user and session
 - Clients (IP address, device id, user agent, language and time zone) are de-duplicated into their own table
-- Buffered writes in batches, so auditing doesn't slow down the calls
-- *Debug/Audit* menu with *Api calls* and *Clients* tables (Admin, Ops or Debug token)
+- Buffered writes: calls are queued and written in batches every 100 ms, so auditing doesn't slow down the calls
+- *Admin / Audit* menu with *API calls* and *Clients* tables (`Api/Audit/ApiCallTable`, `Api/Audit/ClientTable`; Admin, Ops or Debug token)
 
 ## Key components
 
 - [`MySqlApiAuditService`](MySqlApiAuditService.cs) — the `IApiAuditService` implementation and its tables
+- [`MySqlApiAuditParams`](MySqlApiAuditParams.cs) — the `MySqlDbParams` of the service (the schema defaults to `Audit`)
 
 ## Using it
 

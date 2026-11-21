@@ -11,7 +11,7 @@
 
 ## Purpose
 
-Adds the Zstandard format, giving a fast codec with a good ratio for storage, transfer and HTTP clients that support `zstd`, without native binaries.
+A fully managed Zstandard (`zstd`) codec: fast with a good ratio, for storage, transfer and HTTP clients that support `zstd`. [SysWeaver.Compression](../../SysWeaver.Compression/README.md) already registers a `zstd` codec built on the .NET 11 `ZstandardEncoder` / `ZstandardDecoder`; this plug-in replaces it with ZstdSharp.Port.
 
 ## How it fits into SysWeaver
 
@@ -26,7 +26,7 @@ All compressed data in SysWeaver — HTTP content encoding, pre-compressed web a
 
 ## Key features
 
-- Registered for `zstd` (file extension `.zstd`) with priority 1.
+- Registered for `zstd` (file extension `.zstd`) with priority 1, the same as the built-in .NET 11 codec (`CompZStdNETNew`); it is registered after the built-in codecs and the last registered wins a tie, so it replaces the built-in codec.
 - `CompZstdSharp` (singleton `Instance`) implements the full `ICompType` API through `CompStreamCodec`, with pooled buffers.
 - Effort levels map to zstd level 1 / 9 / 22; compressor and decompressor contexts are pooled and reused.
 - Decodes concatenated (and skippable) zstd frames.
@@ -50,7 +50,7 @@ Or register it from code at startup: `SysWeaver.Compression.CompZstdSharp.Regist
 
 - Browser support for `zstd` content encoding is newer than for Brotli/GZip; the server falls back to other codecs when a client does not accept it.
 - The `Best` level (22) is very slow and memory hungry for large inputs; use it for offline compression only.
-- Selection between codecs of the same HTTP code is by priority; this is currently the only registered `zstd` implementation (the .NET 11+ `CompZStdNETNew` in [SysWeaver.Compression](../../SysWeaver.Compression/README.md) is not registered by default).
+- Selection between codecs of the same HTTP code is by priority (on a tie, the last registered); registering this plug-in replaces the built-in `zstd` codec (`CompZStdNETNew` in [SysWeaver.Compression](../../SysWeaver.Compression/README.md)) for every consumer.
 
 ## Relationships
 

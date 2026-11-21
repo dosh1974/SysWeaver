@@ -13,7 +13,7 @@ namespace SysWeaver.Compression
 {
     /// <summary>
     /// A Zstandard ("zstd") implementation using the .NET 11+ System.IO.Compression.ZstandardEncoder / ZstandardDecoder through <see cref="CompStreamCodec{TEncoder, TDecoder}"/>.
-    /// Only compiled for .NET 11 or later, and not registered by default.
+    /// Only compiled for .NET 11 or later, where it is the default implementation (priority 1, registered by the <see cref="CompManager"/>).
     /// </summary>
     /// <remarks>
     /// Uses zstd level 1 / 9 / 22. The native encoders / decoders are pooled per level (see <see cref="CompInstancePool{T}"/>).

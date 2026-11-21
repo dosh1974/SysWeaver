@@ -40,7 +40,7 @@ Call [ComfyUI](https://github.com/comfyanonymous/ComfyUI) workflows (image, vide
 - [`ComfyTaskWorkflow`](ComfyTaskWorkflow.cs) — a workflow analyzed for the task methods (type and parameter mappings, `Describe()` shows them)
 - [`ComfyTaskParams`](ComfyTaskParams.cs) — the task parameters (`TextToImageParams` etc) and `ComfyResult`
 - [`ComfyUiService.Tasks`](ComfyUiService.Tasks.cs) — the task methods, `AddWorkflows`, the workflow lists and defaults
-- [`ComfyUiApiService`](ComfyUiApiService.cs) — web API's for the task methods (`Api/comfyui/TextToImage` etc, returning the file with its mime type; a png image gets the prompt, the workflow and seed and the user as png information chunks, see `AiImageTools.AddPngInfo` of SysWeaver.AI) and the workflow lookups: `GetWorkflow(name)` and `GetDefaultWorkflow(type)` (the details of a workflow, [`ComfyWorkflowInfo`](ComfyWorkflowInfo.cs)), `GetWorkflowNames(type)`, `GetDefaultWorkflows()` and `WorkflowTable`, a table of the loaded workflows (type, model, parameters, model files, LoRA's, prefix / suffix, mappings, the prompt enhancement and more)
+- [`ComfyUiApiService`](ComfyUiApiService.cs) — web API's for the task methods (`Api/comfyui/TextToImage` etc, returning the file with its mime type; a png image gets the prompt, the workflow and seed and the user as png information chunks, see `AiImageTools.AddPngInfo` of SysWeaver.AI) and the workflow lookups: `GetWorkflow(name)` and `GetDefaultWorkflow(type)` (the details of a workflow, [`ComfyWorkflowInfo`](ComfyWorkflowInfo.cs)), `GetWorkflowNames(type)`, `GetDefaultWorkflows()` and `WorkflowTable`, a table of the loaded workflows (type, model, parameters, model files, LoRA's, prefix / suffix, mappings, the prompt enhancement and more), in the menu as *ComfyUI > ComfyUI workflows*. All its API's use one auth, `Auth` of [`ComfyUiApiParams`](ComfyUiApiParams.cs) (default: any logged in user)
 
 ## Using it
 
@@ -80,6 +80,12 @@ var img = await comfy.TextToImage(new TextToImageParams { Prompt = "A red fox in
 if (img.IsSuccess)
     File.WriteAllBytes(img.Name, img.Data);                   // ex: "image_t2i_1234.png", img.Seed is the seed that was used
 var edit = await comfy.ImagesToImage(new ImagesToImageParams { Prompt = "Make it a watercolor", Files = [img], Workflow = "image_edit" });
+```
+
+To expose the task methods as web API's (`Api/comfyui/...`), also register the API service after the ComfyUI service:
+
+```json
+{ "Type": "SysWeaver.AI.ComfyUiApiService, SysWeaver.AI.ComfyUi", "Params": { "Auth": "" } }
 ```
 
 The `ComfyUiExample` program in the SysWeaver.Tests repository has complete examples (image, image edit, image to video, text to video and music).

@@ -24,6 +24,7 @@ Any feature that needs a QR code (e.g. adding a passkey from another device, sha
 
 - [`QrCodeService`](QrCodeService.cs) — the service, API and HTTP module
 - [`QrCodeParams`](QrCodeParams.cs) — end points and response settings
+- [`QrCodeEndPoint`](QrCodeEndPoint.cs) — one end point: url (`.svg` or `.png`), auth, png size and compression
 - [`QrCodeTools`](QrCodeTools.cs) — QR matrix to SVG path
 
 ## Using it
@@ -40,4 +41,4 @@ Any feature that needs a QR code (e.g. adding a passkey from another device, sha
 
 - **Project:** [`SysWeaver.MicroService.QR.csproj`](SysWeaver.MicroService.QR.csproj)
 - **Builds on:** [SysWeaver.MicroServices.ServiceManager](../SysWeaver.MicroServices.ServiceManager/README.md)
-- **Third-party:** QRCoder
+- **Third-party:** QRCoder (NuGet `QRCoder` 1.8.1)

@@ -2,6 +2,10 @@
 
 namespace SysWeaver.MicroService.Media
 {
+    /// <summary>
+    /// A GLSL effect to render with the browser media player (mirrors the JavaScript MediaPlayerParamsEffect):
+    /// size, speed, DPI handling, texture and the live controls of an Effect Weaver effect.
+    /// </summary>
     public class MediaEffect : IMediaData, IEquatable<MediaEffect>
     {
         /// <summary>

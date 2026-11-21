@@ -161,21 +161,9 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Adds a "full control" access rule for the Everyone group to a directory, unless an equivalent rule exists.
-        /// </summary>
-        /// <param name="folder">The folder (not recursive).</param>
-        /// <returns>null if successful, else the exception that occurred (also tracked in the stats), ex: a <see cref="DirectoryNotFoundException"/>.</returns>
-        /// <remarks>
-        /// The rule applies to the directory itself and is inherited by all files and sub directories.
-        /// An existing Everyone rule only counts if it grants full control to the directory itself and its descendants
-        /// (so directories processed by older versions, that only got an inherit-only rule, are fixed).
-        /// A non inherited rule added by older versions (using <see cref="PropagationFlags.NoPropagateInherit"/>, only inherited by direct children) is replaced,
-        /// same as <see cref="PathExt.AllowAllAccess(string)"/>.
-        /// This makes files and folders created by a service (ex: running as SYSTEM) modifiable by users (without an UAC prompt) and vice versa.
-        /// </remarks>
-        /// <summary>
         /// Find the *.exe files that are PE executable images (console or gui subsystem, not dll's), see <see cref="ExecutableFinder"/>.
         /// </summary>
+        /// <param name="folder">The folder (not recursive).</param>
         /// <returns>The executables, the best guess for the main executable first.</returns>
         public IReadOnlyList<ExecutableFile> FindExecutables(String folder)
         {
@@ -201,7 +189,15 @@ namespace SysWeaver
         /// Allow everyone to read and write a directory and everything inside it, by adding an inheritable full control rule for "Everyone" (if missing).
         /// </summary>
         /// <param name="directoryName">The directory</param>
-        /// <returns>Null if successful, else the exception</returns>
+        /// <returns>Null if successful, else the exception that occurred (also tracked in the stats), ex: a <see cref="DirectoryNotFoundException"/>.</returns>
+        /// <remarks>
+        /// The rule applies to the directory itself and is inherited by all files and sub directories.
+        /// An existing Everyone rule only counts if it grants full control to the directory itself and its descendants
+        /// (so directories processed by older versions, that only got an inherit-only rule, are fixed).
+        /// A non inherited rule added by older versions (using <see cref="PropagationFlags.NoPropagateInherit"/>, only inherited by direct children) is replaced,
+        /// same as <see cref="PathExt.AllowAllAccess(string)"/>.
+        /// This makes files and folders created by a service (ex: running as SYSTEM) modifiable by users (without an UAC prompt) and vice versa.
+        /// </remarks>
         public Exception MakeDirectoryAccessableToEveryOne(String directoryName)
         {
             try

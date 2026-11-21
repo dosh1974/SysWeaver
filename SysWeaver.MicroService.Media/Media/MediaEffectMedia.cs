@@ -13,7 +13,7 @@ namespace SysWeaver.MicroService.Media
     /// </summary>
     public sealed class MediaEffectMediaRequest
     {
-        /// <summary>image | audio | collage</summary>
+        /// <summary>image | video | audio | audio2 | collage (any other kind resolves to no urls)</summary>
         public String Kind;
 
         /// <summary>The references of the line (urls are used by the player as they are, only the others need the server), empty = the defaults</summary>
@@ -26,6 +26,7 @@ namespace SysWeaver.MicroService.Media
     /// </summary>
     public sealed class MediaEffectMediaResponse
     {
+        /// <summary>The urls of the media, empty when no resolver knows them</summary>
         public String[] Urls = [];
     }
 
@@ -39,7 +40,7 @@ namespace SysWeaver.MicroService.Media
         /// The urls of the media of an effect's media line, for the user of the request: absolute, or relative to the mediaView folder.
         /// Null (or empty) when the references aren't this resolver's.
         /// </summary>
-        /// <param name="kind">image | audio | collage</param>
+        /// <param name="kind">image | video | audio | audio2 | collage</param>
         /// <param name="refs">The references, empty = the defaults of the kind</param>
         /// <param name="context">The request (its session: the user's own media)</param>
         Task<String[]> ResolveEffectMedia(String kind, String[] refs, HttpServerRequest context);

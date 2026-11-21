@@ -6,6 +6,9 @@
 
 namespace SysWeaver
 {
+    /// <summary>
+    /// Default values for web related parameters, the compression method lists used by the HTTP server and API parameters (format: "method:level, ...").
+    /// </summary>
     public static class WebDefaults
     {
         /// <summary>

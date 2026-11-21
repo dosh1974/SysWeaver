@@ -8,7 +8,7 @@ namespace SysWeaver.MicroService
     public sealed class UserStorageUpload
     {
         /// <summary>
-        /// Set to a string with any required auth tokens, null will still require a user to be logged in (obviously).
+        /// Set to a string with any required auth tokens (comma separated), null, "" or "-" only require a user to be logged in.
         /// </summary>
         public String Auth;
 
@@ -18,14 +18,14 @@ namespace SysWeaver.MicroService
         public long MaxFileSize;
 
         /// <summary>
-        /// Extensions that are allowed, separated by a comma (null = no whitelist).
-        /// There is no point having a whitelist and blacklist.
+        /// Extensions that are allowed, separated by a comma, case insensitive, with or without a leading '.' (null = no whitelist).
+        /// There is no point having a whitelist and blacklist: if a whitelist is set, the blacklist is ignored.
         /// </summary>
         public String Whitelist;
 
         /// <summary>
-        /// Extensions that aren't allowed, separated by a comma (null = no blacklist).
-        /// There is no point having a whitelist and blacklist.
+        /// Extensions that aren't allowed, separated by a comma, case insensitive, with or without a leading '.' (null = no blacklist).
+        /// Ignored if a <see cref="Whitelist"/> is set.
         /// </summary>
         public String Blacklist;
 

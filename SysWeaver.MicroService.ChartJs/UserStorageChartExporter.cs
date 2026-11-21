@@ -6,6 +6,11 @@ using SysWeaver.Serialization;
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// Chart exporter that saves the chart configuration as a json file in the user storage and returns a link to the chart page
+    /// showing it. One instance per scope (0 = private, 1 = protected, 2 = public), added by <see cref="ChartJsService"/> when
+    /// a user storage service is present.
+    /// </summary>
     sealed class UserStorageChartExporter : IChartExporter
     {
         public UserStorageChartExporter(IUserStorageService userStore, Func<ChartJsConfig, ReadOnlyMemory<Byte>> jsonSer, int scopeIndex)

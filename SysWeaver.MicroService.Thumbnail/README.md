@@ -27,15 +27,16 @@ Thumbnails are produced by `MediaInfo` of [SysWeaver.Media](../SysWeaver.Media/R
 
 ## Key features
 
-- One file transformer per configured resolution (`Resolutions`, key = `Prefix` + `WIDTHxHEIGHT`); resolutions can also be added at run time (`AddThumbSize`)
+- One file transformer per configured resolution (`Resolutions`, key = `Prefix` + `WIDTHxHEIGHT`); resolutions can also be added and removed at run time (`AddThumbSize` / `RemoveThumbSize`, use counted)
 - Thumbnails of web media: `thumbnail/<key>.png?<url>` returns a thumbnail of an `http(s)` URL
-- In-memory caching of media information (`CacheSeconds`) on top of the on-disc `MediaInfo` cache
-- Performance monitoring and cache statistics
+- In-memory caching of media information (`CacheSeconds`) on top of the on-disc `MediaInfo` cache; a failed build (ex: the remote thumbnail service was down) is retried after `RetryFailedSeconds`
+- `Invalidate(filename)` forgets the cached information and thumbnails of a file of every size (ex: after an upload replaced it)
+- Performance monitoring (`PerMon`) and cache statistics
 
 ## Key components
 
 - [`ThumbnailService`](ThumbnailService.cs) — the file transformer and HTTP module
-- [`ThumbnailParams`](ThumbnailParams.cs) — prefix, resolutions and cache duration
+- [`ThumbnailParams`](ThumbnailParams.cs) — prefix, resolutions, cache duration, failure retry time and performance monitoring
 
 ## Using it
 
@@ -56,3 +57,4 @@ List it after the icon module and a file module.
 
 - **Project:** [`SysWeaver.MicroService.Thumbnail.csproj`](SysWeaver.MicroService.Thumbnail.csproj)
 - **Builds on:** [SysWeaver.HttpServer.IconModule](../SysWeaver.HttpServer.IconModule/README.md), [SysWeaver.HttpServer](../SysWeaver.HttpServer/README.md), [SysWeaver.Media](../SysWeaver.Media/README.md), [SysWeaver.MicroServices.ServiceManager](../SysWeaver.MicroServices.ServiceManager/README.md)
+- **Packages:** `FFmpeg.AutoGen.Bindings.DynamicallyLoaded` (no code of this project uses it directly)

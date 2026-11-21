@@ -17,7 +17,7 @@ The `EmbedLocal` target in [`SysWeaver.Auth.Core.csproj`](../SysWeaver.Auth.Core
 
 | Item | Description |
 |---|---|
-| [`auth/`](auth/README.md) | Password hash generator and API key management pages, served under `auth/` |
+| [`auth/`](auth/README.md) | Password hash generator and API key management pages and the users table card template, served under `auth/` |
 
 ## Relationships
 

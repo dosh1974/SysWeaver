@@ -17,7 +17,7 @@
 
 | Item | Description |
 |---|---|
-| [`HtmlTranslation.cs`](HtmlTranslation.cs) | HTML template builder (HtmlAgilityPack): text nodes and the `title`, `placeholder` and `alt` attributes, inline scripts handled as JavaScript |
+| [`HtmlTranslation.cs`](HtmlTranslation.cs) | HTML template builder (HtmlAgilityPack): text nodes and the `title`, `placeholder`, `alt` and `aria-label` attributes (context from `data-translation_context`, `translate="no"` skips a subtree), inline scripts handled as JavaScript; a translated page gets `lang="${@Session.Lang}"` and, unless browser translation is allowed, `translate="no"` / `notranslate` markers |
 | [`JsTranslation.cs`](JsTranslation.cs) | JavaScript template builder: finds string literals, unescapes and re-escapes them |
 | [`TranslationTools.cs`](TranslationTools.cs) | Shared helpers: variable dictionary, adding a text as a variable (identical texts in the same context share one), HTML attribute decoding |
 

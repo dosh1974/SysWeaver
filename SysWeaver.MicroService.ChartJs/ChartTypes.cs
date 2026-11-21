@@ -27,7 +27,7 @@
         Doughnut,
 
         /// <summary>
-        /// Polart area chart
+        /// A polar area chart
         /// </summary>
         PolarArea,
     }

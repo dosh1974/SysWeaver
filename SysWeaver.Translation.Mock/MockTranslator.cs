@@ -13,6 +13,9 @@ namespace SysWeaver.Translation
     /// </summary>
     public sealed class MockTranslator : IInternalTranslator
     {
+        /// <summary>
+        /// Create the translator.
+        /// </summary>
         public MockTranslator(MockTranslatorParams p = null)
         {
             p = p ?? new MockTranslatorParams();
@@ -84,6 +87,9 @@ namespace SysWeaver.Translation
     /// </summary>
     public sealed class MockTranslatorParams
     {
+        /// <summary>
+        /// The languages used when <see cref="Languages"/> is null.
+        /// </summary>
         public static readonly String[] DefaultLanguages = ["en", "sv", "de", "fr", "es", "it", "nl", "da", "no", "fi", "pl", "pt", "ja", "zh", "ar"];
 
         /// <summary>

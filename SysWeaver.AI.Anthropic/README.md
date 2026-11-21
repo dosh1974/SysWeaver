@@ -15,7 +15,7 @@ The Anthropic provider for [SysWeaver.AI](../SysWeaver.AI/README.md), built on t
 
 ## How it fits into SysWeaver
 
-`AnthropicAiService` derives from `AiServiceBase`, so it is both an `IAiService` and an `IChatProvider`. AI chats appear in the [SysWeaver.Chat](../SysWeaver.Chat/README.md) UI, and the model can call registered service methods marked `[AiTool]` / `[AiUse]`. Code that uses `IAiService` can swap it for [SysWeaver.AI.OpenAI](../SysWeaver.AI.OpenAI/README.md), [SysWeaver.AI.Google](../SysWeaver.AI.Google/README.md) or [SysWeaver.AI.LlamaSharp](../SysWeaver.AI.LlamaSharp/README.md) (such as [SysWeaver.AI.HostService](../SysWeaver.AI.HostService/README.md)).
+`AnthropicAiService` derives from `AiServiceBase`, so it is both an `IAiService` and an `IChatProvider`. AI chats appear in the [SysWeaver.Chat](../SysWeaver.Chat/README.md) UI, and the model can call registered service methods marked `[AiTool]` / `[AiUse]`. It is interchangeable with [SysWeaver.AI.OpenAI](../SysWeaver.AI.OpenAI/README.md), [SysWeaver.AI.Google](../SysWeaver.AI.Google/README.md) and [SysWeaver.AI.LlamaSharp](../SysWeaver.AI.LlamaSharp/README.md) for code that uses `IAiService` (such as [SysWeaver.AI.HostService](../SysWeaver.AI.HostService/README.md)).
 
 ## Key features
 
@@ -29,7 +29,7 @@ The Anthropic provider for [SysWeaver.AI](../SysWeaver.AI/README.md), built on t
   - tool choice (auto / none / any), streaming (`onText`), max tokens, temperature and reasoning
   - the thinking blocks of a response are returned in `AiCompletionToolCall.Signature` and replayed in the original order
 - Automatic prompt caching (`PromptCaching`, on by default), with cached input tokens reported in `AiCompletionResult.CachedTokens`
-- Model table (`Debug/AI/Models` menu) and debug APIs (chat, token counting)
+- LLM model table (*Debug / AI / Models / LLM* menu, for the `Admin` and `Ops` roles; the other providers list theirs under *Data / AI models*) and debug APIs (chat, token counting)
 - Configurable endpoint, network timeout, retries and concurrency limit for chats
 
 ## Key components

@@ -15,7 +15,7 @@ The OpenAI provider for [SysWeaver.AI](../SysWeaver.AI/README.md), built on the 
 
 ## How it fits into SysWeaver
 
-`OpenAiService` derives from `AiServiceBase` and so is an `IAiService` and an `IChatProvider`: AI chats appear in the [SysWeaver.Chat](../SysWeaver.Chat/README.md) UI, and registered service methods marked `[AiTool]` / `[AiUse]` can be called by the model. It is interchangeable with [SysWeaver.AI.Google](../SysWeaver.AI.Google/README.md) and [SysWeaver.AI.LlamaSharp](../SysWeaver.AI.LlamaSharp/README.md) for code that uses `IAiService` (such as [SysWeaver.AI.HostService](../SysWeaver.AI.HostService/README.md)); [SysWeaver.AI.LlmTranslator](../SysWeaver.AI.LlmTranslator/README.md) and [SysWeaver.LanguageIdentifier.Llm](../SysWeaver.LanguageIdentifier.Llm/README.md) require this provider.
+`OpenAiService` derives from `AiServiceBase` and so is an `IAiService` and an `IChatProvider`: AI chats appear in the [SysWeaver.Chat](../SysWeaver.Chat/README.md) UI, and registered service methods marked `[AiTool]` / `[AiUse]` can be called by the model. It is interchangeable with [SysWeaver.AI.Google](../SysWeaver.AI.Google/README.md), [SysWeaver.AI.Anthropic](../SysWeaver.AI.Anthropic/README.md) and [SysWeaver.AI.LlamaSharp](../SysWeaver.AI.LlamaSharp/README.md) for code that uses `IAiService` (such as [SysWeaver.AI.HostService](../SysWeaver.AI.HostService/README.md)); [SysWeaver.AI.LlmTranslator](../SysWeaver.AI.LlmTranslator/README.md) and [SysWeaver.LanguageIdentifier.Llm](../SysWeaver.LanguageIdentifier.Llm/README.md) require this provider.
 
 ## Key features
 
@@ -26,7 +26,7 @@ The OpenAI provider for [SysWeaver.AI](../SysWeaver.AI/README.md), built on the 
 - Image generation and editing tools (available to users with the `Debug` or `Content` role)
 - `IAiImageGenService` and `IAiImageEditService`: the size closest to the requested size that the model supports (any size on gpt-image-2 and later), transparency on models that support it (a transparency capable model is selected if needed), the negative prompt is appended to the prompt
 - Token encoding/decoding with TiktokenSharp (token files are cached on disc)
-- Model tables (`Debug/AI/Models` menu) and debug APIs (chat, image generation and editing, token encode/decode)
+- LLM and image model tables (*Data / AI models* menu, for the `Admin` and `Ops` roles) and debug APIs (chat, image generation and editing, token encode/decode)
 - Configurable endpoint, organization and project, network timeout and concurrency limits for chats and image generation
 
 ## Key components
@@ -45,6 +45,8 @@ The OpenAI provider for [SysWeaver.AI](../SysWeaver.AI/README.md), built on the 
 IAiService ai = manager.Get<OpenAiService>();
 var chat = ai.CreateChatSession(true, new OpenAiSessionParams { Model = "gpt-4.1", Tier = OpenAiServiceTier.Flex });
 ```
+
+Default models (`OpenAiParams`): chat `gpt-4.1`, image generation `dall-e-3`, image editing `gpt-image-2`.
 
 Set `EndPoint` (e.g. `"http://localhost:1234/v1"`) to use another OpenAI compatible API.
 

@@ -47,6 +47,15 @@ flowchart LR
 - [`BrandFonts`](BrandFonts.cs) — the embedded brand fonts (`Saira`, `BarlowMedium`, `BarlowRegular`)
 - [`SvgSceneBrandExt`](SvgSceneBrandExt.cs), [`MarkDesign`](MarkDesign.cs), [`BrandPalette`](BrandPalette.cs), [`BrandText`](BrandText.cs) — the generated brand icons, logos and banners
 - [`SvgBitmapRenderer`](SvgBitmapRenderer.cs) — SVG to PNG/JPEG via Skia
+- [`SvgBarcodeCode128`](SvgBarcodeCode128.cs), [`SvgBarcodeCode39`](SvgBarcodeCode39.cs), [`SvgBarcodeItf14`](SvgBarcodeItf14.cs) — barcodes as SVG paths
+- [`SvgCompositionTemplate`](SvgCompositionTemplate.cs), [`SvgCompositionTemplateCache`](SvgCompositionTemplateCache.cs) — layered composition templates and their cache
+
+## Using it
+
+```csharp
+// Rasterise an SVG document (0 = use the size of the SVG)
+Byte[] png = SvgBitmapRenderer.CreatePng(svgText, 256, 256);
+```
 
 ## Limitations and considerations
 

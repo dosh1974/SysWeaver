@@ -41,10 +41,13 @@ The HTTP server serves pre-compressed static files through `CompressedFile`, aut
 
 ## Key components
 
-- [`KeyValueStore`](KeyValueStore.cs) — redundant, checksummed, compressed file based key/value store
+- [`KeyValueStore`](KeyValueStore.cs) / [`KeyValueStoreParams`](KeyValueStoreParams.cs) — redundant, checksummed, compressed file based key/value store and the parameters of a custom store
 - [`SystemLock`](SystemLock.cs) — cross-process named locks
-- [`FileMetaData`](FileMetaData.cs) — meta data and derived files keyed by a file's content hash
+- [`FileMetaData`](FileMetaData.cs) — meta data and derived files keyed by a file's content hash; [`FileMetaDataDb<T>`](FileMetaDataDb.cs) / [`FileMetaDataDbAsync<T>`](FileMetaDataDbAsync.cs) wrap it for one meta data type
 - [`CompressedFile`](CompressedFile.cs) — cached compressed copies of files
+- [`DecompressedFileHash`](DecompressedFileHash.cs) — cached hash (MD5, not for security) of the decompressed content of a compressed file
+- [`CompressedChunkedStream`](CompressedChunkedStream.cs) — a read only stream of several compressed chunks, decompressed and concatenated
+- [`TempFolder`](TempFolder.cs) — named temp / cache folders pruned at process exit
 - [`StorageTypeExt`](StorageObjectExt.cs) — reading (possibly compressed) embedded resources
 
 ## Using it

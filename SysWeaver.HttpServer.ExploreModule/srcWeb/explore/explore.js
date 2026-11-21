@@ -11,8 +11,9 @@
  * CompPreference, PreCompressed, Auth, Location, Size, LastModified, Mime}`.
  * Storage: `localStorage["ExploreSettings"] = {Order: number[] (column id + 1, negative = descending), Cols: number[] (column ids)}`.
  * Input: sort with a click / tap / Enter on a column title (buttons), links are real links (Enter, middle click, a click with a modifier key
- * copies the url). Narrow screens (max-width 600px) and touch screens up to 1000px (phones in landscape) show cards like the data tables: the column titles are replaced by a card tool
- * bar ("Sort: <column>" menu button; the "Filter by name" box is shown on every screen), and empty values ("" or "-") are left out of the cards.
+ * copies the url). Narrow screens (below 600px) and touch screens up to 1000px (phones in landscape) show cards like the data tables: the column titles are replaced by a card tool
+ * bar ("Sort: <column>" menu button; the "Filter by name" box is shown on every screen), and empty values ("" or "-") and the size markers
+ * of folders / end points (<DIR>, [API], [UP] ...) are left out of the cards.
  * Styled by explore/explore.css.
  */
 
@@ -157,8 +158,17 @@
             Desc: _TF("The type of the web resource.", "A table column description of a column with web resource types, used in tool tips"),
             Cmp: (a, b) => a.Type - b.Type,
             Render: (c, it, r) => {
-                if (r.Img)
-                    c.append(Sw.Cells.CreateLink(r.Link, r.Img, r.Target, (it.Mime ?? it.Location) + (r.Edit ? r.EditTip : r.OpenTip), true, { UseEdit: r.Edit }));
+                if (r.Img) {
+                    //  The same link as the name: a click / tap target, but not a second tab stop and announcement per row (WCAG 2.4.3,
+                    //  1.1.1: the image alt read the raw location)
+                    const a = Sw.Cells.CreateLink(r.Link, r.Img, r.Target, (it.Mime ?? it.Location) + (r.Edit ? r.EditTip : r.OpenTip), true, { UseEdit: r.Edit });
+                    if (a instanceof Element) {
+                        a.tabIndex = -1;
+                        a.setAttribute("aria-hidden", "true");
+                        a.querySelectorAll("img").forEach(i => i.alt = "");
+                    }
+                    c.append(a);
+                }
             },
         },
         {
@@ -341,7 +351,7 @@
             const f = v => t.Filter(v);
             /** @type {object} The name filter box. */
             t.FilterBox = new Sw.TextBox({
-                Placeholder: _TF("Filter by name..", "Placeholder of the box on the web resource listing (phones) that shows only the items whose name contains the text"),
+                Placeholder: _TF("Filter by name...", "Placeholder of the box on the web resource listing (phones) that shows only the items whose name contains the text"),
                 Title: _TF("Show only the items whose name contains this text", "Tool tip of the name filter box on the web resource listing"),
                 Icon: "filter", Clear: true, OnInput: f, OnChange: f,
             });
@@ -612,8 +622,8 @@
                     if (col.Title)
                         c.dataset.label = col.Title;
                     col.Render(c, it, r, this.Data);
-                    //  Empty values ("" or "-") are left out of the phone cards (explore.css .ExploreBlank)
-                    if (id > 1 && !c.firstElementChild && /^-?$/.test(c.textContent.trim()))
+                    //  Empty values ("" or "-") and the size markers of folders / end points (<DIR>, [API], [UP]: the icon tells the kind) are left out of the phone cards (explore.css .ExploreBlank)
+                    if (id > 1 && !c.firstElementChild && (/^-?$/.test(c.textContent.trim()) || (col.Cls === "ExploreSize" && /^(<DIR>|\[[A-Z?]+\])$/.test(c.textContent.trim()))))
                         c.classList.add("ExploreBlank");
                 });
             });

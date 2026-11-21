@@ -8,6 +8,9 @@ using System.Threading.Tasks;
 namespace SysWeaver
 {
 
+    /// <summary>
+    /// The kinds of message templates a <see cref="ManagedMessages"/> set can hold (flags: a set of kinds to load or require).
+    /// </summary>
     [Flags]
     public enum ManagedMessageTypes
     {

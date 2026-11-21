@@ -34,13 +34,14 @@ flowchart TB
 ## Key features
 
 - One process-wide registry (`SerManager`); formats are addressed by the same short names as file extensions, with or without a leading dot (`"json"`, `".json"`).
-- A serializer type (`ISerializerType`) is a stateless singleton with a name, extension, MIME type, Content-Type header, encoding (null for binary) and a *priority*; `Serialize<T>` returns `ReadOnlyMemory<byte>`, `Create<T>` reads from `ReadOnlyMemory<byte>` / `ReadOnlySpan<byte>`.
+- A serializer type (`ISerializerType`) is a stateless singleton with a name, extension, MIME type, Content-Type header, encoding (null for binary) and a priority (`Prio`); `Serialize<T>` returns `ReadOnlyMemory<byte>` (or writes to an `IBufferWriter<byte>`), `Create<T>` reads from `ReadOnlyMemory<byte>` / `ReadOnlySpan<byte>`.
 - When several serializers share an extension, the highest priority wins (on a tie, the last registered) — this is how a plug-in becomes the default JSON implementation.
 - Text serializers (`ITextSerializerType`) additionally support strings (`ToString<T>`, `FromString<T>`); `SerManager.GetText` only considers these.
 - `SerializerOptions` (`Compact`, `Verbose`, `Typeless`) are hints: Newtonsoft-based serializers use them for indentation and `$type` output, System.Text.Json and CompactJson only for indentation, the rest ignore them.
 - Built in: `NetJsonSerializer` (System.Text.Json, priority 0) is always registered; `NetXmlSerializer` (XmlSerializer) is available via `NetXmlSerializer.Register()`.
 - `SerExtensions` adds `ToJsonString`, `ToJsonData` and `FromJsonData` extension methods that use the active `json` serializer (default option: `Verbose`).
 - `SerTools.SerializeWithoutType` / `TextSerTools.ToStringWithoutType` serialize an `object` as its runtime type; `SerTools.MakeHeader` builds `Content-Type` values with a charset.
+- `SerBufferWriter` is a pooled, per-thread cached `IBufferWriter<byte>` for data that is only needed temporarily; `SerTools.DeepCopy` uses it to copy an object by serializing and deserializing it.
 - `TypeNameResolver` resolves type names through `TypeFinder` (SysWeaver.Common); `GetForData` is used for names from serialized data and only returns types allowed by the `DataTypePolicy`.
 - Plug-ins for Newtonsoft JSON/BSON, Protobuf, MessagePack, SysWeaver's own JSON and binary formats, and several alternative JSON libraries.
 
@@ -50,7 +51,10 @@ flowchart TB
 - [`ISerializerType`](ISerializerType.cs) — the serializer contract (and `ITextSerializerType`)
 - [`SerializerOptions`](SerializerOptions.cs) — output style hints
 - [`NetJsonSerializer`](NetJsonSerializer.cs) — the always registered System.Text.Json serializer
+- [`NetXmlSerializer`](NetXmlSerializer.cs) — the XmlSerializer based `xml` serializer (registered on demand)
 - [`SerExtensions`](SerExtensions.cs) — JSON convenience extension methods
+- [`SerTools`](SerTools.cs) — `SerTools`, `TextSerTools` and `TypeNameResolver` helpers
+- [`SerBufferWriter`](SerBufferWriter.cs) — pooled buffer writer for temporary serialized data
 
 ## Using it
 

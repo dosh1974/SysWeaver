@@ -21,7 +21,7 @@ namespace SysWeaver.MicroService
         /// </summary>
         public String[] Coms;
         /// <summary>
-        /// All sign up methods supported by the user manager (sign up is still only available if the SignUp service is loaded)
+        /// The sign up methods offered by the user manager: empty unless a <see cref="SignUpService"/> is loaded (it enables them, without it there is no sign up api)
         /// </summary>
         public String[] SignUpMethods;
         /// <summary>

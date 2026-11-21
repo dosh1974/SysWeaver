@@ -34,8 +34,8 @@ namespace SysWeaver.MicroService
         /// </summary>
         public MessageHandler.Modes Mode = MessageHandler.Modes.Async;
         /// <summary>
-        /// The maximum size of the logfile, when exceeded it is truncated to half it's size.
-        /// So reliable half of this size is available.
+        /// The maximum size of the logfile, when exceeded the oldest lines are removed, keeping about three quarters of this size (cut at a line start).
+        /// So about three quarters of this size is always available.
         /// </summary>
         public long MaxSize = 2 << 20;
 

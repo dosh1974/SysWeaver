@@ -39,10 +39,13 @@ All providers implement `ICertificateProvider` from [SysWeaver.Common](../SysWea
 
 ## Key components
 
+- [`FileCertificateProvider`](FileCertificateProvider.cs) — a `.pfx` from a monitored file ([`FileCertificateProviderParams`](FileCertificateProviderParams.cs))
+- [`SelfSignedCertificateProvider`](SelfSignedCertificateProvider.cs) — generated, cached and renewed self-signed certificates
 - [`SignedCertificateCreator`](SignedCertificateCreator.cs) — builds subjects and SANs and creates self-signed or CA-signed TLS server certificates
 - [`SignedCertificateProvider`](SignedCertificateProvider.cs) — CA-signed certificates and root certificate publishing
 - [`LanCertificateProvider`](LanCertificateProvider.cs) — client of the LAN certificate manager
 - [`ILanCertificateManager`](ILanCertificateManager.cs) — the remote API implemented by [SysWeaver.MicroService.LanCertificateManager](../SysWeaver.MicroService.LanCertificateManager/README.md)
+- [`CertificateBaseParams`](CertificateBaseParams.cs), [`CertificateParams`](CertificateParams.cs), [`CertificateProviderParams`](CertificateProviderParams.cs) — the shared parameter hierarchy: cache file and password, subject fields, SANs and key size, renewal times
 
 ## Using it
 
@@ -67,4 +70,4 @@ All providers implement `ICertificateProvider` from [SysWeaver.Common](../SysWea
 
 - **Project:** [`SysWeaver.Security.csproj`](SysWeaver.Security.csproj)
 - **Builds on:** [SysWeaver.Common](../SysWeaver.Common/README.md), [SysWeaver.HttpServer](../SysWeaver.HttpServer/README.md), [SysWeaver.IsoData](../SysWeaver.IsoData/README.md), [SysWeaver.Remote.Connection](../SysWeaver.Remote.Connection/README.md)
-- **Used by:** [SysWeaver.Security.Acme](../SysWeaver.Security.Acme/README.md), and the services [ReverseProxyClient](https://github.com/dosh1974/SysWeaver.Services/blob/main/ReverseProxyClient/README.md), [ReverseProxyServer](https://github.com/dosh1974/SysWeaver.Services/blob/main/ReverseProxyServer/README.md), [SwServerManager](https://github.com/dosh1974/SysWeaver.Services/blob/main/SwServerManager/README.md)
+- **Used by:** [SysWeaver.Security.Acme](../SysWeaver.Security.Acme/README.md), and the services [HttpBenchService](https://github.com/dosh1974/SysWeaver.Services/blob/main/HttpBenchService/README.md), [ReverseProxyClient](https://github.com/dosh1974/SysWeaver.Services/blob/main/ReverseProxyClient/README.md), [ReverseProxyServer](https://github.com/dosh1974/SysWeaver.Services/blob/main/ReverseProxyServer/README.md), [SwServerManager](https://github.com/dosh1974/SysWeaver.Services/blob/main/SwServerManager/README.md)

@@ -28,16 +28,18 @@ Consumers only depend on the `IUserStorageService` interface from [SysWeaver.Htt
 ## Key features
 
 - Access scopes: private (owner only), protected (other users with the link, optionally requiring auth tokens) and public (anyone with the link)
-- Per-scope upload repositories for the [file uploader](../SysWeaver.MicroService.FileUploader/README.md), each with its own auth, size limit and extension white/black list (protected uploads are enabled by default)
-- Retention plans (days kept after the last access, per scope) and a per-user disc quota, optionally decided per user by an `IUserStoragePerUserHandler`
+- Per-scope upload repositories for the [file uploader](../SysWeaver.MicroService.FileUploader/README.md), each with its own auth, size limit and extension white/black list (repository keys `UserPublic`, `UserProtected`, `UserPrivate`; only protected uploads are enabled by default)
+- Retention plans (days kept after the last access, per scope) and a per-user disc quota (the least recently accessed files are deleted first, the last file is kept), optionally decided per user by an `IUserStoragePerUserHandler`
 - Files spread over several storage folders, compressed on disc (Brotli by default)
 - Stored links: a URL (with the stored files it references) served as an embedding page, using an extension viewer when one exists
-- APIs and tables for users to list and delete their own files and links
+- APIs (below `Api/UserStorage/`) and tables (`MyStoredFiles`, `MyStoredUrls`) for users to list and delete their own files and links
 
 ## Key components
 
 - [`UserStorageService`](UserStorageService.cs) — storage, HTTP serving, pruning and the user APIs
 - [`UserStorageParams`](UserStorageParams.cs) — folders, compression, retention and upload settings
+- [`UserStorageUpload`](UserStorageUpload.cs) — upload settings of one scope
+- [`StoredFile`](StoredFile.cs), [`StoredUrl`](StoredUrl.cs) — the file and link information returned by the APIs
 
 ## Using it
 
@@ -46,7 +48,7 @@ Consumers only depend on the `IUserStorageService` interface from [SysWeaver.Htt
   "Params": { "Folders": [ "D:\\UserStorage" ] } }
 ```
 
-Without `Folders`, a `UserStorage` folder in the application data folder is used.
+Without `Folders`, a `UserStorage` sub folder in each of the application data folders (shared by all OS users) is used. Files are served below `storage/` (`BaseUrl`). The index of the folder is part of every URL, so don't remove or reorder folders that hold data.
 
 ## Limitations and considerations
 

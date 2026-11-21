@@ -13,7 +13,7 @@ using Codec = SysWeaver.Compression.CompStreamCodec<SysWeaver.Compression.CompBr
 namespace SysWeaver.Compression
 {
     /// <summary>
-    /// The default Brotli ("br") implementation (priority 0, registered by default), using the .NET <see cref="System.IO.Compression.BrotliEncoder"/> / <see cref="System.IO.Compression.BrotliDecoder"/>
+    /// The default Brotli ("br") implementation (priority 1, registered by default), using the .NET <see cref="System.IO.Compression.BrotliEncoder"/> / <see cref="System.IO.Compression.BrotliDecoder"/>
     /// through <see cref="CompStreamCodec{TEncoder, TDecoder}"/>.
     /// </summary>
     /// <remarks>

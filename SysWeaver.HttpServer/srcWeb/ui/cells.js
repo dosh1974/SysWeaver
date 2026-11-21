@@ -1521,7 +1521,7 @@
 
     /**
      * The special tag of an auth requirement (C# TableDataAuth, the api inspector, the explore pages): null = open to anyone (the accent
-     * "Open" tag, so open end points stand out), "" = any signed in user (the "Any logged in user" tag); null for a token list.
+     * "Open" tag, so open end points stand out), "" = any signed in user (the "Any signed in user" tag); null for a token list.
      * @param {string|null|undefined} auth The requirement: null = open, "" = any signed in user, else comma separated tokens.
      * @returns {HTMLElement|null} The tag (span.sw-tag.sw-tag-open / .sw-tag-signedin with its tool tip), null for tokens.
      */
@@ -1533,8 +1533,8 @@
             });
         if (String(auth).trim().length === 0)
             return el("span.sw-tag.sw-tag-signedin", {
-                text: _TF("Any logged in user", "Text of the tag in an auth column: the api or web resource needs a signed in user, but no special role"),
-                title: _TF("Any signed in user, no special role required.", "Tool tip of the Any logged in user tag in an auth column"),
+                text: _TF("Any signed in user", "Text of the tag in an auth column: the api or web resource needs a signed in user, but no special role"),
+                title: _TF("Any signed in user, no special role required.", "Tool tip of the Any signed in user tag in an auth column"),
             });
         return null;
     }
@@ -1544,7 +1544,7 @@
      * a special token, as the original); each tag "key:value" becomes a span
      * with text formats[1] (default "{1}" = key) and title formats[2] (default "{2}" = value); args {0} tag, {1} key, {2} value, {3} text, {4} title.
      * formats[3] = per tag copy template; formats[4] "true" = clicking the cell (outside a tag) copies the raw value.
-     * formats[5] "Auth" = an auth requirement (C# TableDataAuth): null shows the accent "Open" tag, "" the "Any logged in user" tag (AuthTag).
+     * formats[5] "Auth" = an auth requirement (C# TableDataAuth): null shows the accent "Open" tag, "" the "Any signed in user" tag (AuthTag).
      * @param {HTMLElement} e The cell. @param {*} value The value. @param {string[]} formats The format arguments. @param {*} nextValue The next value.
      * @param {string|false} flash Flash class. @param {string} type The C# type. @param {function} onRefresh Refresh callback.
      * @returns {HTMLElement|undefined} The cell.
@@ -2653,7 +2653,7 @@
         ByteSize: FormatFormatters.get("ByteSize"),
         ByteSpeed: FormatFormatters.get("ByteSpeed"),
         Tags,
-        /** The special tag of an auth requirement: null = the accent "Open" tag, "" = "Any logged in user", null for tokens (AuthTag). */
+        /** The special tag of an auth requirement: null = the accent "Open" tag, "" = "Any signed in user", null for tokens (AuthTag). */
         AuthTag,
         PerRowFormat,
         Toggle,

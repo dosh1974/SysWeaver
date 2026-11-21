@@ -20,7 +20,7 @@ A transformer service registers conversions by file extension or MIME type. [`Ca
 | [`CachedTransformer.cs`](CachedTransformer.cs) | The base transformer service: registration, cache lookup, variant selection, build queue, pruning, stats and debug table |
 | [`CachedTransformer.BuildJob.cs`](CachedTransformer.BuildJob.cs) | `CachedTransformerFile` (the source file to validate or build for: key, MIME type, base file name on disc, decoder) and the internal build job |
 | [`CachedTransformerEntry.cs`](CachedTransformerEntry.cs) | The (possibly still building) set of cached variants of a source file, in order of preference |
-| [`CachedTransformerBuildStrategies.cs`](CachedTransformerBuildStrategies.cs) How missing variants are built: `AlwaysDefer` (in the background, the original is served meanwhile), `AlwaysDirect` (the request waits) or `CheckAccept` (defer only if the client accepts the original MIME type) |
+| [`CachedTransformerBuildStrategies.cs`](CachedTransformerBuildStrategies.cs) | How missing variants are built: `AlwaysDefer` (in the background, the original is served meanwhile), `AlwaysDirect` (the request waits) or `CheckAccept` (defer only if the client accepts the original MIME type) |
 | [`CachedTransformerParams.cs`](CachedTransformerParams.cs) | Base parameters: concurrent build limits, cache folders (files distributed by hash) and the days to keep unused entries |
 | [`ICachedTransformer.cs`](ICachedTransformer.cs) | The contract of one conversion: info text, build strategy, validate existing variants, build variants |
 

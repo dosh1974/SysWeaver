@@ -373,6 +373,7 @@ namespace SysWeaver.ReverseProxy
         /// <param name="r">Parameters</param>
         /// <returns></returns>
         [WebApi]
+        [WebApiAuth(Roles.Ops)]
         [WebApiClientCache(1)]
         [WebApiRequestCache(1)]
         public TypedTableData<ReverseProxyClientBrief> GetClientBriefs(TableDataRequest r)

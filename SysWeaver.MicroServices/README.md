@@ -35,6 +35,17 @@ flowchart LR
 - **Cross-service interfaces** — `IServiceMessageListener` (service-to-service notifications), `IRunTimeWebApiAuth` (endpoint permissions decided from configuration at run time), `IHaveDefaultInstanceName`, `IEmailSender`, `IQrCodeService` and template variables (`IHaveTemplateVariables`)
 - Services remain plain classes: no base class is required
 
+## Key components
+
+- [`DependencyAttribute.cs`](DependencyAttribute.cs) — `[IsMicroService]`, `[OptionalDep]` and `[RequiredDep]` (with generic one and two type forms)
+- [`WebApi/WebApiAttribute.cs`](WebApi/WebApiAttribute.cs) — `[WebApi]`, raw responses, rate limits and auditing attributes
+- [`WebApi/WebApiAuthAttribute.cs`](WebApi/WebApiAuthAttribute.cs) — `[WebApiAuth]`, the auth required for a type or method
+- [`WebMenu/WebMenuAttribute.cs`](WebMenu/WebMenuAttribute.cs) — base of the `[WebMenu*]` attributes
+- [`IServiceMessageListener.cs`](IServiceMessageListener.cs) — receives messages posted to the service manager
+- [`IEmailSender.cs`](IEmailSender.cs) — email sending interface, `OutgoingEmailMessage` and the `Send` extension method
+- [`IQrCodeService.cs`](IQrCodeService.cs) — QR code (svg) generation interface
+- [`IHaveDefaultInstanceName.cs`](IHaveDefaultInstanceName.cs) — instance name used when none is configured
+
 ## Using it
 
 ```csharp

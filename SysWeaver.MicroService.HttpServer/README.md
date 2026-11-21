@@ -30,12 +30,12 @@ flowchart TB
 ## Key features
 
 - **API service** (`ApiHttpServerService`): publishes the `[WebApi]` methods of the service manager and of every local service, including services registered later, and connects `IApiAuditService` implementations.
-- **Static data service** (`StaticDataHttpServerService`): serves the embedded resources in the `web/` folder of the assembly of every registered service — adding a service automatically adds its web pages.
+- **Static data service** (`StaticDataHttpServerService`): serves the embedded resources in the `web/` folder of the assembly of every registered service (resources with `.web.` in the name, at the path after it) — adding a service automatically adds its web pages.
 - **Icon service** (`IconHttpServerService`): serves the shared icon set of [SysWeaver.HttpServer.IconModule](../SysWeaver.HttpServer.IconModule/README.md).
-- **Explore service** (`ExploreHttpServerService`): the explorer pages of [SysWeaver.HttpServer.ExploreModule](../SysWeaver.HttpServer.ExploreModule/README.md) and the table export formats offered in the UI (CSV, HTML, Markdown, JSON, and saving to user storage when an `IUserStorageService` is registered), extendable by services implementing `IHaveTableDataExporters`. `Api/StartExportTableApi` / `Api/StartExportTableData` (the same bodies as `ExportTableApi` / `ExportTableData`, plus optional `Key` and `Title`) run the export as a server background job (`HttpServerBase.Jobs`, see [SysWeaver.HttpServer](../SysWeaver.HttpServer/README.md)): they check the API, the exporter and the access at once and return the job; the file is fetched with `Api/jobs/GetJobResult` and kept 30 minutes, so it survives a page reload (the data table export of explore/table.js uses them, with a fallback to the one call export on old servers).
-- **Menu service** (`WebMenuService`): collects the `[WebMenu*]` declarations of all services and APIs into the UI menus, filtered by the session's auth.
-- **Dashboard service** (`DashboardService`): returns per-user dashboards read from a key/value store.
-- **Server service base** (`HttpServerServiceBase`): creates the HTTP server with the registered certificate providers, auth manager and firewall handler, attaches every module, raw module, transformer and template variable group service (now and later), and provides admin APIs to read and save the server manifest (current, last known good and previous versions) and restart the process.
+- **Explore service** (`ExploreHttpServerService`): the explorer pages of [SysWeaver.HttpServer.ExploreModule](../SysWeaver.HttpServer.ExploreModule/README.md) and the table export formats offered in the UI (CSV, HTML, Markdown, JSON, and saving to user storage when an `IUserStorageService` is registered), extendable by services implementing `IHaveTableDataExporters`. `Api/StartExportTableApi` / `Api/StartExportTableData` (the same bodies as `ExportTableApi` / `ExportTableData`, plus optional `Key` and `Title`) run the export as a server background job (`HttpServerBase.Jobs`, see [SysWeaver.HttpServer](../SysWeaver.HttpServer/README.md)): they check the API, the exporter and the access at once and return the job; the file is fetched with `Api/jobs/GetJobResult` and kept 30 minutes, so it survives a page reload (the data table export of explore/table.js uses them, with a fallback to the one call export on old servers). It also registers `explore/csv.html` as the extension viewer of `.csv` / `.tsv` files, adds the table "Monitoring / Recent log entries" (`Api/debug/LogTable`, OpsDev roles), serves `ReadTextFile` (signed in users) and turns `explore/table.html` links stored from the chat into stored table files (`IChatStoreLinkHandler`).
+- **Menu service** (`WebMenuService`): collects the `[WebMenu*]` declarations of all services and APIs into the UI menus (`Api/application/GetMenu`), filtered by the session's auth, `NoUser` and optional dynamic methods.
+- **Dashboard service** (`DashboardService`): returns per-user dashboards read from a key/value store (`Api/application/GetBoard`).
+- **Server service base** (`HttpServerServiceBase`): creates the HTTP server with the registered certificate providers, auth manager and firewall handler, attaches every module, raw module, transformer and template variable group service (now and later), registers the extension viewers of the shared `view/` pages (`.md` / `.markdown` -> `view/markdown.html`, `.html` / `.htm` / `.xhtml` -> `view/html.html`, `.json`, `.xml` / `.xsd` / `.xsl` / `.xslt` -> `view/tree.html`; the first server registers them), and provides admin APIs to read and save the server manifest (current, last known good and previous versions) and restart the process (`RestartProcess`).
 
 ## Key components
 
@@ -44,6 +44,10 @@ flowchart TB
 - [`StaticDataHttpServerService`](StaticDataHttpServerService.cs) — embedded web assets of all services
 - [`WebMenuService`](WebMenuService.cs) — the navigation menus
 - [`ExploreHttpServerService`](ExploreHttpServerService.cs) — explorer and table exporters
+- [`IconHttpServerService`](IconHttpServerService.cs) — the shared icons
+- [`DashboardService`](DashboardService.cs) — per-user dashboards
+- [`JsonTableDataExporter`](JsonTableDataExporter.cs), [`UserDataTableDataExporter`](UserDataTableDataExporter.cs) — the JSON and user storage link exporters (the CSV, HTML and Markdown exporters come from [SysWeaver.TableData](../SysWeaver.TableData/README.md))
+- [`ExportTableApiRequest`](ExportTableApiRequest.cs), [`ExportTableDataRequest`](ExportTableDataRequest.cs) — the bodies of the export APIs
 
 ## Using it
 
@@ -64,10 +68,12 @@ flowchart TB
 - Some services resolve dependencies in their constructors and must be ordered accordingly: icons after static data, explorer after both, the menu after the API service, the HTTP server service after the auth manager, firewall handler and certificate providers.
 - Multiple instances of these services are discouraged by their own documentation.
 - The manifest admin APIs (Admin role) write the manifest file directly; a restart is needed for changes to take effect.
+- Menu items and served web resources stay when their service is removed (only APIs, modules, transformers, template variables and exporters are removed).
+- `ExportTableApi` / `StartExportTableApi` export at most 100 000 rows.
 - `DashboardService` only reads dashboards (stored per user under `Dashboard_<id>_<user>` keys); nothing in the framework writes them yet, and sessions without a user get none.
 
 ## Relationships
 
 - **Project:** [`SysWeaver.MicroService.HttpServer.csproj`](SysWeaver.MicroService.HttpServer.csproj)
 - **Builds on:** [SysWeaver.Auth.Core](../SysWeaver.Auth.Core/README.md), [SysWeaver.CommandLine](../SysWeaver.CommandLine/README.md), [SysWeaver.HttpServer.ExploreModule](../SysWeaver.HttpServer.ExploreModule/README.md), [SysWeaver.HttpServer.IconModule](../SysWeaver.HttpServer.IconModule/README.md), [SysWeaver.HttpServer](../SysWeaver.HttpServer/README.md), [SysWeaver.MicroServices.ServiceManager](../SysWeaver.MicroServices.ServiceManager/README.md), [SysWeaver.Storage](../SysWeaver.Storage/README.md)
-- **Used by:** [SysWeaver.MicroService.AspHttpServer](../SysWeaver.MicroService.AspHttpServer/README.md), [SysWeaver.MicroService.NetHttpServer](../SysWeaver.MicroService.NetHttpServer/README.md), [SwLanCertManager](https://github.com/dosh1974/SysWeaver.Services/blob/main/SwLanCertManager/README.md), [SwServerManager](https://github.com/dosh1974/SysWeaver.Services/blob/main/SwServerManager/README.md), [TranslationService](https://github.com/dosh1974/SysWeaver.Services/blob/main/TranslationService/README.md)
+- **Used by:** [SysWeaver.MicroService.AspHttpServer](../SysWeaver.MicroService.AspHttpServer/README.md), [SysWeaver.MicroService.NetHttpServer](../SysWeaver.MicroService.NetHttpServer/README.md), [HttpBenchService](https://github.com/dosh1974/SysWeaver.Services/blob/main/HttpBenchService/README.md), [SwLanCertManager](https://github.com/dosh1974/SysWeaver.Services/blob/main/SwLanCertManager/README.md), [SwServerManager](https://github.com/dosh1974/SysWeaver.Services/blob/main/SwServerManager/README.md), [TranslationService](https://github.com/dosh1974/SysWeaver.Services/blob/main/TranslationService/README.md)

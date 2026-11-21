@@ -2,7 +2,18 @@
 
 [⬆ SysWeaver overview](../README.md)
 
+> Vendored copies of third-party open source libraries.
+
+| | |
+|---|---|
+| **Repository** | [SysWeaver](../README.md) |
+| **Kind** | Vendored third-party code |
+
+## Purpose
+
 Copies of open source libraries kept in the repository (each with its own upstream README and MIT license file) instead of being consumed as NuGet packages, which allows local modifications.
+
+## Contents
 
 | Library | Used for | Used by |
 |---|---|---|

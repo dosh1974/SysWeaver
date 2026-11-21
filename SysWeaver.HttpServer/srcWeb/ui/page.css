@@ -1,5 +1,5 @@
 /*
- * ui/page.css - SysWeaver UI library (Sw) styles, part 7: the Design v2 page anatomy (Design v2, ui/README.md Page anatomy / PORTING.md B10 / PORTING.md B13 / PORTING.md B11).
+ * ui/page.css - SysWeaver UI library (Sw) styles, part 7 of 7: the Design v2 page anatomy (Design v2, ui/README.md Page anatomy / PORTING.md B10 / PORTING.md B13 / PORTING.md B11).
  *
  * Bundle order (sw/ui.css): tokens.css, components.css, overlays.css, cells.css, code.css, icons.css, page.css.
  * Built by pages (static markup) and by ui/layout.js (Sw.PageHeader, Sw.EmptyState) and ui/page.js (Sw.Card, Sw.Facts, Sw.Kpi,
@@ -17,6 +17,8 @@
  *    button.sw-rows-link).
  *  - Empty state .sw-empty (.sw-empty-icon, -title, -text, -actions; .sw-error) and the state view .sw-state (.is-empty, .is-loading,
  *    .is-error, .is-small) with skeleton lines .sw-skel (static with reduced motion).
+ *  - Edge to edge on phones (Sw.Bleed, ui/page.js): the edge classes .sw-edge-l / .sw-edge-r it sets; the opt in / out classes
+ *    .sw-bleed, .sw-bleed-group, .sw-bleed-frame, .sw-no-bleed are only read by Sw.Bleed (no styles of their own).
  * Flat: no box shadows, no gradients (structure by hairlines and tone; the only gradient is the skeleton shimmer).
  */
 
@@ -86,6 +88,31 @@ html:has(> body > .sw-page-fill) {
     flex: 1;
     min-height: 0;
 }
+
+/* ---------- Edge to edge on phones (Sw.Bleed, ui/page.js) ----------
+   A surface on the page padding line of a narrow screen is moved to the window edge by Sw.Bleed (an inline negative margin); the side
+   that touches the window edge has no border and square corners, so a single card is a band from edge to edge and a row of cards starts
+   and ends at the window edges. sw-bleed / sw-bleed-group: an app's own surface / row of surfaces; sw-no-bleed: never (the subtree). */
+.sw-edge-l {
+    /* SwWeb:allow-design (the state of Sw.Bleed wins over every card rule, also hover / selected borders) */
+    border-left-width: 0 !important;
+    border-top-left-radius: 0 !important;
+    border-bottom-left-radius: 0 !important;
+}
+
+.sw-edge-r {
+    /* SwWeb:allow-design (the state of Sw.Bleed wins over every card rule, also hover / selected borders) */
+    border-right-width: 0 !important;
+    border-top-right-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+}
+
+    /* The focus ring of an edge to edge surface stays inside the window (inside the surface: rings up to 3 px; wins over the
+       outset rings of the components, ex: button.sw-kpi, .icons-item) */
+    :is(.sw-edge-l, .sw-edge-r):focus-visible {
+        /* SwWeb:allow-design (the state of Sw.Bleed wins over every component focus ring offset) */
+        outline-offset: -3px !important;
+    }
 
 /* ---------- Grid ---------- */
 
@@ -285,6 +312,9 @@ html:has(> body > .sw-page-fill) {
     align-items: center;
     gap: var(--sw-space-2);
     align-self: center;
+    /* (never wider than the header: a long status, ex: at a large text size, wraps instead of scrolling the page sideways) */
+    min-width: 0;
+    max-width: 100%;
 }
 
     .sw-ph > .sw-ph-status:empty, .sw-ph-status[hidden] {
@@ -832,6 +862,25 @@ button.sw-kpi {
         text-overflow: ellipsis;
         white-space: nowrap;
     }
+
+/* The description takes up to two lines (one cut line hid most of it, and the tool tip with the whole text needs a mouse) */
+.sw-tile-text > span {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    white-space: normal;
+}
+
+/* Phones: a KPI label wraps (up to three lines) ("Problems, last 24 h" was cut to "Problems,..." at a large text size) */
+@media (max-width: 599px) {
+    .sw-kpi-label > span {
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 3;
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+}
 
 /* ---------- Row lists (recent pages, problems, services) ---------- */
 

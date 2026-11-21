@@ -1,5 +1,5 @@
 ﻿/*
- * ui/components.css - SysWeaver UI library (Sw) styles, part 2 of 6: controls and layout components (Design v2).
+ * ui/components.css - SysWeaver UI library (Sw) styles, part 2 of 7: controls and layout components (Design v2).
  *
  * Icons (sw-icon), buttons (sw-button), groups (sw-group: a card with a header row), switches (sw-toggle), segmented controls (sw-seg), sliders
  * (sw-slider), inputs (sw-input, sw-number, sw-text), selects (sw-select, sw-listpicker), color pickers (sw-swatch, sw-cp), badges / chips,
@@ -1949,16 +1949,25 @@ html.SwMobile .sw-number {
     cursor: row-resize;
 }
 
-/* A wider invisible grab area (wider still on touch screens) */
+/* A wider invisible grab area (wider still on touch screens), across the bar only: along it, it stays in the bar (a full width bar
+   of a vertical split made a phone page scroll sideways by 5 px) */
 .sw-split-bar::before {
     content: "";
     position: absolute;
-    inset: -5px;
+    inset: 0 -5px;
+}
+
+.sw-split-v > .sw-split-bar::before {
+    inset: -5px 0;
 }
 
 @media (pointer: coarse) {
     .sw-split-bar::before {
-        inset: -12px;
+        inset: 0 -12px;
+    }
+
+    .sw-split-v > .sw-split-bar::before {
+        inset: -12px 0;
     }
 }
 
@@ -2485,13 +2494,13 @@ html.SwMobile .sw-number {
 
 /* The visual size stays (36 px small controls, 38 px segments); an invisible ::after extends the hit area to 2.75rem (44 px) where
    the control is smaller, centred on it (a positioned control keeps its own position: :where has no specificity) */
-:root[data-density="touch"] :where(.sw-button.sw-small, .sw-chip, .sw-chip-remove, .sw-seg-item, .sw-tab-close),
-html.SwMobile:not([data-density]) :where(.sw-button.sw-small, .sw-chip, .sw-chip-remove, .sw-seg-item, .sw-tab-close) {
+:root[data-density="touch"] :where(.sw-button.sw-small, .sw-chip, .sw-chip-remove, .sw-seg-item, .sw-tab-close, .sw-cell-action, .sw-cell-toggle),
+html.SwMobile:not([data-density]) :where(.sw-button.sw-small, .sw-chip, .sw-chip-remove, .sw-seg-item, .sw-tab-close, .sw-cell-action, .sw-cell-toggle) {
     position: relative;
 }
 
-:root[data-density="touch"] :is(.sw-button.sw-small, .sw-chip, .sw-chip-remove, .sw-seg-item, .sw-tab-close, .sw-text-field > .sw-button)::after,
-html.SwMobile:not([data-density]) :is(.sw-button.sw-small, .sw-chip, .sw-chip-remove, .sw-seg-item, .sw-tab-close, .sw-text-field > .sw-button)::after {
+:root[data-density="touch"] :is(.sw-button.sw-small, .sw-chip, .sw-chip-remove, .sw-seg-item, .sw-tab-close, .sw-cell-action, .sw-cell-toggle, .sw-text-field > .sw-button)::after,
+html.SwMobile:not([data-density]) :is(.sw-button.sw-small, .sw-chip, .sw-chip-remove, .sw-seg-item, .sw-tab-close, .sw-cell-action, .sw-cell-toggle, .sw-text-field > .sw-button)::after {
     content: "";
     position: absolute;
     top: min(0px, (100% - 2.75rem) / 2);
@@ -2501,11 +2510,11 @@ html.SwMobile:not([data-density]) :is(.sw-button.sw-small, .sw-chip, .sw-chip-re
 }
 
 @media (pointer: coarse) {
-    :root:not([data-density]) :where(.sw-button.sw-small, .sw-chip, .sw-chip-remove, .sw-seg-item, .sw-tab-close) {
+    :root:not([data-density]) :where(.sw-button.sw-small, .sw-chip, .sw-chip-remove, .sw-seg-item, .sw-tab-close, .sw-cell-action, .sw-cell-toggle) {
         position: relative;
     }
 
-    :root:not([data-density]) :is(.sw-button.sw-small, .sw-chip, .sw-chip-remove, .sw-seg-item, .sw-tab-close, .sw-text-field > .sw-button)::after {
+    :root:not([data-density]) :is(.sw-button.sw-small, .sw-chip, .sw-chip-remove, .sw-seg-item, .sw-tab-close, .sw-cell-action, .sw-cell-toggle, .sw-text-field > .sw-button)::after {
         content: "";
         position: absolute;
         top: min(0px, (100% - 2.75rem) / 2);

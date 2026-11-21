@@ -10,6 +10,9 @@ namespace SysWeaver.MicroService
 
     /// <summary>
     /// A file repository for images: an uploaded image is saved in each of the configured sizes
+    /// (next to the original, which is stored by <see cref="StaticFileRepo"/>).
+    /// The repository always accepts the same image extensions as <see cref="CustomUserImageService"/> (png, tif, tiff, jpg, jpeg, webp, avif):
+    /// the configured <see cref="StaticFileRepo.Extensions"/>, <see cref="StaticFileRepo.SavePreCompressed"/> (false) and <see cref="StaticFileRepo.Compression"/> ("") are overwritten.
     /// </summary>
     public sealed class ImageRepo : StaticFileRepo
     {
@@ -24,6 +27,9 @@ namespace SysWeaver.MicroService
         /// </summary>
         public ImageSize[] Sizes;
 
+        /// <summary>
+        /// Force the supported image extensions and the compression settings before the base class handles the request
+        /// </summary>
         protected override Task<Tuple<FileUploadStatus, object>> OnRequest(HttpServerRequest r, bool isUpload)
         {
             Extensions = ImageRepoService.SupportedSourceExts;
@@ -32,6 +38,10 @@ namespace SysWeaver.MicroService
             return base.OnRequest(r, isUpload);
         }
 
+        /// <summary>
+        /// Decode the uploaded image and save it in each of the <see cref="Sizes"/> (in the folder of the uploaded file)
+        /// </summary>
+        /// <returns><see cref="FileUploadStatus.InvalidFile"/> if the data isn't an image in a supported format, else <see cref="FileUploadStatus.None"/></returns>
         protected override async Task<FileUploadStatus> OnUploaded(FileInfo file, long replacedSize, FileUploadInfo info, HttpServerRequest r, object context)
         {
             using var data = await FileReadOnlyMemory.ReadAsync(file.FullName).ConfigureAwait(false);

@@ -11,7 +11,7 @@
 
 ## Purpose
 
-Almost every page in the framework loads `common/common.js` and `common/theme.css`. `theme.css` is served as a template (`${Variable}` substitution, e.g. for the configured colours) and defines the themes selected through the `data-theme` attribute (e.g. `dark`, `hacker`, `application`), several of which use the background images in this folder. The remaining scripts are loaded on demand by the pages that need them.
+Every page in the framework links `common/theme.css`. New format pages load the bundles `sw/core.js` + `sw/ui.js` (see [`../ui`](../ui/README.md)); old format pages load the legacy bundle `common/common.js` here instead, which contains the same core and ui sources plus the old globals. `theme.css` is served as a template (`${Variable}` substitution, e.g. for the configured colours) and defines the themes selected through the `data-theme` attribute (e.g. `dark`, `hacker`, `application`), several of which use the background images in this folder. The remaining scripts are loaded on demand by the pages that need them.
 
 ## Contents
 

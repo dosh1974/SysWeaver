@@ -290,7 +290,9 @@
             /** @type {HTMLElement} The page root (a Design v2 form page; the dashboard width, so the cards have room to be resized). */
             this.E = el("main.api-page.sw-page-dash.sw-root");
             /** @type {HTMLElement} The body of the result card. */
-            this.Results = el("div.api-results", { attrs: { "aria-live": "polite" } });
+            //  (not a live region: a screen reader read the whole result tree aloud after every call; the result history bar announces
+            //  the call, see HistoryE)
+            this.Results = el("div.api-results");
             /** @type {Array<object>} The results of the calls made on this page, newest first (in memory only, see Send / HistoryEntry). */
             this.History = [];
             /** @type {?object} The history entry that is shown. */
@@ -536,7 +538,10 @@
                     console.warn("Failed to parse previous object, error: " + e);
                 }
             }
-            t.Input = new E(d.Arg);
+            //  (Descriptions: the summary of every parameter as a visible line under its field, not only a cut placeholder)
+            const inOpt = new E.Options();
+            inOpt.Descriptions = true;
+            t.Input = new E(d.Arg, null, inOpt);
             await t.Input.SetObject(obj);
             t.Input.Element.addEventListener("EditChange", () => t.UpdateFresh());
             //  The JSON tab: a writable json editor (Sw.CodeEditor, ui/code.js, loaded on demand). Switching tabs converts: form -> text
@@ -880,7 +885,8 @@
             });
             t.BusyE = el("span.api-history-busy", { title: _TF("A call is in progress, its result is shown when it's ready", "Tool tip of the spinner in the result history bar of the API inspector") },
                 new Sw.Spinner({ Size: 16 }).E);
-            t.HistoryE = el("div.api-history", null, t.FreshE, t.HistorySel.E, t.UseB.E, t.BusyE);
+            //  (the short line of a call, "#1 16:05:19 OK 8 ms", is what a screen reader announces when a result arrives)
+            t.HistoryE = el("div.api-history", { attrs: { "aria-live": "polite" } }, t.FreshE, t.HistorySel.E, t.UseB.E, t.BusyE);
             return t.HistoryE;
         }
 

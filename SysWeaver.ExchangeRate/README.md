@@ -35,7 +35,7 @@ The service requires at least one `IRateSource` registered before it in the mani
 - Rates of each source are cached on disc (`CacheFolder`, default a folder under the common application data), so they survive restarts and outages
 - Currency code aliases: a code missing from the sources can get the rate of another code (`OldToNewRateMap`, default `NLE=SLL`)
 - `SyncRates` lets other servers fetch the rates when they changed (requires the `Service` role)
-- Current rates, sources and all rates per source as web tables (menu *Data / Exchange rates*, for every signed in user); the optional `ExchangeRateDebugService` adds extra menu shortcuts to them. Amounts are sent as numbers with the currency (`TableDataCurrency`) and formatted by the web client using `iso_data/currencies.js`, so sorting, filtering and exports work on the numbers
+- Current rates, sources and all rates per source as web tables (menu *Data / Exchange rates*, for every signed in user); the optional `ExchangeRateDebugService` adds extra menu shortcuts to them. Amounts are sent as numbers with the currency (`TableDataCurrency`) and formatted by the web client using `iso_data/currencies.js`, so sorting, filtering and exports work on the numbers. The sources table shows cards by default and the current rates table can switch to cards (templates in `srcWeb/exchange/cards.html`)
 - Stats and perf monitoring
 
 ## Key components
@@ -44,6 +44,8 @@ The service requires at least one `IRateSource` registered before it in the mani
 - [`IRateSource`](IRateSource.cs) - the source plug-in contract
 - [`RateCache`](RateCache.cs) - an immutable set of rates with `GetRate` / `GetRateNoThrow` conversions
 - [`RateDiscCache`](RateDiscCache.cs) - per source disc cache
+- [`ExchangeRateParams`](ExchangeRateParams.cs) - service parameters: `CacheFolder` and `OldToNewRateMap`
+- [`ExchangeRateDebugService`](ExchangeRateDebugService.cs) - optional, adds menu items for the three tables (no code)
 
 ## Using it
 
@@ -72,6 +74,7 @@ To use another SysWeaver server as the source, register `SysWeaver.ExchangeRate.
 | Folder | Content |
 |---|---|
 | [`Sources/`](Sources/README.md) | The rate sources (exchangeratesapi.io, fixer.io, another SysWeaver server) and their parameters |
+| [`srcWeb/`](srcWeb/README.md) | Embedded web assets: the card templates of the rate and source tables |
 
 ## Relationships
 

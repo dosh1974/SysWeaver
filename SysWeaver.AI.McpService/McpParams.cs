@@ -37,7 +37,7 @@ namespace SysWeaver.AI
         public String[] AllowedOrigins = ["*"];
 
         /// <summary>
-        /// If true (and a service manager is supplied), the AI tools (methods with an AiToolAttribute or OpenAiUseAttribute) of all service instances are exposed.
+        /// If true (and a service manager is supplied), the AI tools (methods with an AiToolAttribute or AiUseAttribute) of all service instances are exposed.
         /// Access to each tool is still restricted by its auth (WebApiAuthAttribute).
         /// </summary>
         public bool ServiceTools = true;

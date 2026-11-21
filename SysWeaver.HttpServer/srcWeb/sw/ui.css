@@ -16,9 +16,9 @@
 
 /* ---- ui/tokens.css ---- */
 /*
- * ui/tokens.css - SysWeaver UI library (Sw) styles, part 1 of 6: design tokens and base helpers (Design v2).
+ * ui/tokens.css - SysWeaver UI library (Sw) styles, part 1 of 7: design tokens and base helpers (Design v2).
  *
- * Bundle order (sw/ui.css): tokens.css, components.css, overlays.css, cells.css, code.css, icons.css. Link it after common/theme.css.
+ * Bundle order (sw/ui.css): tokens.css, components.css, overlays.css, cells.css, code.css, icons.css, page.css. Link it after common/theme.css.
  *
  * Theme: the 4 base colors come from the SysWeaver theme (common/theme.css, templated by the server):
  *     --sw-bg = --ThemeBackground, --sw-fg = --ThemeMain, --sw-accent1 = --ThemeAcc1, --sw-accent2 = --ThemeAcc2.
@@ -528,9 +528,10 @@
     }
 }
 
-/* Phones: 16 px page padding */
+/* Phones: 16 px page padding, also in the compact density and the Pro theme (their 24 px rule is more specific than :root; the
+   edge to edge card texts are on 16 px, ui/page.css) */
 @media (max-width: 760px) {
-    :root {
+    :root, :root[data-density], :root[data-theme] {
         --sw-page-px: var(--sw-space-4);
     }
 }
@@ -858,7 +859,7 @@ html.SwMobile[data-theme="pro"] {
 
 /* ---- ui/components.css ---- */
 /*
- * ui/components.css - SysWeaver UI library (Sw) styles, part 2 of 6: controls and layout components (Design v2).
+ * ui/components.css - SysWeaver UI library (Sw) styles, part 2 of 7: controls and layout components (Design v2).
  *
  * Icons (sw-icon), buttons (sw-button), groups (sw-group: a card with a header row), switches (sw-toggle), segmented controls (sw-seg), sliders
  * (sw-slider), inputs (sw-input, sw-number, sw-text), selects (sw-select, sw-listpicker), color pickers (sw-swatch, sw-cp), badges / chips,
@@ -2808,16 +2809,25 @@ html.SwMobile .sw-number {
     cursor: row-resize;
 }
 
-/* A wider invisible grab area (wider still on touch screens) */
+/* A wider invisible grab area (wider still on touch screens), across the bar only: along it, it stays in the bar (a full width bar
+   of a vertical split made a phone page scroll sideways by 5 px) */
 .sw-split-bar::before {
     content: "";
     position: absolute;
-    inset: -5px;
+    inset: 0 -5px;
+}
+
+.sw-split-v > .sw-split-bar::before {
+    inset: -5px 0;
 }
 
 @media (pointer: coarse) {
     .sw-split-bar::before {
-        inset: -12px;
+        inset: 0 -12px;
+    }
+
+    .sw-split-v > .sw-split-bar::before {
+        inset: -12px 0;
     }
 }
 
@@ -3344,13 +3354,13 @@ html.SwMobile .sw-number {
 
 /* The visual size stays (36 px small controls, 38 px segments); an invisible ::after extends the hit area to 2.75rem (44 px) where
    the control is smaller, centred on it (a positioned control keeps its own position: :where has no specificity) */
-:root[data-density="touch"] :where(.sw-button.sw-small, .sw-chip, .sw-chip-remove, .sw-seg-item, .sw-tab-close),
-html.SwMobile:not([data-density]) :where(.sw-button.sw-small, .sw-chip, .sw-chip-remove, .sw-seg-item, .sw-tab-close) {
+:root[data-density="touch"] :where(.sw-button.sw-small, .sw-chip, .sw-chip-remove, .sw-seg-item, .sw-tab-close, .sw-cell-action, .sw-cell-toggle),
+html.SwMobile:not([data-density]) :where(.sw-button.sw-small, .sw-chip, .sw-chip-remove, .sw-seg-item, .sw-tab-close, .sw-cell-action, .sw-cell-toggle) {
     position: relative;
 }
 
-:root[data-density="touch"] :is(.sw-button.sw-small, .sw-chip, .sw-chip-remove, .sw-seg-item, .sw-tab-close, .sw-text-field > .sw-button)::after,
-html.SwMobile:not([data-density]) :is(.sw-button.sw-small, .sw-chip, .sw-chip-remove, .sw-seg-item, .sw-tab-close, .sw-text-field > .sw-button)::after {
+:root[data-density="touch"] :is(.sw-button.sw-small, .sw-chip, .sw-chip-remove, .sw-seg-item, .sw-tab-close, .sw-cell-action, .sw-cell-toggle, .sw-text-field > .sw-button)::after,
+html.SwMobile:not([data-density]) :is(.sw-button.sw-small, .sw-chip, .sw-chip-remove, .sw-seg-item, .sw-tab-close, .sw-cell-action, .sw-cell-toggle, .sw-text-field > .sw-button)::after {
     content: "";
     position: absolute;
     top: min(0px, (100% - 2.75rem) / 2);
@@ -3360,11 +3370,11 @@ html.SwMobile:not([data-density]) :is(.sw-button.sw-small, .sw-chip, .sw-chip-re
 }
 
 @media (pointer: coarse) {
-    :root:not([data-density]) :where(.sw-button.sw-small, .sw-chip, .sw-chip-remove, .sw-seg-item, .sw-tab-close) {
+    :root:not([data-density]) :where(.sw-button.sw-small, .sw-chip, .sw-chip-remove, .sw-seg-item, .sw-tab-close, .sw-cell-action, .sw-cell-toggle) {
         position: relative;
     }
 
-    :root:not([data-density]) :is(.sw-button.sw-small, .sw-chip, .sw-chip-remove, .sw-seg-item, .sw-tab-close, .sw-text-field > .sw-button)::after {
+    :root:not([data-density]) :is(.sw-button.sw-small, .sw-chip, .sw-chip-remove, .sw-seg-item, .sw-tab-close, .sw-cell-action, .sw-cell-toggle, .sw-text-field > .sw-button)::after {
         content: "";
         position: absolute;
         top: min(0px, (100% - 2.75rem) / 2);
@@ -3942,7 +3952,7 @@ html.SwMobile .sw-card-rich :is(.sw-facts dt, .sw-facts dd, .sw-card-figure > dt
 
 /* ---- ui/overlays.css ---- */
 /*
- * ui/overlays.css - SysWeaver UI library (Sw) styles, part 3 of 6: everything that floats above the page (Design v2).
+ * ui/overlays.css - SysWeaver UI library (Sw) styles, part 3 of 7: everything that floats above the page (Design v2).
  *
  * Layers and popups (sw-layer, sw-popup), menus (sw-menu), dialogs (sw-dialog: centered on desktop, a bottom sheet on phones; selection and
  * working dialogs), toasts (sw-toasts: bottom right, inverse surface), hints (sw-hint: tooltips), the loading overlay (sw-loader) and the
@@ -5498,7 +5508,7 @@ iframe.sw-frame-modal {
 
 /* ---- ui/cells.css ---- */
 /*
- * ui/cells.css - SysWeaver UI library (Sw) styles, part 4 of 6: value cells (Sw.Cells) and text popups.
+ * ui/cells.css - SysWeaver UI library (Sw) styles, part 4 of 7: value cells (Sw.Cells) and text popups.
  *
  * Classes set by the cell renderers (Sw.Cells.Classes, replaceable): sw-right / sw-left / sw-center (alignment), sw-mono, sw-null (zero),
  * sw-false (negative / false / dark color), sw-cell-text (plain text; not sw-text, the Sw.TextBox root class), sw-cell-actions (Toggle / Actions), sw-capped (shortened text),
@@ -6012,7 +6022,7 @@ a.sw-link.sw-link-ext.sw-link-image .sw-link-ext-icon {
 
 /* ---- ui/code.css ---- */
 /*
- * ui/code.css - SysWeaver UI library (Sw) styles, part 5 of 6: the code editor (Sw.CodeEditor, ui/code.js, loaded on demand).
+ * ui/code.css - SysWeaver UI library (Sw) styles, part 5 of 7: the code editor (Sw.CodeEditor, ui/code.js, loaded on demand).
  *
  * Colors: --sw-code-* (derived from the theme, a light variant for the light scheme), the background --sw-code-bg, line height --sw-code-lh.
  * Token classes of the highlighter: c comment, k keyword, t type, f function, v variable, n number, p preprocessor, s / sc / sx snippets,
@@ -6433,7 +6443,7 @@ a.sw-link.sw-link-ext.sw-link-image .sw-link-ext-icon {
 
 /* ---- ui/icons.css ---- */
 /*
- * ui/icons.css - SysWeaver UI library (Sw) styles, part 6 of 6: the SysWeaver icon classes.
+ * ui/icons.css - SysWeaver UI library (Sw) styles, part 6 of 7: the SysWeaver icon classes.
  *
  * Every icon class used by the server (C# IconClass values, contract Appendix B) and by the pages: a class only sets mask-image
  * (an svg of the icon module, ../icons/), the element's background color (currentColor for Sw.IconClass / Sw.Icon elements, the
@@ -7515,7 +7525,7 @@ body.SwCollapsed.SwNarrow .IconMainMenu {
 
 /* ---- ui/page.css ---- */
 /*
- * ui/page.css - SysWeaver UI library (Sw) styles, part 7: the Design v2 page anatomy (Design v2, ui/README.md Page anatomy / PORTING.md B10 / PORTING.md B13 / PORTING.md B11).
+ * ui/page.css - SysWeaver UI library (Sw) styles, part 7 of 7: the Design v2 page anatomy (Design v2, ui/README.md Page anatomy / PORTING.md B10 / PORTING.md B13 / PORTING.md B11).
  *
  * Bundle order (sw/ui.css): tokens.css, components.css, overlays.css, cells.css, code.css, icons.css, page.css.
  * Built by pages (static markup) and by ui/layout.js (Sw.PageHeader, Sw.EmptyState) and ui/page.js (Sw.Card, Sw.Facts, Sw.Kpi,
@@ -7533,6 +7543,8 @@ body.SwCollapsed.SwNarrow .IconMainMenu {
  *    button.sw-rows-link).
  *  - Empty state .sw-empty (.sw-empty-icon, -title, -text, -actions; .sw-error) and the state view .sw-state (.is-empty, .is-loading,
  *    .is-error, .is-small) with skeleton lines .sw-skel (static with reduced motion).
+ *  - Edge to edge on phones (Sw.Bleed, ui/page.js): the edge classes .sw-edge-l / .sw-edge-r it sets; the opt in / out classes
+ *    .sw-bleed, .sw-bleed-group, .sw-bleed-frame, .sw-no-bleed are only read by Sw.Bleed (no styles of their own).
  * Flat: no box shadows, no gradients (structure by hairlines and tone; the only gradient is the skeleton shimmer).
  */
 
@@ -7602,6 +7614,31 @@ html:has(> body > .sw-page-fill) {
     flex: 1;
     min-height: 0;
 }
+
+/* ---------- Edge to edge on phones (Sw.Bleed, ui/page.js) ----------
+   A surface on the page padding line of a narrow screen is moved to the window edge by Sw.Bleed (an inline negative margin); the side
+   that touches the window edge has no border and square corners, so a single card is a band from edge to edge and a row of cards starts
+   and ends at the window edges. sw-bleed / sw-bleed-group: an app's own surface / row of surfaces; sw-no-bleed: never (the subtree). */
+.sw-edge-l {
+    /* SwWeb:allow-design (the state of Sw.Bleed wins over every card rule, also hover / selected borders) */
+    border-left-width: 0 !important;
+    border-top-left-radius: 0 !important;
+    border-bottom-left-radius: 0 !important;
+}
+
+.sw-edge-r {
+    /* SwWeb:allow-design (the state of Sw.Bleed wins over every card rule, also hover / selected borders) */
+    border-right-width: 0 !important;
+    border-top-right-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+}
+
+    /* The focus ring of an edge to edge surface stays inside the window (inside the surface: rings up to 3 px; wins over the
+       outset rings of the components, ex: button.sw-kpi, .icons-item) */
+    :is(.sw-edge-l, .sw-edge-r):focus-visible {
+        /* SwWeb:allow-design (the state of Sw.Bleed wins over every component focus ring offset) */
+        outline-offset: -3px !important;
+    }
 
 /* ---------- Grid ---------- */
 
@@ -7801,6 +7838,9 @@ html:has(> body > .sw-page-fill) {
     align-items: center;
     gap: var(--sw-space-2);
     align-self: center;
+    /* (never wider than the header: a long status, ex: at a large text size, wraps instead of scrolling the page sideways) */
+    min-width: 0;
+    max-width: 100%;
 }
 
     .sw-ph > .sw-ph-status:empty, .sw-ph-status[hidden] {
@@ -8348,6 +8388,25 @@ button.sw-kpi {
         text-overflow: ellipsis;
         white-space: nowrap;
     }
+
+/* The description takes up to two lines (one cut line hid most of it, and the tool tip with the whole text needs a mouse) */
+.sw-tile-text > span {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    white-space: normal;
+}
+
+/* Phones: a KPI label wraps (up to three lines) ("Problems, last 24 h" was cut to "Problems,..." at a large text size) */
+@media (max-width: 599px) {
+    .sw-kpi-label > span {
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 3;
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+}
 
 /* ---------- Row lists (recent pages, problems, services) ---------- */
 

@@ -29,7 +29,7 @@ flowchart LR
 
 ## Key features
 
-- Browser login and logout pages, plus *Sign in* / *Sign out* menu entries, shipped as embedded assets
+- Browser login and logout pages, plus the *User* menu with *Sign in* (`LoginService`) and *Sign out* (`AuthManagerService`, order 1000: always the last item), shipped as embedded assets
 - Salted client-side hashing with a one-time pad, so the password hash is never sent in a replayable form
 - One-time token login (`TokenAuth`), typically used to hand a session over from another page or app
 - Current user information (`GetUser`) and per-user password policies for the UI
@@ -42,6 +42,8 @@ flowchart LR
 
 - [`AuthManagerService`](AuthManagerService.cs) — creates the `AuthManager`, tracks authorizers, serves user images and validation APIs
 - [`LoginService`](LoginService.cs) — salt, password policy and login APIs used by the login page
+- [`AuthManagerServiceParams`](AuthManagerServiceParams.cs) — service parameters (`SiteName`, `AllowEmailIps`, `TransparentUserImage`, plus the `AuthManagerParams` of SysWeaver.Auth.Core)
+- [`AuthInfo`](AuthInfo.cs) — what the browser gets back about the signed in user (also `AccountDisabled`, `PasswordChangeRequired`)
 
 ## Using it
 

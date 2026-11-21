@@ -76,7 +76,7 @@
 }
 
 /* Phones (portrait): the document card is edge to edge, no grip */
-@media (max-width: 600px) {
+@media (max-width: 599px) {
     .md-main.sw-page-read > .md-card {
         margin-inline: calc(-1 * var(--sw-page-px, 16px));
         border-width: 1px 0;

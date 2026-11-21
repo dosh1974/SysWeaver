@@ -26,6 +26,19 @@ Read PNG images and read or rewrite their chunks (for example embedded text meta
 - [`PngTools`](PngTools.cs) — decoding, chunk reading/writing and helpers
 - [`PngChunk`](PngChunk.cs) — a single chunk (id and data)
 - [`PngImageInfo`](PngImageInfo.cs) — the decoded IHDR header
+- [`PngChunkIds`](PngChunkIds.cs), [`PngKeywords`](PngKeywords.cs) — well-known chunk ids and text keywords
+
+## Using it
+
+```csharp
+// Decode to 32-bit pixels
+using var s = File.OpenRead("image.png");
+var pixels = PngTools.DecodeArgb(out var width, out var height, s);
+
+// List the chunks of a file
+foreach (var c in PngTools.ReadChunks("image.png"))
+    Console.WriteLine(c);
+```
 
 ## Limitations and considerations
 

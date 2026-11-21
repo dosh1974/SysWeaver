@@ -12,7 +12,7 @@ namespace SysWeaver.Compression
 {
     /// <summary>
     /// A Zstandard ("zstd", extension "zstd") plug-in using the fully managed ZstdSharp.Port library, through <see cref="CompStreamCodec{TEncoder, TDecoder}"/>.
-    /// Registered with priority 1 once <see cref="Register"/> is called.
+    /// Registered with priority 1 once <see cref="Register"/> is called, the same as the built-in <see cref="CompZStdNETNew"/>: since it is registered after the built-in codecs, it replaces it (on a tie the last registered wins).
     /// </summary>
     /// <remarks>
     /// Uses zstd level 1 / 9 / 22 for <see cref="CompEncoderLevels.Fast"/> / <see cref="CompEncoderLevels.Balanced"/> / <see cref="CompEncoderLevels.Best"/>.

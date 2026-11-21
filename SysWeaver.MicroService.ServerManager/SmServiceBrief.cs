@@ -7,6 +7,9 @@ using SysWeaver.Data;
 namespace SysWeaver.MicroService
 {
 
+    /// <summary>
+    /// A row of the managed services table: one managed service and its state
+    /// </summary>
     [TableDataPrimaryKey(nameof(Name))]
     [TableDataCard("+service@ServerManager/cards")]
     public class SmServiceBrief
@@ -116,8 +119,15 @@ namespace SysWeaver.MicroService
     }
 
 
+    /// <summary>
+    /// A row of the managed services table with the row actions (Remove), sent to administrators
+    /// </summary>
     public class SmServiceBriefActions : SmServiceBrief
     {
+        /// <summary>
+        /// Create a row with actions from a row without
+        /// </summary>
+        /// <param name="b">The row to copy</param>
         public SmServiceBriefActions(SmServiceBrief b)
         {
             b.CopyTo(this);

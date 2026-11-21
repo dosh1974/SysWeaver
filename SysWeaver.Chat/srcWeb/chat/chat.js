@@ -2406,11 +2406,21 @@
         /**
          * A language as text.
          * @param {string} iso The iso code.
-         * @returns {string} "English [en]" or "[xx]" when unknown.
+         * @returns {string} "English [en]" (a language of the server list), else the browser's name of the language ("English", Intl.DisplayNames), "[xx]" as the last resort.
          */
         LangText(iso) {
             const l = this.LangMap.get(iso);
-            return l ? l.Name + " [" + iso + "]" : "[" + iso + "]";
+            if (l)
+                return l.Name + " [" + iso + "]";
+            //  Not in the server list: the browser's name of the language ("English"), the bare code in brackets only as the last resort
+            try {
+                const n = new Intl.DisplayNames([document.documentElement.lang || navigator.language || "en"], { type: "language" }).of(iso);
+                if (n && n !== iso)
+                    return n;
+            }
+            catch {
+            }
+            return "[" + iso + "]";
         }
 
         /**
@@ -2553,10 +2563,10 @@
             c.classList.add("chat-root");
             /** @type {MessageList} The message list. */
             t.List = new MessageList(t);
-            /** The top right menu button. */
+            /** The chat menu button: beside the text box when the user can post, else in a slim bar above the list. */
             t.MenuButton = new Sw.Button({
                 Icon: "moreV", Kind: "ghost", Class: "chat-menu-button",
-                Title: _TF("Show menu option", "Tool tip description of a button that when clicked will show a context menu"),
+                Title: _TF("Chat menu", "Tool tip and name of the button that shows the menu of the chat"),
                 Menu: () => t.MainMenuItems(), MenuOptions: { Align: "end" },
             });
             //  Never over the messages: beside the text box (outside it, the other buttons are inside it) when the user can post, else

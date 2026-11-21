@@ -6,11 +6,17 @@ using SysWeaver.Data;
 namespace SysWeaver.MicroService.Db
 {
 
+    /// <summary>
+    /// A row in the AuditApiClients table: one client (ip address, device id, user agent, language and time zone), with the number of audited calls it made and the first and last of them
+    /// </summary>
     [TableDataPrimaryKey(nameof(Ip), nameof(DeviceId))] // Additional primary key (only used in Charts)
     [PartitionByKey(nameof(Id))]
     [Alias("AuditApiClients")]
     sealed class DbAuditApiClient
     {
+        /// <summary>
+        /// Unique id of the client (referenced by the ClientId of the API calls)
+        /// </summary>
         [PrimaryKey]
         [AutoIncrement]
         public long Id { get; set; }
@@ -77,6 +83,9 @@ namespace SysWeaver.MicroService.Db
         [TableDataUrl("{0}", "*table.html?q=../Api/Audit/ApiCallTable&p={1}&n=Api Calls for client %23{1}&s={\"RequestParams\":{\"Order\":[\"-" + nameof(DbAuditApiCall.Id) + "\"]}}", "Click to show the last API calls made by this client")]
         public long LastId { get; set; }
 
+        /// <summary>
+        /// Not stored: the client id as the next value ({1}) of the <see cref="LastId"/> link
+        /// </summary>
         [TableDataHide]
         [Ignore]
         public long Id3 => Id;
@@ -99,6 +108,9 @@ namespace SysWeaver.MicroService.Db
         public long FirstId { get; set; }
 
 
+        /// <summary>
+        /// Not stored: the client id as the next value ({1}) of the <see cref="FirstId"/> link
+        /// </summary>
         [TableDataHide]
         [Ignore]
         public long Id2 => Id;

@@ -6,11 +6,20 @@ namespace SysWeaver.MicroService
 
 
 
+    /// <summary>
+    /// Micro service that publishes the [WebApi] methods of the service manager and of every local service (also services added later, removed with the service)
+    /// through an <see cref="ApiHttpServerModule"/>, and connects the <see cref="IApiAuditService"/> implementations to its audit events.
+    /// </summary>
     [IsMicroService]
     public sealed class ApiHttpServerService : IDisposable
     {
         public override string ToString() => "[Service] " + Mod.ToString();
 
+        /// <summary>
+        /// Create the API module, add the APIs of the registered services and register the module.
+        /// </summary>
+        /// <param name="manager">The service manager</param>
+        /// <param name="p">The parameters, null for the defaults</param>
         public ApiHttpServerService(ServiceManager manager, ApiHttpServerServiceParams p = null)
         {
             Manager = manager;

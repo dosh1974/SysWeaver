@@ -177,7 +177,7 @@
 }
 
 /* Narrow: the tools show their icons only (the text stays the accessible name), the status goes */
-@media (max-width: 600px) {
+@media (max-width: 599px) {
     .tv-main.sw-page-fill > .tv-card {
         margin-inline: calc(-1 * var(--sw-page-px, 16px));
         border-width: 1px 0 0;

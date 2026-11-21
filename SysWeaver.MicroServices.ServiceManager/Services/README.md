@@ -35,10 +35,6 @@ Everything in this folder is in the `SysWeaver.MicroService` namespace. The two 
 | [`IncomingEmail.cs`](IncomingEmail.cs) | A received e-mail |
 | [`GetIncomingEmailRequest.cs`](GetIncomingEmailRequest.cs) | Request for incoming e-mails after `LastId`, optionally for one `System` (matched ignoring the letter case and the spaces around it; null or "" is any system) |
 
-## Limitations and considerations
-
-- The XML doc summary of `CpuService` ("Service that wait for the computer to get a LAN ip.") is copied from `NetworkService` and does not describe the class.
-
 ## Relationships
 
 - **Part of:** [SysWeaver.MicroServices.ServiceManager](../README.md)

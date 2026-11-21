@@ -15,7 +15,7 @@ The Google provider for [SysWeaver.AI](../SysWeaver.AI/README.md), built on the 
 
 ## How it fits into SysWeaver
 
-`GoogleAiService` derives from `AiServiceBase` and so is an `IAiService` and an `IChatProvider`: AI chats appear in the [SysWeaver.Chat](../SysWeaver.Chat/README.md) UI, and registered service methods marked `[AiTool]` / `[AiUse]` can be called by the model. It is interchangeable with [SysWeaver.AI.OpenAI](../SysWeaver.AI.OpenAI/README.md) and [SysWeaver.AI.LlamaSharp](../SysWeaver.AI.LlamaSharp/README.md) for code that uses `IAiService` (such as [SysWeaver.AI.HostService](../SysWeaver.AI.HostService/README.md)).
+`GoogleAiService` derives from `AiServiceBase` and so is an `IAiService` and an `IChatProvider`: AI chats appear in the [SysWeaver.Chat](../SysWeaver.Chat/README.md) UI, and registered service methods marked `[AiTool]` / `[AiUse]` can be called by the model. It is interchangeable with [SysWeaver.AI.OpenAI](../SysWeaver.AI.OpenAI/README.md), [SysWeaver.AI.Anthropic](../SysWeaver.AI.Anthropic/README.md) and [SysWeaver.AI.LlamaSharp](../SysWeaver.AI.LlamaSharp/README.md) for code that uses `IAiService` (such as [SysWeaver.AI.HostService](../SysWeaver.AI.HostService/README.md)).
 
 ## Key features
 
@@ -25,7 +25,7 @@ The Google provider for [SysWeaver.AI](../SysWeaver.AI/README.md), built on the 
 - Native stateless completion (`Complete`) with caller defined tools and image / file parts: system instruction, user / model contents, function calls and function responses (matched by id or name), tool config (auto / none / any), streaming (`onText`), max tokens, temperature and thinking; tool result images are multimodal function responses on Gemini 3+ (parts after the function responses on older models); thought signatures are returned in `AiCompletionToolCall.Signature`
 - Image generation and editing tools using Gemini image models, and image generation using Imagen models (available to users with the `Debug` or `Content` role)
 - `IAiImageGenService` and `IAiImageEditService`: the closest supported aspect ratio and resolution (1K, 2K or 4K where supported), the negative prompt is appended to the prompt, transparency isn't supported
-- Model tables (`Debug/AI/Models` menu) and debug APIs (chat, token counting, image generation and editing)
+- LLM and image model tables (*Data / AI models* menu, for the `Admin` and `Ops` roles) and debug APIs (chat, token counting, image generation and editing)
 - Gemini Developer API or Vertex AI (`VertexAI`, `Project`, `Location`), configurable endpoint, API version, network timeout and concurrency limits for chats and image generation
 
 ## Key components
@@ -44,6 +44,8 @@ The Google provider for [SysWeaver.AI](../SysWeaver.AI/README.md), built on the 
 IAiService ai = manager.Get<GoogleAiService>();
 var chat = ai.CreateChatSession(true, new GoogleSessionParams { Model = "gemini-2.5-flash", Tier = GoogleServiceTier.Flex });
 ```
+
+Default models (`GoogleAiParams`): chat `gemini-3.8-flash`, image generation and editing `gemini-3.1-flash-lite-image`.
 
 ## Limitations and considerations
 

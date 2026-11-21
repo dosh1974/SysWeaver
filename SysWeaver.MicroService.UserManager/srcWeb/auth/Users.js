@@ -270,7 +270,7 @@ async function usersDeleteUser() {
         Title: _T("Delete {0}?", user, "Title of the confirmation of the delete user action of the users page.{0} is replaced with the user name"),
         ItemLabel: _TF("User:", "Label before the user name in the confirmation of a forced password reset"),
         Item: user,
-        Text: _TF("The account, its sign in methods, addresses, roles and all data stored for it are removed, every link sent for it stops working and its open sessions end. The person can't sign in with it again.", "Text of the confirmation of the delete user action of the users page"),
+        Text: _TF("The account, its sign in methods, addresses, roles and the data stored for it are removed (logs kept for security are not part of the account), every link sent for it stops working and its open sessions end. The person can't sign in with it again.", "Text of the confirmation of the delete user action of the users page"),
         Confirm: user,
         OkText: _TF("Delete user", "Confirm button of the delete user action of the users page"),
     });

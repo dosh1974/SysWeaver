@@ -2,7 +2,7 @@
 
 [⬆ srcWeb](../README.md)
 
-> The log file viewer page shown under *Debug / Log file*.
+> The log file viewer page shown under *Monitoring / Log file*.
 
 | | |
 |---|---|
@@ -11,7 +11,7 @@
 
 ## Purpose
 
-`FileLogService` adds `logFile/logfile.html` to the menu (tokens `debug`, `ops` or `admin`). ServerManager `serviceInfo.html` opens it with `?api=<text url>` to view a config file.
+`FileLogService` adds `logFile/logfile.html` to the menu as *Monitoring / Log file* (auth `Roles.AdminOps`: tokens `admin`, `ops` or `debug`). ServerManager `serviceInfo.html` opens it with `?api=<text url>` to view a config file.
 
 ## Contents
 
@@ -38,7 +38,7 @@
 |---|---|
 | `logFileMain()` | Entry: redirect or fallback viewer (manages its own loading phase) |
 | `logFileViewer(api)` | Builds the fallback viewer |
-| `LogFileUrl`, `LogFileDeleteUrl` | Api urls |
+| `LogFileUrl`, `LogFileDeleteUrl`, `LogFileTokenUrl` | Api urls (log text, delete, delete token) |
 
 ## CSS reference
 

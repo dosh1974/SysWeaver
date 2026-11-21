@@ -11,7 +11,7 @@
 
 ## Purpose
 
-[`MySqlApiAuditService`](../MySqlApiAuditService.cs) stores audited calls through these internal (`sealed`, non-public) classes in the `SysWeaver.MicroService.Db` namespace. Attributes on the classes set the table name (`[Alias]`), keys, indices, partitioning and string limits. The `TableData*` attributes control how the *Debug/Audit* tables display the rows: links to the API page, to the active session and to the client, user icons, and JSON formatting.
+[`MySqlApiAuditService`](../MySqlApiAuditService.cs) stores audited calls through these internal (`sealed`, non-public) classes in the `SysWeaver.MicroService.Db` namespace. Attributes on the classes set the table name (`[Alias]`), keys, indices, partitioning and string limits. The `TableData*` attributes control how the *Admin / Audit* tables display the rows: links to the API page, to the active session and to the client, user icons, and JSON formatting.
 
 ## Contents
 

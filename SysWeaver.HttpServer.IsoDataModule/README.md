@@ -27,7 +27,7 @@ flowchart LR
 
 - Generated client-side scripts `iso_data/languages.js`, `countries.js`, `currencies.js` and `phone_prefixes.js` with the reference data as JavaScript classes.
 - Flag URLs by country (`iso_data/country/<name or code>.svg`), language (`iso_data/language/...`) and phone prefix (`iso_data/phone_prefix/...`), falling back to an "unknown" icon.
-- Debug tables (Debug role) of currencies, countries, languages and phone number prefixes under `debug/data`, with menu entries.
+- Debug tables (Debug role) of currencies, countries, languages and phone number prefixes under `debug/data`, with menu entries. The country and currency tables have card templates (`iso_data/cards/iso.html`) for the card layout of `Sw.Table`.
 
 ## Key components
 
@@ -50,7 +50,7 @@ Registered by `IsoDataService` from [SysWeaver.MicroService.Edit](../SysWeaver.M
 
 | Folder | Content |
 |---|---|
-| [`srcWeb/`](srcWeb/README.md) | Static web assets served under `iso_data/` (the "unknown" fall-back icon) |
+| [`srcWeb/`](srcWeb/README.md) | Static web assets served under `iso_data/` (the "unknown" fall-back icon and the card templates of the ISO data tables) |
 
 ## Relationships
 

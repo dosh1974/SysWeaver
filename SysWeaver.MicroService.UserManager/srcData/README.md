@@ -22,6 +22,8 @@ Actions sent to a phone also have `<Action>WhatsApp.md` (WhatsApp formatting onl
 a web notification: `<Action>Notification.txt` (headline) and `<Action>Notification.md` (markdown body). E-mail only actions
 (`AddEmail*`, `ChangeEmail*`, `DeletedEmail*`, `ChangedEmail*`) have an empty `Text.txt`, phone only actions (`AddPhone*`, `ChangePhone*`,
 `DeletedPhone*`) have an empty `Mail.*`.
+By default `SmsComs` sends the `Text.txt` files and `WhatsAppComs` the `WhatsApp.md` files (the actions without one, the e-mail only actions,
+and the header and footer, use the `Text.txt` files); `EmailComs` sends the `Mail.*` files.
 
 | Item | Description |
 |---|---|
@@ -74,5 +76,5 @@ The templates are generic (no site, product or market specifics) and follow one 
 ## Relationships
 
 - **Part of:** [SysWeaver.MicroService.UserManager](../README.md)
-- **Used by:** [`EmailComs`](../EmailComs.cs), [`SmsComs`](../SmsComs.cs)
+- **Used by:** [`EmailComs`](../EmailComs.cs), [`SmsComs`](../SmsComs.cs), [`WhatsAppComs`](../WhatsAppComs.cs), [`UserManagerService`](../UserManagerService.cs) (a `LocalizedMessages` folder uses the same file names, read with `ManagedMessages`)
 - **Uses:** `ManagedMailMessage` / `ManagedMessages` from [SysWeaver.Auth.Core](../../SysWeaver.Auth.Core/README.md)

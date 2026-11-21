@@ -35,8 +35,9 @@ A missing `id` shows the fail toast "No id supplied!", an unknown id "No data fo
 | Name | Description |
 |---|---|
 | `translatorEditMain()` | Entry |
-| `trSection(page, title, tip, text, {Flag, FlagTitle, Bold, Mono})` | Appends a heading and a read only value block (optionally with a language flag) |
+| `trLanguage(iso, name)` | A language value for the facts strip: the flag (`../iso_data/language/<iso>`) and the name |
+| `trBlock(title, tip, text, bold)` | A titled read only text block inside a card (the source text, the context) |
 
 ## CSS reference
 
-`.tr-page` (the `sw-page-form` container of `Sw.PageLayout`), `.tr-lang` + `img.tr-flag` (24 px), `.tr-block` (`h3.tr-label` + `.tr-text`, `.tr-bold`), `textarea.tr-translation` (`[readonly]` dimmed while saving), `.tr-buttons` (form footer, Save right aligned). No shadows.
+`.tr-page` (the `sw-page-form` container of `Sw.PageLayout`), `.tr-lang` + `img.tr-flag` (24 px), `.tr-block` (`h3.tr-label` + `.tr-text`, `.tr-bold`), `textarea.tr-translation` (`[readonly]` dimmed while saving), `.tr-buttons` (form footer, Save right aligned), `.tr-edit` (the translation card; a class name only, no rule). No shadows.

@@ -30,7 +30,7 @@ flowchart LR
 - Compressed uploads (`Content-Encoding`) can be stored pre-compressed and served as such
 - Optional content-defined chunking: a client may send chunk hashes and only needs to upload the chunks the server is missing
 - `StaticFileRepo`: size and extension limits, per-user subfolders, optional serving of uploaded files with their own auth, and hourly pruning of files not used for `RemoveIfUnusedDays`
-- Browser script (`common/fileUploader.js`) with drag-and-drop / file picker helpers, and a debug page (`upload/Example.html`) for manual uploads
+- Browser script (`common/fileUploader.js`) with drag-and-drop / file picker helpers, and a debug page (`upload/Example.html`, menu *Debug / FileUploader / File upload test*, `Dev` / `Debug` roles) for manual uploads; `fileUploader.js` itself does not use the chunking
 
 ## Key components
 

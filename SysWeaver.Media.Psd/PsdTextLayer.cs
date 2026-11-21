@@ -12,6 +12,16 @@ namespace SysWeaver.Media.Psd
         /// </summary>
         public override string ToString() => String.Join("", Width, 'x', Height, " @ ", X, ", ", Y, " \"", Glyphs, '"');
 
+        /// <summary>
+        /// Create a text layer description.
+        /// </summary>
+        /// <param name="name">The layer name</param>
+        /// <param name="glyphs">The text of the layer</param>
+        /// <param name="x">Left edge of the layer rect</param>
+        /// <param name="y">Top edge of the layer rect</param>
+        /// <param name="width">Width of the layer rect</param>
+        /// <param name="height">Height of the layer rect</param>
+        /// <param name="baseLine">The vertical translation of the text transform (document pixels)</param>
         public PsdTextLayer(String name, String glyphs, int x, int y, int width, int height, float baseLine)
         {
             Name = name;

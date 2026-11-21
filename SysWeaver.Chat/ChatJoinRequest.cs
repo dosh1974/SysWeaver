@@ -33,6 +33,9 @@ namespace SysWeaver.Chat
         public long MessageId;
     }
 
+    /// <summary>
+    /// The response of the Join api: the chat, its messages and what the current user may do in it.
+    /// </summary>
     public sealed class ChatJoinResponse
     {
         /// <summary>

@@ -6,6 +6,10 @@ using System.Threading.Tasks;
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// Export table data to the user storage (<see cref="IUserStorageService"/>) as a json file, and return a link to an explore/table.html page that shows it.
+    /// One instance per scope: "Private link" (only the user), "Protected link" (all signed in users) and "Public link" (anyone). Requires a signed in user.
+    /// </summary>
     public sealed class UserDataTableDataExporter : ITableDataExporter
     {
         internal UserDataTableDataExporter(IUserStorageService userStore, ISerializerType jsonSer, int scopeIndex)

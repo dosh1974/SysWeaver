@@ -383,6 +383,7 @@ namespace SysWeaver.Net
         readonly IFirewallHandler FirewallHandler;
         /// <summary>
         /// The number of seconds to wait for pending requests when shutting down (see <see cref="AspHttpServerParams.SecondsToWait"/>).
+        /// Not used yet: <see cref="Stop"/> gives ongoing requests about 3 seconds.
         /// </summary>
         public readonly int SecondsToWait;
 

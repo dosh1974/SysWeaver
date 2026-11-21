@@ -28,7 +28,7 @@ namespace SysWeaver.Security
     /// Terms of service changes are accepted automatically.
     /// When the certificate is about to expire, it's dropped and <see cref="OnChanged"/> is raised (the next <see cref="GetCert"/> orders a new certificate).
     /// </remarks>
-    public sealed class AcmeCertificateProvider : ICertificateProvider, IHttpServerModule, IHaveDefaultInstanceName
+    public sealed class AcmeCertificateProvider : ICertificateProvider, IHttpServerModule, IHaveDefaultInstanceName, IDisposable
     {
 
         const String Prefix = "[ACME] ";
@@ -670,6 +670,16 @@ namespace SysWeaver.Security
         /// The argument is always null and the old certificate has already been disposed, call <see cref="GetCert"/> again to get a renewed certificate.
         /// </summary>
         public event Action<X509Certificate2> OnChanged;
+
+        /// <summary>
+        /// Cancel the scheduled renewal notification and release the certificate (a provider owned by another service, ex: one per
+        /// domain of the LAN certificate manager, must not keep firing after its owner is gone).
+        /// </summary>
+        public void Dispose()
+        {
+            Interlocked.Exchange(ref ExpireAction, null)?.Dispose();
+            Interlocked.Exchange(ref C, null)?.Dispose();
+        }
 
     }
 }

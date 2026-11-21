@@ -123,7 +123,7 @@ namespace SysWeaver.AI
         }
 
         /// <summary>
-        /// Displays the memory that the AI have stored
+        /// Displays what the AI has remembered about you (your own entries only)
         /// </summary>
         /// <param name="r"></param>
         /// <param name="context"></param>

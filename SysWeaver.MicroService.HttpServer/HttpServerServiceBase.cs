@@ -10,11 +10,25 @@ using SysWeaver.Security;
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// The common base of the http server micro services (NetHttpServerService, AspHttpServerService).
+    /// Creates the server with the registered certificate providers, auth manager and firewall handler, adds every module, raw module, transformer service
+    /// and template variable group of the local services (now and when they are added later, removed again when a service is removed),
+    /// registers the extension viewers of the pages in the view folder (md, html, json, xml ...) and has the admin APIs to read and save the manifest and to restart the process.
+    /// </summary>
+    /// <typeparam name="S">The type of the http server</typeparam>
+    /// <typeparam name="P">The type of the parameters of the service</typeparam>
     public abstract class HttpServerServiceBase<S, P> : IDisposable where S : HttpServerBase where P : HttpServerBaseParams, new()
     {
 
         public override string ToString() => "[Service] " + Server;
 
+        /// <summary>
+        /// Create the server (see <see cref="Create"/>), attach the local services, register the server and start it if the parameters say so.
+        /// The certificate providers, the auth manager and the firewall handler are only looked up here, so they must be registered before this service.
+        /// </summary>
+        /// <param name="manager">The service manager</param>
+        /// <param name="p">The parameters, null for the defaults</param>
         public HttpServerServiceBase(ServiceManager manager, P p)
         {
             p = p ?? new P();
@@ -76,7 +90,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Create the http server instance
         /// </summary>
-        /// <param name="paramType">The paramater type used to create the http server</param>
+        /// <param name="paramType">The parameter type used to create the http server</param>
         /// <param name="instanceName">The name to register this instance as (from parameters)</param>
         /// <param name="start">The function to use for starting the http server (if parameters require auto start)</param>
         /// <param name="certs">The registered certificates</param>
@@ -86,10 +100,22 @@ namespace SysWeaver.MicroService
         protected abstract S Create(out Type paramType, out String instanceName, out Func<bool> start, Dictionary<String, ICertificateProvider> certs, AuthManager auth, IFirewallHandler firewallHandler);
 
 
+        /// <summary>
+        /// The service manager
+        /// </summary>
         protected readonly ServiceManager Manager;
+        /// <summary>
+        /// The http server created by <see cref="Create"/>
+        /// </summary>
         protected readonly S Server;
+        /// <summary>
+        /// The parameters of the service
+        /// </summary>
         protected readonly P Params;
 
+        /// <summary>
+        /// The audit name of the admin APIs that change the server (restart, save the manifest)
+        /// </summary>
         public const String ServiceAudit = "Service";
 
         /// <summary>
@@ -112,7 +138,7 @@ namespace SysWeaver.MicroService
         /// Read and parse the server config file
         /// </summary>
         /// <param name="config">What config file to get</param>
-        /// <returns>Services in the </returns>
+        /// <returns>The services in the config file, null if that config file doesn't exist</returns>
         [WebApi("admin/{0}")]
         [WebApiAuth(Roles.Admin)]
         public ConfigEntry[] GetServerConfig(Configs config)
@@ -127,7 +153,7 @@ namespace SysWeaver.MicroService
         /// The raw server config as json
         /// </summary>
         /// <param name="config">What config file to load</param>
-        /// <returns>Services in the </returns>
+        /// <returns>The content of the config file, null if that config file doesn't exist</returns>
         [WebApi("admin/ServerConfig.json")]
         [WebApiAuth(Roles.Admin)]
         [WebApiRaw(HttpServerTools.JsonMime)]
@@ -140,7 +166,7 @@ namespace SysWeaver.MicroService
         }
 
         /// <summary>
-        /// Save server config 
+        /// Save the server config (the current manifest file); the text is written as is (not validated) and is used on the next process start
         /// </summary>
         /// <param name="jsonText">A new config file as json encoded text</param>
         /// <returns>True if successful</returns>
@@ -155,7 +181,7 @@ namespace SysWeaver.MicroService
         }
 
         /// <summary>
-        /// Save server config 
+        /// Save the server config (the current manifest file) built from the entries; it is used on the next process start
         /// </summary>
         /// <param name="configEntries">Config entries</param>
         /// <returns>True if successful</returns>
@@ -304,6 +330,9 @@ namespace SysWeaver.MicroService
 
 
 
+        /// <summary>
+        /// Remove the extension viewers this instance registered, then unregister and dispose the server
+        /// </summary>
         public void Dispose()
         {
             var server = Server;
@@ -318,6 +347,9 @@ namespace SysWeaver.MicroService
     }
 
 
+    /// <summary>
+    /// The server config (manifest) files that the admin APIs of <see cref="HttpServerServiceBase{S, P}"/> can read
+    /// </summary>
     public enum Configs
     {
         /// <summary>

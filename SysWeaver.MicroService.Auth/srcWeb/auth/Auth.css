@@ -8,7 +8,8 @@
  *
  * Load after ../common/theme.css and ../sw/ui.css. Colors come from the Sw tokens (--sw-*), which follow the five
  * themes; icon classes (IconAuth*, IconRetry ...) are defined in sw/ui.css. Responsive: desktop, phone portrait
- * (full width card, 44px touch targets from the Sw tokens) and phone landscape (small icon, the page scrolls).
+ * (an edge to edge card from the top up to 599 px wide, full width buttons, 44px touch targets from the Sw tokens) and phone
+ * landscape (small icon, the page scrolls).
  * Not templated.
  */
 
@@ -580,10 +581,19 @@ html.SwMobile .auth-label-row .sw-button {
         min-width: 9rem;
     }
 
-/* Phones: full width buttons, easy to hit. */
-html.SwNarrow .auth-buttons .sw-button:not(.sw-icon-only) {
+/* Phones: full width buttons, easy to hit (also the actions of a state view, ex: "This link no longer works": its centered column
+   would shrink the action row to the button). */
+html.SwNarrow :is(.auth-buttons, form.auth-box .sw-state-actions) .sw-button:not(.sw-icon-only) {
     flex: 1 1 100%;
 }
+
+html.SwNarrow form.auth-box .sw-state-actions {
+    align-self: stretch;
+}
+
+    html.SwNarrow form.auth-box .sw-state-actions > .sw-row {
+        flex: 1 1 100%;
+    }
 
 /* The small passkey key icon button on the login page. */
 .auth-passkey-icon {
@@ -738,4 +748,52 @@ body.auth-dialog-page {
     /* The page icon: smaller in the dialog (the title bar names the page) */
     .auth-dialog form.auth-box .auth-icon:not(img) {
         --auth-icon: 48px;
+    }
+
+/* ===== Phones (portrait): the card is edge to edge =====
+   The card takes the full row (no 28 / 36 / 48rem width), so Sw.Bleed (ui/page.js) can move it over the page padding to the window
+   edges (no side borders, square corners). Last in the file: wins over every page width rule above. */
+@media (max-width: 599px) {
+    :root .auth-page form.auth-box:not(.auth-inline) {
+        width: auto;
+        flex: 1 1 auto;
+    }
+
+    /* A full width band starts at the top, as an app screen (centered it floated in the middle of empty space) */
+    body.auth-body {
+        align-items: flex-start;
+    }
+
+    /* Large text sizes: a button text wraps instead of making the card wider than the window (WCAG 1.4.4: at 200 % the card started
+       off screen) */
+    :root .auth-page form.auth-box {
+        min-width: 0;
+    }
+
+        form.auth-box .auth-buttons .sw-button {
+            min-width: 0;
+            height: auto;
+            min-height: var(--sw-control-h);
+            white-space: normal;
+        }
+}
+
+/* The title of a sign in style page under its icon (AuthUi.js Page: no page header, no dialog title bar) */
+.auth-heading.auth-page-title {
+    margin: 0;
+    text-align: center;
+}
+
+/* The sign in link at the bottom of the sign up page */
+.auth-signin-link {
+    margin: 0;
+    text-align: center;
+}
+
+    .auth-signin-link a {
+        /* (underlined: a link in a sentence is not told by its colour only, WCAG 1.4.1) */
+        text-decoration: underline;
+        display: inline-flex;
+        align-items: center;
+        min-height: max(var(--sw-control-h), 2.75rem);
     }

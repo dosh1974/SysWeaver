@@ -30,7 +30,7 @@ Every account change follows the same pattern: the user requests an action, the 
 
 ## Key features
 
-- Sign-up (per communication method), invitations and an administrative user table
+- Sign-up (per communication method), invitations and an administrative user table. The sign up methods (`SignUpMethods`, `UserManagerProps.SignUpMethods`) are offered only once a `SignUpService` is registered (it calls `EnableSignUp`): without it there is no sign up api, so both stay empty and the sign up page says that signing up is not available
 - Invitation domain (`InviteUserRequest.Domain`, `UserManagerService.ValidateInviteDomain`): empty means the inviter's own domain; another domain only for Debug or Admin (403 with a reason otherwise, 400 for a domain over 256 characters or with control characters)
 - Row actions give a clear outcome: `CancelInvitation` ("Withdraw invitation") answers 409 "The invitation could not be withdrawn: it was already used, has expired or was withdrawn" instead of false
 - Roles (`UserManagerRoles`, the original roles): inviting a user, the pending invitations, forcing a password reset and the admin recovery below need `UserManagement`; the user tables (`UserDataTable`, `UserAdminTable`, the Users page) need `Ops`, `Debug` or `UserManagement` (the original value lacked a comma, "Ops,DebugUserManagement,Debug", so `UserManagement` alone could invite but not see the users)
@@ -60,7 +60,8 @@ Every account change follows the same pattern: the user requests an action, the 
 ## Key components
 
 - [`UserManagerService`](UserManagerService.cs) — the authorizer and account API (split over several `UserManagerService_*.cs` files)
-- [`SignUpService`](SignUpService.cs) — the public sign-up API and menu entry
+- [`SignUpService`](SignUpService.cs) — the public sign-up API and menu entry; registering it enables the sign up methods of the user manager
+- [`UserManagerParams`](UserManagerParams.cs) — service parameters (MySQL connection, coms order, limits); [`UserManagerProps`](UserManagerProps.cs) — what the pages are told about the service (`Api/auth/UserManagerProps`: coms, sign up methods, code length ...)
 - [`EmailComs`](EmailComs.cs) / [`WhatsAppComs`](WhatsAppComs.cs) / [`SmsComs`](SmsComs.cs) — communication methods sending templated messages through an e-mail sender or a text message sender (WhatsApp and SMS both use an `ITextMessageSender`); `UserManagerParams.ComsOrder` (default `"Email, WhatsApp, Sms"`) sets the order they are tried in, an empty value sends to every channel the user has
 
 ## Using it
@@ -73,7 +74,7 @@ Every account change follows the same pattern: the user requests an action, the 
 ]
 ```
 
-Register an `IEmailSender` (and, for phone numbers, `SmsComs` and / or `WhatsAppComs` with an `ITextMessageSender`) together with the auth services. Without any communication method registered, an `EmailComs` with default parameters is created.
+Leave out `SignUpService` for an invitation only site. Register an `IEmailSender` (and, for phone numbers, `SmsComs` and / or `WhatsAppComs` with an `ITextMessageSender`) together with the auth services. Without any communication method registered, an `EmailComs` with default parameters is created.
 
 ## Limitations and considerations
 

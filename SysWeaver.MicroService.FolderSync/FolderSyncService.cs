@@ -20,7 +20,11 @@ namespace SysWeaver.MicroService
 
 
     /// <summary>
-    /// Upload url "FolderSync/{JobId}/{LocalFile}".
+    /// Server side of folder synchronization: managed folders that clients push new versions to, shared folders that clients pull,
+    /// and remote folders that this server keeps in sync from another server (see <see cref="FolderSyncParams"/>).
+    /// The json api is used for the checks, the content is transferred with binary POST requests handled by this module:
+    /// "FolderSync/{JobId}/{LocalFile}" (a whole file), "FolderSyncCdc/{JobId}/{LocalFile}" (the chunk list of a file),
+    /// "FolderSyncCdcChunks/{JobId}/..." (missing chunks) and "FolderSync/GetChunks" (chunk data when pulling).
     /// </summary>
     [WebApiUrl("../FolderSync")]
     [IsMicroService]

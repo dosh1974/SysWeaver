@@ -1,5 +1,8 @@
 ﻿namespace SysWeaver.Chat
 {
+    /// <summary>
+    /// A request that refers to one message of a chat.
+    /// </summary>
     public class ChatMessageIdRequest : ChatBaseRequest
     {
         /// <summary>

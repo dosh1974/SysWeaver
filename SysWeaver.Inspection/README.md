@@ -33,7 +33,9 @@ flowchart LR
 
 ## Key components
 
+- [`IInspectorImplementation`](IInspectorImplementation.cs) — the interface an inspector implements: the `Field_*` / `Prop_*` / `Array_*` methods called by the compiled handlers
 - [`TypeHandler<T>`](TypeHandler.cs) — the compiled code that inspects one runtime type
+- [`InspectorInfo<I>`](InspectorInfo.cs) / [`InspectorImplementationInfo<I>`](InspectorImplementationInfo.cs) — reflection info about the inspector methods, used when compiling the handlers
 - [`TypeHandlerCache<T>`](TypeHandlerCache.cs) — the handler cache
 - [`StaticTypeHandler`](StaticTypeHandler.cs) — helpers used by the generated code (type names, versions, unmanaged memory)
 - [`TypenameQualifications`](TypenameQualifications.cs) — how type names are written

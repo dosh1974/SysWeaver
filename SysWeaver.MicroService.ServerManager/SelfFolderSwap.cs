@@ -50,6 +50,9 @@ namespace SysWeaver.MicroService
             return (c >= 0 && c <= 9) ? c : -1;
         }
 
+        /// <summary>
+        /// The options of a self update swap (time outs, retries and the health check)
+        /// </summary>
         public sealed class Options
         {
             /// <summary>Max time in seconds to wait for the running service to uninstall (stop), after that every process running from the active folder is killed and the swap continues.</summary>

@@ -2,6 +2,9 @@
 
 namespace SysWeaver.Chat
 {
+    /// <summary>
+    /// Parameters of the ChatService.
+    /// </summary>
     public sealed class ChatServiceParams
     {
         /// <summary>

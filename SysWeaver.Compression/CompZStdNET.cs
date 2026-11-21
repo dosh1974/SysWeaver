@@ -13,7 +13,7 @@ namespace SysWeaver.Compression
 {
 
     /// <summary>
-    /// A ZStd ("zstd") implementation that compresses using the .NET <see cref="ZstandardStream"/> (priority -1, not registered by default).
+    /// A ZStd ("zstd") implementation that compresses using the .NET <see cref="ZstandardStream"/> (priority 0, not registered by default).
     /// Decompression is forwarded to <see cref="CompZStdNETNew"/>, since the stream silently accepts truncated data.
     /// </summary>
     /// <remarks>

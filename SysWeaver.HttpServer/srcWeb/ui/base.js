@@ -3459,7 +3459,9 @@
          * Adds class sw-copyable. Replaces a previous copy action of the element (Sw.Clipboard.RemoveCopy removes it).
          * @param {HTMLElement} e The element.
          * @param {*} [value] The value to copy, null / undefined = the element's current text.
-         * @param {object} [o] Options: { Keyboard (the value is a Tab stop, tabindex 0, and Enter / Space copy it, as the original; else tabindex -1: a click focuses it), AddTitle
+         * @param {object} [o] Options: { Keyboard (the value is a Tab stop, tabindex 0, and Enter / Space copy it, as the original; it is
+         * announced as a button: role "button" with an aria-description, unless the element has a role of its own; else tabindex -1: a
+         * click focuses it), AddTitle
          * (append the hint to the element's title), What (what is copied, for the messages), Generic (don't quote the value: secrets) }.
          * @returns {string} The (translated) hint text for the tool tip.
          */
@@ -3487,6 +3489,12 @@
             if (!e.hasAttribute("tabindex")) {
                 e.tabIndex = o.Keyboard ? 0 : -1;
                 e.SwCopyTab = true;
+            }
+            //  A focusable value says what it is (WCAG 4.1.2: a tab stop announced as plain text): a button that copies
+            if (o.Keyboard && !e.hasAttribute("role")) {
+                e.setAttribute("role", "button");
+                e.setAttribute("aria-description", _TF("Copies the value to the clipboard", "Screen reader description of a value that copies itself to the clipboard when clicked or when Enter is pressed on it"));
+                e.SwCopyRole = true;
             }
             //  Keyboard: Enter / Space on the focused value copy it, as the original copyOnClick(…, true) (its keyboardClick clicked the
             //  value on the key up; S5-A-1). Space doesn't scroll the page.
@@ -3591,6 +3599,11 @@
             if (e.SwCopyTab) {
                 e.removeAttribute("tabindex");
                 e.SwCopyTab = false;
+            }
+            if (e.SwCopyRole) {
+                e.removeAttribute("role");
+                e.removeAttribute("aria-description");
+                e.SwCopyRole = false;
             }
             e.oncopy = null;
             e.classList.remove("sw-copyable");

@@ -20577,7 +20577,9 @@ window.Sw.Sources["ui/base.js"] = "common/common.js";
          * Adds class sw-copyable. Replaces a previous copy action of the element (Sw.Clipboard.RemoveCopy removes it).
          * @param {HTMLElement} e The element.
          * @param {*} [value] The value to copy, null / undefined = the element's current text.
-         * @param {object} [o] Options: { Keyboard (the value is a Tab stop, tabindex 0, and Enter / Space copy it, as the original; else tabindex -1: a click focuses it), AddTitle
+         * @param {object} [o] Options: { Keyboard (the value is a Tab stop, tabindex 0, and Enter / Space copy it, as the original; it is
+         * announced as a button: role "button" with an aria-description, unless the element has a role of its own; else tabindex -1: a
+         * click focuses it), AddTitle
          * (append the hint to the element's title), What (what is copied, for the messages), Generic (don't quote the value: secrets) }.
          * @returns {string} The (translated) hint text for the tool tip.
          */
@@ -20605,6 +20607,12 @@ window.Sw.Sources["ui/base.js"] = "common/common.js";
             if (!e.hasAttribute("tabindex")) {
                 e.tabIndex = o.Keyboard ? 0 : -1;
                 e.SwCopyTab = true;
+            }
+            //  A focusable value says what it is (WCAG 4.1.2: a tab stop announced as plain text): a button that copies
+            if (o.Keyboard && !e.hasAttribute("role")) {
+                e.setAttribute("role", "button");
+                e.setAttribute("aria-description", _TF("Copies the value to the clipboard", "Screen reader description of a value that copies itself to the clipboard when clicked or when Enter is pressed on it"));
+                e.SwCopyRole = true;
             }
             //  Keyboard: Enter / Space on the focused value copy it, as the original copyOnClick(…, true) (its keyboardClick clicked the
             //  value on the key up; S5-A-1). Space doesn't scroll the page.
@@ -20709,6 +20717,11 @@ window.Sw.Sources["ui/base.js"] = "common/common.js";
             if (e.SwCopyTab) {
                 e.removeAttribute("tabindex");
                 e.SwCopyTab = false;
+            }
+            if (e.SwCopyRole) {
+                e.removeAttribute("role");
+                e.removeAttribute("aria-description");
+                e.SwCopyRole = false;
             }
             e.oncopy = null;
             e.classList.remove("sw-copyable");
@@ -23023,7 +23036,8 @@ window.Sw.Sources["ui/controls.js"] = "common/common.js";
      * Named Group (the Ew Frame) since Sw.Frame is the core's frame messaging namespace.
      * Options: Title, Sub (a secondary line under the title), Actions (buttons / elements / components for the right of the header),
      * Class, Flush (no body padding: tables, lists), Content (elements appended to the body).
-     * Properties: E (the card), Head (the header row, hidden without title and actions), Title (the title element), Tools (the actions
+     * Properties: E (the card), Head (the header row, hidden without title and actions), Title (the title element, a level 2 heading:
+     * role "heading", aria-level 2), Tools (the actions
      * area), Body (append content here). Methods: SetTitle(text), SetSub(text).
      */
     class Group {
@@ -23034,7 +23048,8 @@ window.Sw.Sources["ui/controls.js"] = "common/common.js";
             o = o || {};
             Sw.Work.CheckOptions("Sw.Group", o, Schema.Group);
             const comp = x => x && x.E ? x.E : x;
-            this.Title = el("div.sw-group-title");
+            //  (a heading: the group titles are the sections of a page, reachable by heading navigation; level 2 under the page h1)
+            this.Title = el("div.sw-group-title", { attrs: { role: "heading", "aria-level": "2" } });
             this.Sub = el("div.sw-group-sub");
             //  option Actions (alias Tools); the area is Tools (alias Actions, the name of the option and of PageHeader)
             this.Tools = el("div.sw-group-tools", null, ...(o.Actions || o.Tools || []).map(comp));
@@ -37270,7 +37285,7 @@ window.Sw.Sources["ui/cells.js"] = "common/common.js";
 
     /**
      * The special tag of an auth requirement (C# TableDataAuth, the api inspector, the explore pages): null = open to anyone (the accent
-     * "Open" tag, so open end points stand out), "" = any signed in user (the "Any logged in user" tag); null for a token list.
+     * "Open" tag, so open end points stand out), "" = any signed in user (the "Any signed in user" tag); null for a token list.
      * @param {string|null|undefined} auth The requirement: null = open, "" = any signed in user, else comma separated tokens.
      * @returns {HTMLElement|null} The tag (span.sw-tag.sw-tag-open / .sw-tag-signedin with its tool tip), null for tokens.
      */
@@ -37282,8 +37297,8 @@ window.Sw.Sources["ui/cells.js"] = "common/common.js";
             });
         if (String(auth).trim().length === 0)
             return el("span.sw-tag.sw-tag-signedin", {
-                text: _TF("Any logged in user", "Text of the tag in an auth column: the api or web resource needs a signed in user, but no special role"),
-                title: _TF("Any signed in user, no special role required.", "Tool tip of the Any logged in user tag in an auth column"),
+                text: _TF("Any signed in user", "Text of the tag in an auth column: the api or web resource needs a signed in user, but no special role"),
+                title: _TF("Any signed in user, no special role required.", "Tool tip of the Any signed in user tag in an auth column"),
             });
         return null;
     }
@@ -37293,7 +37308,7 @@ window.Sw.Sources["ui/cells.js"] = "common/common.js";
      * a special token, as the original); each tag "key:value" becomes a span
      * with text formats[1] (default "{1}" = key) and title formats[2] (default "{2}" = value); args {0} tag, {1} key, {2} value, {3} text, {4} title.
      * formats[3] = per tag copy template; formats[4] "true" = clicking the cell (outside a tag) copies the raw value.
-     * formats[5] "Auth" = an auth requirement (C# TableDataAuth): null shows the accent "Open" tag, "" the "Any logged in user" tag (AuthTag).
+     * formats[5] "Auth" = an auth requirement (C# TableDataAuth): null shows the accent "Open" tag, "" the "Any signed in user" tag (AuthTag).
      * @param {HTMLElement} e The cell. @param {*} value The value. @param {string[]} formats The format arguments. @param {*} nextValue The next value.
      * @param {string|false} flash Flash class. @param {string} type The C# type. @param {function} onRefresh Refresh callback.
      * @returns {HTMLElement|undefined} The cell.
@@ -38402,7 +38417,7 @@ window.Sw.Sources["ui/cells.js"] = "common/common.js";
         ByteSize: FormatFormatters.get("ByteSize"),
         ByteSpeed: FormatFormatters.get("ByteSpeed"),
         Tags,
-        /** The special tag of an auth requirement: null = the accent "Open" tag, "" = "Any logged in user", null for tokens (AuthTag). */
+        /** The special tag of an auth requirement: null = the accent "Open" tag, "" = "Any signed in user", null for tokens (AuthTag). */
         AuthTag,
         PerRowFormat,
         Toggle,
@@ -38439,6 +38454,7 @@ window.Sw.Sources["ui/page.js"] = "common/common.js";
  *  - Forms and wizards: Sw.Form (fields, Required, rules, messages under the fields, focus, submit gating), Sw.Steps (a wizard: step
  *    list, heading focus, Back / Next / Finish, per step validation).
  *  - Extra line icons for dashboards (cpu, memory, drive, folder), registered when missing.
+ *  - Sw.Bleed (the last part of this file): edge to edge cards on phones (moved over the page padding, no border on the window side).
  */
 
 (() => {
@@ -40523,6 +40539,293 @@ window.Sw.Sources["ui/page.js"] = "common/common.js";
         });
     }
     Object.assign(Sw, add);
+})();
+
+/**
+ * Sw.Bleed - edge to edge surfaces on phones (ui/page.css "Edge to edge", ui/README.md "Edge to edge on phones").
+ *
+ * On a narrow screen (max-width 599 px, where the phone layout of the page anatomy starts) a surface (a card) whose side is on the page padding line (at most
+ * --sw-page-px from the window edge) is moved out to the window edge: a negative margin (inline style) as wide as that gap, and the class
+ * sw-edge-l / sw-edge-r (no border and no round corners on that side). A surface that already touches the window edge only gets the class.
+ * One card per row: both sides; a row of cards: the left most card loses its left border, the right most card its right border.
+ *  - Surfaces: Sw.Bleed.Surfaces (.sw-card, .sw-tile, .sw-bleed, ...). Only the outer most one: a card in a card stays as it is.
+ *  - Groups: Sw.Bleed.Groups (.sw-grid, .sw-tiles, .sw-bleed-group, ...): a row container of surfaces (every visible child is a surface or
+ *    holds one, ex: li > button.sw-tile) moves out as a whole, so the cards keep equal widths; its cards that touch the window edge get the
+ *    classes.
+ *  - Never: a page framed by another page of this site (html.SwNested), anything in .sw-no-bleed (opt out), overlays (dialogs, menus,
+ *    pop-ups) and fixed / absolute / sticky surfaces.
+ * Runs before the paint after a change: window size, the narrow media query, added / removed elements, class / hidden changes. Wide
+ * screens: nothing is observed and every change is undone. Apps add their own selectors (Sw.Bleed.Surfaces.push(".myCard")) or use the
+ * classes sw-bleed / sw-bleed-group; Sw.Bleed.Update() measures again (ex: after a layout change without a DOM change).
+ */
+(() => {
+    "use strict";
+
+    const Sw = window.Sw = window.Sw || {};
+    if (Sw.Bleed)
+        return;
+
+    const Surfaces = [".sw-card", ".sw-group", ".sw-tile", ".sw-bleed", ".sw-table:not(.sw-table-cards)", ".sw-table-cards .sw-table-body > tr", "form.auth-box", ".ExploreWrap", ".icons-item"];
+    const Groups = [".sw-grid", ".sw-tiles", ".sw-bleed-group", ".sw-table-cards .sw-table-body", ".icons-list"];
+    const Frames = [".sw-table.sw-table-cards", ".sw-bleed-frame"];
+    const Skip = ".sw-no-bleed, .sw-layer, .sw-popup, .sw-dialog, .sw-menu";
+    //  (599 px: the phone layout of ui/page.css, app/home.css and explore/table.css starts there too; at 600 px phone edges met the
+    //  wide layout)
+    const Media = "(max-width: 599px)";
+
+    /** The moved elements: { ml, mr, mw } (their own inline margins and max width) */
+    const moved = new Map();
+    /** The elements with an edge class */
+    const edged = new Set();
+
+    let mq = null;
+    let mo = null;
+    let ro = null;
+    let frame = 0;
+    let on = false;
+
+    function active() {
+        return !!(mq && mq.matches && document.body && !document.documentElement.classList.contains("SwNested"));
+    }
+
+    /** True when the element can be moved / edged: not in an overlay or opted out, not inside another surface, in the flow */
+    function eligible(e, surfaceSel) {
+        if (e.closest(Skip))
+            return false;
+        const p = e.parentElement;
+        if (p && p.closest(surfaceSel))
+            return false;
+        if (!e.getClientRects().length)
+            return false;
+        const pos = getComputedStyle(e).position;
+        return pos !== "fixed" && pos !== "absolute" && pos !== "sticky";
+    }
+
+    /** True when every visible child of the group is a surface or holds exactly one (ex: li > button.sw-tile) */
+    function isCardRow(g, surfaceSel) {
+        let n = 0;
+        for (const c of g.children) {
+            if (!c.getClientRects().length)
+                continue;
+            ++n;
+            if (c.matches(surfaceSel))
+                continue;
+            if (c.children.length === 1 && c.firstElementChild.matches(surfaceSel))
+                continue;
+            return false;
+        }
+        return n > 0;
+    }
+
+    /**
+     * Move an element out by l / r px (0, 0: back to its own inline margins). A moved element has no max width (it filled its row, so a
+     * max-width: 100 % was what kept it there; it would move sideways instead of growing).
+     */
+    function setMargins(e, l, r) {
+        const m = moved.get(e);
+        if (!l && !r) {
+            if (m) {
+                e.style.marginLeft = m.ml;
+                e.style.marginRight = m.mr;
+                e.style.maxWidth = m.mw;
+                moved.delete(e);
+            }
+            return;
+        }
+        const o = m || { ml: e.style.marginLeft, mr: e.style.marginRight, mw: e.style.maxWidth };
+        moved.set(e, o);
+        e.style.marginLeft = l ? "calc(" + (o.ml || "0px") + " - " + l + "px)" : o.ml;
+        e.style.marginRight = r ? "calc(" + (o.mr || "0px") + " - " + r + "px)" : o.mr;
+        e.style.maxWidth = "none";
+    }
+
+    function setEdges(e, l, r) {
+        if (e.classList.contains("sw-edge-l") !== l)
+            e.classList.toggle("sw-edge-l", l);
+        if (e.classList.contains("sw-edge-r") !== r)
+            e.classList.toggle("sw-edge-r", r);
+        if (l || r)
+            edged.add(e);
+        else
+            edged.delete(e);
+    }
+
+    /** The page padding --sw-page-px in px (the token is in rem, ex: 1rem; 16 px without sw/ui.css) */
+    function pagePx() {
+        const cs = getComputedStyle(document.documentElement);
+        const v = cs.getPropertyValue("--sw-page-px").trim();
+        const n = parseFloat(v);
+        if (!isFinite(n))
+            return 16;
+        return v.endsWith("rem") ? n * parseFloat(cs.fontSize) : n;
+    }
+
+    /**
+     * The window edges an element can reach through its clipping ancestors (overflow not visible): the inner edges of a window wide
+     * scroller (a fill page's own scroll area, ex: explore/themepreview.html: its scroll bar takes the right side), else the window's.
+     * @param {Element} e The element.
+     * @param {number} w The window width (no scroll bar).
+     * @param {Map<Element, ?Array<number>>} cache The ancestors measured in this pass (null: does not clip).
+     * @returns {Array<number>} [left, right]: the x of the edges the element can reach; NaN: a side it can't move to (a clipping
+     * ancestor, ex: a tab panel scroller inside the page padding, ends before the window edge: moved there, it would be cut off).
+     */
+    function bounds(e, w, cache) {
+        let l = 0;
+        let r = w;
+        //  (body and html too: a page whose body clips inside the html padding, ex: the stand alone table page)
+        for (let p = e.parentElement; p; p = p.parentElement) {
+            let c = cache.get(p);
+            if (c === undefined) {
+                c = null;
+                if (getComputedStyle(p).overflowX !== "visible") {
+                    const b = p.getBoundingClientRect();
+                    const il = b.left + p.clientLeft;
+                    c = [b.left <= 0.5 ? il : NaN, b.right >= w - 0.5 ? il + p.clientWidth : NaN];
+                }
+                cache.set(p, c);
+            }
+            if (c) {
+                l = Math.max(l, c[0]);
+                r = Math.min(r, c[1]);
+            }
+        }
+        return [l, r];
+    }
+
+    function undoAll() {
+        for (const e of [...moved.keys()])
+            setMargins(e, 0, 0);
+        for (const e of [...edged])
+            setEdges(e, false, false);
+    }
+
+    /**
+     * Measure the candidates of one kind (all reads first, then all writes).
+     * @param {string} sel The selector of the kind.
+     * @param {string} surfaceSel The surface selector.
+     * @param {string} kind "frame", "group" (moved, never edged) or "surface".
+     * @param {Set<Element>} keep Collects the handled elements.
+     * @param {Set<Element>} carriers The moved frames and groups (what is in them is not moved again).
+     * @param {Map<Element, ?Array<number>>} scrollers Cache of bounds.
+     */
+    function pass(sel, surfaceSel, kind, keep, carriers, scrollers) {
+        const w = document.documentElement.clientWidth;
+        const gap = pagePx() + 0.5;
+        const todo = [];
+        for (const e of document.body.querySelectorAll(sel)) {
+            if (!eligible(e, surfaceSel))
+                continue;
+            if (kind === "group" && !isCardRow(e, surfaceSel))
+                continue;
+            const b = e.getBoundingClientRect();
+            //  In a moved row / frame: never moved again (it would leave its clipping / grid parent), only edged when it touches the edge
+            let inMoved = false;
+            for (const c of carriers)
+                if (c !== e && c.contains(e)) {
+                    inMoved = true;
+                    break;
+                }
+            const [bl, br] = bounds(e, w, scrollers);
+            //  (NaN: a side that can't reach the window edge, never at it)
+            todo.push([e, isNaN(bl) ? Infinity : b.left - bl, isNaN(br) ? Infinity : br - b.right, inMoved ? 0.5 : gap]);
+        }
+        for (const [e, gl, gr, g] of todo) {
+            const atL = gl > -0.5 && gl <= g;
+            const atR = gr > -0.5 && gr <= g;
+            setMargins(e, (atL && gl > 0.5) ? gl : 0, (atR && gr > 0.5) ? gr : 0);
+            if (kind !== "group")
+                setEdges(e, atL, atR);
+            if (atL || atR) {
+                keep.add(e);
+                if (kind !== "surface" && moved.has(e))
+                    carriers.add(e);
+            }
+        }
+    }
+
+    function update() {
+        frame = 0;
+        if (!active()) {
+            undoAll();
+            return;
+        }
+        const surfaceSel = Surfaces.join(",");
+        const keep = new Set();
+        //  Measure the page as it is without the moves (all in one frame, before the paint: nothing flickers)
+        for (const e of [...moved.keys()])
+            setMargins(e, 0, 0);
+        //  Frames first (a table and its scroller), then rows of cards (moved as a whole), then the cards
+        const carriers = new Set();
+        pass(Frames.join(","), surfaceSel, "frame", keep, carriers, new Map());
+        pass(Groups.join(","), surfaceSel, "group", keep, carriers, new Map());
+        pass(surfaceSel, surfaceSel, "surface", keep, carriers, new Map());
+        //  Elements that are no longer candidates (moved into a dialog, a class removed, gone from the page)
+        for (const e of [...edged])
+            if (!keep.has(e))
+                setEdges(e, false, false);
+        //  Our own class / style changes are no reason to measure again
+        if (mo)
+            mo.takeRecords();
+    }
+
+    function schedule() {
+        if (!frame)
+            frame = requestAnimationFrame(update);
+    }
+
+    function observe() {
+        const want = active();
+        if (want !== on) {
+            on = want;
+            if (want) {
+                mo = mo || new MutationObserver(schedule);
+                mo.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "hidden"] });
+                //  The window size and also a scroll bar that comes or goes (no resize event)
+                if (window.ResizeObserver) {
+                    ro = ro || new ResizeObserver(schedule);
+                    ro.observe(document.documentElement);
+                }
+                else
+                    window.addEventListener("resize", schedule);
+            }
+            else {
+                if (mo)
+                    mo.disconnect();
+                if (ro)
+                    ro.disconnect();
+                window.removeEventListener("resize", schedule);
+            }
+        }
+        schedule();
+    }
+
+    function start() {
+        if (!window.matchMedia || !document.body)
+            return;
+        mq = window.matchMedia(Media);
+        if (mq.addEventListener)
+            mq.addEventListener("change", observe);
+        observe();
+    }
+
+    Sw.Bleed = {
+        /** The surface selectors (cards): moved to the window edge, with edge classes */
+        Surfaces,
+        /** The group selectors (rows of cards): moved as a whole */
+        Groups,
+        /** The frame selectors (a frame without a border around cards, ex: the data table in card layout): moved as a whole, with edge classes */
+        Frames,
+        /** Measure again (in the next frame) */
+        Update() {
+            if (on)
+                schedule();
+        },
+    };
+
+    if (document.body)
+        start();
+    else
+        document.addEventListener("DOMContentLoaded", start, { once: true });
 })();
 }
 

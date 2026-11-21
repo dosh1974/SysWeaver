@@ -12,6 +12,8 @@
  *  - Password leak check (haveibeenpwned k-anonymity range api, only 5 hex chars of the SHA-1 leave the browser); a
  *    deployment turns it off with `:root{--sw-password-leak-check:off}` in app/app.css (see LeakCheckEnabled).
  *  - E-mail / phone validation and phone prefix lookups (AuthManagerService).
+ *  - What a user id can be on this site (UserIdKinds from Api/auth/UserManagerProps): the tool tip (UserIdHint) and the label
+ *    (UserIdLabel, ex: "Email or user name") of a user id box.
  *  - Short codes (the digits sent by e-mail / text message, validated against the HTTP session).
  *  - Token urls: the keyless "Page.html?<token>" form (the whole query is the token) and the keyed forms, passed whole.
  *  - The post sign in navigation (StartPage): reloads the top window when embedded in the app shell (never nests the
@@ -562,9 +564,9 @@
             };
         if (r.State === 1)
             return {
-                Text: _TF("Password is safe (not leaked)!", "Text indicating that an entered password is considered good"),
+                Text: _TF("Not found in known data leaks", "Text indicating that an entered password was not found in the known password leaks (a check can not prove that a password is safe)"),
                 Title: _T("Password was checked against {0} and wasn't found in any data leaks.", LeakDb, "Tool tip description explaining that the entered password is not found in any data leaks.{0} is replaced by the url to the site used for password checking") + "\n\n" +
-                    _TF("This means that the password is probably safe to use for now.", "Tool tip description explaining that the enetered password is safe for use"),
+                    _TF("It was not found in known data leaks (checked anonymously with the Have I Been Pwned service: only the first 5 characters of a hash of the password are sent). This check does not show how strong the password is.", "Tool tip explaining that the entered password was not found in known password leaks (it says nothing about its strength)"),
                 Kind: "ok",
             };
         if (r.State === 2)
@@ -823,7 +825,8 @@
         let q = search ?? window.location.search ?? "";
         if (q.charAt(0) === "?")
             q = q.substring(1);
-        q = q.split("&").filter(p => !/^(usetheme|settheme)=/i.test(p)).join("&");
+        //  (the page options of the core url flags are no part of a token: theme, ?transparent, ?fillscreen, ?css)
+        q = q.split("&").filter(p => !/^(usetheme|settheme|transparent|fillscreen|css)(=|$)/i.test(p)).join("&");
         //  Keyed link: only the token parameter is the token (a bare base64 token never starts with "token=" or contains "&token=")
         const keyed = /(?:^|&)token=([^&]*)/.exec(q);
         if (keyed)
@@ -915,11 +918,28 @@
     }
 
     /**
+     * The label of a user id box: what a user id can be on this site (UserIdKinds), ex: "Email or user name" ("User ID" alone told
+     * nobody what to type).
+     * @returns {Promise<string>} The label.
+     */
+    async function UserIdLabel() {
+        const k = await UserIdKinds();
+        if (k.Email && k.Phone)
+            return _TF("Email, phone or user name", "Label of an input box where the user enters their user id, on a site where it can be an email address, a phone number or a user name");
+        if (k.Email)
+            return _TF("Email or user name", "Label of an input box where the user enters their user id, on a site where it can be an email address or a user name");
+        if (k.Phone)
+            return _TF("Phone or user name", "Label of an input box where the user enters their user id, on a site where it can be a phone number or a user name");
+        return _TF("User name", "Label of an input box where the user enters their user id, on a site where only user names can be used");
+    }
+
+    /**
      * @namespace Sw.Auth - UI-less authentication helpers (see the file header).
      */
     Sw.Auth = {
         UserIdKinds,
         UserIdHint,
+        UserIdLabel,
         Trim,
         SetUser,
         NoteSignedIn,

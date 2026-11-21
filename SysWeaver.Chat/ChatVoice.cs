@@ -2,6 +2,9 @@
 
 namespace SysWeaver.Chat
 {
+    /// <summary>
+    /// The speech synthesis voice to use for the messages of a sender (the web client speaks new messages with it).
+    /// </summary>
     public sealed class ChatVoice
     {
         /// <summary>

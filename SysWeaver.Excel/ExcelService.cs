@@ -22,7 +22,7 @@ namespace SysWeaver.Excel
         /// <summary>
         /// Create the service, sets the license (see <see cref="ExcelTools.SetLicense(ApiKeyParams, bool)"/>) and the static <see cref="TableMarginInch"/>
         /// </summary>
-        /// <param name="p">Parameters, null to use the defaults (free limited license)</param>
+        /// <param name="p">Parameters, null to use the defaults (no key: throws, a license key or "FREE-LIMITED-KEY" must be configured)</param>
         public ExcelService(ExcelParams p)
         {
             p = p ?? new ExcelParams();

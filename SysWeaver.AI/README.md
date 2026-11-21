@@ -29,12 +29,12 @@ A provider derives from `AiServiceBase` and implements `CreateAiChatSession`, `C
 
 ## Key features
 
-- `IAiService` is an `IChatProvider`, so AI chats appear in the [SysWeaver.Chat](../SysWeaver.Chat/README.md) UI, with chat commands (`help`, `clear`, `prompt`, `save`)
+- `IAiService` is an `IChatProvider`, so AI chats appear in the [SysWeaver.Chat](../SysWeaver.Chat/README.md) UI, with chat commands (`help` / `commands`, `clear`, `tools`, `tool <name>`; `prompt` and `save` for users with the `debug` role)
 - Tool calling: methods marked `[AiTool]` / `[AiUse]` (attributes defined in [SysWeaver.Common](../SysWeaver.Common/README.md)) on registered services implementing `IHaveAiTools` are picked up automatically, also when services are added later; JSON schemas and descriptions are generated from signatures and XML documentation
 - Default tools for chat sessions: predefined images, file and flag icons, QR codes, tables, data, charts, maps, calculator, elapsed time, URL display, file/link storage and REST API call validation (tools that live in other services are only added when those services are registered)
 - Per user AI memory (`IAiMemory`) exposed to the model as memory tools; `KeyValueStorageAiMemory` stores it in the application key/value store and, when registered as a service, shows each user's memory in an "AI Memory" table
-- Stateless completion (`IAiService.Complete`) with caller defined tools (returned to the caller, not executed) and image / file attachments (`AiCompletionMessage.Parts`, also on tool results), used by [SysWeaver.AI.HostService](../SysWeaver.AI.HostService/README.md); implemented natively by the OpenAI, Google and LlamaSharp services, the default implementation falls back to a query session with a transcript (tools ignored)
-- Model listing (`GetLlmModels`, `GetImageModels`, cached for 5 minutes), concurrency limits for chats and image generation, usage events (`OnUse`) and performance monitoring
+- Stateless completion (`IAiService.Complete`) with caller defined tools (returned to the caller, not executed) and image / file attachments (`AiCompletionMessage.Parts`, also on tool results), used by [SysWeaver.AI.HostService](../SysWeaver.AI.HostService/README.md); implemented natively by the OpenAI, Google, Anthropic and LlamaSharp services, the default implementation falls back to a query session with a transcript (tools ignored)
+- Model listing (`GetLlmModels`, `GetImageModels`, `GetImageEditModels`, cached for 5 minutes) and model tables of the providers under the *Data / AI models* menu (Anthropic: *Debug / AI / Models / LLM*; `AiLlmModel` rows show as cards by default, image models as a table; templates in `srcWeb/ai/cards/models.html`), concurrency limits for chats and image generation, usage events (`OnUse`) and performance monitoring
 - API agnostic image creation: `IAiImageGenService.TextToImage` (`TextToImagePrompt`) and `IAiImageEditService.ImageToImage` (`ImageToImagePrompt`), implemented by the OpenAI, Google and ComfyUI services, with model listing (`IAiImageGenService.GetImageModels`, `IAiImageEditService.GetImageEditModels` returning `AiImageEditModel`; ComfyUI lists its text to image / images to image workflows, the default first). An empty model uses `DefaultImageModel` / `DefaultImageEditModel` (if that model isn't listed by `GetImageModels` anymore, the most suitable listed model is used), an unset width / height uses `DefaultImageWidth` / `DefaultImageHeight` (1280x720)
 - Common service parameters (`AiServiceParams`: endpoint, API key, timeout, default models, reasoning effort, concurrency) and session parameters (`AiSessionParams`: model, reasoning)
 
@@ -78,7 +78,7 @@ ai.AddChat(chat, "Weather");
 
 | Folder | Content |
 |---|---|
-| [`srcWeb/`](srcWeb/README.md) | Shared AI chat icons (error, debug, working) and predefined smiley images, compressed and embedded at build time |
+| [`srcWeb/`](srcWeb/README.md) | Shared AI chat icons (error, debug, working), predefined smiley images and the card templates of the model tables, compressed and embedded at build time |
 
 ## Relationships
 

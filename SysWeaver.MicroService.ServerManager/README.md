@@ -29,7 +29,8 @@ flowchart TB
 - **Managed services**: each SysWeaver service is a managed folder (pushed with `SwSyncTool`); versions can be activated, compressed, expanded, verified and deleted; backups are kept for `RemoveServiceBackupsDays`
 - Service control by running the service host verbs (start, stop, pause, continue, restart, uninstall, kill) and per-service CPU and memory charts
 - Master configuration files copied into new versions, config and log file viewing, editing and deletion
-- Additional managed folders (`Folders`) and chunk storage statistics
+- Menu: the pages *Server*, *Managed services* and *Key files* ([`srcWeb/ServerManager`](srcWeb/ServerManager/README.md)) and the tables *Process information*, *Drive information*, *Chunk storage* and *Files* (the configured text files), most of them with a card view
+- Service folders in `ServiceFolder` (default `$(CommonApplicationData)/SysWeaver/ManagedServices`), versions compressed when `CompressServices` is true (default); additional managed folders (`Folders`) and chunk storage statistics
 - Host monitoring: CPU, memory and drive charts with history, process table with per-process charts and kill (Kill and Reboot need a token that is only sent with the process list / `GetServerInfo` (`SmProcessKillToken`: HMAC, random key per process, bound to the process start time, valid at least 15 minutes), so a crafted link or an image GET can't use them; the idle and system processes and the server manager itself can't be killed)
 - Configurable text files (`TextFiles`) and the hosts file (`AllowHosts`, `AllowHostsEdit`) viewable/editable in the browser
 - Key file management for the key folder, and reboot of the machine

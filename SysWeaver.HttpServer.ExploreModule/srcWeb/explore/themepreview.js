@@ -179,7 +179,7 @@
                 new Sw.Toggle({ Label: _TF("Enabled", "Label of a demo toggle in the theme preview"), Value: true }),
                 new Sw.Toggle({ Label: _TF("Notify me", "Label of a demo toggle in the theme preview") })),
             row(new Sw.Segmented({ AriaLabel: _TF("Range", "Accessible name of a demo segmented control in the theme preview"), Items: [{ Value: 1, Text: _TF("1 h", "Demo segment in the theme preview") }, { Value: 24, Text: _TF("24 h", "Demo segment in the theme preview") }, { Value: 0, Text: _TF("All", "Demo segment in the theme preview") }], Value: 24 }),
-                el("div.tp-slider", null, new Sw.Slider({ Min: 0, Max: 1, Value: 0.6, Default: 0.5 }).E)),
+                el("div.tp-slider", null, new Sw.Slider({ Min: 0, Max: 1, Value: 0.6, Default: 0.5, Label: _TF("Volume", "Accessible name of a demo slider in the theme preview") }).E)),
             prog.E);
 
         const tags = card(_TF("Tags and badges", "Card title in the theme preview"),

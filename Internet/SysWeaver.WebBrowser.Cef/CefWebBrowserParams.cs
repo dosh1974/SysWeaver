@@ -20,7 +20,7 @@ namespace SysWeaver.WebBrowser
         public bool Init = true;
 
         /// <summary>
-        /// Set to true to onlye log errors
+        /// Set to true to only log fatal errors (the CEF log is verbose otherwise)
         /// </summary>
         public bool SmallLog;
 

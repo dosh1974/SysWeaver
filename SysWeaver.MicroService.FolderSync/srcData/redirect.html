@@ -43,12 +43,12 @@
             const version = await getVersion();
             console.log("Version: " + version);
             if (autoReload > 0) {
-                setInterval(autoReload, async () => {
+                setInterval(async () => {
                     //console.log("Checking version!");
                     const newVersion = await getVersion();
                     if ((newVersion !== version) && newVersion)
                         location.reload(true);
-                });
+                }, autoReload);
             } else {
                 addEventListener("message", async m => {
                     const data = m.data;

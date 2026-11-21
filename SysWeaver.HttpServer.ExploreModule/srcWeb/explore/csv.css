@@ -24,7 +24,7 @@
     white-space: nowrap;
 }
 
-@media (max-width: 600px) {
+@media (max-width: 599px) {
     .csv-bar {
         gap: var(--sw-space-1) var(--sw-space-3);
     }

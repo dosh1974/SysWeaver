@@ -190,7 +190,7 @@ Infrastructure services subscribe to the manager's *service added/removed* event
 
 ### Service manifest
 
-A JSON array of `{ "Type": "Namespace.Class, Assembly", "Name": "...", "Params": { ... } }` entries, read from `<Executable>.Services.<Os>.json` (OS-specific) or `<Executable>.Services.json`. Comments and trailing commas are allowed. Entries are processed in order; each is constructed with the richest constructor whose parameters can be satisfied from already registered services, the manager itself and the entry's `Params`. Serializer and compressor plug-ins are registered instead of instantiated, and an *interface* type with connection parameters becomes a remote proxy. Details: [SysWeaver.MicroServices.ServiceManager](SysWeaver.MicroServices.ServiceManager/README.md).
+A JSON array of `{ "Type": "Namespace.Class, Assembly", "Name": "...", "Params": { ... } }` entries, read from `<Executable>.Services.<Os>.json` (OS-specific, `<Os>` is `Windows` or `Linux`, ex: `MyApp.Services.Linux.json`) if it exists, else from `<Executable>.Services.json`. Comments and trailing commas are allowed. Entries are processed in order; each is constructed with the richest constructor whose parameters can be satisfied from already registered services, the manager itself and the entry's `Params`. Serializer and compressor plug-ins are registered instead of instantiated, and an *interface* type with connection parameters becomes a remote proxy. Details: [SysWeaver.MicroServices.ServiceManager](SysWeaver.MicroServices.ServiceManager/README.md).
 
 ### Web APIs
 
@@ -258,8 +258,8 @@ See also [Companion repositories](#companion-repositories).
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\SysWeaver\SysWeaver.OsServices\SysWeaver.OsServices.csproj" />
-    <ProjectReference Include="..\SysWeaver\SysWeaver.OsServices.ServiceHostFactoryWin32NT\SysWeaver.OsServices.ServiceHostFactoryWin32NT.csproj" />
-    <ProjectReference Include="..\SysWeaver\SysWeaver.OsServices.ServiceHostFactoryUnix\SysWeaver.OsServices.ServiceHostFactoryUnix.csproj" />
+    <ProjectReference Include="..\SysWeaver\Platform\SysWeaver.OsServices.ServiceHostFactoryWin32NT\SysWeaver.OsServices.ServiceHostFactoryWin32NT.csproj" />
+    <ProjectReference Include="..\SysWeaver\Platform\SysWeaver.OsServices.ServiceHostFactoryUnix\SysWeaver.OsServices.ServiceHostFactoryUnix.csproj" />
     <ProjectReference Include="..\SysWeaver\SysWeaver.MicroService.NetHttpServer\SysWeaver.MicroService.NetHttpServer.csproj" />
     <ProjectReference Include="..\SysWeaver\SysWeaver.MicroService.HttpServer\SysWeaver.MicroService.HttpServer.csproj" />
   </ItemGroup>
@@ -406,7 +406,7 @@ flowchart LR
 
 | Project | Purpose |
 |---|---|
-| [SysWeaver.Compression](SysWeaver.Compression/README.md) | The compression abstraction and registry: named, prioritised codecs (Brotli, Deflate, GZip built in; Zstandard and native Brotli as plug-ins) used for HTTP content encoding, pre-compressed web assets, storage and data transfer. |
+| [SysWeaver.Compression](SysWeaver.Compression/README.md) | The compression abstraction and registry: named, prioritised codecs (Brotli, Deflate, GZip and Zstandard built in; native Brotli and managed Zstandard as plug-ins) used for HTTP content encoding, pre-compressed web assets, storage and data transfer. |
 | [SysWeaver.Compression.BrotliNativeNET](Compression/SysWeaver.Compression.BrotliNativeNET/README.md) | Codec plug-in: **br** (Brotli) backed by the native Brotli library of Brotli.NET, preferred over the built-in .NET Brotli codec when registered. |
 | [SysWeaver.Compression.ZstdSharp](Compression/SysWeaver.Compression.ZstdSharp/README.md) | Codec plug-in: **zstd** (Zstandard) backed by the fully managed ZstdSharp.Port. |
 | [SysWeaver.Storage](SysWeaver.Storage/README.md) | Local persistence primitives: a redundant file-based key/value store, cached compressed copies of files, file meta-data databases, temporary cache folders and machine-wide locks. |
@@ -434,8 +434,8 @@ flowchart LR
 | [SysWeaver.HttpTransformer.Svg](SysWeaver.HttpTransformer.Svg/README.md) | File transformer for the SysWeaver web server that minifies served SVG files with SysWeaver.Minifier.Svg, caching the results on disc. |
 | [SysWeaver.HttpTransformer.Translate](SysWeaver.HttpTransformer.Translate/README.md) | File transformer for the SysWeaver web server that translates served text files (e.g. HTML, JavaScript) into the session language with SysWeaver.FileTranslation, caching the results on disc. |
 | [SysWeaver.ReverseProxy](SysWeaver.ReverseProxy/README.md) | Expose web services on machines that are not reachable from the internet: a client on the private machine keeps outbound connections to a public SysWeaver server, which forwards incoming requests through them. |
-| [SysWeaver.HttpBench](SysWeaver.HttpBench/README.md) | Performance tests a SysWeaver web server from a web page (Debug / HTTP bench): many workers call a selection of public end points, then a report with tables and charts; the form can be exported and imported as a json parameter file. |
-| [SysWeaver.HttpBench.Core](SysWeaver.HttpBench.Core/README.md) | The HTTP bench test engine (end points, workers, metrics, report rows and a markdown report) without web server dependencies, used by the bench service and the HttpBench console tool. |
+| [SysWeaver.HttpBench](SysWeaver.HttpBench/README.md) | The HTTP bench service (`HttpBenchService`): performance tests a SysWeaver web server from a web page; many workers call a selection of public end points for a while, then a report shows the results as SysWeaver tables and charts, from the totals down to single requests. |
+| [SysWeaver.HttpBench.Core](SysWeaver.HttpBench.Core/README.md) | The test engine of the HTTP bench: the catalog of end points, the workers that call them, the metrics, the table rows of a report and the markdown report, with no web server, service manager or web api dependencies. Used by the bench service and the HttpBench console tool. |
 
 ### Remote APIs and networking
 
@@ -493,11 +493,11 @@ flowchart LR
 | [SysWeaver.AI.McpService](SysWeaver.AI.McpService/README.md) | An MCP (Model Context Protocol) server for SysWeaver: exposes the AI tools of the registered services to MCP clients (agents, IDEs, desktop assistants) over the Streamable HTTP transport. |
 | [SysWeaver.AI.LlamaSharp](SysWeaver.AI.LlamaSharp/README.md) | Local LLM integration for SysWeaver using LLamaSharp (llama.cpp): an AI service and chat provider that runs GGUF models in process and can call methods of your services as tools. |
 | [SysWeaver.AI.OpenAI](SysWeaver.AI.OpenAI/README.md) | LLM integration for SysWeaver using the OpenAI API (or any compatible endpoint): an AI service and chat provider that can call methods of your services as tools, generate and edit images, tokenize text and keep an AI memory. |
-| [SysWeaver.AI.LlmTranslator](SysWeaver.AI.LlmTranslator/README.md) | A translation back-end that uses a large language model through the OpenAI service. |
+| [SysWeaver.AI.LlmTranslator](SysWeaver.AI.LlmTranslator/README.md) | A translation back-end that uses a large language model through a SysWeaver AI service. |
 | [SysWeaver.Chat](SysWeaver.Chat/README.md) | A chat framework: rooms/sessions with pluggable providers (simple in-memory rooms, MySQL-persisted rooms, AI assistants), real-time delivery, translation, file and link sharing and a web chat UI. |
 | [SysWeaver.Chat.MySql](SysWeaver.Chat.MySql/README.md) | Chat provider whose rooms and messages are persisted in MySQL. |
 | [SysWeaver.Translation.Google](SysWeaver.Translation.Google/README.md) | A translation back-end that uses Google's public translation web page. |
-| [SysWeaver.Translation.Mock](SysWeaver.Translation.Mock/README.md) | A translator for tests: the text with the language in front, offline and free. |
+| [SysWeaver.Translation.Mock](SysWeaver.Translation.Mock/README.md) | A translator for tests: no outside service, no cost, no rate limit. |
 | [SysWeaver.MicroService.Translation](SysWeaver.MicroService.Translation/README.md) | Translation as a web API, and translation *from* another server: exposes the process's translator over HTTP and provides a remote translator client with memory caching. |
 | [SysWeaver.MicroService.TranslationDbCache](SysWeaver.MicroService.TranslationDbCache/README.md) | The caching front of the translation pipeline: an `ITranslator` that serves translations from memory and MySQL and asks an internal translator only for new texts. Includes a translation editor. |
 | [SysWeaver.FileTranslation](SysWeaver.FileTranslation/README.md) | Translation of web files: extracts translatable text from HTML and JavaScript, translates it and rebuilds the file. |
@@ -512,11 +512,11 @@ flowchart LR
 | [SysWeaver.Media.Audio](SysWeaver.Media.Audio/README.md) | Audio file information (duration, format) and waveform icons using NAudio. |
 | [SysWeaver.Media.Png](SysWeaver.Media.Png/README.md) | A managed PNG decoder and chunk reader/writer with no native dependencies. |
 | [SysWeaver.Media.Psd](SysWeaver.Media.Psd/README.md) | Reader/writer for Adobe Photoshop (PSD / PSB) files: layers, masks, channels, groups and image resources, plus helpers to decode RGB images and extract text layers. |
-| [SysWeaver.Media.Shader](SysWeaver.Media.Shader/README.md) | GLSL effects in the Effect Weaver format: parsing, the Ew snippet library, the vertex stage and the final WebGL program (shared with Effect Weaver, used by the media player through `MediaService.BuildEffect`). |
+| [SysWeaver.Media.Shader](SysWeaver.Media.Shader/README.md) | GLSL effects in the Effect Weaver format: parsing, the Ew snippet library, the optional vertex stage and the final WebGL program source. One implementation, so an effect loads the same way in every tool. Used by the media player through `MediaService.BuildEffect`. |
 | [SysWeaver.Media.Svg](SysWeaver.Media.Svg/README.md) | Programmatic SVG creation and rendering: a canvas/scene API with paths, shapes, gradients, shadows, 3D-style extrusion, text with embedded fonts, barcodes, composition templates, and SVG-to-bitmap rendering. |
 | [SysWeaver.Media.Video](SysWeaver.Media.Video/README.md) | Video decoding and information through FFmpeg, with native FFmpeg libraries shipped per platform. |
 | [SysWeaver.Minifier.Svg](SysWeaver.Minifier.Svg/README.md) | SVG minifier/optimiser, used at build time (through the SvgOpt tool) for the framework's icons and at runtime by the SVG transformer. |
-| [SysWeaver.Converter.Js](Converter/SysWeaver.Converter.Js/README.md) | Converts modern JavaScript (and the scripts in html pages) to older versions (ES2017, ES2015, ES5 or a browser list) for old / embedded browsers, like Babel's preset-env, written in C# (used by the JsConvert tool). |
+| [SysWeaver.Converter.Js](Converter/SysWeaver.Converter.Js/README.md) | Converts modern JavaScript to older JavaScript versions (ES2017, ES2015, ES5 or a list of browsers) so that pages can be served to old and embedded browsers — a C# alternative to Babel's `preset-env`. Used by the JsConvert tool. |
 | [SysWeaver.Map](SysWeaver.Map/README.md) | Generates styled SVG maps — the world, Africa, Europe, North America, individual countries and their administrative regions — from embedded map data. |
 | [SysWeaver.MicroService.Map](SysWeaver.MicroService.Map/README.md) | Web API and AI tools that generate SVG maps with SysWeaver.Map. |
 | [SysWeaver.MicroService.Media](SysWeaver.MicroService.Media/README.md) | A browser-based media player and viewer: images, video, audio, text and YouTube with WebGL shader effects, collages, animated counters and map views. |
@@ -530,6 +530,7 @@ flowchart LR
 | [SysWeaver.WebBrowser](SysWeaver.WebBrowser/README.md) | Contracts for headless browser services, so browser automation features do not depend on a particular engine. |
 | [SysWeaver.WebBrowser.Cef](Internet/SysWeaver.WebBrowser.Cef/README.md) | Headless Chromium (CEF, off-screen) implementation of the browser service. |
 | [SysWeaver.WebBrowser.WebView2](Internet/SysWeaver.WebBrowser.WebView2/README.md) | Headless Microsoft Edge WebView2 implementation of the browser service. |
+| [SysWeaver.WebBrowser.Playwright](Internet/SysWeaver.Browser.Playwright/README.md) | Playwright implementation of the browser service: Chromium (an installed Chrome or Edge, or the one downloaded by Playwright), Firefox or WebKit, headless or windowed. |
 
 ### Files, sync and administration
 
@@ -547,8 +548,8 @@ flowchart LR
 - **Target framework:** all projects target .NET 11 (`net11.0`, `net11.0-windows` for the Windows-only browser hosts), built with the C# `runtime-async` feature (`<Features>runtime-async=on</Features>`) so async methods use the .NET 11 runtime async; the vendored libraries in `_external` keep their own targets.
 - **Runtime:** applications run on Windows and Linux. OS-specific behaviour (platform tools, service hosting, native media libraries) lives in separate assemblies resolved at runtime; deploy the ones for your target.
 - **Build:** many projects pre-compress or optimise their embedded web assets with pre-built Windows tools from `_tools` and use Windows shell commands in their build steps, so the repository builds as-is on Windows.
-- **Windows-only components:** the WebView2 browser, the CEF runtime packages as configured, certificate binding for the HttpListener server, and the Windows service host.
-- **Commercial or third-party terms:** Excel export uses a commercial spreadsheet library (GemBox) and needs a key — a licence key or the explicit free limited key; the Google translator uses a public web page rather than an official API; hosted LLM features (OpenAI, Google) require an API account, LlamaSharp runs models locally.
+- **Windows-only components:** the WebView2 browser, the CEF runtime packages as configured (the Playwright browser is the cross-platform alternative), certificate binding for the HttpListener server, and the Windows service host.
+- **Commercial or third-party terms:** Excel export uses a commercial spreadsheet library (GemBox) and needs a key — a licence key or the explicit free limited key; the Google translator uses a public web page rather than an official API; hosted LLM features (Anthropic, OpenAI, Google) require an API account, LlamaSharp runs models locally.
 - **Solution:** every framework project is part of `SysWeaver.slnx` (of the vendored libraries only the used parts are included).
 
 ## Repository layout
@@ -563,7 +564,7 @@ Every folder has a README describing its content and its sub folders; follow the
 | [`Converter/`](Converter/README.md) | Source code converter projects (JavaScript to older JavaScript versions) |
 | [`Communication/`](Communication/README.md) | E-mail sender, e-mail reader and text message provider projects |
 | [`Platform/`](Platform/README.md) | OS-specific platform tools and service host factories (Windows, Linux) |
-| [`Internet/`](Internet/README.md) | Headless browser implementations (CEF, WebView2) |
+| [`Internet/`](Internet/README.md) | Web browser implementations of the browser service (CEF, WebView2, Playwright) |
 | [`_external/`](_external/README.md) | Vendored third-party libraries |
 | [`_tools/`](_tools/README.md) | Pre-built tools used by the build, published from SysWeaver.Tools |
 | [`_docs/`](_docs/README.md) | Additional documents |
@@ -579,8 +580,16 @@ Recurring sub folders inside projects:
 | other names | Source code grouped by topic (namespaces of the project). |
 
 The generated `web/`, `data/`, `bin/` and `obj/` folders are build output and are not part of the repository.
-| `SysWeaver.slnx` | Solution file |
+
+Files in the repository root:
+
+| File | Content |
+|---|---|
+| `SysWeaver.slnx` | Solution file with every framework project (and the used parts of `_external`) |
+| `Directory.Build.props` | Build settings applied to every project (currently: excludes `GemBox.Spreadsheet.dll` from ReadyToRun compilation, which crashes crossgen2 in the .NET 11 SDK) |
+| `Build_All.bat` | Publishes, to a local folder, every root project folder that has a `Properties/PublishProfiles/FolderProfile.pubxml`; nothing is deployed (no project of this repository has such a profile today, so it publishes nothing) |
 | `Clean_All.bat` | Deletes build output (`bin`, `obj`, generated web/data folders) using `_tools/VsClean` |
+| `LICENSE` | MIT license |
 
 ## Companion repositories
 

@@ -68,7 +68,9 @@ namespace SysWeaver.MicroService
             /// </summary>
             public String Thumbprint;
 
-            //  Actions
+            /// <summary>
+            /// Actions that can be performed: a manual update check of the domain (the value is the lower case domain name)
+            /// </summary>
             [TableDataActions("Update", "Click to manually perform an update check", "../Api/Lcm/" + nameof(UpdateCert) + "?\"{0}\"", "../icons/reload.svg")]
             public String Actions;
 

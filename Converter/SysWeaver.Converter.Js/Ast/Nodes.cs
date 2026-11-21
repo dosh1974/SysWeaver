@@ -102,6 +102,9 @@ namespace SysWeaver.Converter.Js.Ast
 
     #region Expressions
 
+    /// <summary>
+    /// An identifier (a variable, function, parameter or property name)
+    /// </summary>
     public sealed class Identifier : Expr
     {
         public String Name;
@@ -120,6 +123,9 @@ namespace SysWeaver.Converter.Js.Ast
         public override void MapChildren(Rewriter r) { }
     }
 
+    /// <summary>
+    /// A number literal
+    /// </summary>
     public sealed class NumberLiteral : Expr
     {
         public double Value;
@@ -127,6 +133,9 @@ namespace SysWeaver.Converter.Js.Ast
         public override void MapChildren(Rewriter r) { }
     }
 
+    /// <summary>
+    /// A string literal
+    /// </summary>
     public sealed class StringLiteral : Expr
     {
         public String Value;
@@ -134,6 +143,9 @@ namespace SysWeaver.Converter.Js.Ast
         public override void MapChildren(Rewriter r) { }
     }
 
+    /// <summary>
+    /// A boolean literal (true or false)
+    /// </summary>
     public sealed class BooleanLiteral : Expr
     {
         public bool Value;
@@ -141,11 +153,17 @@ namespace SysWeaver.Converter.Js.Ast
         public override void MapChildren(Rewriter r) { }
     }
 
+    /// <summary>
+    /// The null literal
+    /// </summary>
     public sealed class NullLiteral : Expr
     {
         public override void MapChildren(Rewriter r) { }
     }
 
+    /// <summary>
+    /// A regular expression literal (/pattern/flags)
+    /// </summary>
     public sealed class RegexLiteral : Expr
     {
         public String Pattern;
@@ -158,6 +176,9 @@ namespace SysWeaver.Converter.Js.Ast
         public override void MapChildren(Rewriter r) { }
     }
 
+    /// <summary>
+    /// A BigInt literal (123n), can't be converted to older targets
+    /// </summary>
     public sealed class BigIntLiteral : Expr
     {
         /// <summary>The decimal digits (no n suffix)</summary>
@@ -166,6 +187,9 @@ namespace SysWeaver.Converter.Js.Ast
         public override void MapChildren(Rewriter r) { }
     }
 
+    /// <summary>
+    /// A string part of a template literal (cooked and raw text)
+    /// </summary>
     public sealed class TemplateQuasi
     {
         /// <summary>The cooked value, null if the raw text contains an invalid escape sequence (only allowed in tagged templates)</summary>
@@ -174,6 +198,9 @@ namespace SysWeaver.Converter.Js.Ast
         public String Raw;
     }
 
+    /// <summary>
+    /// A template literal: `text ${expr} text`
+    /// </summary>
     public sealed class TemplateLiteral : Expr
     {
         public List<TemplateQuasi> Quasis = new List<TemplateQuasi>();
@@ -186,6 +213,9 @@ namespace SysWeaver.Converter.Js.Ast
         public override void MapChildren(Rewriter r) => r.MapList(Expressions);
     }
 
+    /// <summary>
+    /// A tagged template: tag`text ${expr}`
+    /// </summary>
     public sealed class TaggedTemplate : Expr
     {
         public Expr Tag;
@@ -197,16 +227,25 @@ namespace SysWeaver.Converter.Js.Ast
         }
     }
 
+    /// <summary>
+    /// The this keyword
+    /// </summary>
     public sealed class ThisExpr : Expr
     {
         public override void MapChildren(Rewriter r) { }
     }
 
+    /// <summary>
+    /// The super keyword (in super(...) calls and super.x member accesses)
+    /// </summary>
     public sealed class SuperExpr : Expr
     {
         public override void MapChildren(Rewriter r) { }
     }
 
+    /// <summary>
+    /// An array literal: [a, , ...b]
+    /// </summary>
     public sealed class ArrayExpr : Expr
     {
         /// <summary>Elements, null for holes, may contain SpreadElement</summary>
@@ -217,6 +256,9 @@ namespace SysWeaver.Converter.Js.Ast
         public override void MapChildren(Rewriter r) => r.MapList(Elements);
     }
 
+    /// <summary>
+    /// The kind of a Property: a value (Init), a getter or a setter
+    /// </summary>
     public enum PropKind
     {
         Init,
@@ -252,6 +294,9 @@ namespace SysWeaver.Converter.Js.Ast
         }
     }
 
+    /// <summary>
+    /// An object literal: { a: 1, b, [c]: 2, ...d }
+    /// </summary>
     public sealed class ObjectExpr : Expr
     {
         /// <summary>Property or SpreadElement</summary>
@@ -319,6 +364,9 @@ namespace SysWeaver.Converter.Js.Ast
         }
     }
 
+    /// <summary>
+    /// A function or arrow function used as an expression
+    /// </summary>
     public sealed class FunctionExpr : Expr
     {
         public Function F;
@@ -344,6 +392,9 @@ namespace SysWeaver.Converter.Js.Ast
         }
     }
 
+    /// <summary>
+    /// A class used as an expression
+    /// </summary>
     public sealed class ClassExpr : Expr
     {
         public Class C;
@@ -351,6 +402,9 @@ namespace SysWeaver.Converter.Js.Ast
         public override void MapChildren(Rewriter r) => C = (Class)r.Rewrite(C);
     }
 
+    /// <summary>
+    /// A method, getter, setter or constructor in a class body
+    /// </summary>
     public sealed class MethodDef : Node
     {
         public Expr Key;
@@ -366,6 +420,9 @@ namespace SysWeaver.Converter.Js.Ast
         }
     }
 
+    /// <summary>
+    /// A class field (public or private, static or instance)
+    /// </summary>
     public sealed class FieldDef : Node
     {
         public Expr Key;
@@ -379,6 +436,9 @@ namespace SysWeaver.Converter.Js.Ast
         }
     }
 
+    /// <summary>
+    /// A class static initialization block: static { ... }
+    /// </summary>
     public sealed class StaticBlock : Node
     {
         public List<Stmt> Body = new List<Stmt>();
@@ -386,6 +446,9 @@ namespace SysWeaver.Converter.Js.Ast
         public override void MapChildren(Rewriter r) => r.MapStatements(Body);
     }
 
+    /// <summary>
+    /// A unary operator expression (!, -, +, ~, typeof, void, delete)
+    /// </summary>
     public sealed class UnaryExpr : Expr
     {
         public String Op;
@@ -398,6 +461,9 @@ namespace SysWeaver.Converter.Js.Ast
         public override void MapChildren(Rewriter r) => Arg = r.Expr(Arg);
     }
 
+    /// <summary>
+    /// An increment or decrement (++ / --, prefix or postfix)
+    /// </summary>
     public sealed class UpdateExpr : Expr
     {
         /// <summary>"++" or "--"</summary>
@@ -435,6 +501,9 @@ namespace SysWeaver.Converter.Js.Ast
         }
     }
 
+    /// <summary>
+    /// An assignment, simple or compound (a = b, a += b, a ||= b, ...)
+    /// </summary>
     public sealed class AssignExpr : Expr
     {
         /// <summary>The operator, ex: "=", "+=", "??="</summary>
@@ -455,6 +524,9 @@ namespace SysWeaver.Converter.Js.Ast
         }
     }
 
+    /// <summary>
+    /// A conditional expression: test ? a : b
+    /// </summary>
     public sealed class ConditionalExpr : Expr
     {
         public Expr Test;
@@ -474,6 +546,9 @@ namespace SysWeaver.Converter.Js.Ast
         }
     }
 
+    /// <summary>
+    /// A function call, optionally an optional call: f(a), f?.(a)
+    /// </summary>
     public sealed class CallExpr : Expr
     {
         public Expr Callee;
@@ -498,6 +573,9 @@ namespace SysWeaver.Converter.Js.Ast
         }
     }
 
+    /// <summary>
+    /// A new expression: new C(a)
+    /// </summary>
     public sealed class NewExpr : Expr
     {
         public Expr Callee;
@@ -515,6 +593,9 @@ namespace SysWeaver.Converter.Js.Ast
         }
     }
 
+    /// <summary>
+    /// A member access, computed or not, optionally optional: a.b, a[b], a?.b
+    /// </summary>
     public sealed class MemberExpr : Expr
     {
         public Expr Object;
@@ -551,6 +632,9 @@ namespace SysWeaver.Converter.Js.Ast
         public override void MapChildren(Rewriter r) => Expression = r.Expr(Expression);
     }
 
+    /// <summary>
+    /// A comma separated sequence of expressions: a, b, c
+    /// </summary>
     public sealed class SequenceExpr : Expr
     {
         public List<Expr> Expressions = new List<Expr>();
@@ -560,6 +644,9 @@ namespace SysWeaver.Converter.Js.Ast
         public override void MapChildren(Rewriter r) => r.MapList(Expressions);
     }
 
+    /// <summary>
+    /// A spread element (...a) in an array, call or object literal
+    /// </summary>
     public sealed class SpreadElement : Expr
     {
         public Expr Arg;
@@ -567,6 +654,9 @@ namespace SysWeaver.Converter.Js.Ast
         public override void MapChildren(Rewriter r) => Arg = r.Expr(Arg);
     }
 
+    /// <summary>
+    /// A yield or yield* expression
+    /// </summary>
     public sealed class YieldExpr : Expr
     {
         public Expr Arg;
@@ -579,6 +669,9 @@ namespace SysWeaver.Converter.Js.Ast
         public override void MapChildren(Rewriter r) => Arg = r.Expr(Arg);
     }
 
+    /// <summary>
+    /// An await expression
+    /// </summary>
     public sealed class AwaitExpr : Expr
     {
         public Expr Arg;
@@ -615,6 +708,9 @@ namespace SysWeaver.Converter.Js.Ast
         }
     }
 
+    /// <summary>
+    /// An array destructuring pattern: [a, , ...b]
+    /// </summary>
     public sealed class ArrayPattern : Expr
     {
         /// <summary>Patterns, null for holes, the last one may be a RestElement</summary>
@@ -623,6 +719,9 @@ namespace SysWeaver.Converter.Js.Ast
         public override void MapChildren(Rewriter r) => r.MapList(Elements);
     }
 
+    /// <summary>
+    /// An object destructuring pattern: { a, b: c, ...d }
+    /// </summary>
     public sealed class ObjectPattern : Expr
     {
         /// <summary>Property (value is a pattern) or a RestElement (last)</summary>
@@ -650,6 +749,9 @@ namespace SysWeaver.Converter.Js.Ast
         }
     }
 
+    /// <summary>
+    /// A rest element (...a) in a parameter list or a destructuring pattern
+    /// </summary>
     public sealed class RestElement : Expr
     {
         public Expr Arg;
@@ -673,6 +775,9 @@ namespace SysWeaver.Converter.Js.Ast
         public override void MapChildren(Rewriter r) => r.MapStatements(Body);
     }
 
+    /// <summary>
+    /// The root of a syntax tree: the statements of a script or a module
+    /// </summary>
     public sealed class ProgramNode : Node
     {
         public List<Stmt> Body = new List<Stmt>();
@@ -683,6 +788,9 @@ namespace SysWeaver.Converter.Js.Ast
         public override void MapChildren(Rewriter r) => r.MapStatements(Body);
     }
 
+    /// <summary>
+    /// A block statement: { ... }
+    /// </summary>
     public sealed class BlockStmt : Stmt
     {
         public List<Stmt> Body = new List<Stmt>();
@@ -694,6 +802,9 @@ namespace SysWeaver.Converter.Js.Ast
         public override void MapChildren(Rewriter r) => r.MapStatements(Body);
     }
 
+    /// <summary>
+    /// An expression statement
+    /// </summary>
     public sealed class ExprStmt : Stmt
     {
         public Expr Expression;
@@ -703,16 +814,25 @@ namespace SysWeaver.Converter.Js.Ast
         public override void MapChildren(Rewriter r) => Expression = r.Expr(Expression);
     }
 
+    /// <summary>
+    /// An empty statement (;)
+    /// </summary>
     public sealed class EmptyStmt : Stmt
     {
         public override void MapChildren(Rewriter r) { }
     }
 
+    /// <summary>
+    /// A debugger statement
+    /// </summary>
     public sealed class DebuggerStmt : Stmt
     {
         public override void MapChildren(Rewriter r) { }
     }
 
+    /// <summary>
+    /// A with statement
+    /// </summary>
     public sealed class WithStmt : Stmt
     {
         public Expr Object;
@@ -724,6 +844,9 @@ namespace SysWeaver.Converter.Js.Ast
         }
     }
 
+    /// <summary>
+    /// A return statement
+    /// </summary>
     public sealed class ReturnStmt : Stmt
     {
         public Expr Arg;
@@ -731,6 +854,9 @@ namespace SysWeaver.Converter.Js.Ast
         public override void MapChildren(Rewriter r) => Arg = r.Expr(Arg);
     }
 
+    /// <summary>
+    /// A labeled statement: label: statement
+    /// </summary>
     public sealed class LabeledStmt : Stmt
     {
         public String Label;
@@ -743,6 +869,9 @@ namespace SysWeaver.Converter.Js.Ast
         public override void MapChildren(Rewriter r) => Body = r.Stmt(Body);
     }
 
+    /// <summary>
+    /// A break statement, optionally with a label
+    /// </summary>
     public sealed class BreakStmt : Stmt
     {
         public String Label;
@@ -750,6 +879,9 @@ namespace SysWeaver.Converter.Js.Ast
         public override void MapChildren(Rewriter r) { }
     }
 
+    /// <summary>
+    /// A continue statement, optionally with a label
+    /// </summary>
     public sealed class ContinueStmt : Stmt
     {
         public String Label;
@@ -757,6 +889,9 @@ namespace SysWeaver.Converter.Js.Ast
         public override void MapChildren(Rewriter r) { }
     }
 
+    /// <summary>
+    /// An if statement, optionally with an else branch
+    /// </summary>
     public sealed class IfStmt : Stmt
     {
         public Expr Test;
@@ -776,6 +911,9 @@ namespace SysWeaver.Converter.Js.Ast
         }
     }
 
+    /// <summary>
+    /// A case (or default when the test is null) of a switch statement
+    /// </summary>
     public sealed class SwitchCase : Node
     {
         /// <summary>The test, null for default</summary>
@@ -789,6 +927,9 @@ namespace SysWeaver.Converter.Js.Ast
         }
     }
 
+    /// <summary>
+    /// A switch statement
+    /// </summary>
     public sealed class SwitchStmt : Stmt
     {
         public Expr Discriminant;
@@ -801,6 +942,9 @@ namespace SysWeaver.Converter.Js.Ast
         }
     }
 
+    /// <summary>
+    /// A throw statement
+    /// </summary>
     public sealed class ThrowStmt : Stmt
     {
         public Expr Arg;
@@ -808,6 +952,9 @@ namespace SysWeaver.Converter.Js.Ast
         public override void MapChildren(Rewriter r) => Arg = r.Expr(Arg);
     }
 
+    /// <summary>
+    /// The catch clause of a try statement (the parameter is optional)
+    /// </summary>
     public sealed class CatchClause : Node
     {
         /// <summary>The catch parameter (pattern), null for an optional catch binding</summary>
@@ -820,6 +967,9 @@ namespace SysWeaver.Converter.Js.Ast
         }
     }
 
+    /// <summary>
+    /// A try statement with a catch and / or a finally block
+    /// </summary>
     public sealed class TryStmt : Stmt
     {
         public BlockStmt Block;
@@ -833,6 +983,9 @@ namespace SysWeaver.Converter.Js.Ast
         }
     }
 
+    /// <summary>
+    /// A while loop
+    /// </summary>
     public sealed class WhileStmt : Stmt
     {
         public Expr Test;
@@ -849,6 +1002,9 @@ namespace SysWeaver.Converter.Js.Ast
         }
     }
 
+    /// <summary>
+    /// A do ... while loop
+    /// </summary>
     public sealed class DoWhileStmt : Stmt
     {
         public Stmt Body;
@@ -860,6 +1016,9 @@ namespace SysWeaver.Converter.Js.Ast
         }
     }
 
+    /// <summary>
+    /// A for (init; test; update) loop
+    /// </summary>
     public sealed class ForStmt : Stmt
     {
         /// <summary>A VarDecl, an expression or null</summary>
@@ -876,6 +1035,9 @@ namespace SysWeaver.Converter.Js.Ast
         }
     }
 
+    /// <summary>
+    /// A for ... in loop
+    /// </summary>
     public sealed class ForInStmt : Stmt
     {
         /// <summary>A VarDecl (with one declarator) or a pattern / member expression</summary>
@@ -890,6 +1052,9 @@ namespace SysWeaver.Converter.Js.Ast
         }
     }
 
+    /// <summary>
+    /// A for ... of loop (or for await ... of)
+    /// </summary>
     public sealed class ForOfStmt : Stmt
     {
         /// <summary>A VarDecl (with one declarator) or a pattern / member expression</summary>
@@ -905,6 +1070,9 @@ namespace SysWeaver.Converter.Js.Ast
         }
     }
 
+    /// <summary>
+    /// A function declaration statement
+    /// </summary>
     public sealed class FunctionDecl : Stmt
     {
         public Function F;
@@ -912,6 +1080,9 @@ namespace SysWeaver.Converter.Js.Ast
         public override void MapChildren(Rewriter r) => F = (Function)r.Rewrite(F);
     }
 
+    /// <summary>
+    /// One declarator of a variable declaration: a pattern and an optional initializer
+    /// </summary>
     public sealed class VarDeclarator : Node
     {
         /// <summary>The binding (Identifier or pattern)</summary>
@@ -929,6 +1100,9 @@ namespace SysWeaver.Converter.Js.Ast
         }
     }
 
+    /// <summary>
+    /// A var, let or const declaration
+    /// </summary>
     public sealed class VarDecl : Stmt
     {
         /// <summary>"var", "let", "const", "using" or "await using"</summary>
@@ -944,6 +1118,9 @@ namespace SysWeaver.Converter.Js.Ast
         public override void MapChildren(Rewriter r) => r.MapList(Decls);
     }
 
+    /// <summary>
+    /// A class declaration statement
+    /// </summary>
     public sealed class ClassDecl : Stmt
     {
         public Class C;
@@ -951,12 +1128,18 @@ namespace SysWeaver.Converter.Js.Ast
         public override void MapChildren(Rewriter r) => C = (Class)r.Rewrite(C);
     }
 
+    /// <summary>
+    /// An import attribute: with { type: "json" }
+    /// </summary>
     public sealed class ImportAttr
     {
         public Expr Key;
         public StringLiteral Value;
     }
 
+    /// <summary>
+    /// The kind of an import specifier: named ({ a as b }), default or namespace (* as ns)
+    /// </summary>
     public enum ImportSpecKind
     {
         Named,
@@ -964,6 +1147,9 @@ namespace SysWeaver.Converter.Js.Ast
         Namespace,
     }
 
+    /// <summary>
+    /// An import specifier
+    /// </summary>
     public sealed class ImportSpec : Node
     {
         public ImportSpecKind Kind;
@@ -977,6 +1163,9 @@ namespace SysWeaver.Converter.Js.Ast
         }
     }
 
+    /// <summary>
+    /// An import declaration (modules are kept as is)
+    /// </summary>
     public sealed class ImportDecl : Stmt
     {
         public List<ImportSpec> Specifiers = new List<ImportSpec>();
@@ -990,6 +1179,9 @@ namespace SysWeaver.Converter.Js.Ast
         public override void MapChildren(Rewriter r) => r.MapList(Specifiers);
     }
 
+    /// <summary>
+    /// An export specifier: { a as b }
+    /// </summary>
     public sealed class ExportSpec : Node
     {
         public Expr Local;
@@ -1001,6 +1193,9 @@ namespace SysWeaver.Converter.Js.Ast
         }
     }
 
+    /// <summary>
+    /// A named export: export { a }, export const a = 1 or export { a } from "x"
+    /// </summary>
     public sealed class ExportNamedDecl : Stmt
     {
         public Stmt Declaration;
@@ -1019,6 +1214,9 @@ namespace SysWeaver.Converter.Js.Ast
         }
     }
 
+    /// <summary>
+    /// A default export: export default ...
+    /// </summary>
     public sealed class ExportDefaultDecl : Stmt
     {
         /// <summary>A FunctionDecl, ClassDecl (id may be null) or an ExprStmt</summary>
@@ -1026,6 +1224,9 @@ namespace SysWeaver.Converter.Js.Ast
         public override void MapChildren(Rewriter r) => Declaration = r.Stmt(Declaration);
     }
 
+    /// <summary>
+    /// A re-export of all names: export * from "x" (optionally as a namespace)
+    /// </summary>
     public sealed class ExportAllDecl : Stmt
     {
         public Expr Exported;

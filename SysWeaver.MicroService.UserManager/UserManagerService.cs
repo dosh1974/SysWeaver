@@ -304,7 +304,8 @@ namespace SysWeaver.MicroService
             ManProps = new UserManagerProps
             {
                 Coms = ComsMethods.Keys.ToArray(),
-                SignUpMethods = InternalSignUpMethods,
+                //  Empty until a SignUpService registers (EnableSignUp): without it there is no sign up api, so no method may be offered
+                SignUpMethods = [],
                 CanSetNickName = p.CanSetNickName,
                 CanLogin = !p.DisableLogin,
                 ShortCodeDigits = shortCodeDigits,
@@ -431,6 +432,21 @@ namespace SysWeaver.MicroService
         readonly ManagedMessages Messages;
 
         readonly String[] InternalSignUpMethods;
+
+        /// <summary>
+        /// The sign up methods offered to clients: empty until a <see cref="SignUpService"/> calls <see cref="EnableSignUp"/>
+        /// </summary>
+        String[] ActiveSignUpMethods = [];
+
+        /// <summary>
+        /// Offer the configured sign up methods to clients (<see cref="SignUpMethods"/>, <see cref="UserManagerProps"/>).
+        /// Called by the <see cref="SignUpService"/> (the web api of the sign up) when it is created.
+        /// </summary>
+        internal void EnableSignUp()
+        {
+            ActiveSignUpMethods = InternalSignUpMethods;
+            ManProps.SignUpMethods = InternalSignUpMethods;
+        }
 
         readonly IUserManagerComs[] Coms;
 

@@ -2,6 +2,9 @@
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// One uploaded version of a managed service (in the versions list of <see cref="SmServiceDetail"/>)
+    /// </summary>
     public class SmVersionBrief : IComparable<SmVersionBrief>
     {
 #if DEBUG

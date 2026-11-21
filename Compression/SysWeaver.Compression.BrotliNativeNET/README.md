@@ -12,7 +12,7 @@
 
 ## Purpose
 
-An alternative `br` implementation that calls the native Brotli library of the [Brotli.NET](https://www.nuget.org/packages/Brotli.NET) package directly (bypassing its managed stream). The framework's asset compression tool (`_tools/compress`) ships with it.
+An alternative `br` implementation that calls the native Brotli library of the [Brotli.NET](https://www.nuget.org/packages/Brotli.NET) package directly (bypassing its managed stream). The asset compression tools of SysWeaver.Tools ship with it: [Compress](https://github.com/dosh1974/SysWeaver.Tools/blob/main/Compress/README.md) (run by the project builds from `_tools/compress` to pre-compress `srcWeb` files) and [Decompress](https://github.com/dosh1974/SysWeaver.Tools/blob/main/Decompress/README.md).
 
 ## How it fits into SysWeaver
 
@@ -27,7 +27,7 @@ All compressed data in SysWeaver — HTTP content encoding, pre-compressed web a
 
 ## Key features
 
-- Registered for `br` (file extension `.br`) with priority 1, above the built-in .NET Brotli codec (priority 0).
+- Registered for `br` (file extension `.br`) with priority 1, the same as the built-in .NET Brotli codec (`CompBrotliNETNew`); it is registered after the built-in codecs and the last registered wins a tie, so it replaces the built-in codec.
 - `CompBrotliNativeNET` (singleton `Instance`) implements the full `ICompType` API through `CompStreamCodec`, with pooled buffers.
 - Effort levels map to Brotli quality 1 / 4 / 11, with a 2^22 byte window.
 - `CompBrotliNativeNET.IsSupported` tells if the native library loads; `Register()` does nothing when it doesn't (the built-in `br` codec is then used).

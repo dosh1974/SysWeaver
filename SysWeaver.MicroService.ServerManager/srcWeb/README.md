@@ -17,7 +17,7 @@ This folder only contains the `ServerManager/` sub folder. The `EmbedLocal` targ
 
 | Item | Description |
 |---|---|
-| [`ServerManager/`](ServerManager/README.md) | Server, managed services, service/version details, metrics and key file pages |
+| [`ServerManager/`](ServerManager/README.md) | Server, managed services, service / version details, metrics and key file pages, and the card templates of the tables |
 
 ## Relationships
 

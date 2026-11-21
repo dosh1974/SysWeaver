@@ -40,7 +40,7 @@ sequenceDiagram
 - Client end points (`"name:destination"`) can be the hosting SysWeaver server itself (handled in process, no HTTP call), or any URL the client can reach (localhost, LAN or internet).
 - Several parallel connections (long polls) per client (`MaxConcurrentRequests`, default 8). A request is handled on its own task while the connection polls again at once (`MaxRequestsInProgress`, default 32; the task sends the response with a poll of its own), so a slow request, such as the long poll `Api/application/GetMessages` of every SysWeaver page (held up to 90 s), never holds up the requests behind it. Server-side response caching per client using the HTTP cache headers.
 - Connection status of a client (`ReverseProxyClient.GetConnectionStatus`, the Operations menu table "Reverse proxy connection"): "Connected" (a long poll answered less than 2 minutes ago), "No answer", "Not connected" (the last attempt failed, with the error) or "Connecting".
-- Debug tables of connected clients (server) and end points (client).
+- Operations menu tables (shown as cards, templates in [`srcWeb/reverseproxy/cards.html`](srcWeb/reverseproxy/cards.html)): "Reverse proxy clients" on the server, "Reverse proxy end points" and "Reverse proxy connection" on the client. The server also has `GetClientBriefs` (a short list of the connected clients, with links, `Ops` role) and `DebugReverseProxyRequest` (send a request to a client by hand, `Debug` role).
 
 ## Key components
 
@@ -48,6 +48,8 @@ sequenceDiagram
 - [`ReverseProxyClient`](ReverseProxyClient.cs) — service on the private machine, polls the server and executes requests
 - [`IReverseProxyServer`](IReverseProxyServer.cs) — the remote API contract between them
 - [`ReverseProxyClientParams`](ReverseProxyClientParams.cs) / [`ReverseProxyServerParams`](ReverseProxyServerParams.cs) — configuration
+- [`ReverseProxyRequest`](ReverseProxyRequest.cs) / [`ReverseProxyResponse`](ReverseProxyResponse.cs) — a forwarded request and its response
+- [`ReverseProxyClientBrief`](ReverseProxyClientBrief.cs) / [`ReverseProxyClientDetail`](ReverseProxyClientDetail.cs) — the rows of the server's client tables
 
 ## Using it
 

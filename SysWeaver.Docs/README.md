@@ -37,6 +37,7 @@ All SysWeaver projects enable XML documentation generation, which is what makes 
 ## Key components
 
 - [`XmlDocExt`](XmlDocExt.cs) — the extension methods and the documentation cache
+- [`IXmlDocInfo`](IXmlDocInfo.cs), [`IXmlDocMethodInfo`](IXmlDocMethodInfo.cs), [`IXmlDocParameterInfo`](IXmlDocParameterInfo.cs) — the returned documentation (summary, remarks; returns and parameters for methods; summary for a parameter)
 
 ## Using it
 

@@ -28,6 +28,18 @@ Access layered Photoshop documents, e.g. to extract layers, text or the composit
 - [`PsdFile`](PsdFile/PsdFile.cs) — the document model (namespace `PhotoshopFile`), load and save
 - [`PsdTextLayer`](PsdTextLayer.cs) — an extracted text layer
 
+## Using it
+
+```csharp
+// The composite image as RGBA
+var image = PsdImage.Load("design.psd");
+
+// The composite image, the visible text layers and the "key=value" layers
+var composite = PsdImage.LoadAndExtractTextLayers(out var textLayers, out var props, "design.psd");
+foreach (var t in textLayers)
+    Console.WriteLine(t);   // WxH @ X, Y "text"
+```
+
 ## Limitations and considerations
 
 - The code in `PsdFile/` (namespaces `PhotoshopFile`, `PhotoshopFile.Compression`) comes from the "Photoshop PSD FileType Plugin for Paint.NET" by Frank Blumenberg and Tao Yue (MIT License, portions BSD 3-clause by Jonas Beckeman); `PsdImage.cs` and `PsdTextLayer.cs` are SysWeaver code

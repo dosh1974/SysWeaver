@@ -1,5 +1,8 @@
 ﻿namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// A request to take a screenshot of a web page, returned as a JPEG image
+    /// </summary>
     public class ScreenshotJpegRequest : ScreenshotRequest
     {
         /// <summary>

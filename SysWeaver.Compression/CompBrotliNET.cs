@@ -11,7 +11,7 @@ namespace SysWeaver.Compression
 {
 
     /// <summary>
-    /// A Brotli ("br") implementation that compresses using the .NET <see cref="BrotliStream"/> (priority -1, not registered by default).
+    /// A Brotli ("br") implementation that compresses using the .NET <see cref="BrotliStream"/> (priority 0, not registered by default).
     /// Decompression is forwarded to <see cref="CompBrotliNETNew"/>, since the stream silently accepts truncated data.
     /// </summary>
     /// <remarks>

@@ -20,7 +20,7 @@ Extract video information (size, fps, duration) and decode frames for thumbnails
 
 ## Key features
 
-- Video information and an icon from a frame at about 3 seconds (or 25% of the duration)
+- Video information and an icon from a frame at 3 seconds, or at 25% of the duration for videos shorter than 12 seconds
 - PNG thumbnails of a frame at a given time (`Ffmpeg.MakeThumbnailPng`)
 - Hardware accelerated decoding with automatic selection of the best available device type (`Ffmpeg.HwEncoders`, `Ffmpeg.SetHwEncoder`)
 

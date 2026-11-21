@@ -10,7 +10,7 @@ namespace SysWeaver.Remote
     public sealed class RemoteSerializerAttribute : Attribute
     {
         /// <summary>
-        /// The serializer to use for encoding and decoding, encoding can be different by using the postSerizlier
+        /// The serializer to use for encoding and decoding, encoding can be different by using the post serializer (<see cref="PostSer"/>)
         /// </summary>
         public readonly String Ser;
 

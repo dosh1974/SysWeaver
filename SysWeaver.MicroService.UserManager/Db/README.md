@@ -18,6 +18,7 @@
 | Item | Description |
 |---|---|
 | [`DbUser.cs`](DbUser.cs) | Table `Users`: id, creation time, user name, domain, language and nick name |
+| [`DbUserAdminRow.cs`](DbUserAdminRow.cs) | A read-only view of table `Users` for the Users page (`UserAdminTable`): the `DbUser` columns plus the row actions (force password reset, undo forced reset, disable, enable) |
 | [`DbAuthMethod.cs`](DbAuthMethod.cs) | Abstract base of sign-in methods: owning user id, creation and last use time |
 | [`DbAuthPassword.cs`](DbAuthPassword.cs) | Table `AuthPasswords`: salted password hash and the "must reset password" flag |
 | [`DbAuthPassKey.cs`](DbAuthPassKey.cs) | Table `AuthPasskeys`: passkey credential id, device, public key, user handle, relying party id, signature counter, transports, backup state and AAGUID |

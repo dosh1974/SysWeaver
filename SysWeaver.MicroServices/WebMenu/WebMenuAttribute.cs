@@ -5,7 +5,7 @@ namespace SysWeaver.MicroService
 {
 
     /// <summary>
-    /// Put this attribute on a method to add to a menu
+    /// Base of the menu attributes: put one on a method or a type to add an item to a menu
     /// </summary>
     [AttributeUsage(AttributeTargets.Method | AttributeTargets.Class, AllowMultiple = true)]
     public class WebMenuAttribute : Attribute

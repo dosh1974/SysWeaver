@@ -2,7 +2,7 @@
 
 [⬆ SysWeaver overview](../README.md)
 
-> A translation back-end that uses a large language model through the OpenAI service.
+> A translation back-end that uses a large language model through a SysWeaver AI service.
 
 | | |
 |---|---|
@@ -15,13 +15,13 @@ Provide context aware translation for the SysWeaver translation pipeline using a
 
 ## How it fits into SysWeaver
 
-It is one of the interchangeable *internal* translators (`IInternalTranslator`, defined in [SysWeaver.Common](../SysWeaver.Common/README.md)); a caching translator such as [SysWeaver.MicroService.TranslationDbCache](../SysWeaver.MicroService.TranslationDbCache/README.md) sits in front of it so each text is translated once. The LLM calls go through an [`OpenAiService`](../SysWeaver.AI.OpenAI/README.md) instance, which can point at OpenAI or any compatible endpoint (e.g. Gemini's OpenAI endpoint or a local server).
+It is one of the interchangeable *internal* translators (`IInternalTranslator`, defined in [SysWeaver.Common](../SysWeaver.Common/README.md)); a caching translator such as [SysWeaver.MicroService.TranslationDbCache](../SysWeaver.MicroService.TranslationDbCache/README.md) sits in front of it so each text is translated once. The LLM calls go through query sessions of a registered `IAiService` ([SysWeaver.AI](../SysWeaver.AI/README.md)): usually [`OpenAiService`](../SysWeaver.AI.OpenAI/README.md), which can point at OpenAI or any compatible endpoint (e.g. Gemini's OpenAI endpoint or a local server), but any provider works ([Anthropic](../SysWeaver.AI.Anthropic/README.md), [Google](../SysWeaver.AI.Google/README.md), [LlamaSharp](../SysWeaver.AI.LlamaSharp/README.md)).
 
 ## Key features
 
-- One model per translation effort (`LowModel`, `MediumModel`, `HighModel`)
+- One model per translation effort (`LowModel`, `MediumModel`, `HighModel`; null uses the default chat model of the AI service); query sessions are reused per effort
 - Content type aware prompts (plain text, Markdown, HTML), optional source language identification (`"*"`), multiple target languages per request
-- Supported languages are queried from the model, cached for 30 days in the shared key/value store, and can be extended (`ForcedLanguages`) or opened up (`AllowAllLanguages`); operators can refresh them through the `UpdateLanguageList` API
+- Supported languages are queried from the model, cached for 30 days in the shared key/value store, and can be extended (`ForcedLanguages`) or opened up (`AllowAllLanguages`); loaded on start-up (`GetLanguagesOnLoad`, `ForceLanguagesOnLoad` to always ask the model); developers, admins and operators can refresh them through the `UpdateLanguageList` API
 - Retries failed requests (`RetryCount`); token usage per effort and performance are available as statistics
 
 ## Key components
@@ -31,7 +31,7 @@ It is one of the interchangeable *internal* translators (`IInternalTranslator`, 
 
 ## Using it
 
-Register after the OpenAI service it uses (and before the translation cache):
+Register after the AI service it uses (and before the translation cache):
 
 ```json
 { "Type": "SysWeaver.AI.OpenAiService, SysWeaver.AI.OpenAI", "Params": { "CredFile": "$(KeyFolder)/OpenAI.txt" } },
@@ -40,7 +40,7 @@ Register after the OpenAI service it uses (and before the translation cache):
 
 ## Limitations and considerations
 
-- Requires the OpenAI provider specifically (`AiInstance` selects the instance); the model names must match its endpoint
+- Requires a registered AI service (`AiInstance` selects the instance, null: any); the model names must match that service (the defaults are OpenAI models)
 - LLM calls cost money and add latency — always combine with a cache
 - The list of supported languages is only as good as the model's answer
 

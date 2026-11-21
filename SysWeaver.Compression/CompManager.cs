@@ -10,7 +10,7 @@ namespace SysWeaver.Compression
     /// The process wide registry of compression implementations, looked up by HTTP content-coding name or file extension.
     /// </summary>
     /// <remarks>
-    /// The built-in .NET implementations are registered automatically: <see cref="CompBrotliNETNew"/> ("br"), <see cref="CompDeflateNET"/> ("deflate") and <see cref="CompGZipNET"/> ("gzip").
+    /// The built-in .NET implementations are registered automatically, all with priority 1: <see cref="CompBrotliNETNew"/> ("br"), <see cref="CompDeflateNETNew"/> ("deflate"), <see cref="CompGZipNETNew"/> ("gzip") and <see cref="CompZStdNETNew"/> ("zstd") (when built for a target before .NET 11: <see cref="CompBrotliNETNew"/>, <see cref="CompDeflateNET"/> and <see cref="CompGZipNET"/>).
     /// Plug-ins (like native Brotli or Zstandard) are added using <see cref="AddType(ICompType)"/>, usually through their static <c>Register</c> method.
     /// Registration is thread safe (serialized by a lock), lookups are lock free.
     /// When multiple implementations share an HTTP code or extension, the one with the highest <see cref="ICompInfo.Prio"/> is used (on a tie, the last one added).

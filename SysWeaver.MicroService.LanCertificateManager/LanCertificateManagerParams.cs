@@ -4,7 +4,9 @@ using SysWeaver.Security;
 namespace SysWeaver.MicroService
 {
     /// <summary>
-    /// Parameters for the <see cref="LanCertificateManagerService"/>
+    /// Parameters for the <see cref="LanCertificateManagerService"/>.
+    /// The inherited values are copied to the <see cref="AcmeCertificateParams"/> of every domain: <see cref="CertificateBaseParams.Email"/> (the ACME account contact) is required,
+    /// and the <see cref="CertificateBaseParams.Filename"/> template can use $(AuthApi), $(Email), $(DomainName) and $(Hash) like <see cref="AcmeCertificateParams"/>.
     /// </summary>
     public sealed class LanCertificateManagerParams : CertificateBaseParams
     {

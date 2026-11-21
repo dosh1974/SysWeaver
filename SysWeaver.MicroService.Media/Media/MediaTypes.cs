@@ -1,5 +1,8 @@
 ﻿namespace SysWeaver.MicroService.Media
 {
+    /// <summary>
+    /// The kinds of media the browser media player shows (the values match the JavaScript MediaTypes, which also has Text = 5)
+    /// </summary>
     public enum MediaTypes
     {
         /// <summary>

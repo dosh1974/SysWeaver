@@ -6,6 +6,10 @@ using System.Threading.Tasks;
 namespace SysWeaver.MicroService
 {
 
+    /// <summary>
+    /// The sign in web api of the <see cref="AuthManagerService"/>: hands out the salt and a one-time pad for a user name, signs in with a
+    /// salted password hash bound to that pad (so it can't be replayed) and reports the password policies. Adds "Sign in" to the user menu.
+    /// </summary>
     [WebApiUrl("auth")]
     [WebMenuEmbedded("User", "User/Login", "Sign in", "auth/Login.html?parent=1&loc=.", "Click to enter credentials", "IconLogin", 1, null, true)]
     [IsMicroService]

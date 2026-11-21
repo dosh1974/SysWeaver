@@ -37,4 +37,4 @@ The Kestrel counterpart of [SysWeaver.MicroService.NetHttpServer](../SysWeaver.M
 
 - **Project:** [`SysWeaver.MicroService.AspHttpServer.csproj`](SysWeaver.MicroService.AspHttpServer.csproj)
 - **Builds on:** [SysWeaver.AspHttpServer](../SysWeaver.AspHttpServer/README.md), [SysWeaver.Auth.Core](../SysWeaver.Auth.Core/README.md), [SysWeaver.HttpServer](../SysWeaver.HttpServer/README.md), [SysWeaver.MicroService.HttpServer](../SysWeaver.MicroService.HttpServer/README.md), [SysWeaver.MicroServices.ServiceManager](../SysWeaver.MicroServices.ServiceManager/README.md)
-- **Used by:** [SwServerManager](https://github.com/dosh1974/SysWeaver.Services/blob/main/SwServerManager/README.md)
+- **Used by:** [ComfyUiService](https://github.com/dosh1974/SysWeaver.Services/blob/main/ComfyUiService/README.md), [SwServerManager](https://github.com/dosh1974/SysWeaver.Services/blob/main/SwServerManager/README.md), [WebServerService](https://github.com/dosh1974/SysWeaver.Services/blob/main/WebServerService/README.md)

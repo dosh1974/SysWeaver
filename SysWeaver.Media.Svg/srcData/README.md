@@ -15,7 +15,9 @@
 
 ## How it is built
 
-The `EmbedLocal` target of [`SysWeaver.Media.Svg.csproj`](../SysWeaver.Media.Svg.csproj) runs `Compress.exe -Methods br .\srcData\*+ .\data` (see [`_tools`](../../_tools/README.md)), which writes Brotli compressed copies to the generated `data/` folder. All `data/**/*.br` and `data/**/*.ttf` files are embedded as resources (`SysWeaver.Media.data.<Name>.ttf[.br]`). `SvgFont` first looks for an uncompressed `.ttf` resource and otherwise decompresses the `.ttf.br` resource.
+The `EmbedLocal` target of [`SysWeaver.Media.Svg.csproj`](../SysWeaver.Media.Svg.csproj) runs `Compress.exe -Methods br .\srcData\*+ .\data` (see [`_tools`](../../_tools/README.md)), which writes Brotli compressed copies to the generated `data/` folder. All `data/**/*.br` and `data/**/*.ttf` files are embedded as resources (`SysWeaver.Media.data.<Name>.ttf[.br]`). `SvgFont` first looks for an uncompressed `.ttf` resource and otherwise decompresses the `.ttf.br` resource. The `data/` folder (including its copy of this README) is generated and not in git.
+
+The project file also embeds the three `.ttf` files of this folder a second time, uncompressed, as `SvgIconExample.Fonts.<file>`; no code in the repositories reads those resources.
 
 ## Contents
 

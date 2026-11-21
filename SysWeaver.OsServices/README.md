@@ -38,7 +38,7 @@ flowchart TB
 ## Key components
 
 - [`ServiceHost`](ServiceHost.cs) — `Run` entry point, console mode, auto-recovery and manifest backup helpers
-- [`ServiceParams`](ServiceParams.cs) — service name, display name, description, start mode, restart policy, logo, auto-recover
+- [`ServiceParams`](ServiceParams.cs) — service name, display name, description, start mode, restart policy, elevation (`NeedToRunElevated`), console ASCII logo, auto-recover
 - [`ServiceResponse`](ServiceResponse.cs) / [`ServiceStatus`](ServiceStatus.cs) — operation results and service states, with exit code mapping (`ServiceResponseHelper`, `ServiceStatusHelper`)
 - [`IServiceHost`](IServiceHost.cs) / [`IServiceHostFactory`](IServiceHostFactory.cs) — the OS specific install / control / run contract, implemented as `SysWeaver.OsServices.ServiceHostFactory[Platform]`
 - [`OsSystem`](OsSystem.cs) — finds the platform factory and exposes the OS wide functionality below (`Services`, `Firewall`, `Storage`, `NetworkConfig`, `Environment`, `Startup`, `Power`, `FilePermissions`, null if not supported; the `Require*` methods throw a descriptive exception instead)
@@ -73,6 +73,8 @@ public static class Program
     });
 }
 ```
+The services are created from the manifest `MyService.Services.json`, or `MyService.Services.Windows.json` / `MyService.Services.Linux.json` when that file exists (see [SysWeaver.MicroServices.ServiceManager](../SysWeaver.MicroServices.ServiceManager/README.md)).
+
 ```text
 MyService debug        # develop
 MyService install      # deploy
@@ -89,7 +91,7 @@ MyService start
 | `execute` | Run in the console with normal verbosity |
 | `daemon` | The entry point used by the OS service manager |
 | `hash [user] [password]` | Utility to compute a simple password hash for configuration |
-| `help` (or none, in a console) | Usage; with no arguments and no console, `start` is used |
+| `help` (also `-h`, `/h`, `-help`, `/help`, `-?`, `/?`, `?`; or none, in a console) | Usage; with no arguments and no console, `start` is used |
 
 Verbs are matched case insensitively. Before starting, console mode waits up to 15 seconds for another console mode instance of the *same application* (same executable / entry assembly path, tracked with a global named mutex) to exit, ex: the old process during a restart.
 

@@ -36,6 +36,7 @@ flowchart LR
 
 - [`NetHttpServer`](NetHttpServer.cs) — the `HttpServerBase` implementation on `HttpListener`
 - [`NetHttpServerParams`](NetHttpServerParams.cs) — listen prefixes and server options
+- [`NetHttpServerRequest`](NetHttpServerRequest.cs) — the `HttpServerRequest` wrapper around an `HttpListenerContext`
 
 ## Using it
 

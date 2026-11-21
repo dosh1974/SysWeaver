@@ -8,7 +8,7 @@
  * links / actions are defined by the server: name -> serviceInfo.html?p=<name>, "Remove" -> RemoveService).
  *
  * Globals defined: `servicesMain`.
- * Library globals used: `Sw.Table` (explore/table.js, through SmShared.FillTable), `Edit`, `EditOptions` (edit/Edit.js, the object editor
+ * Library globals used: `Sw.Table` (explore/table.js, through SmShared.FillTable), `Sw.Edit`, `Sw.Edit.Options` (edit/Edit.js, the object editor
  * used for the new service dialog).
  */
 

@@ -32,7 +32,7 @@ flowchart TB
 - `IsoLanguage`: ISO 639-1/639-2 codes and names. Lookup by code (`TryGet`, also accepts regional codes like `en-GB`), by name (`TryGetName`), normalization (`Validate`), countries using a language (`GetCountries`) and `Common` (languages used in countries with 10M+ people in total, kept identical to the set computed before the 2026-10-07 population refresh: `sr` kept, `he`, `ho` and `tg` excluded; used as the default target languages).
 - `PhonePrefix`: international calling codes (with region prefixes, dialing prefixes and valid local digit counts). `Identify` finds the code(s) of a partial number; `GetValidatedPhoneNumber` validates a full number and splits it into prefix and local number (throwing with a human readable message when invalid).
 - `AmountExt`: `Amount.CurrencyInfo()` and `Amount.ToAmountString()` for displaying money correctly per currency.
-- Data classes are annotated with table-data attributes so they render nicely (flags, links) in debug tables.
+- Data classes are annotated with table-data attributes so they render nicely (flags, links) in debug tables; `IsoCountry` and `IsoCurrency` name card templates (`[TableDataCard]`, `iso_data/cards/iso.html` in SysWeaver.HttpServer.IsoDataModule) for the card layout of the tables.
 
 ## Key components
 

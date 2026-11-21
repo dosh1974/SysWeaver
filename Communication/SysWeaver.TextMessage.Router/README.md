@@ -34,6 +34,7 @@ Routes to any text message provider registered in the same service manager, ex: 
 - Remembers numbers that failed with `NotOnChannel` per route (`NotOnChannelHours`) and skips that route for them.
 - Merges incoming messages and status updates of all providers: in-process providers using `ITextMessageEvents`, others (remote instances) by long polling `GetIncoming` / `GetStatusUpdates`. A provider used by several routes is received from once (using its first route). Providers can be added / removed at runtime.
 - Replies: incoming messages get a response token prefixed with the route name, so `Reply` (or `Send` with the `ResponseToken`) uses the provider (and number) that received the message.
+- A route can be send only or receive only (`Send`, `Receive`, both default true).
 - `GetRoutes` shows each route, if the provider was found and how it's received from.
 
 ## Key components

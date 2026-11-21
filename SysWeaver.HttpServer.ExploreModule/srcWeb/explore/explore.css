@@ -250,7 +250,12 @@ td.ExploreCompPreference .ExplorePill {
 /* Narrow screens and touch screens up to 1000 px (phones in portrait and landscape, where the grid needed sideways scrolling; the same
    rule as the data table cards): no sideways scrolling. The column titles are replaced by the card tool bar and every item is a card:
    type icon and name on the first line, then one "label  value" line per column (labels = the td data-label set by explore.js) */
-@media (max-width: 600px), (pointer: coarse) and (max-width: 1000px) {
+@media (max-width: 599px), (pointer: coarse) and (max-width: 1000px) {
+    /* The card (no width limit: Sw.Bleed, ui/page.js, widens it over the page padding to the window edges on phones) */
+    .ExploreWrap {
+        max-width: none;
+    }
+
     .Explore {
         display: block;
         width: 100%;
@@ -381,7 +386,7 @@ td.ExploreCompPreference .ExplorePill {
 }
 
 /* Touch screens wider than a phone in portrait (phones in landscape): the cards side by side */
-@media (pointer: coarse) and (min-width: 601px) and (max-width: 1000px) {
+@media (pointer: coarse) and (min-width: 600px) and (max-width: 1000px) {
     .Explore tbody {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
@@ -390,5 +395,28 @@ td.ExploreCompPreference .ExplorePill {
 
     .Explore tbody tr[hidden] {
         display: none;
+    }
+}
+
+/* Phones: 44 px touch targets (UX guide 15 Phones and touch; --sw-control-h is 44 px in the touch density): the item name and type icon
+   links of the cards and the path bar links */
+@media (max-width: 599px), (pointer: coarse) and (max-width: 1000px) {
+    .Explore td.ExploreName a, .Explore td.ExploreIcon a {
+        display: inline-flex;
+        align-items: center;
+        min-height: var(--sw-control-h);
+    }
+
+    a.sw-link.Path {
+        min-height: var(--sw-control-h);
+    }
+
+    /* The listing at a window edge (Sw.Bleed): the row content starts on the page padding line (row 8 + cell 8 = 16 px) */
+    .ExploreWrap.sw-edge-l .Explore tbody tr {
+        padding-left: 8px;
+    }
+
+    .ExploreWrap.sw-edge-r .Explore tbody tr {
+        padding-right: 8px;
     }
 }

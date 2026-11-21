@@ -10,7 +10,8 @@
  *    Two Design v2 layouts (Design v2, ui/README.md Page anatomy / PORTING.md B10): sign in style pages (Login, Logout, SignUp, passkey sign in ...) keep the
  *    centered 28rem card with the page icon; account and tool pages (opts.Account inside the app shell, or page.SetHeader) become a
  *    form page: a left aligned page header (Sw.PageHeader: title = the menu name or the document title, one line description,
- *    actions) above a start aligned card (class auth-tool, Auth.css).
+ *    actions) above a start aligned card (class auth-tool, Auth.css). A sign in style page that is not shown as a dialog shows its
+ *    title as a visible h1 under the page icon (.auth-page-title), unless it has a heading of its own.
  *  - Field / PhoneField: labelled inputs (Sw.TextBox) with autocomplete, inputmode, show / hide password, copy and
  *    "generate a password" buttons, invalid state; Enter moves to the next empty field or submits.
  *  - Status (a live status line with kinds ok / error / warning / info, temporary texts, leak check), Text, Heading,
@@ -359,6 +360,11 @@
         finally {
             if (o.Dialog !== false)
                 page.AsDialog();
+            //  A sign in style page (the card with the page icon: no page header, no dialog title bar, not the sign in page with its
+            //  banner) shows its title under the icon, unless it has a heading of its own (ex: "Welcome ...", an error state)
+            if (!page.Dialog && !page.Header && !document.querySelector(".auth-login") && document.title
+                && !page.Box.querySelector("h1, [role=heading]"))
+                page.IconWrap.after(el("h1.auth-heading.auth-page-title", { text: document.title }));
             page.Loaded();
         }
         return page;
@@ -754,7 +760,7 @@
         }
 
         /**
-         * Show the password leak check result: "Checking password ..", then "Password is safe (not leaked)!", "This password is part
+         * Show the password leak check result: "Checking password ..", then "Not found in known data leaks", "This password is part
          * of N data leaks" or "Password leak check failed!" (the old CheckPassword). The request (Sw.Auth.CheckLeak) starts at once
          * (no delay), and only the newest check is shown. As the old CheckPassword memo (el.LastCheck): the same password as the
          * running or shown check makes no new request; any other text in the line (Set) forgets it.
@@ -1722,6 +1728,8 @@
         });
         //  What a user id can be here: the user name, and e-mail / phone only when the server can reach them (Sw.Auth.UserIdHint)
         A.UserIdHint().then(h => user.Input.title = h, () => { });
+        //  The label says what to type (ex: "Email or user name"), so no instruction in the box
+        A.UserIdLabel().then(l => { user.Box.SetLabel(l); user.Input.placeholder = ""; }, () => { });
         const policyBtn = InfoButton(A.PolicyText(null));
         const pwd = new Field(page, {
             Label: _TF("Password", "Label for an input box where a user should enter their password"),

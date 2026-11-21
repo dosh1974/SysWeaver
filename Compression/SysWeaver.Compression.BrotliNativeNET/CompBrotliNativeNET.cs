@@ -16,7 +16,7 @@ namespace SysWeaver.Compression
 
     /// <summary>
     /// A Brotli ("br") plug-in that calls the native brotli library shipped with the Brotli.NET package directly, through <see cref="CompStreamCodec{TEncoder, TDecoder}"/>.
-    /// Registered with priority 1, so it's preferred over the built-in <see cref="CompBrotliNETNew"/> (priority 0) once <see cref="Register"/> is called.
+    /// Registered with priority 1, the same as the built-in <see cref="CompBrotliNETNew"/>: since it is registered after the built-in codecs, it is preferred once <see cref="Register"/> is called (on a tie the last registered wins).
     /// </summary>
     /// <remarks>
     /// Uses brotli quality 1 / 4 / 11 for <see cref="CompEncoderLevels.Fast"/> / <see cref="CompEncoderLevels.Balanced"/> / <see cref="CompEncoderLevels.Best"/> with a 2^22 byte window.

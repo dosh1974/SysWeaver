@@ -17,7 +17,7 @@ The build step `Compress.exe -Methods br .\srcWeb\*+ .\web` compresses everythin
 
 | Item | Description |
 |---|---|
-| [`explore/`](explore/README.md) | The explorer pages: end point list scripts, API page, table viewer, icon gallery and logo designer |
+| [`explore/`](explore/README.md) | The explorer pages: end point list scripts, API inspector and "How to call APIs" help, table viewer (`Sw.Table`), csv viewer, icon gallery, logo designer and theme preview |
 
 ## Relationships
 

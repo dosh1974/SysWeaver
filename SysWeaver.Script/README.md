@@ -15,7 +15,7 @@ Enables configurable behaviour written in real C# (rules, transformations, custo
 
 ## How it fits into SysWeaver
 
-A stand-alone library (no SysWeaver dependencies, no SysWeaver project currently references it); applications reference it directly.
+A stand-alone library (no SysWeaver dependencies, no SysWeaver project currently references it); applications reference it directly. In SysWeaver.Tools the RunComfyUi tool references it, but no code there uses it yet.
 
 ```mermaid
 sequenceDiagram
@@ -43,7 +43,8 @@ sequenceDiagram
 ## Key components
 
 - [`CsScript`](CsScript.cs) — `Create` / `CreateAsync` factories (compilation)
-- [`CsScript<T, R>`](CsScript_T.cs) / [`CsAsyncScript<T, R>`](CsAsyncScript.cs) — the compiled, disposable scripts
+- [`CsScript<T, R>`](CsScript_T.cs) / [`CsAsyncScript<T, R>`](CsAsyncScript.cs) — the compiled, disposable scripts, both derived from [`CsScriptBase`](CsScriptBase.cs) (`Dispose`, the load context and the `Main` method)
+- [`SimpleUnloadableAssemblyLoadContext`](SimpleUnloadableAssemblyLoadContext.cs) — the collectible load context of one script
 
 ## Using it
 
@@ -66,4 +67,5 @@ int r = s.Run(12);
 
 - **Project:** [`SysWeaver.Script.csproj`](SysWeaver.Script.csproj)
 - **Builds on:** —
+- **Used by:** the [RunComfyUi](https://github.com/dosh1974/SysWeaver.Tools/blob/main/RunComfyUi/README.md) tool (project reference only)
 - **Third-party:** `Microsoft.CodeAnalysis.CSharp` (Roslyn)

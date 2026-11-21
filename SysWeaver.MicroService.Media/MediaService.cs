@@ -13,8 +13,12 @@ using SysWeaver.Net;
 
 namespace SysWeaver.MicroService
 {
-   
 
+    /// <summary>
+    /// Serves the browser media player and viewer (mediaView/, mediaPlayer/): lists the GLSL effect libraries, builds Effect Weaver effects
+    /// for the player, resolves the media of effects, registers the media viewer for image, video, audio and .glsl files and adds debug
+    /// menu entries for the effect libraries and demos.
+    /// </summary>
     [WebApiUrl("../mediaView/Api/")]
     [WebMenuPath(null, "Debug/Media", "Media demos", "Media effect libraries and demos", "../icons/display.svg", 30)]
     [WebMenuEmbedded(null, "Debug/Media/BackgroundEffects", "Background effects", "mediaView/BackgroundEffectsLib.html", "Show all background effects available", "../icons/computer.svg", 1, Roles.Dev)]
@@ -25,6 +29,11 @@ namespace SysWeaver.MicroService
     [WebMenuEmbedded(null, "Debug/Media/GoogleMapDemo", "Google map demo", "mediaView/MapDemo.html", "A demo showcase of the Google map support", "../icons/table_country.svg", 8, Roles.Dev)]
     public sealed class MediaService : IDisposable
     {
+        /// <summary>
+        /// Create the service and register the media viewer for the media file extensions
+        /// </summary>
+        /// <param name="manager">The service manager (extension viewers, messages and the effect media resolvers)</param>
+        /// <param name="p">The parameters, null = defaults</param>
         public MediaService(ServiceManager manager, MediaParams p = null)
         {
             p = p ?? new MediaParams();
@@ -44,7 +53,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Get a google map key (if it's configured and exists)
         /// </summary>
-        /// <returns></returns>
+        /// <returns>The Google Maps key, null if none is configured</returns>
         [WebApi]
         [WebApiClientCacheStatic]
         [WebApiRequestCacheStatic]
@@ -265,6 +274,9 @@ namespace SysWeaver.MicroService
         }
 
 
+        /// <summary>
+        /// Remove the media viewer registrations
+        /// </summary>
         public void Dispose()
         {
             var manager = Manager;

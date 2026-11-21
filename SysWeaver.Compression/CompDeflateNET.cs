@@ -11,9 +11,10 @@ namespace SysWeaver.Compression
 {
 
     /// <summary>
-    /// The default raw Deflate ("deflate") implementation (priority 0, registered by default), using the .NET <see cref="DeflateStream"/>.
+    /// A raw Deflate ("deflate") implementation (priority 0) using the .NET <see cref="DeflateStream"/>.
     /// </summary>
     /// <remarks>
+    /// Registered by default only when built for a target before .NET 11, <see cref="CompDeflateNETNew"/> is registered instead on .NET 11 or later.
     /// Uses <see cref="CompHelpers.GetStreamLevel(CompEncoderLevels)"/> to map the level.
     /// Truncated data is detected using <see cref="CompInflaterState"/> (reflection on the .NET internals), so it throws an <see cref="InvalidDataException"/> instead of returning partial data.
     /// </remarks>

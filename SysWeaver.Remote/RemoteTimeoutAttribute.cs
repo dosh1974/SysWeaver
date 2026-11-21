@@ -10,14 +10,14 @@ namespace SysWeaver.Remote
     public sealed class RemoteTimeoutAttribute : Attribute
     {
         /// <summary>
-        /// The time-out to use in millie seconds, if less or equal than zero, the time-out in the RemoteConnection settings is used
+        /// The time-out to use in milliseconds, if less or equal than zero, the time-out in the RemoteConnection settings is used
         /// </summary>
         public readonly int TimeOutInMilliSeconds;
 
         /// <summary>
         /// Override the time-out for this API call (or calls if placed on an interface)
         /// </summary>
-        /// <param name="timeOutInMilliSeconds">The time-out to use in millie seconds, if less or equal than zero, the time-out in the RemoteConnection is used</param>
+        /// <param name="timeOutInMilliSeconds">The time-out to use in milliseconds, if less or equal than zero, the time-out in the RemoteConnection is used</param>
         public RemoteTimeoutAttribute(int timeOutInMilliSeconds)
         {
             TimeOutInMilliSeconds = timeOutInMilliSeconds;
@@ -50,7 +50,7 @@ namespace SysWeaver.Remote
 
 
         /// <summary>
-        /// Number of seconds that the response can be resued, if 0 no time based caching is performed, <see cref="UseConnection"/> to use the connection value
+        /// Number of seconds that the response can be reused, if 0 no time based caching is performed, <see cref="UseConnection"/> to use the connection value
         /// </summary>
         public readonly int Duration;
 
@@ -63,7 +63,7 @@ namespace SysWeaver.Remote
         /// <summary>
         /// Override the cache behaviour for this specific API call (or calls if placed on an interface)
         /// </summary>
-        /// <param name="duration">Number of seconds that the response can be resued, if 0 no time based caching is performed, -1 (or less) = <see cref="UseConnection"/></param>
+        /// <param name="duration">Number of seconds that the response can be reused, if 0 no time based caching is performed, -1 (or less) = <see cref="UseConnection"/></param>
         /// <param name="maxItems">Maximum number of cached responses, 0 for the default LRU capacity, -1 (or less) = <see cref="UseConnection"/></param>
         public RemoteCacheAttribute(int duration = 0, int maxItems = 0)
         {

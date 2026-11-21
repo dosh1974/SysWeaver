@@ -21,6 +21,7 @@ At build time the files are Brotli-compressed into `web/fakeEmail/` and embedded
 |---|---|
 | [`index.html`](index.html) | Layout: header (brand, system sender address, search, connection dot, theme button), folder side bar, email list, reader, and the composer form (hidden; shown in a `Sw.Dialog`). Inline svg icons. |
 | [`email.js`](email.js) | All behavior; one global `fakeEmailMain` (body onload), everything else private in an IIFE. |
+| [`cards.html`](cards.html) | Not a page: the card template of the `MessageTable` table (`Sw.Table` card view, marked `SwWeb:no-framework`). |
 | [`email.css`](email.css) | Styles; the page palette is mapped onto the Sw tokens (`--sw-*`); responsive at 1100 px (icon rail) and 720 px (single column). |
 
 ## Relationships
@@ -56,7 +57,7 @@ The theme button opens a `Sw.Menu` with the shared theme list, the same as the T
 
 ## Server interaction
 
-All calls are `Sw.Net.Send(<api> + method, data, {Post: true, Reload: true})` (POST json, never cached); errors show the server's text (`Sw.Net.Error.Text`). Methods: `GetEmails`, `GetEmail`, `DeleteEmail`, `Clear`, `SendEmail`, `FakeIncoming`. An unauthenticated call is redirected to the sign in page by `Sw.Net`. The api and the menu item require the role of `FakeEmailParams.Auth` (default Ops, Debug or Dev; null = anyone, for an isolated test machine): a signed in user without it gets the shared "not allowed" state (`showDenied`, `Sw.Access.NotAllowed`, `.denied-page`) instead of the inbox, and the long poll stops.
+All calls are `Sw.Net.Send(<api> + method, data, {Post: true, Reload: true})` (POST json, never cached); errors show the server's text (`Sw.Net.Error.Text`). Methods: `GetEmails`, `GetEmail`, `DeleteEmail`, `Clear`, `SendEmail`, `FakeIncoming`. An unauthenticated call is redirected to the sign in page by `Sw.Net`. The api and the menu item require the auth of `FakeEmailParams.Auth` (default null = anyone, as the services that send through it and the testers call it without signing in; "" = any signed in user; else a comma separated list of roles, ex: Ops, Dev, Debug): a signed in user without it gets the shared "not allowed" state (`showDenied`, `Sw.Access.NotAllowed`, `.denied-page`) instead of the inbox, and the long poll stops.
 
 ## State and persistence
 

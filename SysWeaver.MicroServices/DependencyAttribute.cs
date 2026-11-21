@@ -45,6 +45,9 @@ namespace SysWeaver.MicroService
     [AttributeUsage(AttributeTargets.Interface | AttributeTargets.Class, AllowMultiple = true)]
     public class OptionalDepAttribute<T>: OptionalDepAttribute where T : class
     {
+        /// <summary>
+        /// Declare a dependency on <typeparamref name="T"/>
+        /// </summary>
         public OptionalDepAttribute() : base(typeof(T))
         {
         }
@@ -58,6 +61,9 @@ namespace SysWeaver.MicroService
     [AttributeUsage(AttributeTargets.Interface | AttributeTargets.Class, AllowMultiple = true)]
     public class OptionalDepAttribute<T0, T1>: OptionalDepAttribute where T0 : class where T1 : class
     {
+        /// <summary>
+        /// Declare dependencies on <typeparamref name="T0"/> and <typeparamref name="T1"/>
+        /// </summary>
         public OptionalDepAttribute() : base(typeof(T0), typeof(T1))
         {
         }
@@ -94,6 +100,9 @@ namespace SysWeaver.MicroService
     [AttributeUsage(AttributeTargets.Interface | AttributeTargets.Class, AllowMultiple = true)]
     public class RequiredDepAttribute<T>: RequiredDepAttribute where T : class
     {
+        /// <summary>
+        /// Declare a dependency on <typeparamref name="T"/>
+        /// </summary>
         public RequiredDepAttribute() : base(typeof(T))
         {
         }
@@ -107,6 +116,9 @@ namespace SysWeaver.MicroService
     [AttributeUsage(AttributeTargets.Interface | AttributeTargets.Class, AllowMultiple = true)]
     public class RequiredDepAttribute<T0, T1>: RequiredDepAttribute where T0 : class where T1 : class
     {
+        /// <summary>
+        /// Declare dependencies on <typeparamref name="T0"/> and <typeparamref name="T1"/>
+        /// </summary>
         public RequiredDepAttribute() : base(typeof(T0), typeof(T1))
         {
         }

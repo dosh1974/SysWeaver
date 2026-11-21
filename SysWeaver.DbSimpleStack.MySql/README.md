@@ -36,6 +36,7 @@ flowchart LR
 
 - [`MySqlDbSimpleStack`](MySqlDbSimpleStack.cs) — the MySQL dialect: schema/table creation and synchronisation, partitioning, upserts, maintenance
 - [`MySqlDbParams`](MySqlDbParams.cs) — connection, character set / collation and partition parameters; base class for service parameters
+- [`MySqlOrmConnectionExt`](MySqlOrmConnectionExt.cs) — upsert and bulk upsert extension methods on an `OrmConnection`
 
 ## Using it
 

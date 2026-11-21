@@ -13,7 +13,9 @@ namespace SysWeaver.MicroService
             public void Dispose()
             {
                 var p = Provider;
-                Provider.OnChanged -= OnChanged;
+                p.OnChanged -= OnChanged;
+                //  (cancels its scheduled renewal: it would outlive the service)
+                p.Dispose();
             }
 
             readonly LanCertificateManagerService S;
@@ -40,13 +42,22 @@ namespace SysWeaver.MicroService
                 if (c != null)
                 {
                     Interlocked.Exchange(ref Data, new CertData(c));
+                    RenewalDue = false;
                     S.OnChange(this);
                 }else
                 {
-                    CertErrors.OnException(new Exception("Failed to get certificate"));
+                    //  The provider dropped its certificate because it expires soon (not an error): the retry task orders the new one,
+                    //  the current one (an own copy, see CertData) is served until then
+                    RenewalDue = true;
+                    S.OnRenewalDue(this);
                 }
                 Interlocked.Exchange(ref LastChecked, DateTime.UtcNow.Ticks);
             }
+
+            /// <summary>
+            /// True when the provider dropped its certificate because it expires soon: the retry task orders a new one (<see cref="UpdateCert"/>).
+            /// </summary>
+            public volatile bool RenewalDue;
 
 
             static readonly AsyncLock Lock = new AsyncLock();
@@ -60,6 +71,7 @@ namespace SysWeaver.MicroService
                     if (c != null)
                     {
                         Interlocked.Exchange(ref Data, new CertData(c));
+                        RenewalDue = false;
                         S.OnChange(this);
                     }else
                     {

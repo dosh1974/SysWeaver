@@ -5,7 +5,9 @@
  *  - .sm-upload (upload button made an upload target by SmShared.UploadTarget; the classes Dragging, Selecting and
  *    Uploading are toggled by common/fileUploader.js), .sm-upload-icon, .sm-upload-row (centering row), .sm-upload-labeled
  *    (variant with a visible word, .sm-upload-text),
- *  - .sm-copyable cells use the Sw .sw-copyable style.
+ *  - .sm-dropbtn (the upload Sw.Button of SmShared.UploadButton: drop target styles) and .sm-fill (the live table of a fill page,
+ *    SmShared.FillTable; also the window height of html / body of a .sw-page-fill page and the table refresh line .sw-table-ph-desc
+ *    under the page description).
  * Loaded after ../common/theme.css and ../sw/ui.css. Plain static css, Sw tokens only.
  */
 

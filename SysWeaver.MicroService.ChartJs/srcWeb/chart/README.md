@@ -2,7 +2,7 @@
 
 [⬆ srcWeb](../README.md)
 
-> The chart viewer page: loads a chart configuration from a URL, renders it with Chart.js, keeps it live (polling with animated merging) and offers a menu (type, order, colors, export), keyboard shortcuts and touch long press.
+> The chart viewer page: loads a chart configuration from a URL, renders it with Chart.js, keeps it live (polling with animated merging) and offers a menu (type, order, log scale, table view, colors, export), keyboard shortcuts and touch long press.
 
 | | |
 |---|---|
@@ -56,6 +56,8 @@ Processing (SVG optimisation, Brotli compression, embedding) is described in [`s
 | `axistitles=false` | No automatic axis titles. By default (when the menu is on) axis charts without server axis titles get them (`applyAxisTitles`): the value axis the series names and unit ("Cpu use (%)"), the category axis "Time" (time labels) or "Name" (code names); the method graph (`Api/PerformanceChart`) "Monitored function" / "Number of calls at the same time" (below 500 px height the vertical axis gets the short "Calls at once" / "Monitored function", the long title was cut) |
 | `vhist=<url>`, `vhistn=<n>` | Value history (same site url of a history chart): a two value gauge (pie / doughnut, ex: cpu "Use" / "Idle") shows the mean of the last n (default 3) values of the history chart instead of its single sample, also in its title line (`ApplyValueHistory`). ServerManager uses it for the cpu gauges |
 | `log=true` | Logarithmic value axis on axis charts (the menu toggle "Log scale"; the value axis title gets "(log scale)", or the title "Log scale"; starts at the power of ten at or below the smallest value (1 for counts), bars are at least 4 px long so values at the start keep a bar; only 1, 2, 5 x 10^n ticks get a text). |
+| `shadow=true` | Keep the server's drop shadow (`options.plugins.shadow`); by default `applyDesign` drops it and draws the chart flat |
+| `table=true` | Start with the table view (the data as an html table over the chart, see the menu) |
 | `bordersize`, `bordercol` | Dataset 0 border width / color (`bordercol` also the default border colors) |
 | `textcol`, `backgroundcol` | Default text / background colors (also the data labels); hex without `#` accepted |
 | `font`, `font-size`, `font-style`, `font-weight`, `line-height` | Default fonts (data label radius / padding scale with the size) |
@@ -102,16 +104,16 @@ Processing (SVG optimisation, Brotli compression, embedding) is described in [`s
 Every `RefreshRate` ms (also while the page is hidden, like the original chart) the config is fetched again, the view state is applied and the new data is merged into the live chart: datasets matched by label, x positions by label text (labels, data and same length color arrays spliced), values copied, `update()` animates. Type / color changes rebuild from the last server config without animation, order changes animate. Fetch errors show a toast, wait 3 s and keep polling.
 
 ### Menu, keyboard, touch
-- Menu button top right (10% opacity until hovered / focused; 44 px on touch screens), right click or long press anywhere on the chart, or the context menu key / Shift+F10: a `Sw.Menu` (cascading on desktop, drill down on touch / narrow screens, fully keyboard operable).
-- Type (bar / line vertical and horizontal, pie, doughnut, polar area), Order (original, labels, each dataset; picking the selected one flips ascending / descending; colors follow their values), Color (colored labels / values toggles; theme colors (default), original (the server colors), label hash, random value / series / magnitude gradients, 3 x 12 fixed gradients), Export (server exporters, export font size 100-250% for png, svg 16:9 / A4, png HD / 1440p / 4K / A4 150 dpi / A4 300 dpi; every format has a one line description under its name, ex: "Sharp at any size, for documents and slides").
-- Keys (not in inputs, not while a menu is open, no modifiers): `c` (theme colors) `o` (original) `l` `g` `s` `m` color modes, `t` / `v` colored labels / values, Space cycles the order (0, 1, -1, 2, -2, ...) with an info toast. Tab reaches the menu button (Enter / Space open the menu).
+- Menu button top right (85% opacity until hovered / focused; 44 px on touch screens), right click or long press anywhere on the chart, or the context menu key / Shift+F10: a `Sw.Menu` (cascading on desktop, drill down on touch / narrow screens, fully keyboard operable).
+- Type (bar / line vertical and horizontal, pie, doughnut, polar area), Order (original, labels, each dataset; picking the selected one flips ascending / descending; colors follow their values), Log scale (axis charts only, `ToggleLogScale`), Show as table (`ToggleTable`: the data as an html table, `div.ChartTable`, over the chart; Escape in the table closes it), Color (colored labels / values toggles; theme colors (default), original (the server colors), label hash, random value / series / magnitude gradients, 3 x 12 fixed gradients), Export (server exporters, export font size 100-250% for png, svg 16:9 / A4, png HD / 1440p / 4K / A4 150 dpi / A4 300 dpi; every format has a one line description under its name, ex: "Sharp at any size, for documents and slides").
+- Keys (not in inputs, not while a menu is open, no modifiers): `c` (theme colors) `o` (original) `l` `g` `s` `m` color modes, `t` / `v` colored labels / values, `d` table view, Space cycles the order (0, 1, -1, 2, -2, ...) with an info toast. Tab reaches the menu button (Enter / Space open the menu).
 - A click on a data point posts `{Type: "ChartClick", Label, Value, DatasetIndex, DataIndex}` to `window.parent` (same origin).
 
 ### Exports
 Client side: off-screen render (device pixel ratio 1, exact size) to png (`toBase64Image`) or svg (canvas2svg, viewBox rewritten), downloaded as `<title>.png` / `<title>.svg`. Server side: `POST Api/ExportChart {Data, DataStr, ExportAs, Options: {Filename}}` (input types 1 / 2 send an A4 300 dpi png / svg as `DataStr`); a file reply (`Mime` + `Data`) is downloaded, a reply with only `Name` is a link (copied to the clipboard and opened in a new tab). A working dialog is shown meanwhile.
 
 ### State
-View state lives in memory only (no storage keys).
+View state lives in memory only. The one storage key is the method graph's "Log scale" choice (localStorage `SysWeaver.Chart.MethodLog`).
 
 ## JavaScript reference (`chart.js`)
 
@@ -120,8 +122,8 @@ One IIFE; globals: `Sw.Chart`, `CanvasChart`, `CanvasChartOptions`, `chartMain`.
 | Member | Description |
 |---|---|
 | `Sw.Chart.Add(url, parent, params, onFirstLoad, options)` | Add a live chart; resolves to the `SysWeaver-Chart` element (`.SwChart` = the `ChartView`), after the first fetch when `options.WaitFirst` |
-| `Sw.Chart.Options` | Options class: `DisableMenu`, `DisableOrderMenu`, `DisableColorMenu`, `Transparent`, `WaitFirst` (true), `ValueLabel`, `MinValue`, `MaxValue`, `MaxCount`, `LabelAll` (name every bar of a horizontal chart with at most 30 bars), `Order` (initial order), `IndexAxis` (initial "y" = horizontal), `LogScale` (url log), `Solid` (solid theme colors), `TimeOffset` (url timeoffset: minutes or "local"), `AxisTitles` (automatic axis titles), `ValueHistory` / `ValueHistoryCount` (url vhist / vhistn), callbacks `OnServerData(config)`, `OnFixedData(config)`, `OnDefaults(Chart.defaults)`, `OnClick(label, value, datasetIndex, dataIndex)` |
-| `Sw.Chart.View` | `ChartView` class: state (`Type`, `IndexAxis`, `Color`, `ColorSeed`, `ColorLabels`, `ColorValues`, `Order`, `Scale`, `OrgStr`, `Main`, `RefreshRate`, `Fmt`), `Apply(data)`, `Fresh()`, `Rebuild(animate)`, `Describe()` (canvas text alternative: the title, plus label / value of each part for pie / doughnut / polar charts, "Cpu use: Use 7.99 %, Idle 92.01 %"), `Theme()`, `Poll()`, `OnData(data)`, `SetType`, `SetColor`, `ToggleColorLabels`, `ToggleColorValues`, `SetOrder`, `CycleOrder`, `ShowMenu(anchor)`, `MenuItems` / `TypeItems` / `OrderItems` / `ColorItems` / `ExportItems`, `OnKey(ev)`, `SaveImage(w, h, format)`, `Export(exporter)` |
+| `Sw.Chart.Options` | Options class: `DisableMenu`, `DisableOrderMenu`, `DisableColorMenu`, `Transparent`, `WaitFirst` (true), `ValueLabel`, `MinValue`, `MaxValue`, `MaxCount`, `LabelAll` (name every bar of a horizontal chart with at most 30 bars), `Order` (initial order), `IndexAxis` (initial "y" = horizontal), `LogScale` (url log), `Solid` (solid theme colors), `TimeOffset` (url timeoffset: minutes or "local"), `AxisTitles` (automatic axis titles), `ValueHistory` / `ValueHistoryCount` (url vhist / vhistn), `Shadow` (url shadow), `TableView` (url table), callbacks `OnServerData(config)`, `OnFixedData(config)`, `OnDefaults(Chart.defaults)`, `OnClick(label, value, datasetIndex, dataIndex)` |
+| `Sw.Chart.View` | `ChartView` class: state (`Type`, `IndexAxis`, `Color`, `ColorSeed`, `ColorLabels`, `ColorValues`, `Order`, `Scale`, `OrgStr`, `Main`, `RefreshRate`, `Fmt`), `Apply(data)`, `Fresh()`, `Rebuild(animate)`, `Describe()` (canvas text alternative: the title, plus label / value of each part for pie / doughnut / polar charts, "Cpu use: Use 7.99 %, Idle 92.01 %"), `Theme()`, `Poll()`, `OnData(data)`, `SetType`, `SetColor`, `ToggleColorLabels`, `ToggleColorValues`, `SetOrder`, `CycleOrder`, `ToggleLogScale()`, `ToggleTable(on)` / `RenderTable()` (table view), `ShowDenied(e)`, `ShowMenu(anchor)`, `MenuItems` / `TypeItems` / `OrderItems` / `ColorItems` / `ExportItems`, `OnKey(ev)`, `SaveImage(w, h, format)`, `Export(exporter)` |
 | `Sw.Chart.GetExporters()` | Cached `Api/GetChartExporters` list |
 | `Sw.Chart.RenderImage(data, w, h, transparent, format, scale, fmt)` | Off-screen render ("Png" / "Svg") to a data uri |
 | `Sw.Chart.ApplyLabelMode(config, mode)` | Apply a data label mode 0-6 |
@@ -137,7 +139,10 @@ Internal helpers: `Rng` (seeded sfc32), `rgbToHsl`, `hslToRgb`, `cssToRgba`, `ge
 | Selector | Purpose |
 |---|---|
 | `html`, `body`, `body.FillScreen`, `html.Embedded body` | Full size page, no margin; 16 px top padding inside the shell (`--Margin: 0px` needs the unit: theme.css computes `calc(100% - var(--Margin))` for `html.Embedded`, a unitless 0 made the page taller than the shell frame and cut off the bottom axis labels) |
-| `.ChartMissing`, `.ChartMissingIcon`, `.ChartMissingTitle`, `.ChartMissingText` | The "No chart selected" explanation (chart.html without `q`) |
+| `.ChartMissing`, `.ChartMissingIcon`, `.ChartMissingTitle`, `.ChartMissingText` | The "No chart selected" explanation (chart.html without `q`), also used for the refused other site `q` |
+| `body.ChartWithHead` | A chart page in the app shell's content frame (with its menu): compact page header (`Sw.PageHeader`, class `ChartHead`) and the chart in a card that fills the rest of the height |
+| `body.ChartWithNote`, `.ChartNote`, `.ChartNoteMore`, `.ChartNoteMore.ChartNoteAll` | The method graph explanation above the chart and its "More" / "Show all" buttons |
+| `.ChartTable` (+ `table`, `caption`, `th`, `td`) | The table view over the chart (scrolls on its own; the menu button stays above it) |
 | `SysWeaver-Chart` (+ `.Transparent`, `.ChartCenter canvas`, `html:not([data-theme])`) | Container: 50% theme background (90% in the light theme), none when transparent |
 | `.ChartMenuButton` | Menu button (top right, a framed button in the accent 1 text color on the panel background, visible in every theme; 85% opacity until hover / focus / open; 44 px in `.SwMobile` / coarse pointers) |
 | `.IconChartType*`, `.IconChartSize*`, `.IconColors`, `.IconColored*`, `.IconColorOriginal`, `.IconColorRandom*Gradient`, `.IconColorLabelText` | Chart menu icon masks (not in ui/icons.css) |

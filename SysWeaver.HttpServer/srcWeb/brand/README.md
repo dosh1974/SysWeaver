@@ -1,6 +1,13 @@
 # brand
 
+[⬆ srcWeb](../README.md)
+
 > The brand fonts of the web UI and their licences. They are local copies; nothing is loaded from the internet. How apps brand themselves: [`_docs/WebBranding.md`](../../../_docs/WebBranding.md).
+
+| | |
+|---|---|
+| **Project** | [SysWeaver.HttpServer](../../README.md) |
+| **Kind** | Embedded web assets (fonts) |
 
 ## Contents
 

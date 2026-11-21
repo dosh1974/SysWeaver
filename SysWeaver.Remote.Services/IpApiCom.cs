@@ -6,7 +6,7 @@ using SysWeaver.MicroService;
 namespace SysWeaver.Remote.Services
 {
     /// <summary>
-    /// Information
+    /// The response of the ip-api.com json end point: the location and network information of an ip address (see <see cref="IIpApiCom"/>)
     /// </summary>
     public sealed class IpApiResponse
     {
@@ -150,6 +150,10 @@ namespace SysWeaver.Remote.Services
 
     }
 
+    /// <summary>
+    /// The remote api of the ip-api.com geolocation service (free end point), list it in a manifest with a BaseUrl (ex: "http://ip-api.com/") to create a client.
+    /// <see cref="GetIpInfo"/> is also a <see cref="WebApiAttribute">web api</see>, so the registered client is published by the http server like any service.
+    /// </summary>
     [RemoteSerializer(RemoteParam.JsonSerializer)]
     public interface IIpApiCom : IRemoteApi
     {

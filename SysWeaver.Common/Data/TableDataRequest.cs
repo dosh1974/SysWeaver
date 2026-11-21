@@ -185,6 +185,10 @@ namespace SysWeaver.Data
     }
 
 
+    /// <summary>
+    /// A table data request with a currency (for tables that format amounts in a requested currency).
+    /// Currently not used by any SysWeaver project.
+    /// </summary>
     public class CurrencyTableDataRequest : TableDataRequest
     {
         /// <summary>

@@ -23,7 +23,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Name format, {0} is replaced with the original file name (without extension, the target extension is added).
         /// Must contain "{0}" and differ from "{0}", names must be unique within a repository.
-        /// Defaults to "{0}".
+        /// Defaults to "{0}", which <see cref="ImageRepoService"/> rejects, so every size must set a name (ex: "{0}_small").
         /// </summary>
         public String Name = "{0}";
 
@@ -48,9 +48,10 @@ namespace SysWeaver.MicroService
 
 
         /// <summary>
-        /// The target extension, supported:
+        /// The target extension (required, case sensitive), supported:
         /// ".png"
         /// ".jpg"
+        /// Other values (or null) are not validated when the service starts, they make every upload to the repository fail.
         /// </summary>
         public String Ext;
 

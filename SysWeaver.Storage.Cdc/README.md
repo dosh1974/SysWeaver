@@ -40,6 +40,7 @@ flowchart LR
 
 - [`ContentDependentChunking`](ContentDependentChunking.cs) — cutting, chunk storage, compact / expand / verify / recover / prune
 - [`CdcProps`](CdcProps.cs) — chunking parameters (sizes, hash, compression, folders); `CdcProps.Default` is recommended
+- [`CdcChunkStats`](CdcChunkStats.cs), [`CdcFolderStats`](CdcFolderStats.cs), [`CdcPruneStats`](CdcPruneStats.cs) — statistics returned by `Expand` / `Recover` / `Verify`, `GetFolderStats` and `Prune`
 
 ## Using it
 

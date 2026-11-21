@@ -1,7 +1,7 @@
 ﻿/*
- * ui/tokens.css - SysWeaver UI library (Sw) styles, part 1 of 6: design tokens and base helpers (Design v2).
+ * ui/tokens.css - SysWeaver UI library (Sw) styles, part 1 of 7: design tokens and base helpers (Design v2).
  *
- * Bundle order (sw/ui.css): tokens.css, components.css, overlays.css, cells.css, code.css, icons.css. Link it after common/theme.css.
+ * Bundle order (sw/ui.css): tokens.css, components.css, overlays.css, cells.css, code.css, icons.css, page.css. Link it after common/theme.css.
  *
  * Theme: the 4 base colors come from the SysWeaver theme (common/theme.css, templated by the server):
  *     --sw-bg = --ThemeBackground, --sw-fg = --ThemeMain, --sw-accent1 = --ThemeAcc1, --sw-accent2 = --ThemeAcc2.
@@ -511,9 +511,10 @@
     }
 }
 
-/* Phones: 16 px page padding */
+/* Phones: 16 px page padding, also in the compact density and the Pro theme (their 24 px rule is more specific than :root; the
+   edge to edge card texts are on 16 px, ui/page.css) */
 @media (max-width: 760px) {
-    :root {
+    :root, :root[data-density], :root[data-theme] {
         --sw-page-px: var(--sw-space-4);
     }
 }

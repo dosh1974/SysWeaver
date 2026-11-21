@@ -2538,6 +2538,10 @@
                     t.PHTitle.hidden = true;
             }
             t.E = el("div.sw-table", { class: o.Page ? "sw-table-page sw-table-loading" : t.Fill ? "sw-table-fill sw-table-loading" : "sw-table-loading", attrs: { "data-sw-tid": String(t.Tid) } }, t.ColStyle, t.WidthStyle, t.Toolbar, t.Chips, t.CardBar, t.Area, t.Foot);
+            //  A table that is the page (explore/table.html) is its main landmark when the page has none (WCAG 1.3.1: a "skip to main" /
+            //  landmark list found nothing)
+            if (o.Page && !document.querySelector("main, [role=main]"))
+                t.E.setAttribute("role", "main");
             /** (the table of a root element: Sw.Table.Of(element)) */
             t.E.SwTable = t;
             //  Calm grid options (table.css): column rules (row actions are always shown: RowActions "always" is the only mode)
@@ -2858,7 +2862,8 @@
         /**
          * Low screens (the card tool bar is inside the scrolled area, sticky at its top): hide the bar (slide it up, class
          * `sw-table-barhide`) while the cards are scrolled down, and show it again as soon as they are scrolled up or back to the start,
-         * so Sort / Filter are always one small scroll up away. Elsewhere the bar is always shown.
+         * so its content is always one small scroll up away. Elsewhere the bar is always shown. (Sort and Filter are in the tool bar now,
+         * BuildToolbar: the card tool bar stays empty, and table.css hides it while it is.)
          */
         UpdateCardBarHide() {
             const t = this;
@@ -4084,9 +4089,10 @@
                             flags.push(t.FlagButton(_TF("Match case", "Short text of the toggle button of a data table column text filter that makes it case sensitive (upper and lower case letters must match)"), true, () => f.CaseSensitive, x => f.CaseSensitive = x, f,
                                 _TF("Match case is on: upper and lower case letters must match (A does not find a).", "Tool tip of the pressed Match case toggle button of a data table column text filter") + "\n" + _TF("Ignore upper and lower case.", "Second line of the tool tip of the pressed Match case toggle button of a data table column text filter"),
                                 _TF("Match case is off: upper and lower case letters are ignored (A finds a).", "Tool tip of the Match case toggle button of a data table column text filter when it is not pressed") + "\n" + _TF("Make upper and lower case letters matter.", "Second line of the tool tip of the Match case toggle button of a data table column text filter when it is not pressed")));
-                        inv.setAttribute("aria-label", _TF("Invert (keep the rows that do not match)", "Accessible name of the toggle button that inverts a filter of a data table column"));
+                        //  (the names start with the visible text, WCAG 2.5.3, and name the column: one per column)
+                        inv.setAttribute("aria-label", _T("Not ({0})", label, "Accessible name of the Not toggle button that inverts a filter of a data table column (keeps the rows that do not match). {0} is the column name"));
                         if (flags[1])
-                            flags[1].setAttribute("aria-label", _TF("Case sensitive", "Accessible name of the toggle button that makes a text filter of a data table column case sensitive"));
+                            flags[1].setAttribute("aria-label", _T("Match case ({0})", label, "Accessible name of the Match case toggle button that makes a text filter of a data table column case sensitive. {0} is the column name"));
                         box.append(el("div.sw-table-frow2", null,
                             el("label.sw-table-flabel", { text: label, attrs: { for: id } }),
                             el("div.sw-table-fctl", null, sel, input, el("div.sw-table-ftoggles", null, ...flags))));

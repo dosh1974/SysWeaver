@@ -7,6 +7,9 @@ using SysWeaver.Net;
 
 namespace SysWeaver.Chat
 {
+    /// <summary>
+    /// Helpers for chat providers: user names of sessions and the trimming of tables for an AI.
+    /// </summary>
     public static class ChatTools
     {
         /// <summary>

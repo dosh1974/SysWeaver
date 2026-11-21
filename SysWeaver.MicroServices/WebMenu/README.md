@@ -31,10 +31,6 @@ The main menu folders (Monitoring, Operations, Administration, Data, Development
 | [`WebMenuItem.cs`](WebMenuItem.cs) | One menu item: id, name, type, title, icon class, data and children |
 | [`WebMenuItemTypes.cs`](WebMenuItemTypes.cs) | Item kinds: `Path`, `Table`, `Embedded`, `Link`, `LinkExternal`, `Js`, `Chart` |
 
-## Limitations and considerations
-
-- The XML doc summary of `WebMenuPathAttribute` ("Put this attribute on a method to make it available online") looks copied from `WebApiAttribute`. The attribute can only be placed on classes.
-
 ## Relationships
 
 - **Part of:** [SysWeaver.MicroServices](../README.md)

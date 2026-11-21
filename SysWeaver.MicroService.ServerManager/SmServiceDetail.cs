@@ -4,6 +4,9 @@ using System.Collections.Generic;
 namespace SysWeaver.MicroService
 {
 
+    /// <summary>
+    /// The details of one managed service: state, process, files, config files and versions (polled by the service page)
+    /// </summary>
     public sealed class SmServiceDetail : SmServiceBrief
     {
         /// <summary>

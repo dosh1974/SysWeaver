@@ -880,10 +880,13 @@
     // ------------------------------------------------------------------ main
 
     Sw.Page.Main(async () => {
-        document.body.append(header(), intro());
+        //  (the sections in a main landmark, WCAG 1.3.1)
+        const main = el("main.sw-gallery-main");
+        document.body.append(header(), main);
+        main.append(intro());
         const cols = new Sw.Columns({ MinWidth: 360 });
         cols.Add(brand(), buttons(), uxControls(), uxParity(), inputs(), toggles(), sliders(), selects(), progress(), menus(), dialogs(), overlays(), layouts(), props(), images(), code());
-        document.body.append(cols.E, el("div", { style: { marginTop: "16px" } }, cells()), el("div", { style: { marginTop: "16px" } }, icons()));
+        main.append(cols.E, el("div", { style: { marginTop: "16px" } }, cells()), el("div", { style: { marginTop: "16px" } }, icons()));
         Sw.Keys.Add("?", showKeys, { Title: "Show the keyboard shortcuts" });
         Sw.Keys.Add("Mod+K", () => Sw.Menu.Show(null, demoMenu()), { Title: "Open the demo menu" });
         Sw.Keys.Add("Alt+T", () => Sw.Theme.Set(Sw.Theme.Get() === "light" ? "dark" : "light"), { Title: "Toggle light / dark" });

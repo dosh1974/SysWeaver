@@ -112,6 +112,7 @@ namespace SysWeaver.MicroService
 
         readonly ServiceManager Manager;
 
+        /// <inheritdoc />
         public override string ToString()
         {
             var t = TypeInfoCache.Count + TypeInfoCacheDebug.Count;
@@ -273,11 +274,12 @@ namespace SysWeaver.MicroService
         }
 
         /// <summary>
-        /// Get information about a type
+        /// Get information about a type (its members, flags, ranges, defaults and documentation), used by the object editor (edit/Edit.js).
+        /// Cached per type name; sessions with the debug role get additional details (ex: the assembly) from a separate cache.
         /// </summary>
         /// <param name="typeName">Name of the type</param>
-        /// <param name="request"></param>
-        /// <returns></returns>
+        /// <param name="request">The request (the session decides if the debug details are included)</param>
+        /// <returns>The type description, or null if the type is unknown or not allowed</returns>
         [WebApi]
         [WebApiClientCacheStatic]
         [WebApiRequestCacheStatic]
@@ -785,11 +787,11 @@ namespace SysWeaver.MicroService
         }
 
         /// <summary>
-        /// Get information about a type's member as a data table
+        /// Get information about a type's members as a data table
         /// </summary>
-        /// <param name="r">Request params</param>
-        /// <param name="request"></param>
-        /// <returns></returns>
+        /// <param name="r">Request params, <see cref="TableDataRequest.Param"/> is the type name</param>
+        /// <param name="request">The request (passed to <see cref="GetTypeInfo(string, HttpServerRequest)"/>)</param>
+        /// <returns>The members of the type as a table, or null if the type is unknown or has no members</returns>
         [WebApi]
         [WebApiClientCache(30)]
         [WebApiRequestCache(30)]
@@ -813,7 +815,7 @@ namespace SysWeaver.MicroService
         /// Restricted to developers (Dev and Debug, the same as the list of all APIs), user interfaces that only need to know if the user may call an API use "Api/auth/CanCall".
         /// </summary>
         /// <param name="url">The api url (relative to the base url) to get information about</param>
-        /// <param name="request"></param>
+        /// <param name="request">The request (sessions with the debug role get additional details)</param>
         /// <returns>Detailed information or null if not found</returns>
         [WebApi("../Api/debug/" + nameof(GetApiInfo))]
         [WebApiAuth(Roles.Dev)]

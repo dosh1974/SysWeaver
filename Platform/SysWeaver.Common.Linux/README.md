@@ -24,6 +24,7 @@ The Linux counterpart of [SysWeaver.Common.Windows](../SysWeaver.Common.Windows/
 - OS friendly name from `PRETTY_NAME` in the distribution's `/etc/*-release` files; default key folder `/etc/keys`
 - Directory permissions mimicking the Windows "Everyone full control (inherited)" rule: `a+rwX` on the directory and its content plus a POSIX default ACL (`setfacl`) so content created later stays writable by everyone; used by `Folders` and `PathExt.CreateDataFolder`
 - Reboot via `sudo /sbin/reboot`
+- Executable discovery (`FindExecutables`: ELF binaries and `#!` scripts of any name, shared libraries skipped) and `MakeExecutable` (adds the execute bit for every class that can read the file), used by [SysWeaver.MicroService.ServerManager](../../SysWeaver.MicroService.ServerManager/README.md) for deployed applications
 - Failures counted as statistics (`IHaveStats`, system `Linux.Platform`)
 
 ## Key components
@@ -47,4 +48,4 @@ Deploy the DLL next to the executable; no configuration is required.
 
 - **Project:** [`SysWeaver.Common.Linux.csproj`](SysWeaver.Common.Linux.csproj)
 - **Builds on:** [SysWeaver.Common](../../SysWeaver.Common/README.md)
-- **Used by:** [SysWeaver.Storage](../../SysWeaver.Storage/README.md)
+- **Used by:** [SysWeaver.Storage](../../SysWeaver.Storage/README.md) (deployment reference); at runtime by everything that uses `PlatformTools.Current`

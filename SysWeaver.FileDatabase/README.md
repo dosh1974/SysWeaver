@@ -28,7 +28,7 @@ flowchart LR
 
 - `FileDatabase<T>`, where the row type `T` derives from `DbFileData` (full path as primary key, lower case extension, last write time, size, time of the last db change) and adds its own meta data columns
 - `Init(folders)` creates the table, adds new files, updates changed ones and deletes rows of removed files; overlapping or missing folders are ignored with a warning
-- File system watchers (including sub folders) queue changes that are applied in the background every 100 ms; files modified during the last 15 seconds wait until they are older, or until `MarkAsCompleted(file)` is called
+- File system watchers (including sub folders) queue changes that are applied in the background every 100 ms; files modified during the last 15 seconds wait until they are older, or until `MarkAsCompleted(file)` is called; `AddOrUpdateNow(file)` processes a file at once
 - Optional meta data files: a callback maps a changed file (ex: a sidecar) to the file whose row should be updated
 - Queries with `TableDataRequest` (`GetAsTable`, `GetFiltered`, `GetFilteredWithParams`)
 - Statistics (insert / update / delete counts and failures) and performance monitoring integrated with the service manager
@@ -37,6 +37,7 @@ flowchart LR
 
 - [`FileDatabase<T>`](FileDatabase.cs) — the synchronised file table
 - [`DbFileData`](DbFileData.cs) — base class of a file row
+- [`FindInFileDatabase`](FindInFileDatabase.cs) — unused request / response types (see below)
 
 ## Limitations and considerations
 
@@ -50,3 +51,4 @@ flowchart LR
 
 - **Project:** [`SysWeaver.FileDatabase.csproj`](SysWeaver.FileDatabase.csproj)
 - **Builds on:** [SysWeaver.DbSimpleStack](../SysWeaver.DbSimpleStack/README.md)
+- **Used by:** no project in SysWeaver, SysWeaver.Services or SysWeaver.Tools references it today

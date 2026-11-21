@@ -11,13 +11,13 @@
 
 ## Purpose
 
-Served as `upload/Example.html`, the same url folder as the upload api (`upload/Upload`, `upload/CheckStatus`). [`FileUploaderService`](../../FileUploaderService.cs) adds it to the menu as *Debug / FileUploader / Upload file* (roles `debug`, `dev`, embedded in the shell). It is also the example of how to use [`common/fileUploader.js`](../common/README.md) (`Sw.Upload`).
+Served as `upload/Example.html`, the same url folder as the upload api (`upload/Upload`, `upload/CheckStatus`). [`FileUploaderService`](../../FileUploaderService.cs) adds it to the menu as *Debug / FileUploader / File upload test* (`Roles.Dev`: roles `Dev` or `Debug`, embedded in the shell). It is also the example of how to use [`common/fileUploader.js`](../common/README.md) (`Sw.Upload`).
 
 ## Contents
 
 | Item | Description |
 |---|---|
-| [`Example.html`](Example.html) | The page: new format includes (`../sw/core.js`, `../sw/ui.js`, `../common/fileUploader.js`, `example.js`; `../common/theme.css`, `../sw/ui.css`, `example.css`), a *Save to repository* input, the drop zone `#drop` (with the words "Drop files here or select to choose", `.DropText`), the result link `#link` and the example figure `.UploadUserImage`: the current user image `#userimage` with the caption "Example: your user picture, stored in the UserImage repository" |
+| [`Example.html`](Example.html) | The page: new format includes (`../sw/core.js`, `../sw/ui.js`, `../common/fileUploader.js`, `example.js`; `../common/theme.css`, `../sw/ui.css`, `example.css`), a page header (`header.sw-ph`: "Upload files" and a one line description) in a reading page (`main.UploadExample.sw-page-read`), a *Save to repository* input, the drop zone `#drop` (with the words "Drop files here or select to choose", `.DropText`), the result link `#link` and the example figure `.UploadUserImage`: the current user image `#userimage` with the caption "Example: your user picture, stored in the UserImage repository" |
 | [`example.js`](example.js) | `exampleMain()` (body onload) and `exampleShowResult(res, files)` |
 | [`example.css`](example.css) | Page styles on the Sw tokens: input, drop zone states, link, image |
 
@@ -44,7 +44,7 @@ Served as `upload/Example.html`, the same url folder as the upload api (`upload/
 
 | Selector | Description |
 |---|---|
-| `.UploadExample` | Centered column, max 90 characters wide, 16 px side gutter (at least the safe area). |
+| `.UploadExample`, `.UploadExample > .sw-ph` | Column of the page (16 px gaps) and its page header; width and side gutters come from `.sw-page-read` (ui/page.css). |
 | `.UploadRepo`, `.UploadRepo input` | Label and input (touch sized, focus ring). |
 | `#drop`, `#drop::after`, `.DropText`, `.Selecting`, `.Dragging`, `.Uploading` | Drop zone (neutral, dashed), its masked state icon and its words. |
 | `#link`, `#link.Show` | Result link (hidden until a url exists). |

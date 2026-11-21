@@ -30,12 +30,14 @@ Stands in for [SysWeaver.TextMessage.Twilio](../SysWeaver.TextMessage.Twilio/REA
 - Simulates any channel (`Channel`, default SMS), so two instances can stand in for WhatsApp + SMS behind the [router](../SysWeaver.TextMessage.Router/README.md).
 - Simulated delivery: sent messages get `Sent` and `Delivered` status updates (`AutoDeliver`, `StatusDelay`).
 - Simulated failures: numbers starting with `NotOnChannelPrefixes` fail with `NotOnChannel`, either in the send result or as a later status update (`FailAsync`, like WhatsApp does).
-- `FakeIncoming` simulates a received message, `FakeStatus` a status update, `MessageTable` lists everything.
+- `FakeIncoming` simulates a received message, `FakeStatus` a status update, `MessageTable` lists everything (table menu item "Messages", with a card template).
 
 ## Key components
 
 - [`FakeTextMessageService`](FakeTextMessageService.cs) - the fake provider and its web API
-- [`FakeTextMessageParams`](FakeTextMessageParams.cs) - channel, sender number, simulated failures and delivery
+- [`FakeTextMessageParams`](FakeTextMessageParams.cs) - channel, sender number, simulated failures and delivery, the `Auth` of the APIs; also `FakeStatusRequest` (the `FakeStatus` request)
+- [`AnyTextMessage`](AnyTextMessage.cs) - a sent or received message as stored and listed in the message table
+- [`srcWeb/fakeText/cards.html`](srcWeb/fakeText/cards.html) - the card template of the message table (Brotli-compressed into `web/fakeText/` and embedded at build time)
 
 ## Using it
 

@@ -1,7 +1,7 @@
 /**
  * @file Compatibility stub: `Sw.Edit.Options` (legacy global `EditOptions`) is defined by Edit.js itself, so options can be created
  * right after Edit.js ran (before `await Sw.Edit.Ready`). Edit.js no longer loads this file; pages that include it get the same
- * class. Fields and presets: README.md ("Options").
+ * class. Fields and presets: README.md ("Options and presets").
  */
 (function () {
     "use strict";

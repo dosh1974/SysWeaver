@@ -6,6 +6,10 @@ using System.Reflection;
 namespace SysWeaver.MicroService
 {
 
+    /// <summary>
+    /// Micro service that serves the embedded web resources (the generated web/ folder) of the assembly of every registered service, also of services added later.
+    /// Only resources with ".web." in the name are served, at the path after the first ".web.". Resources are not removed when a service is removed.
+    /// </summary>
     [IsMicroService]
     public sealed class StaticDataHttpServerService : IDisposable
     {

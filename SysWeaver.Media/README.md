@@ -41,7 +41,18 @@ flowchart LR
 - [`MediaFileTypes`](MediaFileTypes.cs) — file extension to `MediaTypes` table
 - [`ImageTools`](ImageTools.cs) — ImageMagick based image helpers
 - [`ColorSpace`](ColorSpace.cs) — Ok* colour space conversions
-- [`IThumbnailWebService`](IThumbnailWebService.cs) — contract for screenshots of urls, implemented by [SysWeaver.MicroService.Thumbnail.Web](../SysWeaver.MicroService.Thumbnail.Web/README.md)
+- [`IThumbnailWebService`](IThumbnailWebService.cs) — contract for screenshots of urls, implemented by [SysWeaver.MicroService.Thumbnail.Web](../SysWeaver.MicroService.Thumbnail.Web/README.md) and used by [SysWeaver.MicroService.MediaThumbnail](../SysWeaver.MicroService.MediaThumbnail/README.md)
+- [`ScreenshotRequest`](ScreenshotRequest.cs), [`ScreenshotImageRequest`](ScreenshotImageRequest.cs), [`ScreenshotImageResponse`](ScreenshotImageResponse.cs) — the screenshot request / response types (url, size, scale, extra delay, format, quality)
+
+## Using it
+
+```csharp
+// Information and a 128x64 icon (fitted, not cropped), cached per icon size
+var info = await MediaInfo.GetAsync(@"C:\Media\clip.mp4", 128, 64, false);
+
+// Scale an image to fill 256x256 (cropping) and save it as png
+await ImageTools.FillInto("photo.jpg", "photo_256.png", 256, 256);
+```
 
 ## Limitations and considerations
 

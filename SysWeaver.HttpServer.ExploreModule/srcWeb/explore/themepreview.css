@@ -209,7 +209,8 @@ html, body {
 
 .tp-kpis {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+    /* auto-fit: four tiles fill the row (auto-fill left an empty column); 10rem: two per row on phones, as the Home KPIs */
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
     gap: var(--sw-space-3, 12px);
 }
 

@@ -23,7 +23,7 @@ These attributes are metadata only. [SysWeaver.HttpServer](../../SysWeaver.HttpS
 | [`IRunTimeWebApiAuth.cs`](IRunTimeWebApiAuth.cs) | Interface for services whose per-method auth is configured at run time (`MethodAuths`, `"*"` for all other methods) |
 | [`WebApiClientCacheAttribute.cs`](WebApiClientCacheAttribute.cs) | `[WebApiClientCache]`: client side cache duration |
 | [`WebApiRequestCacheAttribute.cs`](WebApiRequestCacheAttribute.cs) | `[WebApiRequestCache]` (server side cache, `WebApiCaches`: auto-detect, global or per session), the `...Static` variants and `WebApiTools` cache constants |
-| [`WebApiCompressionAttribute.cs`](WebApiCompressionAttribute.cs) | `[WebApiCompression]`: preferred response compression, with `WebApiCompress` presets (`Best`, `Balanced`, `Fast`) |
+| [`WebApiCompressionAttribute.cs`](WebApiCompressionAttribute.cs) | `[WebApiCompression]`: preferred response compression methods and levels in priority order, ex: `"br:Fast, deflate:Balanced"` (methods `br`, `deflate`, `gzip`; levels `Fast`, `Balanced`, `Best`) |
 | [`WebApiOptionalAttribute.cs`](WebApiOptionalAttribute.cs) | `[WebApiOptional]`: publish the API only when a member on the instance says it is available |
 
 ## Relationships

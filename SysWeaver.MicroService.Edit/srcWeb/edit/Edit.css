@@ -704,8 +704,23 @@ textarea.sw-edit-multiline {
     font-weight: 400;
     line-height: 1.25;
     overflow-wrap: anywhere;
-    /* Dimmed: the type and constraints are secondary to the name (full strength while the label is hovered) */
-    opacity: 0.5;
+    /* Secondary to the name by size and the quiet text colour only: no opacity (0.5 gave 2.2:1 in the light theme, UX guide 12,
+       4.5:1; hover never happens on touch) */
+}
+
+/* The member description (option Descriptions: the summary on a line of its own under the field in the value cell, the help of
+   the field; wraps, quiet text) */
+.sw-edit-desc {
+    display: block;
+    flex: 1 0 100%;
+    padding: 0 0.25em 0 0;
+    color: var(--sw-text-2);
+    /* (xs: quieter than the member name, also in the phone layout where the name is smaller) */
+    font-size: var(--sw-text-xs, 0.75rem);
+    font-weight: 400;
+    line-height: 1.35;
+    white-space: normal;
+    overflow-wrap: anywhere;
 }
 
 @media (hover: hover) {

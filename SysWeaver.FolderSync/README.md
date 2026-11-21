@@ -43,6 +43,24 @@ Without CDC (or if the server uses different CDC settings), changed files are up
 - [`FolderSyncerParams`](FolderSyncerParams.cs) — server address, credentials, concurrency and comment
 - [`IFolderSyncApi`](IFolderSyncApi.cs) — the remote JSON API implemented by the server
 
+## Using it
+
+```csharp
+using var syncer = new FolderSyncer(new FolderSyncerParams
+{
+    Server = "https://myserver.com",
+    CredFile = "$(KeyFolder)/deploy.txt",
+    Comment = "Nightly build",
+});
+// Push a local folder to the managed folder "MyApp" and activate the new version on the server
+var push = await syncer.PushFolders(@"D:\Build\MyApp", "MyApp", switchTo: true);
+// Pull the shared folder "MyApp": the new version is assembled in "D:\Apps\MyApp_UploadTemp" and,
+// with switchTo, swapped in (the previous folder is renamed to "D:\Apps\MyApp_<version>")
+var pull = await syncer.PullFolder("MyApp", @"D:\Apps\MyApp", switchTo: true);
+```
+
+The results (`FolderSyncResult`, `FolderPullSyncResult`) hold the file, byte and chunk counts; failures are returned in `Errors`.
+
 ## Limitations and considerations
 
 - Accepting invalid server certificates (`IgnoreCertErrors`) is possible but explicitly discouraged.

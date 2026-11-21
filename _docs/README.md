@@ -2,7 +2,7 @@
 
 [⬆ SysWeaver overview](../README.md)
 
-> Additional documents that are not tied to a project folder: the web client architecture overview, the web quick start guide and the reverse proxy schematic.
+> Additional documents that are not tied to a project folder: the web client architecture, quick start, messaging, branding and UX guides, and the reverse proxy schematic.
 
 | | |
 |---|---|
@@ -11,7 +11,7 @@
 
 ## Purpose
 
-Holds cross-project documentation. [`Web.md`](Web.md) describes the web client as a whole (the `Sw` library: core, ui, shell) and links to the detailed folder READMEs; [`WebQuickStart.md`](WebQuickStart.md) walks a developer through a first page. The other document is a Word drawing of the reverse proxy set-up of [SysWeaver.ReverseProxy](../SysWeaver.ReverseProxy/README.md). It was committed together with `SysWeaver.ReverseProxy/ReverseProxy.svg`, the schematic shown in that project's README, and appears to be its editable source. Nothing in the build uses this folder.
+Holds cross-project documentation. [`Web.md`](Web.md) describes the web client as a whole (the `Sw` library: core, ui, shell) and links to the detailed folder READMEs; [`WebQuickStart.md`](WebQuickStart.md) walks a developer through a first page; [`WebMessaging.md`](WebMessaging.md), [`WebBranding.md`](WebBranding.md) and [`UX_Guide.md`](UX_Guide.md) go into depth on page to server messaging, branding a deployed app and the UX rules every page follows. The remaining document, `ReverseProxy.docx`, is a Word drawing of the reverse proxy set-up of [SysWeaver.ReverseProxy](../SysWeaver.ReverseProxy/README.md). It was committed together with `SysWeaver.ReverseProxy/ReverseProxy.svg`, the schematic shown in that project's README, and appears to be its editable source. Nothing in the build uses this folder.
 
 ## Contents
 

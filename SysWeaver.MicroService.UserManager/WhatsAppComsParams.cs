@@ -89,6 +89,11 @@ namespace SysWeaver.MicroService
         /// </summary>
         public String DeletedWhatsApp;
 
+        /// <summary>
+        /// An optional template to use for the password reset an administrator forced (if this is an existing file, content is read from that).
+        /// </summary>
+        public String ForcedResetPassword;
+
 
         /// <summary>
         /// An optional template to include as header for texts (if this is an existing file, content is read from that).

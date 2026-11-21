@@ -7,8 +7,8 @@
  * Elements (all created by chat.js, prefix chat-):
  *   .chat-page (Chat.html root, .chat-nobackground, .chat-page-message > .chat-message-box: no id / failed) > .chat-root (any container given to Sw.Chat.Add, .chat-nopost without input)
  *     .chat-list (role log; .chat-stick flash) > .chat-row (.chat-mine, .chat-preview, .chat-hide, .chat-hidden, .chat-working)
- *        > .chat-msg > .chat-header (.chat-toggle) [> .chat-lang (.chat-translating, .chat-translated)] > .chat-who (.chat-name,
- *          .chat-time) > .chat-icon ; .chat-content ; .chat-data > .chat-att (.chat-att-image [.chat-att-blocked: a "Show image" placeholder], .chat-att-file, .chat-att-html)
+ *        > .chat-msg > .chat-header (.chat-toggle) [> .chat-lang (.chat-translating, .chat-translated)] > .chat-who (.chat-name-line > .chat-name + .chat-ai-tag,
+ *          .chat-time) > .chat-icon > .chat-msg-more ; .chat-content ; .chat-data > .chat-att (.chat-att-image [.chat-att-blocked: a "Show image" placeholder], .chat-att-status, .chat-att-file, .chat-att-html)
  *     .chat-menu-button (only without input: a bar above the list), .chat-split (the list / input splitter),
  *     .chat-input (.chat-labels, .chat-pad-row) > .chat-write-box (.chat-write textarea: .chat-listening, .chat-dragging)
  *        + .chat-input-pad (.chat-attach, .chat-input-flag, .chat-mic (.chat-recording), .chat-send) + .chat-menu-button
@@ -39,6 +39,13 @@ html:has(body.ChatMain), body.ChatMain {
     background-color: color-mix(in srgb, var(--sw-bg) 50%, transparent);
     border-inline: 1px solid var(--sw-border);
 }
+
+    /* Phones (portrait): the page is the window width, so the window edges are its edges (no side hairlines, ui/page.css "Edge to edge") */
+    @media (max-width: 599px) {
+        .chat-page {
+            border-inline: 0;
+        }
+    }
 
     /* Low screens (phone landscape): the width limit would leave only the middle half, use the whole width */
     @media (max-height: 540px) {
@@ -268,10 +275,6 @@ html:has(body.ChatMain), body.ChatMain {
     border-bottom: 1px dashed color-mix(in srgb, var(--sw-fg) 10%, transparent);
 }
 
-    /* Room for the top right menu button */
-    .chat-row:first-child {
-        margin-top: 48px;
-    }
 
     .chat-row:last-child,
     .chat-row:has(+ .chat-row.chat-hide:last-child) {
@@ -451,6 +454,11 @@ html:has(body.ChatMain), body.ChatMain {
     .chat-att img:focus-visible {
         outline: 2px solid var(--sw-focus);
         outline-offset: 2px;
+    }
+
+    /* The splitter spans the chat from edge to edge (on a phone the window edges): its ring is drawn inside it */
+    .chat-split:focus-visible {
+        outline-offset: -2px;
     }
 
 @media (hover: hover) {
@@ -1070,7 +1078,7 @@ html:has(body.ChatMain), body.ChatMain {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 12px;
+    font-size: 0.75rem; /* (rem: the labels grow with the chosen text size, as all other text) */
     line-height: 1.1;
     font-weight: 600;
     color: var(--sw-fg);
@@ -1097,7 +1105,7 @@ html:has(body.ChatMain), body.ChatMain {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-        font-size: 12px;
+        font-size: 0.75rem; /* (rem: the labels grow with the chosen text size, as all other text) */
         line-height: 1.1;
         font-weight: 600;
         color: var(--sw-fg);
@@ -1366,9 +1374,6 @@ html:has(body.ChatMain), body.ChatMain {
     padding-top: 0.3em;
 }
 
-.chat-compact .chat-row:first-child {
-    margin-top: 0;
-}
 
 /* Tight (a very low chat, ex: a phone with the on screen keyboard open; Composer.WatchSize): one row, the text box (one line, it
    grows while typing) beside Send and Menu, always in view; the messages get the rest. Attach, the language and Speak step aside

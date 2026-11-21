@@ -32,7 +32,9 @@ flowchart LR
 
 ## Key components
 
-- [`AvatarService`](AvatarService.cs) — the `IDefaultUserImageHandler` and HTTP module that generates the images
+- [`AvatarService`](AvatarService.cs) — the `IAvatarService` (an `IDefaultUserImageHandler`) and HTTP module that generates the images
+- [`AvatarParams`](AvatarParams.cs) — disc folder, cache duration, auth and transparency
+- [`RemoveDuplicates.bat`](RemoveDuplicates.bat) — manual maintenance script that deletes duplicate icons in `srcData/` (see [`srcData/`](srcData/README.md))
 
 ## Using it
 

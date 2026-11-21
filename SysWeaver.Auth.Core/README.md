@@ -32,7 +32,7 @@ The manager is normally created by `AuthManagerService` in [SysWeaver.MicroServi
 - Cache of successful `Authorization` header results, invalidated when an authorizer reports a change
 - Client-side salted hashing: clients send `SHA256(password|salt)`, the secure login additionally binds the hash to a one-time pad so it can't be replayed. An unknown user gets a fake salt that looks like a real one: keyed (HMAC with a random key per process), so nobody can compute it and tell an unknown user from a real one (it was an unkeyed hash of the user name; it changes when the process restarts)
 - `SimpleAuthorizer`: users defined as `user:password[:tokens[:domain]]` lines (clear text or pre-computed hash) in the parameters or a monitored file, optional basic auth, and API keys (usable as bearer tokens) managed from the web UI
-- Debug pages to generate password hashes and manage API keys
+- Admin pages to generate password hashes (role ops) and manage API keys, and a read-only "Built-in users" table (menu `Admin/...`)
 - Password policies (length and character classes) reported to clients so the UI can validate early
 - Managed texts: localizable text, mail and Markdown templates with variables, loaded from files, embedded resources or literal text and reloaded when files change (used by the account flows)
 - `NameGen`: random, human friendly nick names (deterministic per user guid)
@@ -59,7 +59,7 @@ The manager is normally created by `AuthManagerService` in [SysWeaver.MicroServi
 ## Limitations and considerations
 
 - `SimpleAuthorizer` is meant for small, static user sets (operators, services); use [SysWeaver.MicroService.UserManager](../SysWeaver.MicroService.UserManager/README.md) for self-service accounts
-- Password hashes are a single, fast SHA256, so keep user files and configuration private; clear-text passwords in configuration work but should be replaced with hashes from the *Generate password hash* debug page
+- Password hashes are a single, fast SHA256, so keep user files and configuration private; clear-text passwords in configuration work but should be replaced with hashes from the *Generate password hash* page
 - API keys are stored in clear text in the application key/value store (`KeyValueStore.AllApp`)
 - A removed user or changed password can still be used with a cached `Authorization` header until the cache entry expires (30 seconds by default), unless the authorizer reports the change
 - `AuthManager` doesn't issue or consume one-time pads itself; the login service does
@@ -70,7 +70,7 @@ The manager is normally created by `AuthManagerService` in [SysWeaver.MicroServi
 
 | Folder | Content |
 |---|---|
-| [`srcWeb/`](srcWeb/README.md) | `SimpleAuthorizer` web pages (password hash generator, API key management), compressed and embedded at build time |
+| [`srcWeb/`](srcWeb/README.md) | `SimpleAuthorizer` web pages (password hash generator, API key management) and the card template of the users table, compressed and embedded at build time |
 
 ## Relationships
 

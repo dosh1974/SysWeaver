@@ -12,6 +12,11 @@ using SysWeaver.Auth;
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// Micro service that builds the web menus (Api/application/GetMenu) from the [WebMenu*] attributes on the service classes and on the published API methods
+    /// (also of services and APIs added later; items are not removed when a service or API is removed).
+    /// Each item is filtered by the session's auth, NoUser and an optional dynamic method. Needs the API module, so it must come after <see cref="ApiHttpServerService"/>.
+    /// </summary>
     [IsMicroService]
     [RequiredDep<ApiHttpServerModule>]
     [WebApiUrl("application")]
@@ -25,6 +30,10 @@ namespace SysWeaver.MicroService
             return String.Concat(r, r == 1 ? " menu: " : " menues: ", String.Join(", ", rs.Select(x => x.Key.ToQuoted())));
         }
 
+        /// <summary>
+        /// Add the menu items of the published APIs and of the registered services, and follow later changes.
+        /// </summary>
+        /// <param name="manager">The service manager</param>
         public WebMenuService(ServiceManager manager)
         {
             Manager = manager;
@@ -171,6 +180,11 @@ namespace SysWeaver.MicroService
         readonly ApiHttpServerModule Api;
         readonly String DefaultMenu = "Default";
 
+        /// <summary>
+        /// The parent path of a menu item id ("A/B/C" -> "A/B")
+        /// </summary>
+        /// <param name="name">The item id</param>
+        /// <returns>The parent id, null for a root item</returns>
         public static String GetParent(String name)
         {
             var i = name.LastIndexOf('/');
@@ -180,6 +194,12 @@ namespace SysWeaver.MicroService
         }
 
 
+        /// <summary>
+        /// Split a menu item id into the parent path and the last part ("A/B/C" -> "A/B" and "C")
+        /// </summary>
+        /// <param name="parent">The parent id, null for a root item</param>
+        /// <param name="name">The item id</param>
+        /// <returns>The last part of the id</returns>
         public static String GetId(out String parent, String name)
         {
             var i = name.LastIndexOf('/');
@@ -192,6 +212,22 @@ namespace SysWeaver.MicroService
             return name.Substring(i + 1);
         }
 
+        /// <summary>
+        /// Add or update a menu item (null values keep the current value); missing parent items are added as folders (Path items, removed from a menu when they get no children).
+        /// </summary>
+        /// <param name="instance">The instance that declares the item (used to call an instance dynamic method)</param>
+        /// <param name="menu">The menu to add the item to, null for "Default"</param>
+        /// <param name="id">The item id, the path in the menu ("A/B/C")</param>
+        /// <param name="type">The item type</param>
+        /// <param name="name">The display name</param>
+        /// <param name="data">Type dependent data, typically an url</param>
+        /// <param name="title">The tool tip</param>
+        /// <param name="iconClass">The icon class name</param>
+        /// <param name="auth">The required auth tokens (comma separated), null for no requirement</param>
+        /// <param name="order">The sort order among the siblings (then by name)</param>
+        /// <param name="noUserRequired">True to only show the item when there is no user</param>
+        /// <param name="dynamic">Optional "[Type.]Method" returning Task&lt;bool&gt; that decides per request if the item is shown (and can change it), see DynSigs for the accepted signatures</param>
+        /// <exception cref="Exception">The dynamic type or method isn't found</exception>
         public void SetItem(Object instance, String menu, String id, WebMenuItemTypes? type, String name, String data, String title, String iconClass, String auth, float order, bool noUserRequired, String dynamic)
         {
             menu = menu ?? DefaultMenu;
@@ -295,11 +331,11 @@ namespace SysWeaver.MicroService
 
 
         /// <summary>
-        /// Get a menu
+        /// Get a menu, with the items the session may see
         /// </summary>
-        /// <param name="menu">The menu to retrieve</param>
+        /// <param name="menu">The menu to retrieve, null for "Default"; several comma separated menus are merged</param>
         /// <param name="context">Automatically populated by the request handler, don't use</param>
-        /// <returns></returns>
+        /// <returns>The menu, null if a menu isn't found or has no items</returns>
         [WebApi]
         [WebApiClientCache(1)]
         [WebApiRequestCache(60)]

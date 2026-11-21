@@ -1,6 +1,6 @@
 ﻿/**
- * @file logfile.js - the "Debug / Log file" page (logFile/logfile.html, entry `logFileMain`; menu item registered by
- * FileLogService, auth debug,ops,admin). Also opened by ServerManager serviceInfo.html ("View" of a config file) with
+ * @file logfile.js - the "Monitoring / Log file" page (logFile/logfile.html, entry `logFileMain`; menu item registered by
+ * FileLogService, auth Roles.AdminOps: admin, ops or debug). Also opened by ServerManager serviceInfo.html ("View" of a config file) with
  * `?api=<text url>`.
  * Classic script loaded with `<script defer>` after ../sw/core.js and ../sw/ui.js; started from `<body onload>`.
  *
@@ -23,7 +23,7 @@ const LogFileUrl = "../Api/logFile/LogFile.txt";
 
 /** @type {string} Api deleting the log file. */
 const LogFileDeleteUrl = "../Api/logFile/DeleteLogFile";
-/** The one time delete token of the log file with the facts for the confirmation (the server asks for it; older servers: none). */
+/** @type {string} Api returning the one time delete token of the log file with the facts for the confirmation (the server asks for it; older servers: none). */
 const LogFileTokenUrl = "../Api/logFile/GetDeleteLogFileToken";
 
 /**

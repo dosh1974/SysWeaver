@@ -25,10 +25,10 @@ The service is an HTTP server module, so the web server picks it up automaticall
 
 ## Key features
 
-- Streamable HTTP transport on a single end point (`Url`, default `mcp`): `initialize`, `ping`, `tools/list` and `tools/call`
+- Streamable HTTP transport on a single end point (`Url`, default `mcp`): `initialize`, `ping`, `tools/list` and `tools/call`; protocol versions `2025-11-25` (the default), `2025-06-18` and `2025-03-26`
 - Long running tool calls (`StreamToolCalls`, default on): a `tools/call` from a client that accepts `text/event-stream` is answered with a server sent event stream, the headers are sent at once and a keep alive (a `notifications/progress` if the request has a progress token, else an SSE comment) is sent every `KeepAliveSeconds` while the tool runs, so clients and proxies don't time out (ex: a 15 minute video generation)
 - Data proxying (`ProxyData` of a `WebApis` entry): the data returned by all `[WebApiRaw]` methods of that service is kept in memory under `{Url}/data/{id}/{name}` (for `DataLifetimeMinutes`) and the tool returns the url instead of the data, for data that is too large for a tool result (video, audio)
-- Tools of all service instances are found automatically (also services added later), they don't have to implement `IHaveAiTools`; methods marked `[AiHideMcp]` are excluded and tools can also be added or removed in code
+- Tools of all service instances are found automatically (`ServiceTools`, default on; also services added later), they don't have to implement `IHaveAiTools`; methods marked `[AiHideMcp]` are excluded and tools can also be added or removed in code
 - Each tool keeps its own auth (`[WebApiAuth]`, else the service's `Auth`); tools a user may not call are not listed
 - Any service API can be exposed (`WebApis`): all `[WebApi]` methods of the selected service instance (by type and optional instance name) become tools, each keeping the method's own auth (every MCP request also requires `Auth`). Methods returning binary data (`[WebApiRaw]` with a non text mime or a `MemoryFile`, ex: a generated image) attach the data to the tool result as a file (image content for images), only pre-compressed raw data is skipped
 - Files and links attached by tools (images, maps etc) are returned with the tool result; files are stored in the user's storage if available, otherwise served temporarily under `{Url}/files/`

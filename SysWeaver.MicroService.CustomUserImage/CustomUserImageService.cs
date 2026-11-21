@@ -371,10 +371,10 @@ namespace SysWeaver.MicroService
         #endregion//IFileRepo
 
         /// <summary>
-        /// Remove a custom user image
+        /// Remove the custom user image of the logged in user (all sizes), the user then gets the default user image again
         /// </summary>
-        /// <param name="r"></param>
-        /// <returns>True when the image was removed (never false: failures throw)</returns>
+        /// <param name="r">The request (identifies the user)</param>
+        /// <returns>Always true (files that can't be deleted are ignored)</returns>
         /// <exception cref="HttpResponseException">409 with the reason: the image is being changed by another request right now, try again</exception>
         [WebApi]
         [WebApiAuth]

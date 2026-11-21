@@ -16,6 +16,7 @@
  *  - Forms and wizards: Sw.Form (fields, Required, rules, messages under the fields, focus, submit gating), Sw.Steps (a wizard: step
  *    list, heading focus, Back / Next / Finish, per step validation).
  *  - Extra line icons for dashboards (cpu, memory, drive, folder), registered when missing.
+ *  - Sw.Bleed (the last part of this file): edge to edge cards on phones (moved over the page padding, no border on the window side).
  */
 
 (() => {
@@ -2100,4 +2101,291 @@
         });
     }
     Object.assign(Sw, add);
+})();
+
+/**
+ * Sw.Bleed - edge to edge surfaces on phones (ui/page.css "Edge to edge", ui/README.md "Edge to edge on phones").
+ *
+ * On a narrow screen (max-width 599 px, where the phone layout of the page anatomy starts) a surface (a card) whose side is on the page padding line (at most
+ * --sw-page-px from the window edge) is moved out to the window edge: a negative margin (inline style) as wide as that gap, and the class
+ * sw-edge-l / sw-edge-r (no border and no round corners on that side). A surface that already touches the window edge only gets the class.
+ * One card per row: both sides; a row of cards: the left most card loses its left border, the right most card its right border.
+ *  - Surfaces: Sw.Bleed.Surfaces (.sw-card, .sw-tile, .sw-bleed, ...). Only the outer most one: a card in a card stays as it is.
+ *  - Groups: Sw.Bleed.Groups (.sw-grid, .sw-tiles, .sw-bleed-group, ...): a row container of surfaces (every visible child is a surface or
+ *    holds one, ex: li > button.sw-tile) moves out as a whole, so the cards keep equal widths; its cards that touch the window edge get the
+ *    classes.
+ *  - Never: a page framed by another page of this site (html.SwNested), anything in .sw-no-bleed (opt out), overlays (dialogs, menus,
+ *    pop-ups) and fixed / absolute / sticky surfaces.
+ * Runs before the paint after a change: window size, the narrow media query, added / removed elements, class / hidden changes. Wide
+ * screens: nothing is observed and every change is undone. Apps add their own selectors (Sw.Bleed.Surfaces.push(".myCard")) or use the
+ * classes sw-bleed / sw-bleed-group; Sw.Bleed.Update() measures again (ex: after a layout change without a DOM change).
+ */
+(() => {
+    "use strict";
+
+    const Sw = window.Sw = window.Sw || {};
+    if (Sw.Bleed)
+        return;
+
+    const Surfaces = [".sw-card", ".sw-group", ".sw-tile", ".sw-bleed", ".sw-table:not(.sw-table-cards)", ".sw-table-cards .sw-table-body > tr", "form.auth-box", ".ExploreWrap", ".icons-item"];
+    const Groups = [".sw-grid", ".sw-tiles", ".sw-bleed-group", ".sw-table-cards .sw-table-body", ".icons-list"];
+    const Frames = [".sw-table.sw-table-cards", ".sw-bleed-frame"];
+    const Skip = ".sw-no-bleed, .sw-layer, .sw-popup, .sw-dialog, .sw-menu";
+    //  (599 px: the phone layout of ui/page.css, app/home.css and explore/table.css starts there too; at 600 px phone edges met the
+    //  wide layout)
+    const Media = "(max-width: 599px)";
+
+    /** The moved elements: { ml, mr, mw } (their own inline margins and max width) */
+    const moved = new Map();
+    /** The elements with an edge class */
+    const edged = new Set();
+
+    let mq = null;
+    let mo = null;
+    let ro = null;
+    let frame = 0;
+    let on = false;
+
+    function active() {
+        return !!(mq && mq.matches && document.body && !document.documentElement.classList.contains("SwNested"));
+    }
+
+    /** True when the element can be moved / edged: not in an overlay or opted out, not inside another surface, in the flow */
+    function eligible(e, surfaceSel) {
+        if (e.closest(Skip))
+            return false;
+        const p = e.parentElement;
+        if (p && p.closest(surfaceSel))
+            return false;
+        if (!e.getClientRects().length)
+            return false;
+        const pos = getComputedStyle(e).position;
+        return pos !== "fixed" && pos !== "absolute" && pos !== "sticky";
+    }
+
+    /** True when every visible child of the group is a surface or holds exactly one (ex: li > button.sw-tile) */
+    function isCardRow(g, surfaceSel) {
+        let n = 0;
+        for (const c of g.children) {
+            if (!c.getClientRects().length)
+                continue;
+            ++n;
+            if (c.matches(surfaceSel))
+                continue;
+            if (c.children.length === 1 && c.firstElementChild.matches(surfaceSel))
+                continue;
+            return false;
+        }
+        return n > 0;
+    }
+
+    /**
+     * Move an element out by l / r px (0, 0: back to its own inline margins). A moved element has no max width (it filled its row, so a
+     * max-width: 100 % was what kept it there; it would move sideways instead of growing).
+     */
+    function setMargins(e, l, r) {
+        const m = moved.get(e);
+        if (!l && !r) {
+            if (m) {
+                e.style.marginLeft = m.ml;
+                e.style.marginRight = m.mr;
+                e.style.maxWidth = m.mw;
+                moved.delete(e);
+            }
+            return;
+        }
+        const o = m || { ml: e.style.marginLeft, mr: e.style.marginRight, mw: e.style.maxWidth };
+        moved.set(e, o);
+        e.style.marginLeft = l ? "calc(" + (o.ml || "0px") + " - " + l + "px)" : o.ml;
+        e.style.marginRight = r ? "calc(" + (o.mr || "0px") + " - " + r + "px)" : o.mr;
+        e.style.maxWidth = "none";
+    }
+
+    function setEdges(e, l, r) {
+        if (e.classList.contains("sw-edge-l") !== l)
+            e.classList.toggle("sw-edge-l", l);
+        if (e.classList.contains("sw-edge-r") !== r)
+            e.classList.toggle("sw-edge-r", r);
+        if (l || r)
+            edged.add(e);
+        else
+            edged.delete(e);
+    }
+
+    /** The page padding --sw-page-px in px (the token is in rem, ex: 1rem; 16 px without sw/ui.css) */
+    function pagePx() {
+        const cs = getComputedStyle(document.documentElement);
+        const v = cs.getPropertyValue("--sw-page-px").trim();
+        const n = parseFloat(v);
+        if (!isFinite(n))
+            return 16;
+        return v.endsWith("rem") ? n * parseFloat(cs.fontSize) : n;
+    }
+
+    /**
+     * The window edges an element can reach through its clipping ancestors (overflow not visible): the inner edges of a window wide
+     * scroller (a fill page's own scroll area, ex: explore/themepreview.html: its scroll bar takes the right side), else the window's.
+     * @param {Element} e The element.
+     * @param {number} w The window width (no scroll bar).
+     * @param {Map<Element, ?Array<number>>} cache The ancestors measured in this pass (null: does not clip).
+     * @returns {Array<number>} [left, right]: the x of the edges the element can reach; NaN: a side it can't move to (a clipping
+     * ancestor, ex: a tab panel scroller inside the page padding, ends before the window edge: moved there, it would be cut off).
+     */
+    function bounds(e, w, cache) {
+        let l = 0;
+        let r = w;
+        //  (body and html too: a page whose body clips inside the html padding, ex: the stand alone table page)
+        for (let p = e.parentElement; p; p = p.parentElement) {
+            let c = cache.get(p);
+            if (c === undefined) {
+                c = null;
+                if (getComputedStyle(p).overflowX !== "visible") {
+                    const b = p.getBoundingClientRect();
+                    const il = b.left + p.clientLeft;
+                    c = [b.left <= 0.5 ? il : NaN, b.right >= w - 0.5 ? il + p.clientWidth : NaN];
+                }
+                cache.set(p, c);
+            }
+            if (c) {
+                l = Math.max(l, c[0]);
+                r = Math.min(r, c[1]);
+            }
+        }
+        return [l, r];
+    }
+
+    function undoAll() {
+        for (const e of [...moved.keys()])
+            setMargins(e, 0, 0);
+        for (const e of [...edged])
+            setEdges(e, false, false);
+    }
+
+    /**
+     * Measure the candidates of one kind (all reads first, then all writes).
+     * @param {string} sel The selector of the kind.
+     * @param {string} surfaceSel The surface selector.
+     * @param {string} kind "frame", "group" (moved, never edged) or "surface".
+     * @param {Set<Element>} keep Collects the handled elements.
+     * @param {Set<Element>} carriers The moved frames and groups (what is in them is not moved again).
+     * @param {Map<Element, ?Array<number>>} scrollers Cache of bounds.
+     */
+    function pass(sel, surfaceSel, kind, keep, carriers, scrollers) {
+        const w = document.documentElement.clientWidth;
+        const gap = pagePx() + 0.5;
+        const todo = [];
+        for (const e of document.body.querySelectorAll(sel)) {
+            if (!eligible(e, surfaceSel))
+                continue;
+            if (kind === "group" && !isCardRow(e, surfaceSel))
+                continue;
+            const b = e.getBoundingClientRect();
+            //  In a moved row / frame: never moved again (it would leave its clipping / grid parent), only edged when it touches the edge
+            let inMoved = false;
+            for (const c of carriers)
+                if (c !== e && c.contains(e)) {
+                    inMoved = true;
+                    break;
+                }
+            const [bl, br] = bounds(e, w, scrollers);
+            //  (NaN: a side that can't reach the window edge, never at it)
+            todo.push([e, isNaN(bl) ? Infinity : b.left - bl, isNaN(br) ? Infinity : br - b.right, inMoved ? 0.5 : gap]);
+        }
+        for (const [e, gl, gr, g] of todo) {
+            const atL = gl > -0.5 && gl <= g;
+            const atR = gr > -0.5 && gr <= g;
+            setMargins(e, (atL && gl > 0.5) ? gl : 0, (atR && gr > 0.5) ? gr : 0);
+            if (kind !== "group")
+                setEdges(e, atL, atR);
+            if (atL || atR) {
+                keep.add(e);
+                if (kind !== "surface" && moved.has(e))
+                    carriers.add(e);
+            }
+        }
+    }
+
+    function update() {
+        frame = 0;
+        if (!active()) {
+            undoAll();
+            return;
+        }
+        const surfaceSel = Surfaces.join(",");
+        const keep = new Set();
+        //  Measure the page as it is without the moves (all in one frame, before the paint: nothing flickers)
+        for (const e of [...moved.keys()])
+            setMargins(e, 0, 0);
+        //  Frames first (a table and its scroller), then rows of cards (moved as a whole), then the cards
+        const carriers = new Set();
+        pass(Frames.join(","), surfaceSel, "frame", keep, carriers, new Map());
+        pass(Groups.join(","), surfaceSel, "group", keep, carriers, new Map());
+        pass(surfaceSel, surfaceSel, "surface", keep, carriers, new Map());
+        //  Elements that are no longer candidates (moved into a dialog, a class removed, gone from the page)
+        for (const e of [...edged])
+            if (!keep.has(e))
+                setEdges(e, false, false);
+        //  Our own class / style changes are no reason to measure again
+        if (mo)
+            mo.takeRecords();
+    }
+
+    function schedule() {
+        if (!frame)
+            frame = requestAnimationFrame(update);
+    }
+
+    function observe() {
+        const want = active();
+        if (want !== on) {
+            on = want;
+            if (want) {
+                mo = mo || new MutationObserver(schedule);
+                mo.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "hidden"] });
+                //  The window size and also a scroll bar that comes or goes (no resize event)
+                if (window.ResizeObserver) {
+                    ro = ro || new ResizeObserver(schedule);
+                    ro.observe(document.documentElement);
+                }
+                else
+                    window.addEventListener("resize", schedule);
+            }
+            else {
+                if (mo)
+                    mo.disconnect();
+                if (ro)
+                    ro.disconnect();
+                window.removeEventListener("resize", schedule);
+            }
+        }
+        schedule();
+    }
+
+    function start() {
+        if (!window.matchMedia || !document.body)
+            return;
+        mq = window.matchMedia(Media);
+        if (mq.addEventListener)
+            mq.addEventListener("change", observe);
+        observe();
+    }
+
+    Sw.Bleed = {
+        /** The surface selectors (cards): moved to the window edge, with edge classes */
+        Surfaces,
+        /** The group selectors (rows of cards): moved as a whole */
+        Groups,
+        /** The frame selectors (a frame without a border around cards, ex: the data table in card layout): moved as a whole, with edge classes */
+        Frames,
+        /** Measure again (in the next frame) */
+        Update() {
+            if (on)
+                schedule();
+        },
+    };
+
+    if (document.body)
+        start();
+    else
+        document.addEventListener("DOMContentLoaded", start, { once: true });
 })();

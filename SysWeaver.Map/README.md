@@ -39,6 +39,20 @@ flowchart LR
 - [`MapTools`](MapTools.cs) — map resource names and region listing
 - [`Maps`](Maps.cs) — the available maps
 
+## Using it
+
+```csharp
+var svg = MapGen.Generate(new MapGenParams
+{
+    Map = Maps.Europe,
+    Regions = [new MapRegion { Id = "SE", FillColor = "#2a7" }, new MapRegion { Id = "DK", FillColor = "#c33" }],
+    CropToRegions = -5, // crop to the highlighted regions with a 5 % margin
+});
+var regions = MapTools.GetRegions(new MapSelect { Map = Maps.CountryZones, MapCountry = "US" }); // the region ids of a map
+```
+
+[SysWeaver.MicroService.Map](../SysWeaver.MicroService.Map/README.md) exposes this as a web API (and AI tool).
+
 ## Limitations and considerations
 
 - Map data is a static snapshot; border changes require new data and a rebuild

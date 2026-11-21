@@ -1,5 +1,8 @@
 ﻿namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// Chunk statistics of a compressed service version (the result of touching or verifying a version)
+    /// </summary>
     public sealed class SmCompFileStats
     {
         /// <summary>

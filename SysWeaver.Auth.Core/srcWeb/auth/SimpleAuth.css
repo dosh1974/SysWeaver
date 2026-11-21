@@ -9,9 +9,10 @@
 
 /* ===== Tool pages (auth-tool: index.html, KeyMan.html; SimpleAuth.js toolPage -> AuthPage.SetHeader) =====
    The Design v2 form page layout itself (page header above a start aligned card) is shared by every auth page: Auth.css
-   ("Form page layout"). Here only the key list page, whose card uses the page width. */
+   ("Form page layout"). Here only the key list page, whose card uses the page width (auto, not 100 %: on phones Sw.Bleed,
+   ui/page.js, widens it over the page padding to the window edges). */
     .auth-page.auth-tool.auth-wide form.auth-box {
-        width: 100%;
+        width: auto;
         padding: 0;
         gap: 0;
         overflow: hidden;
@@ -53,10 +54,20 @@ html.SwNarrow .auth-tool .auth-list.auth-keys > .auth-item {
     html.SwNarrow .auth-tool .auth-list.auth-keys > .auth-item > .auth-buttons {
         grid-column: 1;
         grid-row: auto;
+        /* (the four actions wrap at a large text size instead of leaving the window) */
+        flex-wrap: wrap;
     }
+
+        /* (44 px touch targets: UX guide 15 Phones and touch) */
+        html.SwNarrow .auth-tool .auth-list.auth-keys > .auth-item > .auth-buttons .sw-button {
+            min-width: 2.75rem;
+            min-height: 2.75rem;
+        }
 
 /* The key value of an API key item (long, monospace, selectable, wraps anywhere). */
 .auth-key {
+    /* (the screen reader text of a masked key is positioned in it, so its clip holds it: it scrolled the page sideways) */
+    position: relative;
     font-family: var(--sw-mono);
     font-size: var(--sw-mono-size);
     overflow-wrap: anywhere;
@@ -69,6 +80,14 @@ html.SwNarrow .auth-tool .auth-list.auth-keys > .auth-item {
     letter-spacing: 0.1em;
     user-select: none;
     -webkit-user-select: none;
+    /* (one line: the dots stand for the key, a wrapped "••" on a line of its own looked like a second value) */
+    overflow-wrap: normal;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    /* (never wider than its row: at 200 % text the dots made the page scroll sideways) */
+    min-width: 0;
+    max-width: 100%;
 }
 /* ===== Password hash generator (index.html, pwdGenMain): a Design v2 form page, Sw.Card + Sw.TextBox + Sw.Form =====
    One form stack gap (--sw-space-4) between the fields, the policy rules as a quiet list under the password, the generate

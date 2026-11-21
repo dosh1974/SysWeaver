@@ -4,6 +4,10 @@ using SysWeaver.Net;
 namespace SysWeaver.Chat
 {
 
+    /// <summary>
+    /// Given to a chat provider when it is registered with the ChatService (IChatProvider.OnInit):
+    /// the provider calls it to push new, changed, removed and cleared messages to the clients.
+    /// </summary>
     public interface IChatController
     {
         /// <summary>

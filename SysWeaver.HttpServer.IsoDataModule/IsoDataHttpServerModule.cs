@@ -12,12 +12,21 @@ using SysWeaver.MicroService;
 
 namespace SysWeaver.Net.IsoDataModule
 {
+    /// <summary>
+    /// Publishes the ISO reference data of SysWeaver.IsoData to the web: the generated scripts iso_data/languages.js, countries.js,
+    /// currencies.js and phone_prefixes.js, the flag urls iso_data/country/..., iso_data/language/... and iso_data/phone_prefix/...
+    /// (the flags of the icon module, else iso_data/icons/unknown.svg), and the debug tables of the data.
+    /// </summary>
     public sealed class IsoDataHttpServerModule : IHttpServerModule
     {
         static readonly DateTime AsmTime = typeof(IsoLanguage).Assembly.GetLastWriteTimerUtc();
         static readonly String AsmETag = HttpServerTools.ToEtag(AsmTime);
 
 
+        /// <summary>
+        /// Create the module and register the generated scripts in the static data module.
+        /// </summary>
+        /// <param name="data">The static data module that serves the scripts and the flag icons (if null, nothing is registered).</param>
         public IsoDataHttpServerModule(StaticDataHttpServerModule data)
         {
             if (data == null)

@@ -7,6 +7,9 @@ namespace SysWeaver.MicroService
 
     public partial class FolderSyncService
     {
+        /// <summary>
+        /// A row of the managed folders table: one version (the active folder or a backup) of a managed folder
+        /// </summary>
         [SysWeaver.Data.TableDataCard("+folder@foldersync/cards")]
         public sealed class ManagedFolderData
         {
@@ -109,6 +112,9 @@ namespace SysWeaver.MicroService
         }
 
 
+        /// <summary>
+        /// A row of the shared folders table: one shared folder
+        /// </summary>
         [SysWeaver.Data.TableDataCard("+shared@foldersync/cards")]
         public sealed class SharedFolderData
         {
@@ -144,6 +150,9 @@ namespace SysWeaver.MicroService
 
 
 
+        /// <summary>
+        /// A row of the remote folders table: one remote folder
+        /// </summary>
         [SysWeaver.Data.TableDataCard("remote@foldersync/cards")]
         public sealed class RemoteFolderData
         {

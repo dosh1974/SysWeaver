@@ -1,5 +1,5 @@
 ﻿/**
- * @file ui/code.js - SysWeaver UI library (Sw), part 7 of 7 (optional, not in the sw/ui.js bundle): the code editor Sw.CodeEditor.
+ * @file ui/code.js - SysWeaver UI library (Sw), an optional part (not in the sw/ui.js bundle, loaded on demand): the code editor Sw.CodeEditor.
  * Port of the EffectWeaver code editor (ew-code.js). Load it on demand after sw/ui.js, ex: await Sw.Net.IncludeJs(null, "../ui/code.js").
  * Styles: ui/code.css (part of sw/ui.css). Documentation: ui/README.md.
  * 

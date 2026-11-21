@@ -31,7 +31,7 @@ flowchart TB
 
 - Pluggable providers (`IChatProvider`): [SysWeaver.Chat.MySql](../SysWeaver.Chat.MySql/README.md) for persisted rooms, the AI services of [SysWeaver.AI](../SysWeaver.AI/README.md) for AI assistants, `SimpleChatService` for configured in-memory rooms
 - Per room permissions (`ChatSessionParams`): join, post, clear, remove own / any message, including anonymous rooms
-- Text, Markdown and HTML messages, message and chat menus, user profiles
+- Text, Markdown and HTML messages (HTML only from the server), message and chat menus, user profiles; AI answers are tagged as such (`ChatMessageFlags.FromAi`)
 - On-demand translation of messages into the user's language (when the server has a translator)
 - Optional continuous speech input with a wake word
 - File and link sharing through the user storage, privately or publicly (`AllowPublicStore`); other services can provide shareable links (`IChatStoreLinkHandler`)
@@ -45,6 +45,8 @@ flowchart TB
 - [`ChatDataView`](ChatDataView.cs) — how a message's attached data is shown: `ChatMessage.DataViews` has one `{Raw, Viewer, Source}` per `Data` entry, filled by `ChatService` from the extension viewers / editors (`ChatDataViews.Fill`); providers may set their own
 - [`ChatMenuItem`](ChatMenuItem.cs) — a server menu item; `Checked` / `Radio` make check box / radio items
 - [`ChatSessionParams`](ChatSessionParams.cs) — permissions and options of a room / session
+- [`ChatServiceParams`](ChatServiceParams.cs) — service parameters: `AllowPublicStore` (default true) and the selectable input languages (`InputLanguages`, null: the languages of the HTTP server)
+- [`ChatMessage`](ChatMessage.cs) / [`ChatMessageFlags`](ChatMessageFlags.cs) — a message; flags mark unfinished messages, AI answers (shown with an "AI" tag) and messages the user can remove
 
 ## Using it
 

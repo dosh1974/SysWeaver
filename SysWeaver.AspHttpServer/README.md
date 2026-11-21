@@ -28,13 +28,15 @@ flowchart LR
 - Cross-platform HTTPS with certificates from SysWeaver certificate providers; the server restarts its listeners when a provider reports a new certificate.
 - HTTP/1.1 for plain HTTP, HTTP/1.1 and HTTP/2 for HTTPS, plus HTTP/3 with `EnableHttp3`.
 - Validates each prefix and, with `IgnoreBadPrefixes` (default), skips prefixes that fail instead of failing the server.
-- Optional firewall rule per prefix, pause mode (503) and graceful shutdown.
+- Optional firewall rule per prefix (`AddToFirewall`).
+- Pause stops Kestrel until Continue (requests that arrive while it stops are answered with 503); Stop asks ongoing requests to cancel and gives them about 3 seconds.
 - Kestrel logging routed into the SysWeaver message system.
 
 ## Key components
 
 - [`AspHttpServer`](AspHttpServer.cs) — the `HttpServerBase` implementation hosting Kestrel directly (no ASP.NET Core host)
 - [`AspHttpServerParams`](AspHttpServerParams.cs) — listen prefixes and server options
+- [`AspHttpServerRequest`](AspHttpServerRequest.cs) — the `HttpServerRequest` wrapper around a Kestrel `HttpContext`
 
 ## Using it
 
@@ -46,6 +48,7 @@ Through [SysWeaver.MicroService.AspHttpServer](../SysWeaver.MicroService.AspHttp
 - HTTP/3 requires OS support (Windows 11 / Server 2022 or libmsquic on Linux).
 - Some Kestrel internals are resolved by type name via reflection, which can be sensitive to ASP.NET Core version changes.
 - The default `ListenOn` is external HTTPS on port 443; configure prefixes explicitly.
+- `SecondsToWait` is not used yet: a stop (also a pause, or a certificate change) waits about 3 seconds for ongoing requests.
 
 ## Relationships
 

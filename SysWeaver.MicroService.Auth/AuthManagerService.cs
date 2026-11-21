@@ -17,9 +17,14 @@ namespace SysWeaver.MicroService
 
 
 
+    /// <summary>
+    /// The authentication service: creates the <see cref="AuthManager"/> from every <see cref="AuthorizerBase"/> service (and keeps it in sync when
+    /// authorizers are added or removed), serves the user images under auth/UserImages/ and the auth web pages, and provides the user
+    /// menu with "Sign out" (the last item) and the web api for the current user, address validation and one-time token sign in.
+    /// </summary>
     [WebApiUrl("auth")]
     [WebMenuPath("User", "User", "User", "User management", "IconUser")]
-    [WebMenuEmbedded("User", "User/Logout", "Sign out", "auth/Logout.html", "Click to sign out", "IconLogout", 0, "")]
+    [WebMenuEmbedded("User", "User/Logout", "Sign out", "auth/Logout.html", "Click to sign out", "IconLogout", 1000, "")]
     [IsMicroService]
     [RequiredDep<AuthorizerBase>]
     [OptionalDep<IUserImageHandler>]

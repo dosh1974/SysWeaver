@@ -30,12 +30,12 @@ namespace SysWeaver.Net
 
 
         /// <summary>
-        /// Optional translator instance name 
+        /// Optional instance name of the translator (ITranslator) to use, null for the default instance
         /// </summary>
         public String TranslatorInstance;
 
         /// <summary>
-        /// Optional audit instance name 
+        /// Optional instance name of the API audit service (IApiAuditService) to use, null for the default instance
         /// </summary>
         public String AuditInstance;
 

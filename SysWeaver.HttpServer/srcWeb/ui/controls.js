@@ -1342,7 +1342,8 @@
      * Named Group (the Ew Frame) since Sw.Frame is the core's frame messaging namespace.
      * Options: Title, Sub (a secondary line under the title), Actions (buttons / elements / components for the right of the header),
      * Class, Flush (no body padding: tables, lists), Content (elements appended to the body).
-     * Properties: E (the card), Head (the header row, hidden without title and actions), Title (the title element), Tools (the actions
+     * Properties: E (the card), Head (the header row, hidden without title and actions), Title (the title element, a level 2 heading:
+     * role "heading", aria-level 2), Tools (the actions
      * area), Body (append content here). Methods: SetTitle(text), SetSub(text).
      */
     class Group {
@@ -1353,7 +1354,8 @@
             o = o || {};
             Sw.Work.CheckOptions("Sw.Group", o, Schema.Group);
             const comp = x => x && x.E ? x.E : x;
-            this.Title = el("div.sw-group-title");
+            //  (a heading: the group titles are the sections of a page, reachable by heading navigation; level 2 under the page h1)
+            this.Title = el("div.sw-group-title", { attrs: { role: "heading", "aria-level": "2" } });
             this.Sub = el("div.sw-group-sub");
             //  option Actions (alias Tools); the area is Tools (alias Actions, the name of the option and of PageHeader)
             this.Tools = el("div.sw-group-tools", null, ...(o.Actions || o.Tools || []).map(comp));

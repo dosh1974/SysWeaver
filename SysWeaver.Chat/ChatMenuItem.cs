@@ -7,6 +7,10 @@ namespace SysWeaver.Chat
 {
 
 
+    /// <summary>
+    /// A menu item that the server (the chat provider) adds to the chat menu or to the menu of a message.
+    /// A leaf item sends its Id and value to the provider (the SetValue api); items with children are sub menus.
+    /// </summary>
     public class ChatMenuItem
     {
         /// <summary>

@@ -44,8 +44,9 @@ namespace SysWeaver.MicroService
         {
             foreach (var d in Domains.Values)
             {
+                //  No certificate yet, or the renewal is due (the provider dropped its certificate shortly before it expires)
                 var cert = d.Data;
-                if (cert != null)
+                if ((cert != null) && !d.RenewalDue)
                     continue;
                 try
                 {
@@ -139,6 +140,11 @@ namespace SysWeaver.MicroService
         void OnChange(Domain d)
         {
             Manager.AddMessage(MessageLevels.Info, $"Certificate for {d.DomainName} was updated!");
+        }
+
+        void OnRenewalDue(Domain d)
+        {
+            Manager.AddMessage(MessageLevels.Info, $"Certificate for {d.DomainName} expires soon, ordering a new one");
         }
 
         async Task InitDomains()

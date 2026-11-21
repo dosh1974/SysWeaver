@@ -90,13 +90,13 @@ namespace SysWeaver.MicroService
 
 
         /// <summary>
-        /// The methods that can be used for sign up (sign up is still only available if the SignUp service is loaded)
+        /// The methods that can be used for sign up: empty unless a <see cref="SignUpService"/> is loaded (it enables them, without it there is no sign up api)
         /// </summary>
-        /// <returns>The names of the sign up methods (as configured for this service)</returns>
+        /// <returns>The names of the sign up methods (as configured for this service), empty when sign up is not available</returns>
         [WebApi]
         [WebApiClientCacheStatic]
         [WebApiRequestCacheStatic]
-        public String[] SignUpMethods() => InternalSignUpMethods;
+        public String[] SignUpMethods() => ActiveSignUpMethods;
 
 
         /// <summary>

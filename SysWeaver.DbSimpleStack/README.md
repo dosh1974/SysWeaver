@@ -43,6 +43,8 @@ flowchart TB
 - [`DbParams`](DbParams.cs) — base parameters shared by all database-backed services
 - [`DbTableCache`](DbTableCache.cs) — caches a complete table in a dictionary, optionally refreshed in the background
 - [`DbData`](DbDataExtension.cs) — answers `TableDataRequest`s from a table
+- [`DbExtensions`](DbExtensions.cs) — raw SQL commands (`CommandAsync`, `ReaderCommandAsync`, `ScaleCommandAsync`) and the compiled row readers (`DbCacheRead<T>`)
+- [`IBlob`](IBlob.cs) — object to blob conversion, implemented by `DbSimpleStack`
 - [`CaseSensitiveAttribute` and friends](DbAttributes.cs) — column attributes (declared in the `SimpleStack.Orm.Attributes` namespace)
 
 ## Using it

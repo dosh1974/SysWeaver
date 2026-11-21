@@ -19,7 +19,7 @@ Provides general world knowledge that services can query without an internet con
 flowchart LR
   DB["embedded .db files<br/>Brotli-compressed JSON"] --> Load["category classes<br/>Persons, Places, Movies, ..."]
   Code["data in code<br/>Cities, Animals, Years, ..."] --> Load
-  Iso["SysWeaver.IsoData<br/>countries, languages"] --> Load
+  Iso["SysWeaver.IsoData<br/>countries, currencies"] --> Load
   Load --> All["AllInfo<br/>keyword lookup"]
   All --> Search["InfoSearcher<br/>find entities in text"]
   Search --> Consumer["your service"]
@@ -39,6 +39,8 @@ No other SysWeaver project references it; it is a standalone data library for ap
 - [`AllInfo`](AllInfo.cs) — the combined keyword dictionary and the shared `Searcher`
 - [`InfoSearcher`](InfoSearcher.cs) — finds the entities mentioned in a text
 - [`Info`](Info.cs) — the entity type all categories derive from
+- Categories loaded from the embedded data: [`Persons`](Persons.cs), [`Places`](Places.cs), [`Artists`](Artists.cs), [`ArtStyles`](ArtStyles.cs), [`Movies`](Movies.cs), [`Series`](Series.cs), [`CarBrands`](CarBrands.cs), [`Sports`](Sports.cs), [`HistoricalEvents`](HistoricalEvents.cs); [`Countries`](Iso.cs) are built from SysWeaver.IsoData (plus the country aliases from the data)
+- Categories defined in code: [`Cities`](Cities.cs), [`Animals`](Animals.cs), [`Years`](Years.cs), [`MediaCat`](MediaCat.cs) (the parent categories of movies and series)
 
 ## Limitations and considerations
 
@@ -50,7 +52,7 @@ No other SysWeaver project references it; it is a standalone data library for ap
 
 | Folder | Content |
 |---|---|
-| [`data/`](data) | The embedded knowledge data files (Brotli compressed JSON, `*.db`) |
+| [`data/`](data) | The embedded knowledge data files: each `*.db` is a Brotli compressed JSON array of strings, embedded as is (no build step) and read by `DataHelper.GetData` the first time a category is used. `Artists`, `Arts` (art styles), `Cars`, `Events`, `LangAlts` (alternative country names), `Movies`, `Persons`, `Places`, `Series` and `Sports`. Unlike the generated `data/` folders of other projects these files are source files in the repository (the `data` rule of `.gitignore` matches the folder, so new files must be added with `git add -f`). |
 
 ## Relationships
 

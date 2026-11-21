@@ -29,7 +29,7 @@ The `EmbedLocal` target of [`SysWeaver.MicroService.Avatar.csproj`](../SysWeaver
 |---|---|
 | `*-svgrepo-com.svg` (648 files) | Multi-coloured icons, all named after their [SVG Repo](https://www.svgrepo.com) download, e.g. `airplane-svgrepo-com.svg`, `badger-svgrepo-com.svg`, `tiger-face-svgrepo-com.svg`, `zipper-mouth-face-svgrepo-com.svg` |
 
-About 155 of the names are emoji-style faces (`*-face-*`); about 145 carry a ` (1)` / ` (2)` suffix, which are further drawings of the same subject downloaded under the same name (no two files have identical content).
+About 145 of the names are emoji-style faces (`*face*`); about 155 carry a ` (1)` / ` (2)` suffix, which are further drawings of the same subject downloaded under the same name (no two files have identical content).
 
 ## Limitations and considerations
 

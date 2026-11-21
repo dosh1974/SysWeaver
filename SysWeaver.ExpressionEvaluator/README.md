@@ -45,6 +45,8 @@ flowchart LR
 - [`ExpressionEvaluator`](ExpressionEvaluator.cs) — the standard evaluators and `ExpressionEvaluator<T>` (parse, compile, evaluate)
 - [`ExpressionOptimizer`](ExpressionOptimizer.cs) — LINQ expression simplification
 - [`CalcService`](CalcService.cs) — calculator web API
+- [`StringTokenizer`](StringTokenizer.cs) / [`StringTokenizerHelper`](StringTokenizerHelper.cs), [`ShuntingYard`](ShuntingYard.cs) and [`PostfixEvaluator`](PostfixEvaluator.cs) — the parsing stages: text to tokens, tokens to postfix order, postfix to an expression tree
+- [`ExpressionParserException`](ExpressionParserException.cs) — parse error with the position of the offending token
 
 ## Using it
 
@@ -79,4 +81,4 @@ Publish the calculator (optional):
 
 - **Project:** [`SysWeaver.ExpressionEvaluator.csproj`](SysWeaver.ExpressionEvaluator.csproj)
 - **Builds on:** [SysWeaver.Common](../SysWeaver.Common/README.md), [SysWeaver.MicroServices](../SysWeaver.MicroServices/README.md)
-- **Used by:** [SysWeaver.CommandLine](../SysWeaver.CommandLine/README.md), [SysWeaver.TableData](../SysWeaver.TableData/README.md)
+- **Used by:** [SysWeaver.CommandLine](../SysWeaver.CommandLine/README.md), [SysWeaver.TableData](../SysWeaver.TableData/README.md); [SysWeaver.AI](../SysWeaver.AI/README.md) uses it (through its references) for the calculator tool

@@ -20,7 +20,7 @@
 }
 
 /* Phones (portrait): the card is edge to edge */
-@media (max-width: 600px) {
+@media (max-width: 599px) {
     .html-main.sw-page-fill > .html-card {
         margin-inline: calc(-1 * var(--sw-page-px, 16px));
         border-width: 1px 0 0;

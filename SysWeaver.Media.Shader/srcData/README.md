@@ -37,6 +37,9 @@ Conventions:
 - `EwHashAToB`: A = input dimension, B = output dimension (the effects use `hash12` / `hash21`
   inconsistently, the snippets don't).
 - Rotations are counter-clockwise for `matrix * vector` (right handed for 3D).
+- Exception: [`audio/EwAudio2`](<audio/EwAudio2.md>) reads the audio2 texture of an audio2 effect
+  (passed as a `sampler2D` parameter) and defines many functions and constants. It is not in
+  `catalog.tsv`, so the generated folder list below doesn't show it.
 
 ## Per effect instructions
 

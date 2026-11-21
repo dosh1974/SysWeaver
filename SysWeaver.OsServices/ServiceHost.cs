@@ -736,9 +736,11 @@ namespace SysWeaver.OsServices
         /// Run this from the main entrypoint of a command line program to run as a service.
         /// The first command line argument is the verb (see <see cref="ServiceVerbs"/>), ex: "install", "start", "debug" or "daemon" (used by the OS).
         /// Services will be loaded and created from service manifest file named: "ExecutableFile.Services.json".
-        /// You can have different manifest files depending on the OS, using the syntax "ExecutableFile.Services.[OS].json", where OS is one of the following:
-        /// * Win32NT = The operating system is Windows NT or later.
-        /// * Unix = The operating system is Unix.
+        /// You can have different manifest files depending on the OS, using the syntax "ExecutableFile.Services.[OS].json", which is used instead when it exists.
+        /// OS is <see cref="EnvInfo.OsPlatform"/> with the first letter in upper case (see ServiceManager.GetManifestFileName), one of the following:
+        /// * Windows (ex: "MyService.Services.Windows.json").
+        /// * Linux (ex: "MyService.Services.Linux.json", the case matters on Linux).
+        /// * Osx, Freebsd or Unknown (no service host is implemented for these).
         /// </summary>
         /// <param name="p">Optional params, if null defaults are used. Name and display name are resolved and written back.</param>
         /// <param name="onStart">Optional callback to execute after all services in the manifest file have been created</param>

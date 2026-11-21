@@ -75,7 +75,7 @@ sequenceDiagram
 - **Push messages:** a long-poll channel through which the server pushes messages to a session, a user, all logged in users or all sessions.
 - **Translation:** with a translator registered, responses and web assets are translated to the session language. `Api/application/GetSupportedLanguages`, `GetLocalizedLanguages`, `GetLanguage` and `SetLanguage` read and change the session language; `GetSelectableLanguages` returns the localized languages only when a translator is registered (null otherwise: the app shell then offers no language choice).
 - **Built-in end points:** `logout`, `auth/redirect`, `auth/logout_user` and `serverTime`, plus fall-backs used when no module serves them (`login`, `basic_auth`, the generated app icon, logo and banner and the bitmaps rendered from them, see [App icon, logo and banner](#app-icon-logo-and-banner), empty `app/app.css` / `app/app.js`).
-- **Web application shell:** an embedded single-page application (home and welcome pages, tabs, tags, themes, common scripts) that other projects extend with their own pages and menus.
+- **Web application shell:** an embedded single-page application (the client core `Sw`, the UI component library, the shell with header, menu and content frame, home and welcome pages, themes and file viewers, see [`srcWeb/`](srcWeb/README.md)) that other projects extend with their own pages and menus.
 - **HTTPS and firewall:** certificate binding from certificate provider services (`CertificateBinder`) and optional firewall rules per listen prefix (`FirewallHandler.Instance` picks `WindowsFirewallHandler`, `LinuxFirewallHandler` or `NoFirewallHandler`).
 - **Diagnostics:** tables of APIs, sessions, users, caches, MIME types, template variables and transformer caches.
 - **In-process API invocation** (`IApiHttpServerEndPoint.InvokeAsync`) for AI tools and other services. It performs no auth, rate limit or cache checks, so callers must check `Auth` themselves.
@@ -112,8 +112,12 @@ The rendered bitmaps are cached in memory. The server checks the source svg for 
 
 - [`HttpServerBase`](HttpServerBase.cs) — the abstract pipeline (partial, split over `HttpServerBase*.cs`), configured by [`HttpServerBaseParams`](HttpServerBaseParams.cs)
 - [`ApiHttpServerModule`](ApiHttpServerModule.cs) — the Web API engine, with [`ApiHttpEntry`](ApiHttpEntry.cs) as a compiled API method; a `[WebApiRaw]` method without a mime type returns a `MemoryFile` (`ApiMemoryFile`: the mime type is taken from the file per call, or derived from its name, and a name is sent as an `inline` `Content-Disposition`)
+- [`HttpServerRequest`](HttpServerRequest.cs) — the abstract request that the listeners implement: method, url, headers, body, session, client address
 - [`HttpSession`](HttpSession.cs) — per client session state, user and push message queue
+- [`BackgroundJobs`](BackgroundJobs.cs) — the background jobs of `HttpServerBase.StartJob` / `StartWork` and their client APIs
 - [`FileHttpServerModule`](FileHttpServerModule.cs) — serves folders on disc
+- [`HttpProxy`](HttpProxy.cs) — forwards url prefixes to other servers, with memory and disc caching
+- [`HttpServerBase_Favicon`](HttpServerBase_Favicon.cs) — the generated app icon, logo and banner and the bitmaps rendered from them
 - [`CachedTransformer`](CachedTransformer/CachedTransformer.cs) — base class of the disc-cached file transformers
 
 ## Using it
@@ -213,7 +217,7 @@ The result is serialized by the serializer the `Accept` header asks for (the def
 - The listeners' default listen prefix is external HTTPS on port 443 (`HttpServerPrefix.DefaultExternalHttps`), which requires a certificate provider (and, on Windows with HttpListener, elevated rights). Always configure prefixes explicitly, e.g. `http://localhost:8080`.
 - With a wildcard prefix (`https://*:8097/`) the host of a request's `Prefix` is the client's Host header: build links that leave the request (e-mails, text messages) with `GetLinkRoot(request)` (the request prefix only for a fixed host prefix, else the configured `ExternalRootUri`) and set `ExternalRootUri` for such a listener.
 - HTTP range requests are not handled for cached content (TODO in source), which matters for media streaming; suffix and multi-range requests are rejected.
-- The client IP is always the direct peer address. `Forwarded` / `X-Forwarded-For` headers are neither read nor added by the built-in proxy components (TODO in source). `HttpProxy` / `FileProxy` strip the Cookie and Authorization headers unless `ForwardCookies` / `ForwardAuthorization` are set; the reverse proxy forwards Authorization and only the cookies that the client itself has set (see SysWeaver.ReverseProxy).
+- The client IP (`HttpServerRequest.GetIpAddress`) is the address of the connection, unless the connection comes from a trusted proxy (`HttpServerBaseParams.TrustedProxies`, default `loopback` and `private` networks): then it is the first address from the right of the `Forwarded` (`for=`) or `X-Forwarded-For` chain that is not a trusted proxy itself (`IsForwarded` is true). A client that connects directly from a trusted network can set these headers itself, so set `TrustedProxies` to an empty array when the private network isn't trusted. The built-in proxy components (`HttpProxy`, `FileProxy`, `ProxyRequestCache`) add the connection's address to `X-Forwarded-For`. `HttpProxy` / `FileProxy` strip the Cookie and Authorization headers unless `ForwardCookies` / `ForwardAuthorization` are set; the reverse proxy forwards Authorization and only the cookies that the client itself has set (see SysWeaver.ReverseProxy).
 - The API engine limits POST bodies and their decompressed size (64 MB each by default, `ApiHttpServerModuleParams.MaxRequestSize` / `MaxDecompressedSize`, 413 when exceeded). Other modules apply no request body size limit.
 - Request path handling and template output have known open hardening issues; expose only folders meant to be public and don't rely on the server as the only protection for sensitive files.
 - Firewall handling: Windows uses `netsh advfirewall` (needs elevation); Linux detects firewalld, ufw or plain nftables (needs root, never uses `sudo`, does nothing when no firewall is active, iptables-only systems aren't supported, nftables rules are runtime only); macOS has no firewall support. Rules the handler didn't add are never changed or removed.
@@ -227,7 +231,7 @@ The result is serialized by the serializer the `Accept` header asks for (the def
 | [`CachedTransformer/`](CachedTransformer/README.md) | Base class and contracts of the disc-cached file transformers |
 | [`Security/`](Security/README.md) | Firewall handlers for Windows (netsh) and Linux (ufw, firewalld, nftables) |
 | [`Services/`](Services/README.md) | Service contracts for user images and user storage |
-| [`srcWeb/`](srcWeb/README.md) | Source of the embedded web application shell (`index.html`, `app/`, `common/`, `help/`) |
+| [`srcWeb/`](srcWeb/README.md) | Source of the embedded web client: the start page `index.html`, the client core, UI library and application shell (`core/`, `ui/`, `shell/`, bundled into `sw/`), file viewers (`view/`), start pages (`app/`), the theme and legacy bundle (`common/`), brand fonts (`brand/`) and template help (`help/`) |
 
 ## Relationships
 

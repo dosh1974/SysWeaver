@@ -32,6 +32,7 @@ No project calls this assembly directly; it only needs to be deployed with the a
 - OS friendly name from WMI (`Win32_OperatingSystem` caption, plus build and bitness); default key folder `C:\Keys`
 - Machine reboot via `ExitWindowsEx` after enabling `SeShutdownPrivilege` (used by administrative services)
 - Flushing file buffers to disk (`FlushFileBuffers`)
+- Executable discovery (`FindExecutables`: `*.exe` files that are PE images with a console or GUI subsystem); `MakeExecutable` has nothing to do on Windows
 - Granting the Everyone group full control on a directory, inherited by contained files and folders (used for data folders shared by all users)
 - Failures counted as statistics (`IHaveStats`, system `Windows.Platform`)
 
@@ -54,5 +55,5 @@ Nothing to configure — deploy the DLL with the application and use `PlatformTo
 
 - **Project:** [`SysWeaver.Common.Windows.csproj`](SysWeaver.Common.Windows.csproj)
 - **Builds on:** [SysWeaver.Common](../../SysWeaver.Common/README.md)
-- **Used by:** [SysWeaver.Storage](../../SysWeaver.Storage/README.md)
+- **Used by:** [SysWeaver.Storage](../../SysWeaver.Storage/README.md) (deployment reference); at runtime by everything that uses `PlatformTools.Current`
 - **Third-party:** System.Diagnostics.PerformanceCounter, System.Management

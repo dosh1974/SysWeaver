@@ -1,5 +1,8 @@
 ﻿namespace SysWeaver.Chat
 {
+    /// <summary>
+    /// Who receives the push messages of a chat change (IChatController).
+    /// </summary>
     public enum ChatScopes
     {
         /// <summary>

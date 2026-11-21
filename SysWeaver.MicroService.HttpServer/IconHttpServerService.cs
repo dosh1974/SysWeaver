@@ -5,6 +5,9 @@ using System;
 namespace SysWeaver.MicroService
 {
 
+    /// <summary>
+    /// Micro service that serves the shared icon set (<see cref="IconHttpServerModule"/>); needs the static data module, so it must come after <see cref="StaticDataHttpServerService"/>.
+    /// </summary>
     [IsMicroService]
     [RequiredDep<StaticDataHttpServerModule>]
     public sealed class IconHttpServerService : IDisposable

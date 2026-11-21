@@ -1,5 +1,5 @@
 ﻿/*
- * ui/icons.css - SysWeaver UI library (Sw) styles, part 6 of 6: the SysWeaver icon classes.
+ * ui/icons.css - SysWeaver UI library (Sw) styles, part 6 of 7: the SysWeaver icon classes.
  *
  * Every icon class used by the server (C# IconClass values, contract Appendix B) and by the pages: a class only sets mask-image
  * (an svg of the icon module, ../icons/), the element's background color (currentColor for Sw.IconClass / Sw.Icon elements, the

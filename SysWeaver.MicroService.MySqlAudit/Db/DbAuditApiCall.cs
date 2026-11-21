@@ -6,6 +6,9 @@ using SysWeaver.Data;
 namespace SysWeaver.MicroService.Db
 {
 
+    /// <summary>
+    /// A row in the AuditApiCalls table: one audited API call, its state, input, output, user, session and client
+    /// </summary>
     [TableDataPrimaryKey(nameof(Api))] // Additional primary key (only used in Charts)
     [PartitionByKey(nameof(Id))]
     [Alias("AuditApiCalls")]

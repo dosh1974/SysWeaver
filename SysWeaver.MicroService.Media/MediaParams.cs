@@ -1,5 +1,8 @@
 ﻿namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// Parameters of the <see cref="MediaService"/>
+    /// </summary>
     public sealed class MediaParams
     {
 

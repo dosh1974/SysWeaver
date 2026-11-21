@@ -30,18 +30,25 @@ flowchart LR
 
 - Append `explore` to any folder URL (e.g. `/explore`, `/Api/explore`) to list the server's end points below it, with type, auth, caching, compression, size and location.
 - API page and a generic interactive table page for any table-data API or session data reference (`GetTableDataRefUrl` builds the link).
-- Icon gallery of the shared icon set and a logo seed designer.
+- Icon gallery of the shared icon set, the app theme page (logo seed designer) with a theme preview (`GetAppSeed`, `GetSeedColors`, `PreviewTheme.css`).
+- "How to call APIs" help page (`apihelp.html`) and a csv / tsv viewer (`csv.html`, registered as the `.csv` / `.tsv` extension viewer by `ExploreHttpServerService`).
 - Debug tables of the registered serializers, compression formats and the live table data references.
 - Menu entries under *Debug* in the web UI.
 
 ## Key components
 
 - [`ExploreHttpServerModule`](ExploreHttpServerModule.cs) — the module, request handler and `debug/explore` APIs
-- [`ExploreHttpServerModuleParams`](ExploreHttpServerModuleParams.cs) — auth (default `Debug,Dev,Ops`) and caching options
+- [`ExploreHttpServerModuleParams`](ExploreHttpServerModuleParams.cs) — the auth (default `Debug,Dev,Ops`), compression and client cache options of `BaseHttpServerModuleParams`, and `PerMon` (performance monitoring, on by default)
+- [`ExploreItem`](ExploreItem.cs) / [`ExploreData`](ExploreData.cs) — the end point list passed to `explore.js` `Build(data)`
+- [`SerData`](SerData.cs) / [`CompData`](CompData.cs) — the rows of the serializer and compression format tables
 
 ## Using it
 
 Added by `ExploreHttpServerService` from [SysWeaver.MicroService.HttpServer](../SysWeaver.MicroService.HttpServer/README.md) (after the static data and icon services).
+
+```json
+{ "Type": "SysWeaver.MicroService.ExploreHttpServerService, SysWeaver.MicroService.HttpServer" }
+```
 
 ## Limitations and considerations
 

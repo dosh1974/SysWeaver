@@ -32,13 +32,15 @@ The service is the `ITranslator` of the process; the internal translator behind 
 ## Key features
 
 - Two-level cache (memory, MySQL) with separate durations per retention level (short, medium, long) and randomized expiration; expired entries are pruned periodically
-- A table of all translations (`Debug/Translator` menu) and a web editor to inspect, override and delete translations (`Debug` role, changes are audited)
+- A table of all cached translations (`Data/Translator` menu, "Cached translations") with Edit and Remove row actions, and a web editor to inspect and override a translation (`GetTranslation`, `SetTranslation`, `DeleteTranslation`, `Debug` role, changes are audited)
 - Statistics and performance monitoring
 
 ## Key components
 
 - [`TranslatorDbCacheService`](TranslatorDbCacheService.cs) — the caching translator, translation table and editor APIs
 - [`TranslatorDbCacheParams`](TranslatorDbCacheParams.cs) — database and cache parameters
+- [`DbTranslation`](DbTranslation.cs), [`DbInput`](DbInput.cs) — the database tables (translations, and the inputs shown in the table with their row actions)
+- [`Translation`](Translation.cs), [`SetTranslationRequest`](SetTranslationRequest.cs) — the editor API data
 
 ## Using it
 

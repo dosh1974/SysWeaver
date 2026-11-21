@@ -251,6 +251,11 @@ body {
     border-radius: 0 0 var(--sw-radius-md, var(--sw-radius)) var(--sw-radius-md, var(--sw-radius));
 }
 
+/* The JSON editor (Ace) keeps its layers (gutter z-index 4) to itself: they painted over the sticky Reset / Send bar while scrolling */
+.api-page .ace_editor {
+    isolation: isolate;
+}
+
     .api-formfoot .api-denied {
         margin: 0;
         max-width: 28rem;

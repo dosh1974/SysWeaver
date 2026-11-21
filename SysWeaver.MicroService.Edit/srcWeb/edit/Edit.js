@@ -52,11 +52,25 @@
      */
     const Has = v => v !== undefined && v !== null;
 
-    /** Default option values (Sw.Edit.Options copies them; used directly when an editor is created without options). */
+    /**
+     * Default option values (Sw.Edit.Options copies them; used directly when an editor is created without options).
+     * - Title: show the title row; Dev: developer tool tips (type names, assembly); ReadOnly: nothing can be changed.
+     * - CanExpand / IsExpanded: the title row has an expand button / the editor starts expanded; KeyName: the title (and the
+     *   accessible name) instead of the type's display name; Border: a framed box (false = class sw-edit-noborder).
+     * - ExpandAllCollections: collections start expanded; ExpandObjects: existing nested objects start expanded (forms for people).
+     * - MenuIcon: a menu button per member (MenuIconClass: its icon, the default = the "moreV" icon; MenuColorClass: legacy).
+     * - AddToHeader: `function(element)` that adds extras to the title row.
+     * - TypeHints: the hint line under the member names; PlainHints: hints for people (no type names, limits in words).
+     * - Summary: a one line summary of the value after the title of objects; MarkChanged: members that are not at their default
+     *   get class sw-edit-changed.
+     * - Descriptions: the summary of every member as a visible line (div.sw-edit-desc) under its value, referenced by the
+     *   member's inputs (aria-describedby) instead of being their placeholder.
+     */
     const OptionDefaults = Object.freeze({
         Title: true, Dev: true, ReadOnly: false, CanExpand: true, IsExpanded: true, KeyName: null, Border: true,
         ExpandAllCollections: false, MenuIcon: false, MenuIconClass: "SysWeaverEditIconMenu", MenuColorClass: "IconColorThemeAcc2",
         AddToHeader: null, TypeHints: true, PlainHints: false, Summary: false, MarkChanged: false, ExpandObjects: false,
+        Descriptions: false,
     });
 
     //  Inline icons used by the editor menus (stroked 24x24, follow the theme).
@@ -3512,7 +3526,7 @@
     /**
      * Options controlling how an editor renders and behaves (`new Sw.Edit.Options()` = defaults, or clone a preset). Defined here
      * (not in EditOptions.js, which is now a compatibility stub) so pages can create options right after Edit.js ran, before
-     * `await Sw.Edit.Ready`. The fields are documented in OptionDefaults and README.md ("Options").
+     * `await Sw.Edit.Ready`. The fields are documented in OptionDefaults and README.md ("Options and presets").
      */
     class EditOptions {
         /** Create the default options. */

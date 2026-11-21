@@ -33,14 +33,15 @@ flowchart LR
 ## Key features
 
 - `TranslatorApiService`: translate one text, multiple texts and to multiple languages, check source / target languages; client and request caching; auth configurable at runtime (`Auth`, default `Service`)
-- `TranslatorDebugService`: tables of the supported source and target languages in the `Debug/Translator` menu (default auth `Debug`)
-- `RemoteTranslatorService`: an `IInternalTranslator` using a generated HTTP proxy to a remote `ITranslator`, with an in-memory cache per retention level, cached language lists, a concurrency limit and statistics; it also registers the file translation handlers of [SysWeaver.FileTranslation](../SysWeaver.FileTranslation/README.md)
+- `TranslatorDebugService`: tables of the supported source and target languages in the `Data/Translator` menu, API under `translator/debug` (default auth `Debug`)
+- `RemoteTranslatorService`: an `IInternalTranslator` using a generated HTTP proxy to a remote `ITranslator`, with an in-memory cache per retention level, cached language lists, a concurrency limit and statistics, and a `RefreshFromServer` API (`AdminOps`, audited) that clears the memory caches; it also registers the file translation handlers of [SysWeaver.FileTranslation](../SysWeaver.FileTranslation/README.md)
 
 ## Key components
 
 - [`TranslatorApiService`](TranslatorApiService.cs) — the translation web API
 - [`TranslatorDebugService`](TranslatorDebugService.cs) — debug tables of supported languages
 - [`RemoteTranslatorService`](RemoteTranslatorService.cs) — translator client for a remote translation server
+- [`TranslatorApiParams`](TranslatorApiParams.cs), [`TranslatorDebugParams`](TranslatorDebugParams.cs), [`RemoteTranslatorParams`](RemoteTranslatorParams.cs) — the parameters (auth; base url, credentials, cache durations and concurrency of the remote client)
 
 ## Using it
 

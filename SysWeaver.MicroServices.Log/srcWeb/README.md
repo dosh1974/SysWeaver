@@ -17,7 +17,7 @@ This folder only contains the `logFile/` sub folder. The `EmbedLocal` target in 
 
 | Item | Description |
 |---|---|
-| [`logFile/`](logFile/README.md) | The *Debug / Log file* page |
+| [`logFile/`](logFile/README.md) | The *Monitoring / Log file* page |
 
 ## Relationships
 

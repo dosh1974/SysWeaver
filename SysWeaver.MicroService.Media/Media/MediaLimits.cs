@@ -1,5 +1,8 @@
 ﻿namespace SysWeaver.MicroService.Media
 {
+    /// <summary>
+    /// Limits shared by the media data types
+    /// </summary>
     public static class MediaLimits
     {
         /// <summary>

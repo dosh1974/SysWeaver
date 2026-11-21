@@ -19,7 +19,7 @@ Let standard OpenAI and Google GenAI clients (SDKs, agents, tools) use the model
 flowchart LR
   OC["OpenAI clients"] --> H["HostService<br/>IHttpServerModule"]
   GC["Google GenAI clients"] --> H
-  H -- "IAiService.Complete" --> A["AI services<br/>LlamaSharp, OpenAI, Google"]
+  H -- "IAiService.Complete" --> A["AI services<br/>LlamaSharp, OpenAI, Google, Anthropic"]
 ```
 
 The service is an HTTP server module, so the web server picks it up automatically; authentication uses the server's normal mechanisms (session, `Authorization: Bearer`, `x-api-key` / `x-goog-api-key` headers).
@@ -61,7 +61,7 @@ var r = await google.Models.GenerateContentAsync("qwen3-8b", "Hello");
 - Text only (no images, audio or files) and only function tools (no built in tools like web search or code execution)
 - OpenAI: `n` must be 1, logprobs are not supported. Google: `candidateCount` must be 1; `countTokens`, caching, embeddings, structured output and stop sequences are not supported; the `?key=` query parameter is not supported (use the `x-goog-api-key` header)
 - Vertex AI with Google OAuth credentials can't be used, use an API key (express mode) or a Bearer token known by the server
-- Tool calls and token streaming need a native `IAiService.Complete` (only [SysWeaver.AI.LlamaSharp](../SysWeaver.AI.LlamaSharp/README.md) has one); with the OpenAI and Google services the conversation is sent as a transcript, caller defined tools are rejected when required (ignored otherwise) and the response arrives in a single update
+- Tool calls and token streaming need a native `IAiService.Complete`: the services of [SysWeaver.AI.LlamaSharp](../SysWeaver.AI.LlamaSharp/README.md), [SysWeaver.AI.OpenAI](../SysWeaver.AI.OpenAI/README.md), [SysWeaver.AI.Google](../SysWeaver.AI.Google/README.md) and [SysWeaver.AI.Anthropic](../SysWeaver.AI.Anthropic/README.md) have one. With an AI service that only has the default implementation of `AiServiceBase`, the conversation is sent as a transcript, caller defined tools are rejected when required (ignored otherwise) and the response arrives in a single update
 
 ## Relationships
 

@@ -3,6 +3,9 @@ using SysWeaver.Media;
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// The result of a screenshot request: the encoded image and optionally its media information
+    /// </summary>
     public sealed class ScreenshotImageResponse
     {
         /// <summary>

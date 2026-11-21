@@ -16,12 +16,24 @@ namespace SysWeaver.MicroService
 {
 
 
+    /// <summary>
+    /// Micro service that serves the explorer pages (<see cref="ExploreHttpServerModule"/>) and the table exports offered in the UI:
+    /// CSV (comma, tab, semicolon), HTML, Markdown, JSON (verbose, compact) and, when an <see cref="IUserStorageService"/> is registered, a private, protected or public link in the user storage.
+    /// Services implementing <see cref="IHaveTableDataExporters"/> add their own exporters.
+    /// Also registers explore/csv.html as the extension viewer of .csv and .tsv files, and has the "Monitoring/Recent log entries" table (<see cref="LogTable"/>).
+    /// Needs the icon and static data modules, so it must come after <see cref="IconHttpServerService"/> and <see cref="StaticDataHttpServerService"/>.
+    /// </summary>
     [IsMicroService]
     [RequiredDep<IconHttpServerModule, StaticDataHttpServerModule>]
     public sealed class ExploreHttpServerService : IDisposable, IHaveTableDataExporters, IChatStoreLinkHandler
     {
         public override string ToString() => "[Service] " + Mod.ToString();
 
+        /// <summary>
+        /// Create and register the explorer module, the built in exporters and the extension viewers, and add the exporters of the registered services.
+        /// </summary>
+        /// <param name="manager">The service manager</param>
+        /// <param name="p">The parameters, null for the defaults</param>
         public ExploreHttpServerService(ServiceManager manager, ExploreHttpServerServiceParams p = null)
         {
             Manager = manager;
@@ -89,6 +101,16 @@ namespace SysWeaver.MicroService
 
         #region Table exporters
 
+        /// <summary>
+        /// Part of <see cref="IChatStoreLinkHandler"/>: store a link to an explore/table.html page (a table api, up to 100 000 rows) in the user storage as a table file
+        /// with the user storage exporter of the scope, and return the stored link.
+        /// </summary>
+        /// <param name="us">The user storage service</param>
+        /// <param name="url">The link to store</param>
+        /// <param name="scope">The scope of the stored link</param>
+        /// <param name="context">The request</param>
+        /// <returns>The stored link, null if the url isn't a table page (or no user storage is registered)</returns>
+        /// <exception cref="HttpResponseException">404: unknown table api, 403: not allowed</exception>
         public async Task<string> HandleLink(IUserStorageService us, string url, UserStorageScopes scope, HttpServerRequest context)
         {
             var ss = StorageExporters;
@@ -138,20 +160,21 @@ namespace SysWeaver.MicroService
 
 
         /// <summary>
-        /// Get the menu items for all registered table exporters
+        /// Get the menu items for all registered table exporters (without the exporters that need a user when the session has none)
         /// </summary>
-        /// <returns></returns>
+        /// <param name="request">Automatically populated by the request handler, don't use</param>
+        /// <returns>The exporters as menu items (Id = the name to use as ExportAs)</returns>
         [WebApi]
         public WebMenuItem[] GetTableExporters(HttpServerRequest request) => request.Session.Auth == null ? TableExporterMenu : TableExporterMenuUser;
 
 
         /// <summary>
-        /// Export some table data using a specified exporter
+        /// Export some table data (sent by the client) using a specified exporter
         /// </summary>
-        /// <param name="export">Required paramterers</param>
-        /// <param name="request"></param>
-        /// <returns>A "file" with the exported data</returns>
-        /// <exception cref="Exception"></exception>
+        /// <param name="export">The data, the exporter and the options (Key and Title are only used by <see cref="StartExportTableData"/>)</param>
+        /// <param name="request">Automatically populated by the request handler, don't use</param>
+        /// <returns>A "file" with the exported data (a link for the user storage exporters)</returns>
+        /// <exception cref="HttpResponseException">400: unknown exporter, 403: the exporter needs a signed in user</exception>
         [WebApi]
         public Task<MemoryFile> ExportTableData(ExportTableDataRequest export, HttpServerRequest request)
         {
@@ -229,12 +252,12 @@ namespace SysWeaver.MicroService
 
 
         /// <summary>
-        /// Export some table data using a specified exporter
+        /// Export the rows of a table data API (up to 100 000 rows, with the filter and sort of the request) using a specified exporter
         /// </summary>
-        /// <param name="export">Required paramterers</param>
-        /// <param name="request"></param>
-        /// <returns>A "file" with the exported data</returns>
-        /// <exception cref="Exception"></exception>
+        /// <param name="export">The API, the table request, the exporter and the options (Key and Title are only used by <see cref="StartExportTableApi"/>)</param>
+        /// <param name="request">Automatically populated by the request handler, don't use</param>
+        /// <returns>A "file" with the exported data (a link for the user storage exporters)</returns>
+        /// <exception cref="HttpResponseException">404: unknown table api, 403: not allowed, 400: unknown exporter</exception>
         [WebApi]
         public async Task<MemoryFile> ExportTableApi(ExportTableApiRequest export, HttpServerRequest request)
         {
@@ -386,11 +409,11 @@ namespace SysWeaver.MicroService
 
 
         /// <summary>
-        /// Used internally, make a table request against a stored file
+        /// Used internally (the links made by the user storage exporters), make a table request against a table stored as a json file in the user storage
         /// </summary>
-        /// <param name="r"></param>
-        /// <param name="request"></param>
-        /// <returns></returns>
+        /// <param name="r">The table request, Param is the url of the stored file</param>
+        /// <param name="request">Automatically populated by the request handler, don't use</param>
+        /// <returns>The requested rows</returns>
         [WebApi]
         [WebApiClientCache(30)]
         [WebApiRequestCache(60)]
@@ -459,6 +482,11 @@ namespace SysWeaver.MicroService
             RemoveExporter(instance as IHaveTableDataExporters);
         }
 
+        /// <summary>
+        /// Add a table exporter (the menu of exporters is rebuilt)
+        /// </summary>
+        /// <param name="exp">The exporter</param>
+        /// <returns>False if an exporter with the same name is already added</returns>
         public bool AddExporter(ITableDataExporter exp)
         {
             if (!TableExporters.TryAdd(exp.Name, exp))
@@ -467,6 +495,11 @@ namespace SysWeaver.MicroService
             return true;
         }
 
+        /// <summary>
+        /// Remove a table exporter (by name; the menu of exporters is rebuilt)
+        /// </summary>
+        /// <param name="exp">The exporter</param>
+        /// <returns>False if no exporter with that name was added</returns>
         public bool RemoveExporter(ITableDataExporter exp)
         { 
             if (!TableExporters.TryRemove(exp.Name, out var _))
@@ -476,6 +509,11 @@ namespace SysWeaver.MicroService
         }
 
 
+        /// <summary>
+        /// Add all table exporters of an instance
+        /// </summary>
+        /// <param name="exp">The instance, can be null</param>
+        /// <returns>The number of exporters added</returns>
         public int AddExporter(IHaveTableDataExporters exp)
         {
             if (exp == null)
@@ -491,6 +529,11 @@ namespace SysWeaver.MicroService
             return c;
         }
 
+        /// <summary>
+        /// Remove all table exporters of an instance
+        /// </summary>
+        /// <param name="exp">The instance, can be null</param>
+        /// <returns>The number of exporters removed</returns>
         public int RemoveExporter(IHaveTableDataExporters exp)
         {
             if (exp == null)
@@ -530,6 +573,9 @@ namespace SysWeaver.MicroService
         readonly ITableDataExporter[] Eporters; 
         
 
+        /// <summary>
+        /// The built in exporters of this service (CSV, HTML, Markdown, JSON and the user storage links)
+        /// </summary>
         public IReadOnlyList<ITableDataExporter> TableDataExporters => Eporters;
 
 
@@ -551,11 +597,11 @@ namespace SysWeaver.MicroService
 
 
         /// <summary>
-        /// Read the content of one of the available text files
+        /// Read the content of one of the available text files (see ServiceManager.ReadTextFile), requires a signed in user
         /// </summary>
-        /// <param name="name"></param>
-        /// <param name="context"></param>
-        /// <returns></returns>
+        /// <param name="name">The name of the text file</param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
+        /// <returns>The text</returns>
         [WebApi]
         [WebApiAuth]
         [WebApiRawText]

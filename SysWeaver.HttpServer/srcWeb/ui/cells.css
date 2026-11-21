@@ -1,5 +1,5 @@
 ﻿/*
- * ui/cells.css - SysWeaver UI library (Sw) styles, part 4 of 6: value cells (Sw.Cells) and text popups.
+ * ui/cells.css - SysWeaver UI library (Sw) styles, part 4 of 7: value cells (Sw.Cells) and text popups.
  *
  * Classes set by the cell renderers (Sw.Cells.Classes, replaceable): sw-right / sw-left / sw-center (alignment), sw-mono, sw-null (zero),
  * sw-false (negative / false / dark color), sw-cell-text (plain text; not sw-text, the Sw.TextBox root class), sw-cell-actions (Toggle / Actions), sw-capped (shortened text),

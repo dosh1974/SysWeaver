@@ -27,15 +27,18 @@ flowchart LR
 ## Key features
 
 - `GetTypeInfo` / `GetDefaultInstance`: type descriptions (members, flags, ranges, documentation) and default instances, cached per type; the `Edit*` attributes of a member are also found on an overridden or hidden member of a base type and on the interface member a property implements (`EditAttributeLookup`)
-- A type information page (`edit/type.html`) linked from type names in tables, and `GetApiInfo` for detailed API documentation (debug); `GetApiIoInfo` (`Api/debug/GetApiIoInfo`, Dev) lists the enabled input / output serializers, the request compression methods, the binary GET argument types and the size limits (`ApiIoInfo`, used by explore/apihelp.html and the Curl tab of explore/api.html)
+- `GetTypeInfoTable`: the members of a type as a data table
+- A type information page (`edit/type.html`) linked from type names in tables, and `GetApiInfo` (`Api/debug/GetApiInfo`, Dev) for detailed API documentation; `GetApiIoInfo` (`Api/debug/GetApiIoInfo`, Dev) lists the enabled input / output serializers, the request compression methods, the binary GET argument types and the size limits (`ApiIoInfo`, used by explore/apihelp.html and the Curl tab of explore/api.html)
 - A text/code editor (`edit/text.html`, based on Ace) registered as the extension editor for common text file types (`.txt`, `.json`, `.cs`, `.js`, `.xml`, `.log`, …)
 - `IsoDataService` registers the ISO data module (languages, countries, currencies, phone prefixes) used by the editor's lookups
 
 ## Key components
 
-- [`TypeService`](TypeService.cs) — the type metadata micro service, served under `edit/`
+- [`TypeService`](TypeService.cs) — the type metadata micro service, served under `edit/`; parameters: [`TypeParams`](TypeParams.cs) (`InstanceName`, `PerMon`)
 - [`IsoDataService`](IsoDataService.cs) — hosts the `IsoDataHttpServerModule`
-- [`TypeMemberDesc`](TypeMemberDesc.cs) — the type and member descriptions sent to the browser
+- [`TypeDesc`](TypeDesc.cs), [`TypeMemberDesc`](TypeMemberDesc.cs), [`TypeMemberFlags`](TypeMemberFlags.cs) — the type and member descriptions sent to the browser
+- [`ApiInfo`](ApiInfo.cs), [`ApiIoInfo`](ApiIoInfo.cs) — the results of `GetApiInfo` and `GetApiIoInfo`
+- [`EditAttributeLookup`](EditAttributeLookup.cs) — finds the `Edit*` attributes of a member, also on base and interface members
 
 ## Using it
 
@@ -61,5 +64,5 @@ flowchart LR
 
 - **Project:** [`SysWeaver.MicroService.Edit.csproj`](SysWeaver.MicroService.Edit.csproj)
 - **Builds on:** [SysWeaver.Docs](../SysWeaver.Docs/README.md), [SysWeaver.HttpServer.IsoDataModule](../SysWeaver.HttpServer.IsoDataModule/README.md), [SysWeaver.HttpServer](../SysWeaver.HttpServer/README.md), [SysWeaver.MicroServices.ServiceManager](../SysWeaver.MicroServices.ServiceManager/README.md), [SysWeaver.MicroServices](../SysWeaver.MicroServices/README.md)
-- **Used by:** [SysWeaver.Services](https://github.com/dosh1974/SysWeaver.Services) applications: ExchangeRateService, FakeEmailService, FakeTextService, IpLocationService, ReverseProxyClient, ReverseProxyServer, SwLanCertManager, SwServerManager, TranslationService, WebServerService
+- **Used by:** [SysWeaver.Services](https://github.com/dosh1974/SysWeaver.Services) applications: ComfyUiService, ExchangeRateService, FakeEmailService, FakeTextService, HttpBenchService, IpLocationService, ReverseProxyClient, ReverseProxyServer, SwLanCertManager, SwServerManager, TranslationService, WebServerService
 - **Third-party:** Ace editor and Prettier (bundled browser scripts)

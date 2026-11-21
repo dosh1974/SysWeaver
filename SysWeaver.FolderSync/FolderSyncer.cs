@@ -536,9 +536,9 @@ namespace SysWeaver.FolderSync
         /// <summary>
         /// Check if a new version of a shared folder is available
         /// </summary>
-        /// <param name="srcName"></param>
-        /// <param name="version"></param>
-        /// <returns></returns>
+        /// <param name="srcName">The name of the shared folder on the server</param>
+        /// <param name="version">The version of the local folder, see <see cref="GetPullFolderVersion"/></param>
+        /// <returns>True if the server has a different version (false if it is the same, or the folder is being updated right now)</returns>
         public async Task<bool> CheckPullFolder(String srcName, String version)
         {
             return await Api.SharedFolderHasChanged(new SharedFolderSyncRequest
@@ -553,9 +553,9 @@ namespace SysWeaver.FolderSync
         /// <summary>
         /// Wait until a new version of a shared folder is available (or the request time's out)
         /// </summary>
-        /// <param name="srcName"></param>
-        /// <param name="version"></param>
-        /// <returns></returns>
+        /// <param name="srcName">The name of the shared folder on the server</param>
+        /// <param name="version">The version of the local folder, see <see cref="GetPullFolderVersion"/></param>
+        /// <returns>True if a new version is available, false if the wait timed out</returns>
         public async Task<bool> WaitPullFolder(String srcName, String version)
         {
             return await Api.WaitUntilSharedFolderHasChanged(new SharedFolderSyncRequest

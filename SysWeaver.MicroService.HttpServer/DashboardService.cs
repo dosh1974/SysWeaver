@@ -16,14 +16,24 @@ namespace SysWeaver.MicroService
     
 
 
+    /// <summary>
+    /// Parameters for <see cref="DashboardService"/>.
+    /// </summary>
     public sealed class DashboardParams
     {
+        /// <summary>
+        /// The key value store that holds the dashboards, null for the default store (id "Default")
+        /// </summary>
         public KeyValueStoreParams Store;
     }
 
 
 
 
+    /// <summary>
+    /// Micro service that returns per user dashboards (Api/application/GetBoard), read from a key value store under the key "Dashboard_[id]_[user guid]".
+    /// Nothing in the framework writes dashboards yet, and sessions without a user get none.
+    /// </summary>
     [IsMicroService]
     [WebApiUrl("application")]
     public sealed class DashboardService

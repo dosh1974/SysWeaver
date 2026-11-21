@@ -54,14 +54,14 @@ namespace SysWeaver.MicroService
         public int[] Sizes = [-64, 512];
 
         /// <summary>
-        /// Auth required to access images (with a positive size).
-        /// Defaults to "" (no auth required).
+        /// Auth required to access images (with a positive size), a comma separated list of tokens: null = no auth required, "" = any logged in user.
+        /// Defaults to "" (any logged in user).
         /// </summary>
         public String PrivateAuth = "";
 
         /// <summary>
-        /// Auth required to access images with a negative size.
-        /// Defaults to null.
+        /// Auth required to access images with a negative size, a comma separated list of tokens: null = no auth required, "" = any logged in user.
+        /// Defaults to null (no auth required).
         /// </summary>
         public String PublicAuth;
 

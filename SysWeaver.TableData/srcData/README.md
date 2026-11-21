@@ -11,7 +11,7 @@
 
 ## Purpose
 
-The `EmbedLocal` target in [`SysWeaver.TableData.csproj`](../SysWeaver.TableData.csproj) runs `Compress.exe -Methods br -OptimizeWebFiles false .\srcData\*+ .\data` before each build. The templates are compressed but not minified. The generated `data/**/*.br` files (not in git) are embedded as resources. The project file also embeds `data/**/*.md`, but this folder currently has no Markdown files.
+The `EmbedLocal` target in [`SysWeaver.TableData.csproj`](../SysWeaver.TableData.csproj) runs `Compress.exe -Methods br -OptimizeWebFiles false .\srcData\*+ .\data` before each build. The templates are compressed but not minified. The generated `data/**/*.br` files (not in git) are embedded as resources. The build also copies the README.md files of this folder into `data/` (next to their `.br` versions), and the project file embeds `data/**/*.md` too, so these READMEs end up as resources too (not read by the code of this project).
 
 [`HtmlTableDataExporter`](../HtmlTableDataExporter.cs) loads a template set from a sub folder by name: `<folder>.<folder>Body.html`, `...Row.html`, `...Header.html` and `...Cell.html`. A new HTML export style can therefore be added as a new sub folder with those four files.
 

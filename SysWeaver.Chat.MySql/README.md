@@ -19,14 +19,16 @@ Durable chat history for [SysWeaver.Chat](../SysWeaver.Chat/README.md) that surv
 
 ## Key features
 
-- Rooms configured in the manifest (`Rooms`, `MySqlChatRoom` with the permissions and options of `ChatSessionParams`)
+- Rooms configured in the manifest (`Rooms`, `MySqlChatRoom` with the permissions and options of `ChatSessionParams`); room defaults: no removal of own messages, speech name `Chat`, uploads to `UserProtected`
+- The provider name (`ProviderId`, default `MySql`) is the first part of the chat ids (`MySql.<room>`)
 - Rooms supplied at runtime by other code through a room provider (`IMySqlRoomProvider`, registered with `AddRoomProvider`)
 - Optional rate limiting per room and per session
-- File uploads in rooms when a user storage service is available (`UploadRepo`, default `UserProtected`)
+- File uploads in rooms when a user storage service is available (`UploadRepo`)
 
 ## Key components
 
 - [`MySqlChat`](MySqlChat.cs) — the chat provider service
+- [`MySqlChatParams`](MySqlChatParams.cs) — service parameters: the MySQL connection, `ProviderId` and the `Rooms`
 - [`MySqlChatRoom`](MySqlChatRoom.cs) — room parameters (permissions, rate limits)
 - [`IMySqlRoomProvider`](IMySqlRoomProvider.cs) — contract for code that supplies rooms on demand
 
@@ -41,6 +43,8 @@ Durable chat history for [SysWeaver.Chat](../SysWeaver.Chat/README.md) that surv
 
 - Requires a MySQL server (schema `Chat` by default)
 - Room providers are not discovered automatically, they must be added in code
+- Rooms can not be created by users (`CreateNewChat` returns null)
+- Each room gets its own message table (`Room_<room name>`)
 
 ## Folder layout
 

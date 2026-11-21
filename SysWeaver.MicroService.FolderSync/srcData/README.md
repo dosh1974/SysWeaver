@@ -23,10 +23,6 @@ The `EmbedLocal` target of [`SysWeaver.MicroService.FolderSync.csproj`](../SysWe
 |---|---|
 | [`redirect.html`](redirect.html) | Template with the placeholders `ToRoot` (relative path to the site root, for icons and manifest), `Url` (the versioned page), `GetVersion` (version API URL, empty to disable checks) and `AutoReload` (check interval in milliseconds, `0` to check only on request) |
 
-## Limitations and considerations
-
-- In the interval branch the template calls `setInterval(autoReload, async () => ...)`, which passes the arguments in the reverse order of `setInterval(callback, delay)`; periodic reloading may therefore not work as intended.
-
 ## Relationships
 
 - **Part of:** [SysWeaver.MicroService.FolderSync](../README.md)

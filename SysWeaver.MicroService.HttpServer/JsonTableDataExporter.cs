@@ -14,9 +14,15 @@ namespace SysWeaver.MicroService
 
         public override string ToString() => Name;
 
+        /// <summary>
+        /// Export as indented json
+        /// </summary>
         public static readonly JsonTableDataExporter Verbose = new JsonTableDataExporter(false, "JSON (verbose)", 9000,
             "A json file that is formatted to be more human readable.");
 
+        /// <summary>
+        /// Export as json without white space
+        /// </summary>
         public static readonly JsonTableDataExporter Compact = new JsonTableDataExporter(true, "JSON (compact)", 9001, 
             "A json file without unnecessary white spaces.");
 

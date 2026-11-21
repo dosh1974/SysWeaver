@@ -19,7 +19,8 @@
         public bool IgnoreBadPrefixes = true;
 
         /// <summary>
-        /// When shutting down, wait for any pending request for these many seconds
+        /// When shutting down, wait for any pending request for these many seconds.
+        /// Note: not used by <see cref="AspHttpServer"/> yet, <see cref="AspHttpServer.Stop"/> gives ongoing requests about 3 seconds.
         /// </summary>
         public int SecondsToWait = 30;
 

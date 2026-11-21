@@ -22,6 +22,7 @@ These classes live in the `SysWeaver.MicroService.Media` namespace and describe 
 | [`MediaCrop.cs`](MediaCrop.cs) | Crop information used by the media types |
 | [`MediaEffect.cs`](MediaEffect.cs) | A GLSL effect to render: reference width/height, speed, offset, size limits, DPI handling, static and transparent options, the live controls of an Effect Weaver effect (`Controls`, iMouse x, y, z, w in [0, 1]) |
 | [`MediaEffectBuild.cs`](MediaEffectBuild.cs) | Request / response of `MediaService.BuildEffect` (an effect built like Effect Weaver builds it) |
+| [`MediaEffectMedia.cs`](MediaEffectMedia.cs) | Request / response of `MediaService.ResolveEffectMedia` (the media named by an effect's `//  media:` line) and `IEffectMediaResolver`, the interface of the services that resolve them |
 | [`MediaImage.cs`](MediaImage.cs) | Meta data for images |
 | [`MediaLimits.cs`](MediaLimits.cs) | Constants such as `MaxImageDuration` (5 minutes) |
 | [`MediaTypes.cs`](MediaTypes.cs) | Enum of media kinds: `Image`, `Video`, `Audio`, `YouTube`, `Effect` |

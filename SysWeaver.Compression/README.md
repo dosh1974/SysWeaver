@@ -2,7 +2,7 @@
 
 [⬆ SysWeaver overview](../README.md)
 
-> The compression abstraction and registry: named, prioritised codecs (Brotli, Deflate, GZip built in; Zstandard and native Brotli as plug-ins) used for HTTP content encoding, pre-compressed web assets, storage and data transfer.
+> The compression abstraction and registry: named, prioritised codecs (Brotli, Deflate, GZip and Zstandard built in; native Brotli and managed Zstandard as plug-ins) used for HTTP content encoding, pre-compressed web assets, storage and data transfer.
 
 | | |
 |---|---|
@@ -17,9 +17,9 @@ Give the whole framework a single way to compress and decompress data by HTTP en
 
 ```mermaid
 flowchart TB
-  Builtin[".NET Brotli, Deflate, GZip"] --> CM["CompManager<br/>codecs by HTTP code"]
+  Builtin[".NET Brotli, Deflate, GZip, Zstandard"] --> CM["CompManager<br/>codecs by HTTP code"]
   Native["Native Brotli plug-in"] --> CM
-  Zstd["Zstandard plug-in"] --> CM
+  Zstd["Managed Zstandard plug-in"] --> CM
   CM --> Http["HTTP server<br/>Accept-Encoding negotiation"]
   CM --> Assets["Embedded web assets<br/>pre-compressed .br"]
   CM --> Storage["Key/value store, chunk store"]
@@ -29,7 +29,7 @@ flowchart TB
 ## Key features
 
 - Codec lookup by HTTP content-coding name or file extension (`CompManager.GetFromHttp`, `CompManager.GetFromExt`); the highest priority implementation wins (on a tie, the last registered).
-- Built-in codecs registered by default: `CompBrotliNETNew` (`br`), `CompDeflateNET` (`deflate`) and `CompGZipNET` (`gzip`, extensions `gz` / `gzip`), all priority 0. An alternative `BrotliStream` based codec (`CompBrotliNET`, priority -1) and codecs using the .NET 11+ encoder APIs (only compiled when targeting .NET 11 or later) exist but are not registered.
+- Built-in codecs registered by default, all priority 1, using the .NET 11 encoder / decoder APIs: `CompBrotliNETNew` (`br`), `CompDeflateNETNew` (`deflate`), `CompGZipNETNew` (`gzip`, extensions `gz` / `gzip`) and `CompZStdNETNew` (`zstd`). The stream based codecs (`CompBrotliNET`, `CompDeflateNET`, `CompGZipNET`, `CompZStdNET`, priority 0) are kept as reference / benchmark implementations and are not registered (`CompDeflateNET` and `CompGZipNET` are the defaults when built for a target before .NET 11).
 - Three effort levels (`CompEncoderLevels.Fast` / `Balanced` / `Best`), mapped by each codec to its own quality setting (ex: Brotli quality 1 / 4 / 11). Callers express preferences as compact strings such as `"br:Balanced, gzip:Fast"`.
 - Sync and async APIs for every combination of stream / memory input and output; extension methods (`CompExt`: `GetCompressed`, `GetDecompressed`, `GetDecompressedArray`, `GetUnmanagedDecompressed`) that compress or decompress into an exact size array or pooled memory.
 - Truncated or invalid compressed data throws (`InvalidDataException`) instead of silently returning partial data, also for the .NET `DeflateStream` / `GZipStream` based codecs.
@@ -63,12 +63,12 @@ var packed = br.GetCompressed(data, CompEncoderLevels.Balanced);
 - Codec availability is process-wide; clients can only negotiate codecs that have been registered.
 - Concatenated streams are only decoded for GZip (members) and Zstandard (frames); for other formats data after the first compressed stream is ignored.
 - When decompressing from a stream, the decoder may read past the end of the compressed data.
-- Build steps that pre-compress web assets use an external tool (see [SysWeaver overview](../README.md) build notes).
-- Platforms: this library and the Zstandard plug-in are fully managed; the native Brotli plug-in has no arm64 binaries, see [SysWeaver.Compression.BrotliNativeNET](../Compression/SysWeaver.Compression.BrotliNativeNET/README.md).
+- Build steps that pre-compress web assets run an external tool, `_tools/compress/Compress.exe` ([Compress](https://github.com/dosh1974/SysWeaver.Tools/blob/main/Compress/README.md) from SysWeaver.Tools).
+- Platforms: the built-in codecs use the compression libraries of the .NET runtime; the Zstandard plug-in is fully managed; the native Brotli plug-in has no arm64 binaries, see [SysWeaver.Compression.BrotliNativeNET](../Compression/SysWeaver.Compression.BrotliNativeNET/README.md).
 
 ## Relationships
 
 - **Project:** [`SysWeaver.Compression.csproj`](SysWeaver.Compression.csproj)
 - **Builds on:** [SysWeaver.Common](../SysWeaver.Common/README.md)
-- **Used by:** [SysWeaver.Auth.Core](../SysWeaver.Auth.Core/README.md), [SysWeaver.Compression.BrotliNativeNET](../Compression/SysWeaver.Compression.BrotliNativeNET/README.md), [SysWeaver.Compression.ZstdSharp](../Compression/SysWeaver.Compression.ZstdSharp/README.md), [SysWeaver.DbSimpleStack](../SysWeaver.DbSimpleStack/README.md), [SysWeaver.FolderSync](../SysWeaver.FolderSync/README.md), [SysWeaver.HttpServer](../SysWeaver.HttpServer/README.md), [SysWeaver.Knowledge](../SysWeaver.Knowledge/README.md), [SysWeaver.LanguageIdentifier.FastText](../SysWeaver.LanguageIdentifier.FastText/README.md), [SysWeaver.Map](../SysWeaver.Map/README.md), [SysWeaver.Media.Svg](../SysWeaver.Media.Svg/README.md), [SysWeaver.MicroService.Media](../SysWeaver.MicroService.Media/README.md), [SysWeaver.MicroService.TranslationDbCache](../SysWeaver.MicroService.TranslationDbCache/README.md), [SysWeaver.Remote.Connection](../SysWeaver.Remote.Connection/README.md), [SysWeaver.Storage](../SysWeaver.Storage/README.md), [SysWeaver.TableData](../SysWeaver.TableData/README.md); in SysWeaver.Tools: [Compress](https://github.com/dosh1974/SysWeaver.Tools/blob/main/Compress/README.md), [Decompress](https://github.com/dosh1974/SysWeaver.Tools/blob/main/Decompress/README.md), [SvgOpt](https://github.com/dosh1974/SysWeaver.Tools/blob/main/SvgOpt/README.md), [SwCurl](https://github.com/dosh1974/SysWeaver.Tools/blob/main/SwCurl/README.md), [SwSyncTool](https://github.com/dosh1974/SysWeaver.Tools/blob/main/SwSyncTool/README.md)
+- **Used by:** [SysWeaver.Auth.Core](../SysWeaver.Auth.Core/README.md), [SysWeaver.Compression.BrotliNativeNET](../Compression/SysWeaver.Compression.BrotliNativeNET/README.md), [SysWeaver.Compression.ZstdSharp](../Compression/SysWeaver.Compression.ZstdSharp/README.md), [SysWeaver.DbSimpleStack](../SysWeaver.DbSimpleStack/README.md), [SysWeaver.FolderSync](../SysWeaver.FolderSync/README.md), [SysWeaver.HttpBench.Core](../SysWeaver.HttpBench.Core/README.md), [SysWeaver.HttpServer](../SysWeaver.HttpServer/README.md), [SysWeaver.Knowledge](../SysWeaver.Knowledge/README.md), [SysWeaver.LanguageIdentifier.FastText](../SysWeaver.LanguageIdentifier.FastText/README.md), [SysWeaver.Map](../SysWeaver.Map/README.md), [SysWeaver.Media.Svg](../SysWeaver.Media.Svg/README.md), [SysWeaver.MicroService.Media](../SysWeaver.MicroService.Media/README.md), [SysWeaver.MicroService.TranslationDbCache](../SysWeaver.MicroService.TranslationDbCache/README.md), [SysWeaver.Remote.Connection](../SysWeaver.Remote.Connection/README.md), [SysWeaver.Storage](../SysWeaver.Storage/README.md), [SysWeaver.TableData](../SysWeaver.TableData/README.md); in SysWeaver.Tools: [Compress](https://github.com/dosh1974/SysWeaver.Tools/blob/main/Compress/README.md), [Decompress](https://github.com/dosh1974/SysWeaver.Tools/blob/main/Decompress/README.md), [SvgOpt](https://github.com/dosh1974/SysWeaver.Tools/blob/main/SvgOpt/README.md), [SwCurl](https://github.com/dosh1974/SysWeaver.Tools/blob/main/SwCurl/README.md), [SwSyncTool](https://github.com/dosh1974/SysWeaver.Tools/blob/main/SwSyncTool/README.md)
 - **Third-party:** [CommunityToolkit.HighPerformance](https://www.nuget.org/packages/CommunityToolkit.HighPerformance)

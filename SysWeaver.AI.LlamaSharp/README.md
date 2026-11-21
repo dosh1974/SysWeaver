@@ -15,7 +15,7 @@ The local provider for [SysWeaver.AI](../SysWeaver.AI/README.md), built on the [
 
 ## How it fits into SysWeaver
 
-`LlamaSharpAiService` derives from `AiServiceBase` and so is an `IAiService` and an `IChatProvider`: AI chats appear in the [SysWeaver.Chat](../SysWeaver.Chat/README.md) UI, and registered service methods marked `[AiTool]` / `[AiUse]` can be called by the model. It is interchangeable with [SysWeaver.AI.OpenAI](../SysWeaver.AI.OpenAI/README.md) and [SysWeaver.AI.Google](../SysWeaver.AI.Google/README.md) for code that uses `IAiService`; it is the only provider with native stateless completions, which [SysWeaver.AI.HostService](../SysWeaver.AI.HostService/README.md) uses to serve local models through OpenAI and Google compatible APIs.
+`LlamaSharpAiService` derives from `AiServiceBase` and so is an `IAiService` and an `IChatProvider`: AI chats appear in the [SysWeaver.Chat](../SysWeaver.Chat/README.md) UI, and registered service methods marked `[AiTool]` / `[AiUse]` can be called by the model. It is interchangeable with [SysWeaver.AI.OpenAI](../SysWeaver.AI.OpenAI/README.md), [SysWeaver.AI.Google](../SysWeaver.AI.Google/README.md) and [SysWeaver.AI.Anthropic](../SysWeaver.AI.Anthropic/README.md) for code that uses `IAiService`; [SysWeaver.AI.HostService](../SysWeaver.AI.HostService/README.md) uses its native stateless completions to serve local models through OpenAI and Google compatible APIs.
 
 ## Key features
 
@@ -27,7 +27,7 @@ The local provider for [SysWeaver.AI](../SysWeaver.AI/README.md), built on the [
 - Thinking is removed from responses; the oldest messages are dropped when a conversation doesn't fit in the context
 - Models with multi token prediction layers that the bundled llama.cpp can't load are automatically loaded from a stripped copy
 - CPU and Vulkan (GPU) backends are included, Vulkan is used if available (`UseVulkan`); llama.cpp log messages can be forwarded to the log (`LogNative`)
-- Model tables (`Debug/AI/Models` menu) and debug APIs (chat, token counting)
+- Model tables (*Data / AI models* menu, for the `Admin` and `Ops` roles) and debug APIs (chat, token counting)
 
 ## Key components
 
