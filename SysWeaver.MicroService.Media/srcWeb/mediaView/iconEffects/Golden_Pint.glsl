@@ -56,7 +56,7 @@ const float LogoSize = 1.4; // var: { "min": 0.3, "max": 1.6, "step": 0.02, "nam
 const float LogoHeight = 0.03; // var: { "min": -0.25, "max": 0.25, "step": 0.01, "name": "Logo Height", "desc": "Vertical position of the etched logo on the glass" }
 const float LogoAngle = 10.0; // var: { "min": -180.0, "max": 180.0, "step": 1.0, "name": "Logo Angle", "desc": "Starting angle of the logo around the glass", "unit": "°" }
 const float EtchStrength = 1.0; // var: { "min": 0.0, "max": 1.5, "step": 0.02, "name": "Etch Frost", "desc": "Strength of the frosted glass etching", "scale": 100, "unit": "%" }
-const float LogoColorMix = 1.0; // var: { "min": 0.0, "max": 1.0, "step": 0.02, "name": "Fixed Color Mix", "desc": "Mix from original image colors (0%) to the fixed Logo Color (100%)", "scale": 100, "unit": "%" }
+const float LogoColorMix = 0.0; // var: { "min": 0.0, "max": 1.0, "step": 0.02, "name": "Fixed Color Mix", "desc": "Mix from original image colors (0%) to the fixed Logo Color (100%)", "scale": 100, "unit": "%" }
 const vec3 LogoColor = vec3(1.0, 1.0, 1.0); // var: { "type": "col", "name": "Logo Color", "desc": "Fixed tint color for the etched logo (white for classic frosted glass)" }
 
 #define BubbleAmount mix(0.0, 2.0, iMouse.x)
