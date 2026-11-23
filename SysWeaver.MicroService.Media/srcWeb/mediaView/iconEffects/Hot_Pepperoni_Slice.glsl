@@ -1,3 +1,4 @@
+//  media: image none
 // Hot Pepperoni Slice - photoreal procedural pizza slice on a small plate, steaming hot
 // Raymarched studio food shot: a slice with a puffy, lumpy crust, melted blistered cheese,
 // cupped pepperoni with charred edges and grease, draped over a glazed ceramic plate.
@@ -55,6 +56,13 @@ const float FlourAmount = 0.35; // var: { "min": 0.0, "max": 1.0, "step": 0.01, 
 // --- Scene ---
 const bool ShowPlate = true; // var: { "name": "Plate", "desc": "Show the small ceramic plate under the slice (without it the slice lies flat)" }
 const int Quality = 1; // 0 fast (1 sample), 1 default (2 samples), 2 high (4 samples)
+
+// --- Plate Logo ---
+const vec3 LogoColor = vec3(0.28, 0.26, 0.24); // var: { "type": "col", "name": "Logo Color", "desc": "Fixed color for the etched logo when tinted" }
+const float LogoColorMix = 0.0; // var: { "min": 0.0, "max": 1.0, "step": 0.01, "name": "Logo Color Mix", "desc": "Mix from original image colors (0%) to the fixed Logo Color (100%)", "scale": 100, "unit": "%" }
+const float LogoOpacity = 1.0; // var: { "min": 0.0, "max": 1.0, "step": 0.01, "name": "Logo Opacity", "desc": "Strength of the etched logo blended onto the plate", "scale": 100, "unit": "%" }
+const float LogoRelief = 0.7; // var: { "min": 0.0, "max": 2.0, "step": 0.05, "name": "Logo Relief", "desc": "Depth of the subtle carved relief lighting on the porcelain" }
+const float LogoSize = 1.4; // var: { "min": 0.4, "max": 1.4, "step": 0.02, "name": "Logo Size", "desc": "Scale of the etched logo on the plate", "unit": "x" }
 
 #define SteamAmount mix(0.0, 2.0, iMouse.x)
 #define Swing radians(mix(0.0, 70.0, iMouse.y))
@@ -314,13 +322,23 @@ vec3 envDiffuse(vec3 n, vec3 Ld)
          + KeyColor * KeyLight * 0.06 * clamp(0.5 + 0.5 * dot(n, Ld), 0.0, 1.0);
 }
 
+// sample the optional plate logo with smooth anti-aliased edge masking
+vec4 samplePlateLogo(vec2 uv, float lod, vec2 edgePx)
+{
+    vec4 t = textureLod(iChannel0, clamp(uv, 0.0, 1.0), lod);
+    vec2 m = smoothstep(vec2(0.0), edgePx, uv) * (1.0 - smoothstep(1.0 - edgePx, vec2(1.0), uv));
+    t.a *= m.x * m.y;
+    return t;
+}
+
 // physically based shading of a surface hit (material id: 1 plate, 2 dough, 3 cheese, 4 pepperoni)
 // nao = normal + ambient visibility, sh = key light visibility (from traceScene)
-vec4 shade(vec3 pos, vec3 rd, float id, vec3 Ld, vec4 nao, float sh)
+vec4 shade(vec3 pos, vec3 rd, float id, vec3 Ld, vec4 nao, float sh, float pxWorld)
 {
     vec3 n = nao.xyz;
     vec3 po = pos;
     po.xz = gRot * po.xz;
+    vec3 pPlate = po;
     po.y -= plateTop(length(po.xz));
     po /= SliceScale;
     vec2 q = sliceQ(po);
@@ -332,6 +350,59 @@ vec4 shade(vec3 pos, vec3 rd, float id, vec3 Ld, vec4 nao, float sh)
     float rough = 0.08;
     float sss = 0.0;
     vec3 sssCol = vec3(0.0);
+
+    if (SwHaveImage && id < 1.5 && n.y > 0.3 && pPlate.y > -0.002) {
+        // logo etched onto the porcelain plate in front of the slice, aligned with the front cut edge
+        vec2 axisU = vec2(sin(SliceHalfAngle), cos(SliceHalfAngle));
+        vec2 axisV = vec2(cos(SliceHalfAngle), -sin(SliceHalfAngle));
+        vec2 texRes = max(iChannelResolution[0].xy, vec2(1.0));
+        float imgAspect = texRes.x / texRes.y;
+        vec2 maxBox = vec2(0.42, 0.198);
+        vec2 logoDim = imgAspect > (maxBox.x / maxBox.y)
+            ? vec2(maxBox.x, maxBox.x / imgAspect)
+            : vec2(maxBox.y * imgAspect, maxBox.y);
+        vec2 logoCenter = vec2(0.0, -0.302);
+        // keep bottom corners inside the flat plate well (r <= 0.42) at default size
+        vec2 halfD = 0.5 * logoDim;
+        float cornerR = length(vec2(halfD.x, -logoCenter.y + halfD.y));
+        if (cornerR > 0.42) {
+            float aQ = dot(halfD, halfD);
+            float bQ = -logoCenter.y * halfD.y;
+            float cQ = logoCenter.y * logoCenter.y - 0.42 * 0.42;
+            logoDim *= (-bQ + sqrt(max(bQ * bQ - aQ * cQ, 0.0))) / max(aQ, 1e-6);
+        }
+        logoDim *= LogoSize;
+        vec2 uv = (vec2(dot(pPlate.xz, axisU), dot(pPlate.xz, axisV)) - logoCenter) / logoDim + 0.5;
+
+        float pxPlate = pxWorld / sqrt(max(dot(n, -rd), 0.25));
+        vec2 duv = max(vec2(1.0) / texRes, vec2(pxPlate) / logoDim * 0.85);
+        if (uv.x > -duv.x * 2.0 && uv.x < 1.0 + duv.x * 2.0 && uv.y > -duv.y * 2.0 && uv.y < 1.0 + duv.y * 2.0) {
+            float texelsPerPx = pxPlate * max(texRes.x / logoDim.x, texRes.y / logoDim.y);
+            float lod = max(0.0, log2(max(texelsPerPx, 1e-4)) - 0.5);
+            vec2 edgePx = max(vec2(pxPlate) / logoDim, vec2(1.0) / texRes);
+
+            vec4 tex = samplePlateLogo(uv, lod, edgePx);
+            float etchA = clamp(tex.a * LogoOpacity, 0.0, 1.0);
+            if (LogoRelief > 0.0) {
+                float hL = -samplePlateLogo(uv - vec2(duv.x, 0.0), lod, edgePx).a;
+                float hR = -samplePlateLogo(uv + vec2(duv.x, 0.0), lod, edgePx).a;
+                float hD = -samplePlateLogo(uv - vec2(0.0, duv.y), lod, edgePx).a;
+                float hU = -samplePlateLogo(uv + vec2(0.0, duv.y), lod, edgePx).a;
+                mat2 invRot = transpose(gRot);
+                vec2 tU2 = invRot * axisU;
+                vec2 tV2 = invRot * axisV;
+                vec3 T = normalize(vec3(tU2.x, 0.0, tU2.y) - n * dot(n, vec3(tU2.x, 0.0, tU2.y)));
+                vec3 Bv = normalize(vec3(tV2.x, 0.0, tV2.y) - n * dot(n, vec3(tV2.x, 0.0, tV2.y)));
+                float bevel = LogoRelief * LogoOpacity * 0.9;
+                n = normalize(n - ((hR - hL) * T + (hU - hD) * Bv) * bevel);
+                nao.w *= 1.0 - 0.14 * etchA * clamp(LogoRelief, 0.0, 1.5);
+            }
+            vec3 imgCol = EwSrgbToLinear(tex.rgb);
+            vec3 logoCol = mix(imgCol, LogoColor, LogoColorMix);
+            alb = mix(alb, logoCol, etchA);
+            rough = mix(rough, 0.36, etchA * etchA);
+        }
+    }
 
     if (id > 1.5 && id < 2.5) {
         // dough and crust: pale bottom, golden brown top, charred blisters, crumb at the cut
@@ -588,7 +659,7 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord)
             if (t1 > t0) {
                 vec4 nao; float sh;
                 id = traceScene(ro, rd, t0, t1, Ld, tHit, pos, nao, sh);
-                if (id > 0.0) c = shade(pos, rd, id, Ld, nao, sh);
+                if (id > 0.0) c = shade(pos, rd, id, Ld, nao, sh, tHit * uvs / (iResolution.y * FL));
             }
         }
         if (s == 0) tPrim = tHit;
