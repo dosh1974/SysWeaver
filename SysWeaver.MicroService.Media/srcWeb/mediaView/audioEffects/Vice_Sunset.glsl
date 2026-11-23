@@ -1,4 +1,4 @@
-//  media: audio2 stock:YuE2_00051.flac
+//  media: audio stock:YuE2_00051.flac
 // Vice Sunset: an 80's Miami neon sunset over the ocean, driven by the music.
 //  iMouse.x = Reactivity | How strongly the scene reacts to the music | 0.5 | 0.0 .. 2.0 | x
 //  iMouse.y = Hue Shift | Rotates the whole neon palette | 0.5 | -90 .. 90 | °

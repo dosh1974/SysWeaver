@@ -1038,7 +1038,17 @@
                     Title: denied ? _TF("Not allowed", "Title of the error state of an API call that the server refused (403)") : _TF("The call failed", "Title of the error state of a failed API call"),
                     Text: why || _TF("The service returned an error. The details are below.", "Text of the error state of a failed API call"),
                 });
-                const c = el("div.api-error", null, st.E, el("pre.api-code.api-errortext", { text: msg }));
+                //  The role requirement (when refused) is dynamic text that may be copied, the generic fallback text isn't
+                if (why) {
+                    const te = st.E.querySelector(".sw-empty-text");
+                    if (te)
+                        te.classList.add("sw-selectable");
+                }
+                //  The error details: a Copy button above the (selectable) text
+                const c = el("div.api-error", null, st.E,
+                    el("div.api-codebar", null, copyButton(() => msg,
+                        _TF("Copy the error details to the clipboard", "Tool tip of the Copy button of the error details of a failed call in the API inspector")).E),
+                    el("pre.api-code.api-errortext", { text: msg }));
                 tabs.Add({ Title: _TF("Error", "The text of a tab header that will display the server error as a result of an API call"), Content: c });
                 statusText = denied ? _TF("Refused", "Status badge of an API call that the server refused") : _TF("Error", "Status badge of a failed API call");
                 status = Sw.Badge(statusText, "error", msg);

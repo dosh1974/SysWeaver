@@ -1,10 +1,11 @@
+//  media: audio
 // Audio - spectral cross pulse
 // Concentric rings driven by the music spectrum (radius = frequency),
 // crossed by a glowing diagonal X; colors drift with screen position and time.
 // Calm in silence: the diagonal glow and color drift stay alive.
 //
 // Live controls:
-//  iMouse.x = Brightness | Overall light intensity | 0.5 | 0.0 .. 6.0 | x
+//  iMouse.x = Brightness | Overall light intensity | 0.3 | 0.0 .. 6.0 | x
 //  iMouse.y = Ring Density | Number of concentric ripples | 0.5 | 4.0 .. 28.0
 //  iMouse.z = Spectrum Zoom | Radius range mapped to the spectrum (higher = more bass) | 0.5 | 4.0 .. 28.0
 //  iMouse.w = Color Shift | Shifts the blue / yellow balance | 0.5 | -2.0 .. 2.0
@@ -27,10 +28,10 @@ const float DiagonalGlow = 0.1; // var: { "min": 0.01, "max": 0.5, "step": 0.01,
 float sigmoid(float x) { return 1. / (1. + exp(x)); }
 vec3 sigmoid(vec3 v) { return 1. / (1. + exp(v)); }
 
-// Spectrum level at radius-like coordinate f
+// Spectrum level at radius-like coordinate f: the log frequency axis from ~40 Hz (the 128 band row of the audio texture)
 float sample_at(float f)
 {
-    return texture(iChannel0, vec2(f / SpectrumZoom, 0.)).x;
+    return EwAudioGetValue(iChannel0, 0.1 + max(f, 0.0) / SpectrumZoom, EwAudioFrequency128v, false);
 }
 
 // 5-tap box blur of the spectrum around f

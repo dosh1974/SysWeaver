@@ -77,6 +77,14 @@ namespace SysWeaver.MicroService.Media
         public bool Transparent;
 
         /// <summary>
+        /// The picture of the effect (its texture: an image, a video, a text) has transparency: the effect's SwTransparentImage constant
+        /// (a setting, never guessed from the picture; false without a picture). An image / video marked Transparent and the word
+        /// "transparent" in the effect's media line set it too.
+        /// </summary>
+        [EditDefault(false)]
+        public bool TransparentImage;
+
+        /// <summary>
         /// If true the effect's width and height will change dynamically to match the container
         /// </summary>
         [EditDefault(false)]
@@ -184,6 +192,7 @@ namespace SysWeaver.MicroService.Media
             (MipMap ? 256 : 0) |
             (AntiAlias ? 512 : 0) |
             (ImageSize ? 1024 : 0) |
+            (TransparentImage ? 2048 : 0) |
             0);
 
         public override bool Equals(object obj) => Equals(obj as MediaEffect);
@@ -209,6 +218,8 @@ namespace SysWeaver.MicroService.Media
             if (Static != other.Static)
                 return false;
             if (Transparent != other.Transparent)
+                return false;
+            if (TransparentImage != other.TransparentImage)
                 return false;
             if (AdaptiveSize != other.AdaptiveSize)
                 return false;

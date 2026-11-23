@@ -197,7 +197,7 @@
 
     /** Defaults of the effect params (MediaPlayerParamsEffect). */
     const EffectDefaults = {
-        Width: 1920, Height: 1080, Speed: 1, Offset: 0, LimitSize: false, DpiAdjust: false, DpiScale: 1, Static: false, Transparent: false,
+        Width: 1920, Height: 1080, Speed: 1, Offset: 0, LimitSize: false, DpiAdjust: false, DpiScale: 1, Static: false, Transparent: false, TransparentImage: false,
         AdaptiveSize: true, WrapU: false, WrapY: false, Texture: null, WebGL2: false, MipMap: false, AntiAlias: false, FxProps: null,
     };
 
@@ -430,6 +430,10 @@
             {
                 Key: "Transparent", Label: _TF("Transparent", "Setting in the media editor"), Type: "bool", Default: false, Group: G.Size(),
                 Desc: _TF("The effect draws see-through parts: the page shows through them", "Description of a setting in the media editor"),
+            },
+            {
+                Key: "TransparentImage", Label: _TF("Transparent picture", "Setting in the media editor: the picture of an effect has see-through parts"), Type: "bool", Default: false, Group: G.Size(),
+                Desc: _TF("The picture (texture) of the effect has see-through parts: the effect can draw behind them (SwTransparentImage in the shader)", "Description of a setting in the media editor. SwTransparentImage is a name in the shader code, keep it."),
             },
             {
                 Key: "DpiScale", Label: _TF("Sharpness", "Setting in the media editor: the resolution of an effect"), Type: "float", Min: 0.1, Max: 1, Step: 0.05, Scale: 100, Unit: "%", Default: 1, Group: G.Quality(),
@@ -2304,7 +2308,7 @@
 
         /**
          * Effect files of a library kind (cached).
-         * @param {string} kind "Background", "Image" or "Collage".
+         * @param {string} kind "Background", "Image", "Frame", "Icon", "Collage" or "Audio".
          * @returns {Promise<string[]>} The names.
          */
         async EffectNames(kind) {
@@ -2328,7 +2332,10 @@
             const groups = kind === "background" ? [["Background", "backgroundEffects/", _TF("Effect", "Kind of an effect in the effect picker of the media editor")]]
                 : kind === "audio" ? [["Audio", "audioEffects/", _TF("Sound effect", "Kind of an effect in the effect picker of the media editor")]]
                 : kind === "collage" ? [["Collage", "collageEffects/", _TF("Collage effect", "Kind of an effect in the effect picker of the media editor")], ["Image", "imageEffects/", _TF("Picture effect", "Kind of an effect in the effect picker of the media editor")]]
-                    : [["Image", "imageEffects/", _TF("Picture effect", "Kind of an effect in the effect picker of the media editor")]];
+                    : [["Image", "imageEffects/", _TF("Picture effect", "Kind of an effect in the effect picker of the media editor")],
+                        //  (frames around the picture, the picture on an object)
+                        ["Frame", "frameEffects/", _TF("Frame", "Kind of an effect in the effect picker of the media editor: a frame drawn around the picture")],
+                        ["Icon", "iconEffects/", _TF("Icon", "Kind of an effect in the effect picker of the media editor: the picture is put on an object (ex: a logo on a cup)")]];
             const out = kind === "background" ? [] : [{ Value: "", Label: _TF("No effect", "Choice of the effect of a picture in the media editor"), Icon: "close" }];
             //  A sound: null = the default effect of the viewer (MV.DefaultAudioEffect), "" = none
             if (kind === "audio" && MV.DefaultAudioEffect) {
@@ -2356,7 +2363,7 @@
             //  (a video: the effect draws its frames, like a picture: the image effects)
             const overlay = t.Type === TImage || t.Type === TVideo || t.Type === TText || t.Type === TAudio;
             const kind = !overlay ? "background" : t.Type === TAudio ? "audio" : t.Type === TText && t.Props.CollageSeparator ? "collage" : "image";
-            await Promise.all(["Background", "Image", "Collage", "Audio"].map(k => t.EffectNames(k)));
+            await Promise.all(["Background", "Image", "Frame", "Icon", "Collage", "Audio"].map(k => t.EffectNames(k)));
             const opts = t.EffectOptions(kind);
             if (!opts.length) {
                 Sw.Toast(_TF("No effects found in the library", "Shown by the effects button of the media editor when the library is empty"), { Kind: "warning" });

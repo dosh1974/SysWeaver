@@ -6,7 +6,7 @@
  * Loading: included by MediaPlayer.Init (when window.MediaLoadAll is set) or lazily by MediaPlayer.Create
  * (MediaTypes.Audio).
  * Globals defined: MediaPlayerParamsAudio, MediaPlayerAudio, MediaAudioAnalyser (the spectrum / waveform of the sound), MediaAudioSamples (its offline analysis) and
- * MediaPlayerAudioTexture (the sound as a texture of MediaPlayerEffect: ShaderToy's audio input, or the rich audio2 texture of
+ * MediaPlayerAudioTexture (the sound as a texture of MediaPlayerEffect: ShaderToy's audio input (legacyaudio), or the audio texture of
  * media_audio2.js).
  * Dependencies: MediaPlayerElement and MediaPlayerTools (media_player_tools.js: the play window, volume and transport shared with
  * MediaPlayerVideo, InitBase, OnCacheComplete, waitEvent2, delay; no SysWeaver core needed).
@@ -255,6 +255,7 @@ class MediaAudioAnalyser {
             split.connect(left, 0);
             split.connect(right, 1);
             t.Nodes = [mono, left, right];
+            t.Split = split;
             t.Gain = gain;
         }
         catch (e) {
@@ -265,6 +266,37 @@ class MediaAudioAnalyser {
         t.Live = true;
         t.RemoveListeners();
         t.Player.ApplyVolume();
+    }
+
+    /**
+     * The latest 8192 samples of left and right of the playing sound (when live, else silence): the live source of the audio texture until
+     * the sound is decoded (MediaPlayerAudioTexture.Bridge). Its analysers are made on first use.
+     * @returns {Float32Array[]} [left, right] (reused arrays).
+     */
+    PullSamples() {
+        const t = this;
+        if (!t.Time2)
+            t.Time2 = [new Float32Array(8192), new Float32Array(8192)];
+        if (!t.Live || !t.Split) {
+            t.Time2[0].fill(0);
+            t.Time2[1].fill(0);
+            return t.Time2;
+        }
+        if (!t.Nodes2) {
+            /** @returns {AnalyserNode} The samples, unsmoothed. */
+            const mk = () => {
+                const a = t.Ctx.createAnalyser();
+                a.fftSize = 8192;
+                a.smoothingTimeConstant = 0;
+                return a;
+            };
+            t.Nodes2 = [mk(), mk()];
+            t.Split.connect(t.Nodes2[0], 0);
+            t.Split.connect(t.Nodes2[1], 1);
+        }
+        t.Nodes2[0].getFloatTimeDomainData(t.Time2[0]);
+        t.Nodes2[1].getFloatTimeDomainData(t.Time2[1]);
+        return t.Time2;
     }
 
     /**
@@ -510,12 +542,16 @@ class MediaAudioSamples {
  * One per WebGL context (made again after a lost context); the sound and its analyser belong to the player and outlive it.
  */
 class MediaPlayerAudioTexture {
+    /** @type {Float32Array[]} Silence: the samples of Quiet. */
+    static #Zeros = null;
+    /** @type {MediaAudio2Engine|null} The audio texture of silence (before the sound is decoded and the live graph runs). */
+    static #Quiet = null;
 
     /**
      * @param {WebGLRenderingContext|WebGL2RenderingContext} gl - Effect context.
      * @param {MediaPlayerAudio} media - The player of the sound.
      * @param {boolean} [audio2] - The rich audio2 texture (512 x 64, MediaAudio2Engine of media_audio2.js: computed from the decoded sound
-     * at the play position, the same as Effect Weaver's editor), else ShaderToy's 512 x 2.
+     * at the play position, the same as Effect Weaver's editor; until it is decoded: from the live samples, Bridge), else ShaderToy's 512 x 2.
      */
     constructor(gl, media, audio2) {
         const t = this;
@@ -534,7 +570,7 @@ class MediaPlayerAudioTexture {
             //  The decoded sound (one per player, shared by the textures of lost / remade contexts), the engine computes from its samples
             t.Floats = t.Gl2 ? t.Data : new Float32Array(size);
             media.Audio2Ready = media.Audio2Ready || MediaAudioSamples.Load(media.Url).then(s => media.Audio2Engine = new MediaAudio2Engine(s), e => {
-                console.warn("Media: no audio2 analysis, " + (e && e.message ? e.message : e));
+                console.warn("Media: no audio texture analysis, " + (e && e.message ? e.message : e));
                 return null;
             });
             t.Step = null;
@@ -559,10 +595,12 @@ class MediaPlayerAudioTexture {
     async Cache() {
         const t = this;
         const gl = t.GL;
-        //  Offline analysis / audio2: the sound is decoded first (the first frames already show it)
+        //  Offline analysis / the audio texture: the sound is decoded first (the first frames already show it)
         if (t.Analyser.Ready)
             await t.Analyser.Ready;
-        if (t.Audio2)
+        //  (the audio texture: live, it starts at once from the playing sound (Bridge) and goes on from the decoded one when it's ready;
+        //  offline (screenshots, exports): the decoded sound's exact values from the first frame)
+        if (t.Audio2 && MediaAudioAnalyser.IsOffline)
             await t.Media.Audio2Ready;
         gl.bindTexture(gl.TEXTURE_2D, t.Texture);
         t.Upload(true);
@@ -583,18 +621,21 @@ class MediaPlayerAudioTexture {
         const gl = t.GL;
         const gl2 = t.Gl2;
         if (t.Audio2) {
-            //  audio2: one analysis step per 1/60 s of the play position (only a new step is computed / uploaded)
-            const e = t.Media.Audio2Engine;
-            const n = e ? Math.floor(Math.max(0, t.Media.GetPos() || 0) * MediaAudio2Engine.Steps) : null;
-            if (!create && n === t.Step)
+            //  The audio texture: one analysis step per 1/60 s of the play position (only a new step is computed / uploaded)
+            const decoded = t.Media.Audio2Engine, e = decoded || t.Bridge();
+            if (decoded)
+                t.Media.Audio2Live = null;
+            const n = Math.floor(Math.max(0, t.Media.GetPos() || 0) * MediaAudio2Engine.Steps);
+            if (!create && n === t.Step && e === t.Engine)
                 return;
+            //  (the bridge is live: its own steps, on with the time played, never back)
+            const k = decoded ? n : t.LiveStep = (t.LiveStep ?? 0) + (t.Step === null ? 1 : Math.min(60, Math.max(1, n - t.Step)));
             t.Step = n;
-            if (e) {
-                e.Fill(t.Floats, n);
-                if (!gl2)
-                    for (let i = 0; i < t.Data.length; ++i)
-                        t.Data[i] = t.Floats[i] * 255;
-            }
+            t.Engine = e;
+            e.Fill(t.Floats, k);
+            if (!gl2)
+                for (let i = 0; i < t.Data.length; ++i)
+                    t.Data[i] = t.Floats[i] * 255;
         }
         else
             t.Analyser.Read(t.Data, gl2 ? 1 : 255);
@@ -609,6 +650,22 @@ class MediaPlayerAudioTexture {
     }
 
     /**
+     * The audio texture until the sound is decoded (no waiting for the download and the decode): an engine of the playing sound's samples
+     * when the live graph runs (one per player), else of silence.
+     * @returns {MediaAudio2Engine} The engine.
+     */
+    Bridge() {
+        const t = this, m = t.Media, an = t.Analyser, C = MediaPlayerAudioTexture;
+        if (an.Live)
+            return m.Audio2Live || (m.Audio2Live = new MediaAudio2Engine({ Live: true, Rate: an.SampleRate, Pull: () => an.PullSamples() }));
+        if (!C.#Quiet) {
+            C.#Zeros = [new Float32Array(8192), new Float32Array(8192)];
+            C.#Quiet = new MediaAudio2Engine({ Live: true, Rate: 44100, Pull: () => C.#Zeros });
+        }
+        return C.#Quiet;
+    }
+
+    /**
      * Uploads the current sound data (called by MediaPlayerEffect.render before every frame, texture unit 0 active).
      * @returns {void}
      */
@@ -619,7 +676,7 @@ class MediaPlayerAudioTexture {
     }
 
     /**
-     * Binds the texture; texUv = (1, 1, 0, 0) (no flip), texSize = 512 x 2 (audio2: 512 x 64).
+     * Binds the texture; texUv = (1, 1, 0, 0) (no flip), texSize = 512 x 2 (the audio texture: 512 x 64).
      * @param {WebGLUniformLocation|null} uvScaleAndOffset - texUv uniform.
      * @param {WebGLUniformLocation|null} texSize - texSize uniform.
      * @returns {void}

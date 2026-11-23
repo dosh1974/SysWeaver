@@ -1,4 +1,4 @@
-// Corridor: a hazy corridor drawn by the sound (ShaderToy style, the audio2 texture is iChannel0: spectrum, waveform,
+// Corridor: a hazy corridor drawn by the sound (ShaderToy style, the audio texture is iChannel0: spectrum, waveform,
 // kick / snare / hi-hat pulses, bass energy and the beat; r = mono, g = left, b = right).
 //  - the left / right walls are LED spectrum meters of the left / right channel (bass near the camera, treble far away),
 //    with floating peak caps and top cells that sparkle on the hi-hat
@@ -8,7 +8,7 @@
 //  - the ceiling is two rows of colored lamps that flash on the kick, flash white on the snare, and a light chases down them on the beat
 //  - haze: fog and light shafts under the lamps, tinted and thickened by the bass; the camera ducks / zooms on the kick
 // The camera looks around and sways sideways / up and down, it never moves along the corridor.
-//  media: audio2 stock:YuE2_00056.flac
+//  media: audio stock:YuE2_00056.flac
 
 //  Live controls:
 //  iMouse.x = Haze | Fog and light shafts | 0.06 | 0.0 .. 0.3
@@ -65,7 +65,7 @@ vec3 hsv(float h, float s, float v)
 	return v * mix(vec3(1.0), k, s);
 }
 
-//  The spectrum (0..1) of the bar at u (0 = bass .. 1 = treble): one bar = exactly one band of the audio2 spectrum row
+//  The spectrum (0..1) of the bar at u (0 = bass .. 1 = treble): one bar = exactly one band of the audio texture's spectrum row
 //  with Bars bands (32 or 64, the log axis 20 Hz .. 20 kHz), read at its center (no blending); r = mono, g = left, b = right;
 //  sm = 1: the smoothed row (calm motion, peak caps)
 //  (textureLod: the texture has no mip levels, and without screen derivatives the callers can really branch)
@@ -76,7 +76,7 @@ vec3 spectrum(float u, float sm)
 	return textureLod(iChannel0, vec2(x, SpecRowV + sm * EwAudioDiffuseAddV), 0.0).rgb;
 }
 
-//  One mono value of the audio2 texture (u, v: the snippet's constants)
+//  One mono value of the audio texture (u, v: the snippet's constants)
 float audioValue(float u, float v)
 {
 	return textureLod(iChannel0, vec2(u, v), 0.0).r;
@@ -318,7 +318,7 @@ vec3 haze(vec3 ro, vec3 rd, float t, float kk, float bass, vec3 col)
 void vertexMain(vec2 fragCoord)
 {
 	float tm = iTime;
-	//  The music (audio2): pulses for the hits, smoothed energies for flowing motion
+	//  The music (the audio texture): pulses for the hits, smoothed energies for flowing motion
 	float kp = audioValue(EwAudioKickPulseU, EwAudioKickPulseV);
 	float sp = audioValue(EwAudioSnarePulseU, EwAudioSnarePulseV);
 	float hp = audioValue(EwAudioHiHatPulseU, EwAudioHiHatPulseV);

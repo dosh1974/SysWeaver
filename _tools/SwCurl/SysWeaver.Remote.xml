@@ -150,7 +150,7 @@
         </member>
         <member name="F:SysWeaver.Remote.RemoteSerializerAttribute.Ser">
             <summary>
-            The serializer to use for encoding and decoding, encoding can be different by using the postSerizlier
+            The serializer to use for encoding and decoding, encoding can be different by using the post serializer (<see cref="F:SysWeaver.Remote.RemoteSerializerAttribute.PostSer"/>)
             </summary>
         </member>
         <member name="F:SysWeaver.Remote.RemoteSerializerAttribute.PostSer">
@@ -172,14 +172,14 @@
         </member>
         <member name="F:SysWeaver.Remote.RemoteTimeoutAttribute.TimeOutInMilliSeconds">
             <summary>
-            The time-out to use in millie seconds, if less or equal than zero, the time-out in the RemoteConnection settings is used
+            The time-out to use in milliseconds, if less or equal than zero, the time-out in the RemoteConnection settings is used
             </summary>
         </member>
         <member name="M:SysWeaver.Remote.RemoteTimeoutAttribute.#ctor(System.Int32)">
             <summary>
             Override the time-out for this API call (or calls if placed on an interface)
             </summary>
-            <param name="timeOutInMilliSeconds">The time-out to use in millie seconds, if less or equal than zero, the time-out in the RemoteConnection is used</param>
+            <param name="timeOutInMilliSeconds">The time-out to use in milliseconds, if less or equal than zero, the time-out in the RemoteConnection is used</param>
         </member>
         <member name="T:SysWeaver.Remote.RemoteCacheAttribute">
             <summary>
@@ -203,7 +203,7 @@
         </member>
         <member name="F:SysWeaver.Remote.RemoteCacheAttribute.Duration">
             <summary>
-            Number of seconds that the response can be resued, if 0 no time based caching is performed, <see cref="F:SysWeaver.Remote.RemoteCacheAttribute.UseConnection"/> to use the connection value
+            Number of seconds that the response can be reused, if 0 no time based caching is performed, <see cref="F:SysWeaver.Remote.RemoteCacheAttribute.UseConnection"/> to use the connection value
             </summary>
         </member>
         <member name="F:SysWeaver.Remote.RemoteCacheAttribute.MaxItems">
@@ -215,7 +215,7 @@
             <summary>
             Override the cache behaviour for this specific API call (or calls if placed on an interface)
             </summary>
-            <param name="duration">Number of seconds that the response can be resued, if 0 no time based caching is performed, -1 (or less) = <see cref="F:SysWeaver.Remote.RemoteCacheAttribute.UseConnection"/></param>
+            <param name="duration">Number of seconds that the response can be reused, if 0 no time based caching is performed, -1 (or less) = <see cref="F:SysWeaver.Remote.RemoteCacheAttribute.UseConnection"/></param>
             <param name="maxItems">Maximum number of cached responses, 0 for the default LRU capacity, -1 (or less) = <see cref="F:SysWeaver.Remote.RemoteCacheAttribute.UseConnection"/></param>
         </member>
         <member name="T:SysWeaver.Remote.NoRemoteCacheAttribute">

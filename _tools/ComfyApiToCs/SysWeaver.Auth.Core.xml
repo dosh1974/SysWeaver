@@ -1584,6 +1584,11 @@
             They are removed from the template, so that a variable value is never changed.
             </summary>
         </member>
+        <member name="T:SysWeaver.ManagedMessageTypes">
+            <summary>
+            The kinds of message templates a <see cref="T:SysWeaver.ManagedMessages"/> set can hold (flags: a set of kinds to load or require).
+            </summary>
+        </member>
         <member name="F:SysWeaver.ManagedMessageTypes.Text">
             <summary>
             Plain text message intended for SMS 

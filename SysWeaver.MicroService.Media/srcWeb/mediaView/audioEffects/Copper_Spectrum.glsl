@@ -1,4 +1,4 @@
-//  media: audio2 stock:YuE2_00004.flac
+//  media: audio stock:YuE2_00004.flac
 
 // Copper Spectrum: polished copper rods driven by the music spectrum, standing on a glossy white tile floor.
 //  iMouse.x = Rod Height | Height gain of the spectrum rods | 0.5 | 0.2 .. 1.8 | x
@@ -46,7 +46,7 @@ const float WaveWidth = 0.02; // var: { "min": 0.004, "max": 0.05, "step": 0.001
 // Quality
 const int AA = 2; // var: { "min": 1, "max": 3, "step": 1, "name": "Anti-Aliasing", "desc": "Samples per pixel axis: 1 fast (jagged), 2 smooth edges (4x cost), 3 very smooth (9x cost)", "format": "{0}x{0}" }
 
-// one rod per band of the 32 band audio2 spectrum
+// one rod per band of the 32 band spectrum of the audio texture
 #define NR 32
 const float Spacing = 0.2;
 
@@ -346,7 +346,7 @@ vec3 render(vec3 ro, vec3 rd, float pix) {
 void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     float tm = mod(iTime, 1000.0);
 
-    // spectrum -> rod levels: the 32 log bands of audio2, one band per rod (bass on the left)
+    // spectrum -> rod levels: the 32 log bands of the audio texture, one band per rod (bass on the left)
     // Smoothing blends the raw band with its time smoothed value
     float lvl[NR];
     for (int i = 0; i < NR; i++) {
@@ -371,7 +371,7 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
         gH[i] = h;
         gMaxH = max(gMaxH, h);
     }
-    // bass for the woofers: audio2 bass energy (20 .. 150 Hz), thresholded
+    // bass for the woofers: bass energy (30 .. 250 Hz), thresholded
     float bass = EwAudioGetBassEnergy(iChannel0);
     gBass = smoothstep(BassThreshold, BassThreshold + 0.5, bass * BassGain);
     gBass = smoothstep(BassThreshold, BassThreshold + 0.5, bass * BassGain);

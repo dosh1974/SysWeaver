@@ -31,12 +31,22 @@
             </summary>
             <typeparam name="T">The type of the optional dependency</typeparam>
         </member>
+        <member name="M:SysWeaver.MicroService.OptionalDepAttribute`1.#ctor">
+            <summary>
+            Declare a dependency on <typeparamref name="T"/>
+            </summary>
+        </member>
         <member name="T:SysWeaver.MicroService.OptionalDepAttribute`2">
             <summary>
             Add to a micro service class to show two optional dependencies
             </summary>
             <typeparam name="T0">The type of the first optional dependency</typeparam>
             <typeparam name="T1">The type of the second optional dependency</typeparam>
+        </member>
+        <member name="M:SysWeaver.MicroService.OptionalDepAttribute`2.#ctor">
+            <summary>
+            Declare dependencies on <typeparamref name="T0"/> and <typeparamref name="T1"/>
+            </summary>
         </member>
         <member name="T:SysWeaver.MicroService.RequiredDepAttribute">
             <summary>
@@ -60,12 +70,22 @@
             </summary>
             <typeparam name="T">The type of the required dependency</typeparam>
         </member>
+        <member name="M:SysWeaver.MicroService.RequiredDepAttribute`1.#ctor">
+            <summary>
+            Declare a dependency on <typeparamref name="T"/>
+            </summary>
+        </member>
         <member name="T:SysWeaver.MicroService.RequiredDepAttribute`2">
             <summary>
             Add to a micro service class to show two required dependencies
             </summary>
             <typeparam name="T0">The type of the first required dependency</typeparam>
             <typeparam name="T1">The type of the second required dependency</typeparam>
+        </member>
+        <member name="M:SysWeaver.MicroService.RequiredDepAttribute`2.#ctor">
+            <summary>
+            Declare dependencies on <typeparamref name="T0"/> and <typeparamref name="T1"/>
+            </summary>
         </member>
         <member name="T:SysWeaver.MicroService.IEmailSender">
             <summary>
@@ -486,26 +506,6 @@
                 Best = Best compression, often too slow for on the fly.
             </summary>
         </member>
-        <member name="T:SysWeaver.MicroService.WebApiCompress">
-            <summary>
-            Common compression priority strings for <see cref="T:SysWeaver.MicroService.WebApiCompressionAttribute"/>
-            </summary>
-        </member>
-        <member name="F:SysWeaver.MicroService.WebApiCompress.Best">
-            <summary>
-            Best compression level for all supported methods
-            </summary>
-        </member>
-        <member name="F:SysWeaver.MicroService.WebApiCompress.Balanced">
-            <summary>
-            Balanced compression level for all supported methods
-            </summary>
-        </member>
-        <member name="F:SysWeaver.MicroService.WebApiCompress.Fast">
-            <summary>
-            Fast compression level for all supported methods
-            </summary>
-        </member>
         <member name="T:SysWeaver.MicroService.WebApiOptionalAttribute">
             <summary>
             Put this attribute on a method to invoke a member to check if the api is available or not
@@ -686,7 +686,7 @@
         </member>
         <member name="T:SysWeaver.MicroService.WebMenuAttribute">
             <summary>
-            Put this attribute on a method to add to a menu
+            Base of the menu attributes: put one on a method or a type to add an item to a menu
             </summary>
         </member>
         <member name="M:SysWeaver.MicroService.WebMenuAttribute.#ctor(System.String,System.String,SysWeaver.MicroService.WebMenuItemTypes,System.String,System.String,System.String,System.Single,System.String,System.Boolean,System.String,System.String)">

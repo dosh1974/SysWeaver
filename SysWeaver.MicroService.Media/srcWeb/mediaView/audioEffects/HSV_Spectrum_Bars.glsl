@@ -1,6 +1,6 @@
 
 
-//  media: audio2
+//  media: audio
 // =============================================================================
 //  Oklab Spectrum Bars: a music visualizer of the sound of the media line (choose it in the Media tab):
 //  2^Bars (default 64) log frequency bars, smoothed or live, in a perceptual (Oklab) color gradient

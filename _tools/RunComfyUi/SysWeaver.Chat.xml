@@ -168,6 +168,11 @@
             Id of the message
             </summary>
         </member>
+        <member name="T:SysWeaver.Chat.ChatJoinResponse">
+            <summary>
+            The response of the Join api: the chat, its messages and what the current user may do in it.
+            </summary>
+        </member>
         <member name="F:SysWeaver.Chat.ChatJoinResponse.UserName">
             <summary>
             The name of the currently logged in user
@@ -293,6 +298,12 @@
             <param name="session">The session of the user (what the user is allowed to do is evaluated using its auth)</param>
             <param name="messages">The initial messages</param>
             <param name="storage">Optional user storage service</param>
+        </member>
+        <member name="T:SysWeaver.Chat.ChatMenuItem">
+            <summary>
+            A menu item that the server (the chat provider) adds to the chat menu or to the menu of a message.
+            A leaf item sends its Id and value to the provider (the SetValue api); items with children are sub menus.
+            </summary>
         </member>
         <member name="F:SysWeaver.Chat.ChatMenuItem.Id">
             <summary>
@@ -517,10 +528,26 @@
             A two letter ISO 639-1 language code or a three letter ISO 639-2 language code, optionally combined with a two letter ISO 3166-A2 country code using a hyphen.
             </summary>
         </member>
+        <member name="T:SysWeaver.Chat.ChatMessageFlags">
+            <summary>
+            Flags of a chat message (ChatMessage.Flags), also read by the web client (Sw.Chat.Flags).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatMessageFlags.IsWorking">
+            <summary>
+            The message is not complete yet (ex: an AI answer that is still being streamed), the client shows it as working.
+            </summary>
+        </member>
         <member name="F:SysWeaver.Chat.ChatMessageFlags.FromAi">
             <summary>
             The message is written by an AI (an answer of an AI chat session, or a message sent as its agent).
             The web client tags the sender with "AI", so people know that they talk to an AI (EU AI Act art. 50).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Chat.ChatMessageFlags.CanRemove">
+            <summary>
+            The current user can remove the message without a confirmation.
+            Set by the chat service on messages addressed to the user of the session, cleared on all others.
             </summary>
         </member>
         <member name="T:SysWeaver.Chat.ChatMessageFormats">
@@ -544,6 +571,11 @@
             HTML code.
             Only the server application may send HTML messages (clients posting HTML to <see cref="M:SysWeaver.Chat.ChatService.UserMessage(SysWeaver.Chat.ChatMessageRequest,SysWeaver.Net.HttpServerRequest)"/> are refused with 400).
             The web front end still sanitizes it (an element / attribute allow list) before showing it.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Chat.ChatMessageIdRequest">
+            <summary>
+            A request that refers to one message of a chat.
             </summary>
         </member>
         <member name="F:SysWeaver.Chat.ChatMessageIdRequest.MessageId">
@@ -589,6 +621,11 @@
         <member name="F:SysWeaver.Chat.ChatRemoveMessages.Any">
             <summary>
             The user can remove any message
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Chat.ChatScopes">
+            <summary>
+            Who receives the push messages of a chat change (IChatController).
             </summary>
         </member>
         <member name="F:SysWeaver.Chat.ChatScopes.Global">
@@ -838,6 +875,11 @@
             Always assume that the user wants a public scope, unless they state that it's private or if they wan't to share it with other users (use protected).
             </summary>
         </member>
+        <member name="T:SysWeaver.Chat.ChatServiceParams">
+            <summary>
+            Parameters of the ChatService.
+            </summary>
+        </member>
         <member name="F:SysWeaver.Chat.ChatServiceParams.AllowPublicStore">
             <summary>
             If true, the user can store files in chat in a way that anyone can look at them
@@ -959,6 +1001,11 @@
             <param name="auth">The auth of the user making the request</param>
             <returns>What type of messages that the user should be able to remove from this session</returns>
         </member>
+        <member name="T:SysWeaver.Chat.ChatTools">
+            <summary>
+            Helpers for chat providers: user names of sessions and the trimming of tables for an AI.
+            </summary>
+        </member>
         <member name="M:SysWeaver.Chat.ChatTools.GetAnonymousUsername(SysWeaver.Net.HttpSession)">
             <summary>
             Get an anonymous user name for the given session
@@ -1007,6 +1054,11 @@
             Message Id (0 = Global command)
             </summary>
         </member>
+        <member name="T:SysWeaver.Chat.ChatVoice">
+            <summary>
+            The speech synthesis voice to use for the messages of a sender (the web client speaks new messages with it).
+            </summary>
+        </member>
         <member name="F:SysWeaver.Chat.ChatVoice.Name">
             <summary>
             The user name that will be spoken with this voice
@@ -1035,6 +1087,12 @@
         <member name="F:SysWeaver.Chat.ChatVoice.Pitch">
             <summary>
             [0, 2] Pitch of the voice
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Chat.IChatController">
+            <summary>
+            Given to a chat provider when it is registered with the ChatService (IChatProvider.OnInit):
+            the provider calls it to push new, changed, removed and cleared messages to the clients.
             </summary>
         </member>
         <member name="M:SysWeaver.Chat.IChatController.PostMessage(System.String,SysWeaver.Chat.ChatMessage,SysWeaver.Net.HttpSession,SysWeaver.Chat.ChatScopes)">

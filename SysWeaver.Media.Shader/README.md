@@ -43,6 +43,8 @@ flowchart LR
 - Snippets are inserted (with their dependencies) before the first declaration using them; `#line` keeps the line numbers
 - The snippet library is embedded (brotli compressed) and decoded once, when first used; a folder of snippets can be put on top of it (the Effect Weaver editor, where admins save)
 - Vertex stage support: a source is split into the two stages, the varyings are rewritten and the `main()` of the vertex shader is generated
+- `SwHaveImage` (`ShaderParser.HaveImageName`): a shader that uses it gets `const bool SwHaveImage = true / false;` in the head (the `haveImage` argument of `BuildSource` / `BuildParts`: drawn with a picture texture), so one effect works with and without an image. The callers: the Effect Weaver editor (true for image / video / collage effects), Effect Saver and VjWeaver (false), SysWeaver's media player (sets the value of its texture, `media_effect_program.js`)
+- `SwTransparentImage` (`ShaderParser.TransparentImageName`): the same for a picture that has transparency, `const bool SwTransparentImage = true / false;` (the `transparentImage` argument; always false without a picture). A setting of the user, never guessed from the picture: Effect Weaver's media line `//  media: image transparent <ref>` (the editor's Transparent check box), SysWeaver's media player `MediaEffect.TransparentImage` (an image / video marked Transparent sets it). Ex: a frame draws its inner effect behind the picture and alpha blends the picture on top
 
 ## Key components
 

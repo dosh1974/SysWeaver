@@ -7,7 +7,7 @@
         <member name="T:SysWeaver.Compression.CompZstdSharp">
             <summary>
             A Zstandard ("zstd", extension "zstd") plug-in using the fully managed ZstdSharp.Port library, through <see cref="T:SysWeaver.Compression.CompStreamCodec`2"/>.
-            Registered with priority 1 once <see cref="M:SysWeaver.Compression.CompZstdSharp.Register"/> is called.
+            Registered with priority 1 once <see cref="M:SysWeaver.Compression.CompZstdSharp.Register"/> is called, the same as the built-in <see cref="T:SysWeaver.Compression.CompZStdNETNew"/>: since it is registered after the built-in codecs, it replaces it (on a tie the last registered wins).
             </summary>
             <remarks>
             Uses zstd level 1 / 9 / 22 for <see cref="F:SysWeaver.Compression.CompEncoderLevels.Fast"/> / <see cref="F:SysWeaver.Compression.CompEncoderLevels.Balanced"/> / <see cref="F:SysWeaver.Compression.CompEncoderLevels.Best"/>.

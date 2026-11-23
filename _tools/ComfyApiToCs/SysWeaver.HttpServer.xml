@@ -1037,6 +1037,15 @@
             </remarks>
             <exception cref="T:System.Exception">The <see cref="T:SysWeaver.MicroService.WebApiOptionalAttribute"/> member is missing or isn't boolean.</exception>
         </member>
+        <member name="M:SysWeaver.Net.ApiHttpServerModule.IsEnabled(System.Object,System.Reflection.MethodInfo)">
+            <summary>
+            Check if an API method is enabled, i.e. it has no <see cref="T:SysWeaver.MicroService.WebApiOptionalAttribute"/> or the named boolean field, property or parameterless method on <paramref name="o"/> is true.
+            </summary>
+            <param name="o">The instance that the method is invoked on.</param>
+            <param name="method">The method.</param>
+            <returns>True if the method should be exposed.</returns>
+            <exception cref="T:System.Exception">The <see cref="T:SysWeaver.MicroService.WebApiOptionalAttribute"/> member is missing or isn't boolean.</exception>
+        </member>
         <member name="M:SysWeaver.Net.ApiHttpServerModule.RemoveMethod(System.Object,System.Reflection.MethodInfo,System.String,System.String)">
             <summary>
             Unregister a single API method (raises <see cref="E:SysWeaver.Net.ApiHttpServerModule.OnApiRemoved"/> if it was registered).
@@ -3966,6 +3975,12 @@
             The duration (in seconds) for which to cache responses on disc.
             Any time a 304 is returned, the disc caching is extend to this value (keeping used data in memory).
             Set to zero or less to disable caching. The default is 0 seconds (no disc caching).
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Net.HttpProxyEndPoint">
+            <summary>
+            One forwarded folder of a <see cref="T:SysWeaver.Net.HttpProxy"/>: the local web root, the remote source folder and optional overrides of the
+            settings of the parent <see cref="T:SysWeaver.Net.HttpProxyParams"/> (null uses the parent's value).
             </summary>
         </member>
         <member name="F:SysWeaver.Net.HttpProxyEndPoint.WebRoot">

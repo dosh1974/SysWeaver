@@ -4,6 +4,11 @@
         <name>Compress</name>
     </assembly>
     <members>
+        <member name="T:SysWeaver.CompressParams">
+            <summary>
+            The command line options of Compress (parsed by SysWeaver.CommandLine FilesToFolderTool, the XML docs of the public fields are the help text).
+            </summary>
+        </member>
         <member name="F:SysWeaver.CompressParams.OnlyBest">
             <summary>
             If true, only the best compression method is saved
@@ -16,7 +21,7 @@
         </member>
         <member name="F:SysWeaver.CompressParams.RecompressImages">
             <summary>
-            If true, image files such as png and jpeg may be re-compressed, trying to make smaller
+            If true, .png files are re-compressed with ZopfliPng (lossless, the result replaces the original in the output folder)
             </summary>
         </member>
         <member name="F:SysWeaver.CompressParams.CopyOriginal">
@@ -26,22 +31,23 @@
         </member>
         <member name="F:SysWeaver.CompressParams.Methods">
             <summary>
-            The compression methods to use (br, zgip, zstd, deflate), or use "org" to copy the original (or the type compressed version)
+            The compression methods to use (HTTP codes, comma separated: br, gzip, zstd, deflate; unknown names are ignored), or use "org" to copy the original (or the type compressed version)
             </summary>
         </member>
         <member name="F:SysWeaver.CompressParams.OptimizeWebFiles">
             <summary>
-            If true, .js files will be minimized
+            If true, web files (.js, .mjs, .css, .htm, .html, .xhtml, .json, .svg, .xml, .rss, .webmanifest) are minified with minify
+            (//DEBUG_BEGIN .. //DEBUG_END blocks are removed from .js files first)
             </summary>
         </member>
         <member name="F:SysWeaver.CompressParams.OptimizeShaders">
             <summary>
-            If true, .glsl files will be optimized
+            If true, .glsl / .frag shaders are optimized (stripped, see MinifyShaders)
             </summary>
         </member>
         <member name="F:SysWeaver.CompressParams.RemoveShaderVars">
             <summary>
-            If true, shader variables will be removed
+            If true, the tunable shader variables and iMouse control comments (that Effect Weaver reads from the source) aren't kept when optimizing shaders
             </summary>
         </member>
         <member name="F:SysWeaver.CompressParams.MinifyShaders">
@@ -93,14 +99,14 @@
             Shader optimization (.glsl / .frag).
             <para>
             A minimized shader must work exactly like the original in Effect Weaver (Effect Saver, Effect Vj, the shader editor), so everything
-            its shader parser (EffectWeaver.Common ShaderParser) reads from the source is kept (unless RemoveShaderVars is set):
+            its shader parser (ShaderParser in SysWeaver.Media.Shader, was EffectWeaver.Common) reads from the source is kept (unless RemoveShaderVars is set):
             </para>
             <list type="bullet">
             <item>The tunable variable candidates: "#define NAME literal" (top level or in an "#ifndef NAME" guard) and "const T NAME = literal;" with
             a comment, each on its own line with its comment (comment continuation lines are joined, "var: {...}" annotations are compacted).
             The candidates are found with the parser's rules (mirrored here), names defined more than once are no candidates.</item>
             <item>The iMouse channel comments ("// iMouse.x = Name | Description | Default"), as compact lines at the top.</item>
-            <item>The media line of an image / audio / audio2 / collage effect ("//  media: kind refs"), compact, at the top (also without the variables).</item>
+            <item>The media line of an image / video / audio / legacyaudio / collage effect ("//  media: kind refs"), compact, at the top (also without the variables).</item>
             <item>The entry points (main, mainImage and vertexMain, the optional vertex stage).</item>
             </list>
             <para>
@@ -260,7 +266,7 @@
             <summary>The media line of an effect ("//  media: kind refs", Effect Weaver's EffectMedia.LineRx), keep in sync with it</summary>
         </member>
         <member name="M:SysWeaver.CompressProgram.GetMediaLine(System.String[])">
-            <summary>The first media line of a shader as a compact comment ("//media:audio2 stock:a.flac"), null if none</summary>
+            <summary>The first media line of a shader as a compact comment ("//media:audio stock:a.flac"), null if none</summary>
         </member>
         <member name="M:SysWeaver.CompressProgram.GetMouseComments(System.String[])">
             <summary>

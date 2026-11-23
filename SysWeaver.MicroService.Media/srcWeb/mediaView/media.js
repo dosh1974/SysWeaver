@@ -89,8 +89,8 @@
         Effect: type => {
             const k = EffectKind(type);
             const v = k ? Sw.Storage.Get(k.Key) : null;
-            //  (only a built in effect of the kind, or none)
-            return typeof v === "string" && (v === "" || (v.startsWith(k.Folder) && /^[\w\-. ]+\.glsl$/i.test(v.substring(k.Folder.length)))) ? v : null;
+            //  (only a built in effect of the kind (one of its groups: an image's effects, frames, icons), or none)
+            return typeof v === "string" && (v === "" || k.Groups.some(g => v.startsWith(g.Folder) && /^[\w\-. ]+\.glsl$/i.test(v.substring(g.Folder.length)))) ? v : null;
         },
         /**
          * Remember the effect chosen for a media type.
@@ -129,26 +129,51 @@
      * folder (relative to this script), the storage key of the last choice (Prefs.Effect), the effect when the settings name none and no
      * choice was made (a sound: DefaultAudioEffect), and the name of the menu item.
      * @param {number} type The media type.
-     * @returns {?{Api:string, Folder:string, Key:string, Default:string, Text:function():string}} The kind, null: no effect choice (a video ...).
+     * Groups: the lists of the menu, the first listed directly, the others (Text) as sub menus (an image / a video: the frames and the icons).
+     * @returns {?{Api:string, Folder:string, Key:string, Default:string, Text:function():string, Groups:Array<{Api:string, Folder:string, Text:?function():string}>}}
+     *   The kind, null: no effect choice.
      */
     function EffectKind(type) {
         if (type === MediaTypes.Audio)
-            return {
+            return WithGroups({
                 Api: "Api/GetAudioEffects", Folder: "audioEffects/", Key: "SysWeaver.Media.AudioEffect", Default: DefaultAudioEffect,
                 Text: () => _TF("Visualization", "Menu item of the media viewer with the effects that visualize a sound (a sub menu: none and the built in audio effects)"),
-            };
+            });
         if (type === MediaTypes.Image)
-            return {
+            return WithGroups({
                 Api: "Api/GetImageEffects", Folder: "imageEffects/", Key: "SysWeaver.Media.ImageEffect", Default: "",
                 Text: () => _TF("Effects", "Menu item of the media viewer with the effects of an image (a sub menu: none and the built in image effects)"),
-            };
-        //  (a video with an effect: the effect draws its frames, like a picture: the image effects)
+            }, PictureGroups());
+        //  (a video with an effect: the effect draws its frames, like a picture: the image effects, frames and icons)
         if (type === MediaTypes.Video)
-            return {
+            return WithGroups({
                 Api: "Api/GetImageEffects", Folder: "imageEffects/", Key: "SysWeaver.Media.VideoEffect", Default: "",
                 Text: () => _TF("Effects", "Menu item of the media viewer with the effects of a video (a sub menu: none and the built in image effects)"),
-            };
+            }, PictureGroups());
         return null;
+    }
+
+    /**
+     * An effect kind with its groups: its own list first, then the extra groups.
+     * @param {object} k The kind (Api, Folder ...).
+     * @param {Array<object>} [extra] More groups (sub menus).
+     * @returns {object} The kind (Groups set).
+     */
+    function WithGroups(k, extra) {
+        k.Groups = [{ Api: k.Api, Folder: k.Folder, Text: null }].concat(extra || []);
+        return k;
+    }
+
+    /**
+     * The extra effect groups of a picture (an image, a video): the frames (a frame around the picture, transparent pictures show its inner
+     * effect through: SwTransparentImage) and the icons (the picture on an object).
+     * @returns {Array<{Api:string, Folder:string, Text:function():string}>} The groups.
+     */
+    function PictureGroups() {
+        return [
+            { Api: "Api/GetFrameEffects", Folder: "frameEffects/", Text: () => _TF("Frames", "Sub menu of the effects menu of the media viewer: the effects that draw a frame around an image / a video") },
+            { Api: "Api/GetIconEffects", Folder: "iconEffects/", Text: () => _TF("Icons", "Sub menu of the effects menu of the media viewer: the effects that put an image / a video on an object (ex: a logo on a cup)") },
+        ];
     }
 
     /**
@@ -756,7 +781,7 @@
      * value the value; the description shows as tooltip, on long press and focus.
      * Only what the browser already has is shown (no extra download, no decoding): the resource timing of the file (size, transfer, MIME
      * type, protocol), the element (natural size, frame counters, buffered time), the decoded sound when the player has one (an effect with
-     * the audio2 texture, the offline analysis), the effect's counters. The values are refreshed 4 times a second while the block is shown.
+     * the audio texture, the offline analysis), the effect's counters. The values are refreshed 4 times a second while the block is shown.
      * @param {object} player The player.
      * @param {object} props The media params.
      * @param {number} [type] The media type (MediaTypes).
@@ -1288,7 +1313,7 @@
             }
         }
 
-        // ---- the sound (the decoded sound when the player has one: an effect with the audio2 texture, the offline analysis)
+        // ---- the sound (the decoded sound when the player has one: an effect with the audio texture, the offline analysis)
         if (soundPlayer) {
             /** @returns {?object} The decoded sound ({Rate, Channels}), null when the player didn't decode it. */
             const decoded = () => soundPlayer.Analyser?.Samples || soundPlayer.Audio2Engine?.Src || null;
@@ -1462,7 +1487,7 @@
                     const tx = player.Texture;
                     if (!tx || !(tx.Width > 0) || !(tx.Height > 0))
                         return null;
-                    const kind = tx.Audio2 ? " (audio2)" : typeof tx.Quiet === "boolean" ? " (" + _TF("sound", "A media statistics value: the texture of the effect is a sound") + ")" : "";
+                    const kind = tx.Audio2 ? " (audio)" : typeof tx.Quiet === "boolean" ? " (" + _TF("sound", "A media statistics value: the texture of the effect is a sound") + ")" : "";
                     return [size(tx.Width, tx.Height)[0] + kind, tx.Width + "x" + tx.Height];
                 });
             add(_TF("Transparent", "Name of a media statistics value: the effect draws with transparency"), _TF("The effect draws see-through pixels", "Description of a media statistics value"), null,
@@ -2410,7 +2435,11 @@
             let fxFromPrefs = false;
             if (fxKind) {
                 fxNames = [];
-                Sw.Net.Get(fxKind.Api).then(x => fxNames = Array.isArray(x) ? x.filter(n => n && n !== "None") : []).catch(() => { });
+                //  (the names of each group of the kind, in the order of fxKind.Groups)
+                fxKind.Groups.forEach((g, i) => {
+                    fxNames[i] = [];
+                    Sw.Net.Get(g.Api).then(x => fxNames[i] = Array.isArray(x) ? x.filter(n => n && n !== "None") : []).catch(() => { });
+                });
                 const fx0 = mediaProps ? mediaProps.Effect : null;
                 const pref = Prefs.Effect(type);
                 if ((fx0 === null || fx0 === undefined) && pref !== null) {
@@ -2500,12 +2529,20 @@
                 const cur = curFx();
                 const items = [{ Text: _TF("None", "Menu item of the effects menu of the media viewer (a sound's visualization, an image's effect): the media is shown without an effect"), Radio: true, Checked: !cur, OnClick: () => setFx("", true) }];
                 let found = !cur;
-                for (const n of fxNames) {
-                    const v = fxKind.Folder + n + ".glsl";
-                    const on = sameFx(cur, v);
-                    found = found || on;
-                    items.push({ Text: Sw.Format.BeautifyName(n), Radio: true, Checked: on, OnClick: () => setFx(v, true) });
-                }
+                fxKind.Groups.forEach((g, i) => {
+                    const sub = [];
+                    for (const n of fxNames[i] || []) {
+                        const v = g.Folder + n + ".glsl";
+                        const on = sameFx(cur, v);
+                        found = found || on;
+                        sub.push({ Text: Sw.Format.BeautifyName(n), Radio: true, Checked: on, OnClick: () => setFx(v, true) });
+                    }
+                    //  The first group directly, the others (frames, icons) as sub menus (marked when the current effect is in them)
+                    if (!g.Text)
+                        items.push(...sub);
+                    else if (sub.length)
+                        items.push({ Text: g.Text(), Icon: sub.some(x => x.Checked) ? "check" : undefined, Items: sub });
+                });
                 //  An effect of its own (not a built in one, never remembered): listed too, so the choice can go back to it
                 if (!found) {
                     const own = cur;

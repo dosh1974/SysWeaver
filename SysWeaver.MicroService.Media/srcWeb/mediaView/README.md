@@ -35,7 +35,7 @@ All players come from [`../mediaPlayer`](../mediaPlayer/README.md).
 | [`parseTools.js`](parseTools.js) | `ParseTools`: url parameters / json side files / objects to typed params. |
 | [`textEffect.js`](textEffect.js), [`textEffect.css`](textEffect.css) | `TextEffect` (text and counter effect factories), `CounterEffectParams`, the counter demo boot `textEffectMain`. |
 | [`DemoCollage.svg`](DemoCollage.svg), [`DemoCollage.json`](DemoCollage.json) | Demo texture atlas for the collage effects and its atlas variables. |
-| [`audioEffects/`](audioEffects/README.md), [`backgroundEffects/`](backgroundEffects/README.md), [`imageEffects/`](imageEffects/README.md), [`collageEffects/`](collageEffects/README.md), [`counterEffects/`](counterEffects/README.md), [`textEffects/`](textEffects/README.md) | Effect folders (`.glsl` files are enumerated by the server; keep names and folders). |
+| [`audioEffects/`](audioEffects/README.md), [`backgroundEffects/`](backgroundEffects/README.md), [`imageEffects/`](imageEffects/README.md), [`collageEffects/`](collageEffects/README.md), [`counterEffects/`](counterEffects/README.md), [`textEffects/`](textEffects/README.md), `frameEffects/`, `iconEffects/` | Effect folders (`.glsl` files are enumerated by the server; keep names and folders). The frames and icons (copies of Effect Weaver's `_effects/Frame` and `_effects/Icons`) are image effects too: `Api/GetFrameEffects` / `GetIconEffects`, the Frames / Icons sub menus of the player's Effects menu (images, videos), the Frame / Icon groups of the media editor's effect picker, the sections of ImageEffectsLib.html (opened by `imageEffects/?Effect=../frameEffects/<name>`). |
 | [`map/`](map/README.md) | Pin images of MapView. |
 
 ## Relationships

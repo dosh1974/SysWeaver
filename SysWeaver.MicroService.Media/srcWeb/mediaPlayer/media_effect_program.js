@@ -658,6 +658,19 @@ uniform vec4 iDate;                 // (year, month, day, time in seconds)
             vsSrc = t.Es3 ? "#version 300 es\nin vec2 position;void main(){gl_Position=vec4(position, 0, 1);}" : defaultVS;
             fsSrc = src;
         }
+        //  SwHaveImage / SwTransparentImage: a built program declares them (when used, ShaderParser.HaveImageName / TransparentImageName)
+        //  with false, the values of the texture / the params are set here
+        for (const [name, value] of [["SwHaveImage", t.HaveImage], ["SwTransparentImage", t.HaveImage && t.TransparentImage]]) {
+            const decl = "const bool " + name + " = " + (value ? "true" : "false") + ";";
+            const rx = new RegExp("\\bconst\\s+bool\\s+" + name + "\\s*=\\s*(true|false)\\s*;", "g");
+            const declared = new RegExp("\\bconst\\s+bool\\s+" + name + "\\s*=");
+            if (declared.test(fsSrc) || declared.test(vsSrc)) {
+                fsSrc = fsSrc.replace(rx, decl);
+                vsSrc = vsSrc.replace(rx, decl);
+            }
+            else
+                fsSrc = EffectProgramData.InsertGlobal(fsSrc, decl);
+        }
         const debug = window.ShaderDebug;
         if (debug) {
             console.log("### Final vertex shader ###\n" + vsSrc);
@@ -761,6 +774,78 @@ uniform vec4 iDate;                 // (year, month, day, time in seconds)
 
     /** @type {boolean} The source is a program built by the server (see the constructor), no prefix / suffix. */
     Built = false;
+
+    /**
+     * Compiled into the fragment shader as "const bool SwHaveImage = true / false;" (set by the player before Compile): the effect
+     * has a picture texture (an image, a video, a text), so one shader can behave differently with and without an image.
+     * @type {boolean}
+     */
+    HaveImage = false;
+
+    /**
+     * Compiled into the fragment shader as "const bool SwTransparentImage = true / false;" (set by the player before Compile, from its
+     * TransparentImage param): the user marked the picture as transparent (never guessed from the picture), false without a picture.
+     * @type {boolean}
+     */
+    TransparentImage = false;
+
+    /**
+     * Inserts a global declaration into a shader source after its leading preprocessor block (#version, #extension, defines, comments),
+     * outside any #if block: before the first code line at #if depth 0.
+     * @param {string} src - The shader source.
+     * @param {string} decl - The declaration (one line).
+     * @returns {string} The source with the declaration.
+     */
+    static InsertGlobal(src, decl) {
+        const lines = src.split("\n");
+        let depth = 0;
+        let inComment = false;
+        let at = lines.length;
+        for (let i = 0; i < lines.length; ++i) {
+            let l = lines[i].trim();
+            let cut = false;
+            if (inComment) {
+                const e = l.indexOf("*/");
+                if (e < 0)
+                    continue;
+                inComment = false;
+                l = l.substring(e + 2).trim();
+                cut = true;
+            }
+            if (l.startsWith("/*")) {
+                const e = l.indexOf("*/", 2);
+                if (e < 0) {
+                    inComment = true;
+                    continue;
+                }
+                l = l.substring(e + 2).trim();
+                cut = true;
+            }
+            if ((!l) || l.startsWith("//"))
+                continue;
+            if (l.startsWith("#")) {
+                const d = l.substring(1).trim();
+                if (/^if/.test(d))
+                    ++depth;
+                else if (/^endif\b/.test(d))
+                    --depth;
+                continue;
+            }
+            if (depth <= 0) {
+                //  (code after the end of a block comment on the same line: the declaration goes between them)
+                if (cut) {
+                    const raw = lines[i];
+                    const c = raw.lastIndexOf(l);
+                    lines[i] = raw.substring(0, c) + "\n" + decl + "\n" + raw.substring(c);
+                    return lines.join("\n");
+                }
+                at = i;
+                break;
+            }
+        }
+        lines.splice(at, 0, decl);
+        return lines.join("\n");
+    }
 
     /**
      * The property names of the live controls of a built effect (iMouse x, y, z, w) among its variables (FxProps / EffectProps).

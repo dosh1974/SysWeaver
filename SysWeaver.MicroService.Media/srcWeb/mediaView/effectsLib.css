@@ -16,6 +16,11 @@
         grid-column: 1 / -1;
     }
 
+/* More sections of a gallery (the image effects: Frames, Icons), a section title above their own grid */
+.fx-section {
+    margin-top: var(--sw-space-6, 32px);
+}
+
 /* A card: title row (name link + copy button), info text, 16:9 thumbnail. A click on the thumbnail or the name link (Enter) opens the
    effect page; a click elsewhere on the card copies its url (as the original card); the name link shows the keyboard focus ring. */
 .fx-card {

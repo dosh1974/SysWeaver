@@ -1,4 +1,4 @@
-//  media: audio2 stock:YuE2_00056.flac
+//  media: audio stock:YuE2_00056.flac
 //  Neon pillar hall: every pillar listens to one of 32 spectrum bands.
 //  iMouse.x = Haze | Amount of glowing haze around the pillars | 0.5 | 0.0 .. 2.0 | x
 //  iMouse.y = Reactivity | How strongly the pillars flare with their band | 0.5 | 0.0 .. 3.0 | x
@@ -217,10 +217,9 @@ flat varying vec3 vAmb;    // ambient (sum of the band lights)
 flat varying vec3 vRo;     // camera position
 varying vec3 vRay;         // camera * vec3(uv, 1.1), affine in fragCoord
 
-// audio2: band i of the 32 band log spectrum (20 Hz .. 20 kHz), tilt lifts the quieter highs
+// band i of the 32 band log spectrum (20 Hz .. 20 kHz; the audio texture is already tilted: typical music reads flat)
 float bandLevel(int i) {
-    float fi = float(i);
-    float v = textureLod(iChannel0, vec2(EwAudioGet32u(i), EwAudioFrequency32v), 0.0).r * (1.0 + 0.5 * fi / 31.0);
+    float v = textureLod(iChannel0, vec2(EwAudioGet32u(i), EwAudioFrequency32v), 0.0).r;
     float e = smoothstep(Sensitivity, Sensitivity + 0.6, v);
     return e * e;
 }

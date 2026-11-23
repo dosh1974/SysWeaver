@@ -83,6 +83,29 @@ namespace SysWeaver.MicroService
             => InternalGet("mediaView/imageEffects", context);
 
         /// <summary>
+        /// Get a list of all frame effects (image effects that draw a frame around the picture, or an inner effect without one; the
+        /// picture's SwTransparentImage shows the inner effect through its transparent parts)
+        /// </summary>
+        /// <param name="context"></param>
+        /// <returns></returns>
+        [WebApi]
+        [WebApiClientCache(30)]
+        [WebApiRequestCache(28, WebApiCaches.Globally)]
+        public String[] GetFrameEffects(HttpServerRequest context)
+            => InternalGet("mediaView/frameEffects", context);
+
+        /// <summary>
+        /// Get a list of all icon effects (image effects that put the picture on an object, ex: a logo on a cup)
+        /// </summary>
+        /// <param name="context"></param>
+        /// <returns></returns>
+        [WebApi]
+        [WebApiClientCache(30)]
+        [WebApiRequestCache(28, WebApiCaches.Globally)]
+        public String[] GetIconEffects(HttpServerRequest context)
+            => InternalGet("mediaView/iconEffects", context);
+
+        /// <summary>
         /// Get a list of all collage effects
         /// </summary>
         /// <param name="context"></param>
@@ -134,7 +157,9 @@ namespace SysWeaver.MicroService
         {
             var res = new MediaEffectMediaResponse();
             var kind = r?.Kind ?? "";
-            if (kind != "image" && kind != "video" && kind != "audio" && kind != "audio2" && kind != "collage")
+            if (kind == "audio2")
+                kind = "audio";
+            if (kind != "image" && kind != "video" && kind != "audio" && kind != "legacyaudio" && kind != "collage")
                 return res;
             var refs = (r.Refs ?? []).Where(x => !String.IsNullOrWhiteSpace(x) && x.Length <= 2048).Take(MaxEffectMediaRefs).ToArray();
             foreach (var x in Manager.GetAll<IEffectMediaResolver>())

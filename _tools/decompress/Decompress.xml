@@ -4,6 +4,11 @@
         <name>Decompress</name>
     </assembly>
     <members>
+        <member name="T:SysWeaver.DecompressParams">
+            <summary>
+            The command line options of Decompress (parsed by SysWeaver.CommandLine FilesToFolderTool, the XML docs of the public fields are the help text).
+            </summary>
+        </member>
         <member name="F:SysWeaver.DecompressParams.Overwrite">
             <summary>
             If true, existing destination files are overwritten, else they are skipped

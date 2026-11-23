@@ -13,14 +13,16 @@ const float GridDensity = 6.0; // var: { "min": 3.0, "max": 12.0, "step": 0.5, "
 const float LineWidth = 1.2; // var: { "min": 0.4, "max": 4.0, "step": 0.1, "name": "Line Width", "desc": "Core width of the lines", "unit": "px" }
 const float Exposure = 1.0; // var: { "min": 0.3, "max": 3.0, "step": 0.05, "name": "Exposure", "desc": "Overall brightness" }
 
+// The spectrum at f on the log frequency axis (the 128 band row of the audio texture)
 float spec(float f)
 {
-    return texture(iChannel0, vec2(clamp(f, 0.0, 1.0), 0.25)).r;
+    return EwAudioGetValue(iChannel0, clamp(f, 0.0, 1.0), EwAudioFrequency128v, false);
 }
 
+// The log frequency of an axis position (0 = center: ~40 Hz .. 1 = edge: ~10 kHz)
 float bandF(float a)
 {
-    return 0.004 + 0.45 * a * a;
+    return 0.1 + 0.8 * a;
 }
 
 float shape(float v)
@@ -69,7 +71,7 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord)
     vec2 uv = (fragCoord - 0.5 * iResolution.xy) / iResolution.y;
     float t = mod(iTime * Speed, 600.0);
 
-    float bass = (spec(0.004) + spec(0.008) + spec(0.014)) * 0.3333;
+    float bass = EwAudioGetBassEnergy(iChannel0);
     bass = smoothstep(0.35, 0.95, bass);
 
     vec2 p = uv * 2.0 / GridScale;

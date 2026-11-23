@@ -7218,6 +7218,12 @@
             The filters, one array per filter row (with one filter per column)
             </summary>
         </member>
+        <member name="T:SysWeaver.Data.CurrencyTableDataRequest">
+            <summary>
+            A table data request with a currency (for tables that format amounts in a requested currency).
+            Currently not used by any SysWeaver project.
+            </summary>
+        </member>
         <member name="F:SysWeaver.Data.CurrencyTableDataRequest.Currency">
             <summary>
             The currency to use
@@ -8694,7 +8700,8 @@
                         "AppName" = Application name.
                         "AppDisplayName" = Application display name.
                         "AppDescription" = Application description name.
-                        "AppVersion" = Application version (see <see cref="P:SysWeaver.EnvInfo.AppVersion"/>), "AppBuildTime" = build time (UTC) of the executable.
+                        "AppVersion" = Application version (see <see cref="P:SysWeaver.EnvInfo.AppVersion"/>).
+                        "AppBuildTime" = build time (UTC) of the executable.
                         "AppStart" = Application start time (UTC) formatted using "yyyy-MM-dd HH:mm:ss".
                         "AppAssemblyName" = Application assembly name (typically the exe name), "ExchangeRateService".
                         "AppGuid" = A unique guid for this application, ex: "{CFBEDD92-341E-4EDB-96EB-C8305974EE29}".
@@ -28585,6 +28592,26 @@
         <member name="M:SysWeaver.ValueKeyTableReadonlySet`1.#ctor(System.Collections.Generic.IReadOnlySet{`0})">
             <summary>
             Copy the items of a set with more than 8 unique keys (see <see cref="M:SysWeaver.ValueKeyTable`1.CanUse(System.Int32,System.Collections.Generic.IEqualityComparer{`0})"/>)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.WebDefaults">
+            <summary>
+            Default values for web related parameters, the compression method lists used by the HTTP server and API parameters (format: "method:level, ...").
+            </summary>
+        </member>
+        <member name="F:SysWeaver.WebDefaults.DynamicCompression">
+            <summary>
+            Default compression methods to use for one-off data (ex: returning API data that isn't cached at all).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.WebDefaults.CachedCompression">
+            <summary>
+            Default compression methods to use for cached data (ex: returning API data that is cached in memory for some limited time).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.WebDefaults.StaticCompression">
+            <summary>
+            Default compression methods to use for static data (ex: static data that never changes for the process duration or is stored on disc etc).
             </summary>
         </member>
         <member name="T:SysWeaver.WebPath">

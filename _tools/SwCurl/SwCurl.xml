@@ -4,10 +4,45 @@
         <name>SwCurl</name>
     </assembly>
     <members>
+        <member name="T:SwCurl.IDummy">
+            <summary>
+            An empty remote API: SwCurl only needs the authenticated HttpClient of the remote connection, not a typed API.
+            </summary>
+        </member>
+        <member name="T:SwCurl.SwCompression">
+            <summary>
+            The compression of the request payload (the -Compression option).
+            </summary>
+        </member>
         <member name="F:SwCurl.SwCompression.Auto">
             <summary>
-            No payload compression at all.
-            If auth method in SysWeaver, Brotli compression is used.
+            Brotli if the SysWeaver login is used and the payload has a compressible MIME type, else no compression.
+            </summary>
+        </member>
+        <member name="F:SwCurl.SwCompression.None">
+            <summary>
+            No payload compression.
+            </summary>
+        </member>
+        <member name="F:SwCurl.SwCompression.Brotli">
+            <summary>
+            Brotli ("br") compression.
+            </summary>
+        </member>
+        <member name="F:SwCurl.SwCompression.Deflate">
+            <summary>
+            Deflate compression.
+            </summary>
+        </member>
+        <member name="F:SwCurl.SwCompression.GZip">
+            <summary>
+            GZip compression.
+            </summary>
+        </member>
+        <member name="T:SwCurl.SwCurlParmas">
+            <summary>
+            The command line options of SwCurl (parsed by SysWeaver.CommandLine, the XML docs of the fields are the help text),
+            the credentials (User, Password, CredFile) are inherited from CredentialParams.
             </summary>
         </member>
         <member name="F:SwCurl.SwCurlParmas.AuthMethod">
@@ -153,10 +188,15 @@
             Exit code: the request timed out.
             </summary>
         </member>
+        <member name="T:SwCurl.SwMethods">
+            <summary>
+            The HTTP method of the request (the -HttpMethod option).
+            </summary>
+        </member>
         <member name="F:SwCurl.SwMethods.Auto">
             <summary>
             GET if no payload, POST if payload.
-            If auth method is SysWeaver, GET can be used even with payload.
+            If auth method is SysWeaver, GET is used for payloads smaller than GetThreshold bytes (sent as query data).
             </summary>
         </member>
     </members>

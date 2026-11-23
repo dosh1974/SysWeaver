@@ -141,20 +141,41 @@ class MediaPlayer {
     /**
      * The media line of an effect (Effect Weaver's media effects, a comment line in the shader): "//  media: image stock:a.png",
      * "//  media: audio https://example.com/song.mp3", "//  media: collage stock:a.png my:b.jpg"; a line without references uses the
-     * defaults of its kind (the server's). "audio2": a sound with the rich 512 x 64 audio texture (MediaAudio2Engine, media_audio2.js);
-     * "video": a video whose frames are the texture (MediaPlayerVideoTexture, the effect follows its time line).
+     * defaults of its kind (the server's). "audio": a sound with the 512 x 64 audio texture (MediaAudio2Engine, media_audio2.js; was
+     * "audio2", still read); "legacyaudio": a sound with ShaderToy's 512 x 2 texture; "video": a video whose frames are the texture
+     * (MediaPlayerVideoTexture, the effect follows its time line).
      * @type {RegExp}
      */
-    static MediaLineRx = /^[ \t]*\/\/[ \t]*media[ \t]*:[ \t]*(image|video|audio2|audio|collage)\b([^\r\n]*)$/im;
+    static MediaLineRx = /^[ \t]*\/\/[ \t]*media[ \t]*:[ \t]*(image|video|legacyaudio|audio2|audio|collage)\b([^\r\n]*)$/im;
 
     /**
-     * The media line of an effect source.
+     * The media line of an effect source. The kind as Effect Weaver reads it (EffectMedia.KindOfLine): "audio2" → "audio"; an "audio" line of
+     * a shader that reads ShaderToy's rows (iChannel0 at a constant v) and none of the EwAudio names → "legacyaudio" (effects made before the
+     * rename, when "audio" was ShaderToy's texture).
      * @param {string} src The source (the .glsl file).
-     * @returns {{Kind:string, Refs:string[]}|null} Its kind and references, null without a line.
+     * @returns {{Kind:string, Refs:string[], None:boolean, Transparent:boolean}|null} Its kind and references, null without a line. None: the reference "none"
+     * (Effect Weaver's "//  media: image none"): the effect is used without media (no texture, SwHaveImage false). Transparent: the word
+     * "transparent" (Effect Weaver's "//  media: image transparent stock:x.png"): the user marked the picture as transparent (SwTransparentImage).
      */
     static MediaLine(src) {
         const m = typeof src === "string" ? MediaPlayer.MediaLineRx.exec(src) : null;
-        return m ? { Kind: m[1].toLowerCase(), Refs: m[2].split(/\s+/).filter(x => /^(https?:\/\/\S+|[a-z][a-z0-9]*:[^\s/\\:]+)$/i.test(x)) } : null;
+        if (!m)
+            return null;
+        const words = m[2].split(/\s+/);
+        let kind = m[1].toLowerCase();
+        if (kind === "audio2")
+            kind = "audio";
+        else if (kind === "audio") {
+            const code = src.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, " ");
+            if (!/\bEwAudio(?:2|[A-Z]\w*)\b/.test(code) && /\b(?:texture|texture2D|texelFetch)\s*\(\s*iChannel0\s*,\s*i?vec2\s*\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*,\s*[0-9.]+\s*\)/.test(code))
+                kind = "legacyaudio";
+        }
+        return { Kind: kind, Refs: words.filter(x => /^(https?:\/\/\S+|[a-z][a-z0-9]*:[^\s/\\:]+)$/i.test(x)), None: words.some(x => x.toLowerCase() === "none"), Transparent: words.some(x => x.toLowerCase() === "transparent") };
+    }
+
+    /** @param {string} kind A media line's kind. @returns {boolean} It is a sound (the audio texture or ShaderToy's). */
+    static IsAudioKind(kind) {
+        return kind === "audio" || kind === "legacyaudio";
     }
 
     /**
@@ -170,11 +191,19 @@ class MediaPlayer {
         const line = await MediaPlayer.#ReadLine(url);
         if (!line)
             return mediaParams;
-        //  A Texture setting wins, but the line still says which texture a sound gets (audio2: the rich one)
+        //  The line marks the picture as transparent (the word "transparent"): SwTransparentImage (with the settings' TransparentImage, see #Construct)
+        if (line.Transparent) {
+            mediaParams = mediaParams || {};
+            Object.defineProperty(mediaParams, "LineTransparentImage", { value: true, enumerable: false, configurable: true, writable: true });
+        }
+        //  A Texture setting wins, but the line still says which texture a sound gets (audio: the 512 x 64 one, legacyaudio: ShaderToy's)
         if (mediaParams && mediaParams.Texture) {
-            Object.defineProperty(mediaParams, "LineTextureAudio2", { value: line.Kind === "audio2", enumerable: false, configurable: true, writable: true });
+            Object.defineProperty(mediaParams, "LineTextureAudio2", { value: line.Kind === "audio", enumerable: false, configurable: true, writable: true });
             return mediaParams;
         }
+        //  No media ("none"): no texture (not the defaults)
+        if (line.None)
+            return mediaParams;
         let urls = line.Refs.length && line.Refs.every(x => /^https?:/i.test(x)) ? line.Refs : null;
         if (!urls) {
             try {
@@ -195,9 +224,9 @@ class MediaPlayer {
             return mediaParams;
         const p = mediaParams || {};
         Object.defineProperty(p, "LineTexture", { value: urls[0], enumerable: false, configurable: true, writable: true });
-        Object.defineProperty(p, "LineTextureAudio", { value: line.Kind === "audio" || line.Kind === "audio2", enumerable: false, configurable: true, writable: true });
+        Object.defineProperty(p, "LineTextureAudio", { value: MediaPlayer.IsAudioKind(line.Kind), enumerable: false, configurable: true, writable: true });
         //  (audio2: the rich 512 x 64 audio texture, MediaAudio2Engine)
-        Object.defineProperty(p, "LineTextureAudio2", { value: line.Kind === "audio2", enumerable: false, configurable: true, writable: true });
+        Object.defineProperty(p, "LineTextureAudio2", { value: line.Kind === "audio", enumerable: false, configurable: true, writable: true });
         //  (video: its frames are the texture, MediaPlayerVideoTexture)
         Object.defineProperty(p, "LineTextureVideo", { value: line.Kind === "video", enumerable: false, configurable: true, writable: true });
         return p;
@@ -222,7 +251,7 @@ class MediaPlayer {
      * The texture of an effect: its Texture setting, else the texture of its media line (#LineMedia).
      * @param {object} mediaParams The effect params.
      * @returns {{Url:string, Audio:boolean, Audio2:boolean, Video:boolean}|null} The url, whether it is a sound, whether the sound gets the
-     *   audio2 texture (the media line's kind) and whether it is a video (by its extension, or the line's kind), null for none.
+     *   audio texture (512 x 64: the media line's kind "audio") and whether it is a video (by its extension, or the line's kind), null for none.
      */
     static #TextureOf(mediaParams) {
         if (!mediaParams)
@@ -348,6 +377,17 @@ class MediaPlayer {
         //  own params say otherwise
         if (fx && mediaParams.Transparent && (type === MediaTypes.Image || type === MediaTypes.Text) && !(mediaParams.EffectParams && mediaParams.EffectParams.Transparent === false))
             mediaParams.EffectParams = Object.assign({}, mediaParams.EffectParams || {}, { Transparent: true });
+        //  A picture (an image, a video, a text) marked Transparent with an effect: the effect's SwTransparentImage is true (its TransparentImage)
+        if (fx && mediaParams.Transparent && (type === MediaTypes.Image || type === MediaTypes.Video || type === MediaTypes.Text) && !(mediaParams.EffectParams && mediaParams.EffectParams.TransparentImage))
+            mediaParams.EffectParams = Object.assign({}, mediaParams.EffectParams || {}, { TransparentImage: true });
+        //  An effect whose media line marks its picture as transparent ("//  media: image transparent ..."): SwTransparentImage
+        if (type === MediaTypes.Effect && mediaParams && mediaParams.LineTransparentImage && !mediaParams.TransparentImage) {
+            const lp = mediaParams;
+            mediaParams = Object.assign({}, lp, { TransparentImage: true });
+            for (const k of ["LineTexture", "LineTextureAudio", "LineTextureAudio2", "LineTextureVideo"])
+                if (k in lp)
+                    Object.defineProperty(mediaParams, k, { value: lp[k], enumerable: false, configurable: true, writable: true });
+        }
         switch (type) {
             case MediaTypes.Image:
                 if (fx)
@@ -359,7 +399,7 @@ class MediaPlayer {
                     return MediaPlayer.#WithVideo(mediaParams.Effect, mediaParams.EffectParams, data, mediaParams);
                 return new MediaPlayerVideo(data, mediaParams);
             case MediaTypes.Audio:
-                //  (the effect's media line "audio2": the rich 512 x 64 texture, see Create)
+                //  (the effect's media line "audio": the 512 x 64 texture, see Create)
                 //  (made by CreateSync, the kind is not known yet: null, read from the effect's source when its texture is made)
                 if (fx)
                     return MediaPlayer.#WithSound(mediaParams.Effect, mediaParams.EffectParams, data, mediaParams, ("EffectAudio2" in mediaParams) ? !!mediaParams.EffectAudio2 : null);
@@ -408,7 +448,7 @@ class MediaPlayer {
      * @param {object} effectParams The effect params.
      * @param {string} sound Url of the sound.
      * @param {object|null} soundParams The audio params (MediaPlayerParamsAudio: Volume, StartAt, EndAt), null = defaults.
-     * @param {boolean|null} [audio2] The rich 512 x 64 audio2 texture (the effect's media line), else ShaderToy's 512 x 2; null = not known
+     * @param {boolean|null} [audio2] The 512 x 64 audio texture (the effect's media line "audio"), else ShaderToy's 512 x 2; null = not known
      *   yet (CreateSync: the media line of the effect's source decides when the texture is made, the source is loaded by then).
      * @returns {MediaPlayerEffect} The player.
      */
@@ -419,7 +459,7 @@ class MediaPlayer {
             if ((audio2 !== null) && (audio2 !== undefined))
                 return !!audio2;
             const line = p && (typeof p.Src === "string") ? MediaPlayer.MediaLine(p.Src) : null;
-            return !!line && line.Kind === "audio2";
+            return !!line && line.Kind === "audio";
         };
         p = new MediaPlayerEffect(effect, effectParams, gl => new MediaPlayerAudioTexture(gl, media, rich()), media);
         return p;
@@ -452,11 +492,11 @@ class MediaPlayer {
         //  An effect without a Texture setting: the media its shader names (its media line)
         if (type === MediaTypes.Effect && typeof data === "string")
             mediaParams = await MediaPlayer.#LineMedia(data, mediaParams);
-        //  A sound with an effect: the effect's media line says which audio texture it reads ("audio2": the rich 512 x 64 one, else
+        //  A sound with an effect: the effect's media line says which audio texture it reads ("audio": the 512 x 64 one, else
         //  ShaderToy's 512 x 2); a hidden param, so the settings stay as they are
         if (type === MediaTypes.Audio && mediaParams && typeof mediaParams.Effect === "string" && mediaParams.Effect) {
             const line = await MediaPlayer.#ReadLine(mediaParams.Effect);
-            Object.defineProperty(mediaParams, "EffectAudio2", { value: !!line && line.Kind === "audio2", enumerable: false, configurable: true, writable: true });
+            Object.defineProperty(mediaParams, "EffectAudio2", { value: !!line && line.Kind === "audio", enumerable: false, configurable: true, writable: true });
         }
         const need = MediaPlayer.#Needs[MediaPlayer.#NeedKey(type, mediaParams)];
         if (!need)

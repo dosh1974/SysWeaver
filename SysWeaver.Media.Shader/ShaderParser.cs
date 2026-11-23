@@ -1081,13 +1081,15 @@ void main()
     /// <param name="alpha">Keep the alpha output of mainImage (logos, premultiplied), else it's opaque</param>
     /// <returns>The fragment shader; with a vertex stage (<see cref="EffectInfo.UsesVertexStage"/>) followed by <see cref="ShaderStages.Marker"/>
     /// and the vertex shader (<see cref="ShaderStages.SplitProgram"/>)</returns>
-    public static string BuildSource(EffectInfo fx, JsonObject? vars, bool webGL2, bool alpha = false)
+    /// <param name="haveImage">The value of <see cref="HaveImageName"/> (the effect is drawn with a picture texture)</param>
+    /// <param name="transparentImage">The value of <see cref="TransparentImageName"/> (the user marked the picture as transparent)</param>
+    public static string BuildSource(EffectInfo fx, JsonObject? vars, bool webGL2, bool alpha = false, bool haveImage = false, bool transparentImage = false)
     {
-        var p = BuildParts(fx, vars, webGL2, alpha);
+        var p = BuildParts(fx, vars, webGL2, alpha, haveImage: haveImage, transparentImage: transparentImage);
         var fragment = p.Head + "#line 1\n" + p.Body + p.Tail;
         if (!fx.UsesVertexStage)
             return fragment;
-        var v = BuildParts(fx, vars, webGL2, alpha, stage: ShaderStages.Stage.Vertex);
+        var v = BuildParts(fx, vars, webGL2, alpha, stage: ShaderStages.Stage.Vertex, haveImage: haveImage, transparentImage: transparentImage);
         return ShaderStages.JoinProgram(fragment, v.Head + "#line 1\n" + v.Body + v.Tail);
     }
 
@@ -1100,8 +1102,12 @@ void main()
     /// the head ends with a float precision if the variables need one</param>
     /// <param name="stage">With a vertex stage (<see cref="EffectInfo.UsesVertexStage"/>): the stage to build (its code, varyings as in / out),
     /// Vertex: the vertex shader (head without the fragment output, tail = main() calling vertexMain)</param>
+    /// <param name="haveImage">The value of <see cref="HaveImageName"/> (the effect is drawn with a picture texture: an image, a video, a collage),
+    /// declared at the end of the head when the shader uses it</param>
+    /// <param name="transparentImage">The value of <see cref="TransparentImageName"/> (the picture has transparency: a setting of the user, never
+    /// guessed from the picture; false without a picture), declared at the end of the head when the shader uses it</param>
     public static SourceParts BuildParts(EffectInfo fx, JsonObject? vars, bool webGL2, bool alpha = false, bool export = false, bool stripVars = false,
-        ShaderStages.Stage stage = ShaderStages.Stage.Fragment)
+        ShaderStages.Stage stage = ShaderStages.Stage.Fragment, bool haveImage = false, bool transparentImage = false)
     {
         var lines = (string[])fx.Lines.Clone();
         foreach (var v in fx.Vars)
@@ -1171,7 +1177,7 @@ void main()
             body = ShaderStages.RewriteVaryings(vertex ? split.Vertex : split.Fragment, vertex ? ShaderStages.Stage.Vertex : ShaderStages.Stage.Fragment, es3);
         }
         if (vertex)
-            return VertexParts(fx, body, es3, export);
+            return VertexParts(fx, body, es3, export, haveImage, transparentImage);
         var sb = new StringBuilder(body.Length + 1024);
         if (es3)
             sb.Append("#version 300 es\n");
@@ -1205,6 +1211,7 @@ void main()
             // Float constants declared before the shader's own precision statement need one
             else if (!precision && stripVars && fx.Vars.Any(x => !x.IsDefine && x.GlslType != "int" && x.GlslType != "bool"))
                 sb.Append("precision highp float;\n");
+            sb.Append(ImageDecl(body, haveImage, transparentImage));
             return new(sb.ToString(), body, "");
         }
         sb.Append("precision highp float;\nprecision highp int;\n");
@@ -1222,6 +1229,7 @@ void main()
                 sb.Append(decl).Append('\n');
         foreach (var decl in UsedChannels(fx, body))
             sb.Append(decl).Append('\n');
+        sb.Append(ImageDecl(body, haveImage, transparentImage));
         if (es3)
             sb.Append("out vec4 effectSaverFragColor;\n");
         string tail;
@@ -1233,8 +1241,57 @@ void main()
         return new(sb.ToString(), body, tail);
     }
 
+    /// <summary>
+    /// The global constant an effect reads to work with and without a picture: <c>const bool SwHaveImage = true;</c> when it is drawn with a
+    /// picture texture (an image, a video, a collage on tex / iChannel0), else false (no texture, a sound). Declared by the builders (and by
+    /// SysWeaver's media player for the effects it compiles itself, which sets the value of its texture), so a shader doesn't declare it.
+    /// </summary>
+    public const string HaveImageName = "SwHaveImage";
+
+    static readonly Regex HaveImageUseRx = new(@"\b" + HaveImageName + @"\b", RegexOptions.Compiled);
+    static readonly Regex HaveImageDeclRx = new(@"\bbool\s+" + HaveImageName + @"\b", RegexOptions.Compiled);
+
+    /// <summary>The code (comments removed) of a shader source uses <see cref="HaveImageName"/></summary>
+    public static bool UsesHaveImage(string? source) =>
+        source != null && source.Contains(HaveImageName, StringComparison.Ordinal) && HaveImageUseRx.IsMatch(CommentRx.Replace(source, " "));
+
+    /// <summary>
+    /// The global constant an effect reads to draw a picture that has transparency: <c>const bool SwTransparentImage = true;</c> when the user
+    /// marked the picture as transparent (a setting, never guessed from the picture: Effect Weaver's media line
+    /// <c>//  media: image transparent ...</c>, SysWeaver's media player <c>TransparentImage</c> / an image marked Transparent), else false (always
+    /// false without a picture, see <see cref="HaveImageName"/>). Ex: a frame draws its inner effect behind the picture and alpha blends the
+    /// picture on top. Declared by the builders like <see cref="HaveImageName"/>, a shader doesn't declare it.
+    /// </summary>
+    public const string TransparentImageName = "SwTransparentImage";
+
+    static readonly Regex TransparentImageUseRx = new(@"\b" + TransparentImageName + @"\b", RegexOptions.Compiled);
+    static readonly Regex TransparentImageDeclRx = new(@"\bbool\s+" + TransparentImageName + @"\b", RegexOptions.Compiled);
+
+    /// <summary>The code (comments removed) of a shader source uses <see cref="TransparentImageName"/></summary>
+    public static bool UsesTransparentImage(string? source) =>
+        source != null && source.Contains(TransparentImageName, StringComparison.Ordinal) && TransparentImageUseRx.IsMatch(CommentRx.Replace(source, " "));
+
+    /// <summary>
+    /// The declarations (lines) of <see cref="HaveImageName"/> and <see cref="TransparentImageName"/> the shader uses and doesn't declare, else
+    /// empty. SwTransparentImage is false without a picture.
+    /// </summary>
+    static string ImageDecl(string body, bool haveImage, bool transparentImage)
+    {
+        var have = UsesHaveImage(body);
+        var tr = UsesTransparentImage(body);
+        if (!have && !tr)
+            return "";
+        var code = CommentRx.Replace(body, " ");
+        var s = "";
+        if (have && !HaveImageDeclRx.IsMatch(code))
+            s += "const bool " + HaveImageName + " = " + (haveImage ? "true" : "false") + ";\n";
+        if (tr && !TransparentImageDeclRx.IsMatch(code))
+            s += "const bool " + TransparentImageName + " = " + (haveImage && transparentImage ? "true" : "false") + ";\n";
+        return s;
+    }
+
     /// <summary>The vertex stage: version, precision, the ShaderToy uniforms (like the fragment stage), the position attribute (GLSL ES 1.00)</summary>
-    static SourceParts VertexParts(EffectInfo fx, string body, bool es3, bool export)
+    static SourceParts VertexParts(EffectInfo fx, string body, bool es3, bool export, bool haveImage, bool transparentImage)
     {
         var sb = new StringBuilder(512);
         if (es3)
@@ -1252,6 +1309,7 @@ void main()
                 sb.Append(decl).Append('\n');
         foreach (var decl in UsedChannels(fx, body))
             sb.Append(decl).Append('\n');
+        sb.Append(ImageDecl(body, haveImage, transparentImage));
         if (!es3)
             sb.Append("attribute vec2 ").Append(ShaderStages.PositionAttribute).Append(";\n");
         return new(sb.ToString(), body, ShaderStages.VertexMain(body, es3, export));

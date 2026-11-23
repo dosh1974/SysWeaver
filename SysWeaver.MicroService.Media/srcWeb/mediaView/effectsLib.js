@@ -3,7 +3,9 @@
  * (developer pages of the Debug/Media menu). Before the rewrite each page had its own inline copy of this code.
  *
  * The page kind comes from `<body data-effects="Background|Image|Collage">`:
- * - names from `Api/GetBackgroundEffects` | `Api/GetImageEffects` | `Api/GetCollageEffects` (cached 30 s),
+ * - names from `Api/GetBackgroundEffects` | `Api/GetImageEffects` | `Api/GetCollageEffects` (cached 30 s); the image gallery also has the
+ *   sections Frames (`Api/GetFrameEffects`, frameEffects/) and Icons (`Api/GetIconEffects`, iconEffects/), opened by the image effect page
+ *   (`imageEffects/?Effect=../frameEffects/<name>`),
  * - a card per effect with the name, the compilation and draw time (no draw time when unknown) and a thumbnail rendered off-screen at 640x360, t = 5 s
  *   (MediaPlayerEffect.GetImage, cached in localStorage `SysWeaver.EffectInfo.<kind>.<hash(url)>` and re-validated by ETag),
  * - image effects use `../logo.png` as texture; collage effects `DemoCollage.svg` with the atlas vars of DemoCollage.json.
@@ -37,6 +39,11 @@
             //  "../logo.png" was /mediaView/logo.png there, a 404 and a black effect); the texture of the thumbnails is relative to this page)
             Api: "GetImageEffects", Folder: "imageEffects", Image: "../../logo.png", Texture: { EffectSizeFromImage: true, Url: "../logo.png" },
             Title: () => _TF("Image Effects Demo", "Title of the gallery page of the image effects (the original page title)"),
+            //  More sections: the frames and the icons are image effects too (opened by the image effect page: Effect=../frameEffects/<name>)
+            More: [
+                { Api: "GetFrameEffects", Folder: "frameEffects", Title: () => _TF("Frames", "Section title of the image effects gallery: the effects that draw a frame around the picture") },
+                { Api: "GetIconEffects", Folder: "iconEffects", Title: () => _TF("Icons", "Section title of the image effects gallery: the effects that put the picture on an object (ex: a logo on a cup)") },
+            ],
         },
         Collage: {
             Api: "GetCollageEffects", Folder: "collageEffects", Image: "DemoCollage.svg", Texture: { EffectSizeFromImage: false, Url: "DemoCollage.svg" }, FxProps: "DemoCollage.json",
@@ -188,14 +195,14 @@
      * "took too long" and the next one starts.
      * @param {object} kind The gallery definition.
      * @param {object} mp The effect params.
-     * @param {Array<{Name: string, Card: object}>} items The cards.
+     * @param {Array<{Name: string, Card: object, Folder: string}>} items The cards (Folder: the effect folder of its section).
      * @returns {Promise<void>}
      */
     async function RenderAll(kind, mp, items) {
         const tex = kind.Texture;
         const createTexture = tex ? gl => new MediaPlayerImageTexture(gl, { EffectSizeFromImage: tex.EffectSizeFromImage }, tex.Url) : undefined;
         //  The last thumbnails at once (no request), re-validated below
-        await Promise.all(items.map(async it => ShowCached(it.Card, await CacheKey(kind.Key, kind.Folder + "/" + it.Name + ".glsl"))));
+        await Promise.all(items.map(async it => ShowCached(it.Card, await CacheKey(kind.Key, it.Folder + "/" + it.Name + ".glsl"))));
         const visible = new Set();
         const io = new IntersectionObserver(entries => {
             for (const e of entries) {
@@ -231,7 +238,7 @@
                 const timeout = new Promise(r => timer = setTimeout(() => r([null, _TF("it took too long", "Reason on an effect card when its preview did not render within some seconds")]), CardTimeoutMs));
                 let r;
                 try {
-                    r = await Promise.race([MediaPlayerEffect.GetImage(kind.Key, kind.Folder + "/" + it.Name + ".glsl", mp, createTexture), timeout]);
+                    r = await Promise.race([MediaPlayerEffect.GetImage(kind.Key, it.Folder + "/" + it.Name + ".glsl", mp, createTexture), timeout]);
                 }
                 finally {
                     clearTimeout(timer);
@@ -288,16 +295,34 @@
             if (kind.FxProps)
                 mp.FxProps = await Sw.Net.CachedGet(kind.FxProps, 30000);
             const effects = await Sw.Net.CachedGet("Api/" + kind.Api, 30000) || [];
-            items = effects.map(name => {
-                let url = kind.Folder + "/?Effect=" + encodeURIComponent(name);
+            /**
+             * The cards of one section: its effects, opened by the effect page of the gallery's folder (the effect of another folder by
+             * its path relative to that page, ex: ../frameEffects/Bulb_Frame).
+             * @param {string[]} names The effect names.
+             * @param {string} folder The folder of the effects.
+             * @param {HTMLElement} into The list.
+             * @returns {Array<{Name: string, Card: object, Folder: string}>} The items.
+             */
+            const cards = (names, folder, into) => names.map(name => {
+                let url = kind.Folder + "/?Effect=" + encodeURIComponent(folder === kind.Folder ? name : "../" + folder + "/" + name);
                 if (kind.Image)
                     url += "&Image=" + kind.Image;
                 const card = CreateCard(name, url, kind.Texture ? kind.Texture.Url : null);
-                list.appendChild(card.E);
-                return { Name: name, Card: card };
+                into.appendChild(card.E);
+                return { Name: name, Card: card, Folder: folder };
             });
+            items = cards(effects, kind.Folder, list);
             if (!items.length)
                 list.appendChild(Sw.StateView({ Title: _TF("No effects found.", "Shown in an effect gallery without effects"), Icon: "image" }).E);
+            //  The more sections (an image gallery: frames, icons), each with its title and its own grid; an empty one is left out
+            for (const m of kind.More || []) {
+                const names = await Sw.Net.CachedGet("Api/" + m.Api, 30000) || [];
+                if (!names.length)
+                    continue;
+                const sl = Sw.el("div.fx-list");
+                list.parentElement.append(Sw.el("section.fx-section", null, Sw.SectionTitle(m.Title()), sl));
+                items = items.concat(cards(names, m.Folder, sl));
+            }
         }
         catch (e) {
             const msg = Sw.ErrorMessage(e);

@@ -52,6 +52,8 @@ class MediaPlayerParamsEffect {
     Static = false;
     /** @type {boolean} Create the context with alpha and clear to transparent instead of opaque green (0,0.5,0,1). Default false. */
     Transparent = false;
+    /** @type {boolean} The picture of the effect (its texture: an image, a video, a text) has transparency: the effect's SwTransparentImage constant (a setting, never guessed from the picture; false without a picture). Also set by an image / video marked Transparent and by the media line's word "transparent". Default false. */
+    TransparentImage = false;
     /** @type {boolean} Backing store follows the element's client size x devicePixelRatio; set to false by Create when the texture dictates the size. Default true. */
     AdaptiveSize = true;
     /** @type {boolean} Use REPEAT wrapping on the S (U) axis of the texture (applied in render when ApplyTextue). Default false. */
@@ -940,10 +942,12 @@ class MediaPlayerEffect {
      */
     CompileSignature() {
         const ep = this.Params.EffectProps;
+        //  (SwTransparentImage is compiled in)
+        const tr = this.Params.TransparentImage ? "T" : "";
         if (!ep || (typeof ep !== "object"))
-            return "";
+            return tr;
         const keys = EffectProgramData.ControlKeys;
-        return JSON.stringify(ep, (k, v) => keys.includes(k) ? undefined : v);
+        return tr + JSON.stringify(ep, (k, v) => keys.includes(k) ? undefined : v);
     }
 
     /** @type {number} How many times the shader was compiled (Compile calls), for tests and diagnostics. */
@@ -1210,6 +1214,10 @@ class MediaPlayerEffect {
         ++t.CompileCount;
         const signature = t.CompileSignature();
         t.CompiledSignature = null;
+        //  The effect's SwHaveImage constant: true with a picture texture (an image, a video, a text), false without one or with a sound
+        t.ProgramData.HaveImage = (typeof MediaPlayerTexture !== "undefined") && (t.Texture instanceof MediaPlayerTexture);
+        //  SwTransparentImage: the user marked the picture as transparent (Params.TransparentImage), false without a picture
+        t.ProgramData.TransparentImage = t.ProgramData.HaveImage && !!t.Params.TransparentImage;
         const program = await t.ProgramData.Compile(t.Params.EffectProps, "attribute vec2 position;void main(){gl_Position=vec4(position, 0, 1);}", abortCheckFn);
         if (!program) {
             t.CompilationTime = -3;

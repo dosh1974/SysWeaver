@@ -67,6 +67,13 @@ body {
 }
 
 
+/* Dynamic text (the api, the result, the error details) may be selected and copied (the theme body disables selection);
+   headers, labels and other fixed texts stay unselectable */
+.api-signature, .api-code, .api-errortext, .api-filename, .api-time, .api-locked-facts > dd {
+    user-select: text;
+    -webkit-user-select: text;
+}
+
 .api-tag:focus-visible, .api-url:focus-visible, .api-ph .sw-ph-desc:focus-visible, .api-code:focus-visible {
     outline: 2px solid var(--sw-focus);
     outline-offset: 2px;

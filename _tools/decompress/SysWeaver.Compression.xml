@@ -162,7 +162,7 @@
         </member>
         <member name="T:SysWeaver.Compression.CompBrotliNET">
             <summary>
-            A Brotli ("br") implementation that compresses using the .NET <see cref="T:System.IO.Compression.BrotliStream"/> (priority -1, not registered by default).
+            A Brotli ("br") implementation that compresses using the .NET <see cref="T:System.IO.Compression.BrotliStream"/> (priority 0, not registered by default).
             Decompression is forwarded to <see cref="T:SysWeaver.Compression.CompBrotliNETNew"/>, since the stream silently accepts truncated data.
             </summary>
             <remarks>
@@ -244,7 +244,7 @@
         </member>
         <member name="T:SysWeaver.Compression.CompBrotliNETNew">
             <summary>
-            The default Brotli ("br") implementation (priority 0, registered by default), using the .NET <see cref="T:System.IO.Compression.BrotliEncoder"/> / <see cref="T:System.IO.Compression.BrotliDecoder"/>
+            The default Brotli ("br") implementation (priority 1, registered by default), using the .NET <see cref="T:System.IO.Compression.BrotliEncoder"/> / <see cref="T:System.IO.Compression.BrotliDecoder"/>
             through <see cref="T:SysWeaver.Compression.CompStreamCodec`2"/>.
             </summary>
             <remarks>
@@ -375,9 +375,10 @@
         </member>
         <member name="T:SysWeaver.Compression.CompDeflateNET">
             <summary>
-            The default raw Deflate ("deflate") implementation (priority 0, registered by default), using the .NET <see cref="T:System.IO.Compression.DeflateStream"/>.
+            A raw Deflate ("deflate") implementation (priority 0) using the .NET <see cref="T:System.IO.Compression.DeflateStream"/>.
             </summary>
             <remarks>
+            Registered by default only when built for a target before .NET 11, <see cref="T:SysWeaver.Compression.CompDeflateNETNew"/> is registered instead on .NET 11 or later.
             Uses <see cref="M:SysWeaver.Compression.CompHelpers.GetStreamLevel(SysWeaver.Compression.CompEncoderLevels)"/> to map the level.
             Truncated data is detected using <see cref="T:SysWeaver.Compression.CompInflaterState"/> (reflection on the .NET internals), so it throws an <see cref="T:System.IO.InvalidDataException"/> instead of returning partial data.
             </remarks>
@@ -457,7 +458,7 @@
         <member name="T:SysWeaver.Compression.CompDeflateNETNew">
             <summary>
             A raw Deflate ("deflate") implementation using the .NET 11+ System.IO.Compression.DeflateEncoder / DeflateDecoder through <see cref="T:SysWeaver.Compression.CompStreamCodec`2"/>.
-            Only compiled for .NET 11 or later, and not registered by default.
+            Only compiled for .NET 11 or later, where it is the default implementation (priority 1, registered by the <see cref="T:SysWeaver.Compression.CompManager"/>).
             </summary>
             <remarks>
             Uses zlib level 1 / 6 / 9 with a 15 bit window. The native encoders / decoders are pooled per level (see <see cref="T:SysWeaver.Compression.CompInstancePool`1"/>).
@@ -796,9 +797,10 @@
         </member>
         <member name="T:SysWeaver.Compression.CompGZipNET">
             <summary>
-            The default GZip ("gzip", extensions "gz" and "gzip") implementation (priority 0, registered by default), using the .NET <see cref="T:System.IO.Compression.GZipStream"/>.
+            A GZip ("gzip", extensions "gz" and "gzip") implementation (priority 0) using the .NET <see cref="T:System.IO.Compression.GZipStream"/>.
             </summary>
             <remarks>
+            Registered by default only when built for a target before .NET 11, <see cref="T:SysWeaver.Compression.CompGZipNETNew"/> is registered instead on .NET 11 or later.
             Uses <see cref="M:SysWeaver.Compression.CompHelpers.GetStreamLevel(SysWeaver.Compression.CompEncoderLevels)"/> to map the level.
             Concatenated gzip members are decompressed (as supported by <see cref="T:System.IO.Compression.GZipStream"/>).
             Truncated data is detected using <see cref="T:SysWeaver.Compression.CompInflaterState"/> (reflection on the .NET internals), so it throws an <see cref="T:System.IO.InvalidDataException"/> instead of returning partial data.
@@ -879,7 +881,7 @@
         <member name="T:SysWeaver.Compression.CompGZipNETNew">
             <summary>
             A GZip ("gzip") implementation using the .NET 11+ System.IO.Compression.GZipEncoder / GZipDecoder through <see cref="T:SysWeaver.Compression.CompStreamCodec`2"/>.
-            Only compiled for .NET 11 or later, and not registered by default.
+            Only compiled for .NET 11 or later, where it is the default implementation (priority 1, registered by the <see cref="T:SysWeaver.Compression.CompManager"/>).
             </summary>
             <remarks>
             Uses zlib level 1 / 6 / 9 with a 15 bit window. The native encoders / decoders are pooled per level (see <see cref="T:SysWeaver.Compression.CompInstancePool`1"/>).
@@ -1185,7 +1187,7 @@
             The process wide registry of compression implementations, looked up by HTTP content-coding name or file extension.
             </summary>
             <remarks>
-            The built-in .NET implementations are registered automatically: <see cref="T:SysWeaver.Compression.CompBrotliNETNew"/> ("br"), <see cref="T:SysWeaver.Compression.CompDeflateNET"/> ("deflate") and <see cref="T:SysWeaver.Compression.CompGZipNET"/> ("gzip").
+            The built-in .NET implementations are registered automatically, all with priority 1: <see cref="T:SysWeaver.Compression.CompBrotliNETNew"/> ("br"), <see cref="T:SysWeaver.Compression.CompDeflateNETNew"/> ("deflate"), <see cref="T:SysWeaver.Compression.CompGZipNETNew"/> ("gzip") and <see cref="T:SysWeaver.Compression.CompZStdNETNew"/> ("zstd") (when built for a target before .NET 11: <see cref="T:SysWeaver.Compression.CompBrotliNETNew"/>, <see cref="T:SysWeaver.Compression.CompDeflateNET"/> and <see cref="T:SysWeaver.Compression.CompGZipNET"/>).
             Plug-ins (like native Brotli or Zstandard) are added using <see cref="M:SysWeaver.Compression.CompManager.AddType(SysWeaver.Compression.ICompType)"/>, usually through their static <c>Register</c> method.
             Registration is thread safe (serialized by a lock), lookups are lock free.
             When multiple implementations share an HTTP code or extension, the one with the highest <see cref="P:SysWeaver.Compression.ICompInfo.Prio"/> is used (on a tie, the last one added).
@@ -1935,7 +1937,7 @@
         </member>
         <member name="T:SysWeaver.Compression.CompZStdNET">
             <summary>
-            A ZStd ("zstd") implementation that compresses using the .NET <see cref="T:System.IO.Compression.ZstandardStream"/> (priority -1, not registered by default).
+            A ZStd ("zstd") implementation that compresses using the .NET <see cref="T:System.IO.Compression.ZstandardStream"/> (priority 0, not registered by default).
             Decompression is forwarded to <see cref="T:SysWeaver.Compression.CompZStdNETNew"/>, since the stream silently accepts truncated data.
             </summary>
             <remarks>
@@ -2018,7 +2020,7 @@
         <member name="T:SysWeaver.Compression.CompZStdNETNew">
             <summary>
             A Zstandard ("zstd") implementation using the .NET 11+ System.IO.Compression.ZstandardEncoder / ZstandardDecoder through <see cref="T:SysWeaver.Compression.CompStreamCodec`2"/>.
-            Only compiled for .NET 11 or later, and not registered by default.
+            Only compiled for .NET 11 or later, where it is the default implementation (priority 1, registered by the <see cref="T:SysWeaver.Compression.CompManager"/>).
             </summary>
             <remarks>
             Uses zstd level 1 / 9 / 22. The native encoders / decoders are pooled per level (see <see cref="T:SysWeaver.Compression.CompInstancePool`1"/>).

@@ -186,13 +186,53 @@
             Base class of all statements
             </summary>
         </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.Identifier">
+            <summary>
+            An identifier (a variable, function, parameter or property name)
+            </summary>
+        </member>
         <member name="T:SysWeaver.Converter.Js.Ast.PrivateName">
             <summary>
             A private name (#name), Name excludes the #
             </summary>
         </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.NumberLiteral">
+            <summary>
+            A number literal
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.StringLiteral">
+            <summary>
+            A string literal
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.BooleanLiteral">
+            <summary>
+            A boolean literal (true or false)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.NullLiteral">
+            <summary>
+            The null literal
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.RegexLiteral">
+            <summary>
+            A regular expression literal (/pattern/flags)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.BigIntLiteral">
+            <summary>
+            A BigInt literal (123n), can't be converted to older targets
+            </summary>
+        </member>
         <member name="F:SysWeaver.Converter.Js.Ast.BigIntLiteral.Digits">
             <summary>The decimal digits (no n suffix)</summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.TemplateQuasi">
+            <summary>
+            A string part of a template literal (cooked and raw text)
+            </summary>
         </member>
         <member name="F:SysWeaver.Converter.Js.Ast.TemplateQuasi.Cooked">
             <summary>The cooked value, null if the raw text contains an invalid escape sequence (only allowed in tagged templates)</summary>
@@ -200,8 +240,38 @@
         <member name="F:SysWeaver.Converter.Js.Ast.TemplateQuasi.Raw">
             <summary>The raw value (as written in the source, line endings normalized)</summary>
         </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.TemplateLiteral">
+            <summary>
+            A template literal: `text ${expr} text`
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.TaggedTemplate">
+            <summary>
+            A tagged template: tag`text ${expr}`
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.ThisExpr">
+            <summary>
+            The this keyword
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.SuperExpr">
+            <summary>
+            The super keyword (in super(...) calls and super.x member accesses)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.ArrayExpr">
+            <summary>
+            An array literal: [a, , ...b]
+            </summary>
+        </member>
         <member name="F:SysWeaver.Converter.Js.Ast.ArrayExpr.Elements">
             <summary>Elements, null for holes, may contain SpreadElement</summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.PropKind">
+            <summary>
+            The kind of a Property: a value (Init), a getter or a setter
+            </summary>
         </member>
         <member name="T:SysWeaver.Converter.Js.Ast.Property">
             <summary>
@@ -210,6 +280,11 @@
         </member>
         <member name="F:SysWeaver.Converter.Js.Ast.Property.Value">
             <summary>The value (a FunctionExpr for methods and accessors, a pattern in an ObjectPattern)</summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.ObjectExpr">
+            <summary>
+            An object literal: { a: 1, b, [c]: 2, ...d }
+            </summary>
         </member>
         <member name="F:SysWeaver.Converter.Js.Ast.ObjectExpr.Properties">
             <summary>Property or SpreadElement</summary>
@@ -238,6 +313,11 @@
             True if all parameters are plain identifiers (no defaults, patterns or rest)
             </summary>
         </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.FunctionExpr">
+            <summary>
+            A function or arrow function used as an expression
+            </summary>
+        </member>
         <member name="T:SysWeaver.Converter.Js.Ast.Class">
             <summary>
             A class (declaration or expression)
@@ -246,8 +326,38 @@
         <member name="F:SysWeaver.Converter.Js.Ast.Class.Members">
             <summary>MethodDef, FieldDef or StaticBlock</summary>
         </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.ClassExpr">
+            <summary>
+            A class used as an expression
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.MethodDef">
+            <summary>
+            A method, getter, setter or constructor in a class body
+            </summary>
+        </member>
         <member name="F:SysWeaver.Converter.Js.Ast.MethodDef.Kind">
             <summary>"constructor", "method", "get" or "set"</summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.FieldDef">
+            <summary>
+            A class field (public or private, static or instance)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.StaticBlock">
+            <summary>
+            A class static initialization block: static { ... }
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.UnaryExpr">
+            <summary>
+            A unary operator expression (!, -, +, ~, typeof, void, delete)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.UpdateExpr">
+            <summary>
+            An increment or decrement (++ / --, prefix or postfix)
+            </summary>
         </member>
         <member name="F:SysWeaver.Converter.Js.Ast.UpdateExpr.Op">
             <summary>"++" or "--"</summary>
@@ -257,14 +367,39 @@
             Binary and logical (&amp;&amp;, ||, ??) expressions
             </summary>
         </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.AssignExpr">
+            <summary>
+            An assignment, simple or compound (a = b, a += b, a ||= b, ...)
+            </summary>
+        </member>
         <member name="F:SysWeaver.Converter.Js.Ast.AssignExpr.Op">
             <summary>The operator, ex: "=", "+=", "??="</summary>
         </member>
         <member name="F:SysWeaver.Converter.Js.Ast.AssignExpr.Target">
             <summary>The target (Identifier, MemberExpr or a pattern for "=")</summary>
         </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.ConditionalExpr">
+            <summary>
+            A conditional expression: test ? a : b
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.CallExpr">
+            <summary>
+            A function call, optionally an optional call: f(a), f?.(a)
+            </summary>
+        </member>
         <member name="F:SysWeaver.Converter.Js.Ast.CallExpr.Optional">
             <summary>True for an optional call (callee?.(args))</summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.NewExpr">
+            <summary>
+            A new expression: new C(a)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.MemberExpr">
+            <summary>
+            A member access, computed or not, optionally optional: a.b, a[b], a?.b
+            </summary>
         </member>
         <member name="F:SysWeaver.Converter.Js.Ast.MemberExpr.Property">
             <summary>An Identifier (not computed), a PrivateName or any expression (computed)</summary>
@@ -277,6 +412,26 @@
             Marks the extent of an optional chain (a?.b.c)
             </summary>
         </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.SequenceExpr">
+            <summary>
+            A comma separated sequence of expressions: a, b, c
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.SpreadElement">
+            <summary>
+            A spread element (...a) in an array, call or object literal
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.YieldExpr">
+            <summary>
+            A yield or yield* expression
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.AwaitExpr">
+            <summary>
+            An await expression
+            </summary>
+        </member>
         <member name="T:SysWeaver.Converter.Js.Ast.MetaProperty">
             <summary>
             new.target or import.meta
@@ -287,8 +442,18 @@
             A dynamic import: import(source, options)
             </summary>
         </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.ArrayPattern">
+            <summary>
+            An array destructuring pattern: [a, , ...b]
+            </summary>
+        </member>
         <member name="F:SysWeaver.Converter.Js.Ast.ArrayPattern.Elements">
             <summary>Patterns, null for holes, the last one may be a RestElement</summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.ObjectPattern">
+            <summary>
+            An object destructuring pattern: { a, b: c, ...d }
+            </summary>
         </member>
         <member name="F:SysWeaver.Converter.Js.Ast.ObjectPattern.Properties">
             <summary>Property (value is a pattern) or a RestElement (last)</summary>
@@ -298,46 +463,216 @@
             A pattern with a default value (left = right)
             </summary>
         </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.RestElement">
+            <summary>
+            A rest element (...a) in a parameter list or a destructuring pattern
+            </summary>
+        </member>
         <member name="T:SysWeaver.Converter.Js.Ast.StatementList">
             <summary>
             A transient list of statements, used by rewriters to replace one statement with several (flattened into the parent list)
             </summary>
         </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.ProgramNode">
+            <summary>
+            The root of a syntax tree: the statements of a script or a module
+            </summary>
+        </member>
         <member name="F:SysWeaver.Converter.Js.Ast.ProgramNode.TrailingComments">
             <summary>Comments after the last statement</summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.BlockStmt">
+            <summary>
+            A block statement: { ... }
+            </summary>
         </member>
         <member name="F:SysWeaver.Converter.Js.Ast.BlockStmt.TrailingComments">
             <summary>Comments after the last statement</summary>
         </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.ExprStmt">
+            <summary>
+            An expression statement
+            </summary>
+        </member>
         <member name="F:SysWeaver.Converter.Js.Ast.ExprStmt.Directive">
             <summary>If this is a directive ("use strict"), the raw directive text (including quotes)</summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.EmptyStmt">
+            <summary>
+            An empty statement (;)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.DebuggerStmt">
+            <summary>
+            A debugger statement
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.WithStmt">
+            <summary>
+            A with statement
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.ReturnStmt">
+            <summary>
+            A return statement
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.LabeledStmt">
+            <summary>
+            A labeled statement: label: statement
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.BreakStmt">
+            <summary>
+            A break statement, optionally with a label
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.ContinueStmt">
+            <summary>
+            A continue statement, optionally with a label
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.IfStmt">
+            <summary>
+            An if statement, optionally with an else branch
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.SwitchCase">
+            <summary>
+            A case (or default when the test is null) of a switch statement
+            </summary>
         </member>
         <member name="F:SysWeaver.Converter.Js.Ast.SwitchCase.Test">
             <summary>The test, null for default</summary>
         </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.SwitchStmt">
+            <summary>
+            A switch statement
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.ThrowStmt">
+            <summary>
+            A throw statement
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.CatchClause">
+            <summary>
+            The catch clause of a try statement (the parameter is optional)
+            </summary>
+        </member>
         <member name="F:SysWeaver.Converter.Js.Ast.CatchClause.Param">
             <summary>The catch parameter (pattern), null for an optional catch binding</summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.TryStmt">
+            <summary>
+            A try statement with a catch and / or a finally block
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.WhileStmt">
+            <summary>
+            A while loop
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.DoWhileStmt">
+            <summary>
+            A do ... while loop
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.ForStmt">
+            <summary>
+            A for (init; test; update) loop
+            </summary>
         </member>
         <member name="F:SysWeaver.Converter.Js.Ast.ForStmt.Init">
             <summary>A VarDecl, an expression or null</summary>
         </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.ForInStmt">
+            <summary>
+            A for ... in loop
+            </summary>
+        </member>
         <member name="F:SysWeaver.Converter.Js.Ast.ForInStmt.Left">
             <summary>A VarDecl (with one declarator) or a pattern / member expression</summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.ForOfStmt">
+            <summary>
+            A for ... of loop (or for await ... of)
+            </summary>
         </member>
         <member name="F:SysWeaver.Converter.Js.Ast.ForOfStmt.Left">
             <summary>A VarDecl (with one declarator) or a pattern / member expression</summary>
         </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.FunctionDecl">
+            <summary>
+            A function declaration statement
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.VarDeclarator">
+            <summary>
+            One declarator of a variable declaration: a pattern and an optional initializer
+            </summary>
+        </member>
         <member name="F:SysWeaver.Converter.Js.Ast.VarDeclarator.Id">
             <summary>The binding (Identifier or pattern)</summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.VarDecl">
+            <summary>
+            A var, let or const declaration
+            </summary>
         </member>
         <member name="F:SysWeaver.Converter.Js.Ast.VarDecl.Kind">
             <summary>"var", "let", "const", "using" or "await using"</summary>
         </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.ClassDecl">
+            <summary>
+            A class declaration statement
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.ImportAttr">
+            <summary>
+            An import attribute: with { type: "json" }
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.ImportSpecKind">
+            <summary>
+            The kind of an import specifier: named ({ a as b }), default or namespace (* as ns)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.ImportSpec">
+            <summary>
+            An import specifier
+            </summary>
+        </member>
         <member name="F:SysWeaver.Converter.Js.Ast.ImportSpec.Imported">
             <summary>The imported name (Identifier or StringLiteral), only for Named</summary>
         </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.ImportDecl">
+            <summary>
+            An import declaration (modules are kept as is)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.ExportSpec">
+            <summary>
+            An export specifier: { a as b }
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.ExportNamedDecl">
+            <summary>
+            A named export: export { a }, export const a = 1 or export { a } from "x"
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.ExportDefaultDecl">
+            <summary>
+            A default export: export default ...
+            </summary>
+        </member>
         <member name="F:SysWeaver.Converter.Js.Ast.ExportDefaultDecl.Declaration">
             <summary>A FunctionDecl, ClassDecl (id may be null) or an ExprStmt</summary>
+        </member>
+        <member name="T:SysWeaver.Converter.Js.Ast.ExportAllDecl">
+            <summary>
+            A re-export of all names: export * from "x" (optionally as a namespace)
+            </summary>
         </member>
         <member name="T:SysWeaver.Converter.Js.Ast.Rewriter">
             <summary>

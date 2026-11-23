@@ -12,7 +12,7 @@ Based on Led Spectrum Analyser by: simesgreen - 27th February, 2013 https://www.
 Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License.
 */
 
-//  iMouse.x = Sensitivity | How high the bars rise for a given loudness | 1.0 | 0.25 .. 1.75 | x
+//  iMouse.x = Sensitivity | How high the bars rise for a given loudness | 0.5 | 0.25 .. 1.75 | x
 //  iMouse.y = Brightness | Overall LED brightness | 1.0 | 0.0 .. 2.0 | x
 //  iMouse.z = Ghost LEDs | Brightness of the unlit LEDs | 0.1 | 0.0 .. 0.2
 //  iMouse.w = Color Shift | Moves the green-to-red transition down (-) or up (+) | 0.0 | -0.5 .. 0.5
@@ -34,6 +34,8 @@ const float ColorCurve = 0.5; // var: { "min": 0.2, "max": 2.0, "step": 0.05, "n
 // --- Grid ---
 const float Bands = 30.0; // var: { "min": 8.0, "max": 120.0, "step": 1.0, "name": "Bands", "desc": "Number of frequency columns" }
 const float Segments = 40.0; // var: { "min": 8.0, "max": 120.0, "step": 1.0, "name": "Segments", "desc": "Number of LEDs per column" }
+const float FreqLow = 0.12; // var: { "min": 0.0, "max": 0.5, "step": 0.01, "name": "Lowest Frequency", "desc": "Where the left column starts on the log frequency axis (0 = 20 Hz, 0.1 = 40 Hz, 0.23 = 100 Hz)" }
+const float FreqHigh = 0.92; // var: { "min": 0.5, "max": 1.0, "step": 0.01, "name": "Highest Frequency", "desc": "Where the right column ends on the log frequency axis (0.77 = 4 kHz, 0.9 = 10 kHz, 1 = 20 kHz)" }
 const float LedSize = 0.5; // var: { "min": 0.2, "max": 0.5, "step": 0.01, "name": "LED Size", "desc": "Size of the lit area inside each cell (smaller = more gap between LEDs)" }
 const float LedSoftness = 0.15; // var: { "min": 0.01, "max": 0.3, "step": 0.01, "name": "LED Softness", "desc": "Softness of the LED edges" }
 // --- Reflection ---
@@ -42,6 +44,12 @@ const float ReflectionStrength = 0.18; // var: { "min": 0.0, "max": 1.0, "step":
 const float ReflectionFalloff = 1.0; // var: { "min": 0.25, "max": 4.0, "step": 0.05, "name": "Reflection Falloff", "desc": "How fast the reflection fades towards the bottom (higher = faster)" }
 const float ReflectionBlur = 0.1; // var: { "min": 0.0, "max": 1.0, "step": 0.01, "name": "Reflection Blur", "desc": "Diffuseness of the reflection: blur radius grows with the distance to the floor (0 = sharp mirror)" }
 const int ReflectionSamples = 9; // var: { "min": 3, "max": 24, "step": 1, "name": "Reflection Samples", "desc": "Horizontal blur taps in the reflection (more = smoother, slower)" }
+
+// The level of the spectrum at x (0 = left .. 1 = right column) on the log frequency axis (the 128 band row of the audio texture)
+float Level(float x)
+{
+    return EwAudioGetValue(iChannel0, mix(FreqLow, FreqHigh, x), EwAudioFrequency128v, false);
+}
 
 // Draws a grid of LEDs; each column lights up to the level of its frequency band.
 void mainImage( out vec4 fragColor, in vec2 fragCoord )
@@ -84,7 +92,7 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
 
     if (!isRefl) {
         // read frequency data from first row of texture
-        float fft = texture(iChannel0, vec2(p.x, 0.0)).x * Sensitivity;
+        float fft = Level(p.x) * Sensitivity;
         // mask for bar graph: lit LEDs below the level, ghost LEDs above
         float mask = (p.y < fft) ? 1.0 : GhostLevel;
         float colX = p.x * Bands * colNorm;
@@ -120,7 +128,7 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
         if (nearBands) {
             for (int j = 0; j < 3; j++) {
                 float bj = clamp(bc + float(j - 1), 0.0, Bands - 1.0);
-                float top = ceil(texture(iChannel0, vec2(bj / Bands, 0.0)).x * Sensitivity * Segments) / Segments;
+                float top = ceil(Level(bj / Bands) * Sensitivity * Segments) / Segments;
                 float lit = clamp(top * invEdge + yEdge, 0.0, 1.0);
                 m3[j] = mix(GhostLevel, 1.0, lit * lit * (3.0 - 2.0 * lit));
             }
@@ -138,7 +146,7 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
                 float off = fb - bc;                                        // -1, 0 or 1
                 mask = off < -0.5 ? m3.x : (off > 0.5 ? m3.z : m3.y);
             } else {
-                float top = ceil(texture(iChannel0, vec2(bi / Bands, 0.0)).x * Sensitivity * Segments) / Segments;
+                float top = ceil(Level(bi / Bands) * Sensitivity * Segments) / Segments;
                 float lit = clamp(top * invEdge + yEdge, 0.0, 1.0);
                 mask = mix(GhostLevel, 1.0, lit * lit * (3.0 - 2.0 * lit));
             }

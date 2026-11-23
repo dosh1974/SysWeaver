@@ -70,17 +70,17 @@
             <summary>
             Check if a new version of a shared folder is available
             </summary>
-            <param name="srcName"></param>
-            <param name="version"></param>
-            <returns></returns>
+            <param name="srcName">The name of the shared folder on the server</param>
+            <param name="version">The version of the local folder, see <see cref="M:SysWeaver.FolderSync.FolderSyncer.GetPullFolderVersion(System.String)"/></param>
+            <returns>True if the server has a different version (false if it is the same, or the folder is being updated right now)</returns>
         </member>
         <member name="M:SysWeaver.FolderSync.FolderSyncer.WaitPullFolder(System.String,System.String)">
             <summary>
             Wait until a new version of a shared folder is available (or the request time's out)
             </summary>
-            <param name="srcName"></param>
-            <param name="version"></param>
-            <returns></returns>
+            <param name="srcName">The name of the shared folder on the server</param>
+            <param name="version">The version of the local folder, see <see cref="M:SysWeaver.FolderSync.FolderSyncer.GetPullFolderVersion(System.String)"/></param>
+            <returns>True if a new version is available, false if the wait timed out</returns>
         </member>
         <member name="M:SysWeaver.FolderSync.FolderSyncer.PullFolder(System.String,System.String,System.Boolean,System.Boolean,System.Action{SysWeaver.FolderSync.FolderSyncEvents,System.String},System.Func{System.String,System.String,System.Threading.Tasks.Task{System.Exception}})">
             <summary>

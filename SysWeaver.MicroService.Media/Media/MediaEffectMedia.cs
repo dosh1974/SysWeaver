@@ -6,14 +6,14 @@ namespace SysWeaver.MicroService.Media
 {
     /// <summary>
     /// The media line of an effect (Effect Weaver's media effects): <c>//  media: &lt;kind&gt; &lt;refs&gt;</c> in the shader, kind "image" (a picture),
-    /// "audio" (a sound: it plays with the effect and is its audio texture), "audio2" (the same with the rich 512 x 64 audio texture,
-    /// mediaPlayer/media_audio2.js) or "collage" (several pictures). The media player reads it when
+    /// "audio" (a sound: it plays with the effect and is its 512 x 64 audio texture, mediaPlayer/media_audio2.js; was "audio2", still read),
+    /// "legacyaudio" (the same with ShaderToy's 512 x 2 audio texture) or "collage" (several pictures). The media player reads it when
     /// the effect's settings name no Texture; references that aren't urls (ex: Effect Weaver's "stock:file", "my:file") and a line without
     /// references (the defaults of the kind) are resolved by the server (<see cref="MediaService.ResolveEffectMedia"/>).
     /// </summary>
     public sealed class MediaEffectMediaRequest
     {
-        /// <summary>image | video | audio | audio2 | collage (any other kind resolves to no urls)</summary>
+        /// <summary>image | video | audio | legacyaudio | collage ("audio2" = audio; any other kind resolves to no urls)</summary>
         public String Kind;
 
         /// <summary>The references of the line (urls are used by the player as they are, only the others need the server), empty = the defaults</summary>
@@ -40,7 +40,7 @@ namespace SysWeaver.MicroService.Media
         /// The urls of the media of an effect's media line, for the user of the request: absolute, or relative to the mediaView folder.
         /// Null (or empty) when the references aren't this resolver's.
         /// </summary>
-        /// <param name="kind">image | video | audio | audio2 | collage</param>
+        /// <param name="kind">image | video | audio | legacyaudio | collage</param>
         /// <param name="refs">The references, empty = the defaults of the kind</param>
         /// <param name="context">The request (its session: the user's own media)</param>
         Task<String[]> ResolveEffectMedia(String kind, String[] refs, HttpServerRequest context);

@@ -186,7 +186,11 @@ namespace SysWeaver.AI
                 Msg?.AddMessage(MessageLevels.Debug, $"{MsgPrefix}{type} using workflow {wfName.ToQuoted()} ({wf.Name.ToQuoted()} on the server): {p}");
                 var data = await ExecuteCore(cancel, wf, values, WriteTaskValues, x => ComfyUiJson.ReadBytes(x, tw.OutputTag), true).ConfigureAwait(false);
                 if ((data == null) || (data.Length == 0))
-                    return new ComfyResult($"The workflow {wfName.ToQuoted()} returned no output!", wfName, seed);
+                {
+                    var error = await GetNoOutputError(wfName, wf, cancel).ConfigureAwait(false);
+                    Msg?.AddMessage(MessageLevels.Warning, $"{MsgPrefix}{type} using workflow {wfName.ToQuoted()} failed: {error}");
+                    return new ComfyResult(error, wfName, seed);
+                }
                 var ext = ComfyUiJson.GetExt(data);
                 var mime = MimeTypeMap.GetMimeType(ext, false).Item1;
                 return new ComfyResult(String.Concat(wfName, "_", seed.ToString(), ext), mime, data, wfName, seed);

@@ -1,4 +1,4 @@
-//  media: audio2 stock:YuE2_00056.flac
+//  media: audio stock:YuE2_00056.flac
 //  Hifi VU Meters: the brushed aluminium front of a vintage amplifier with two backlit analog
 //  VU meters behind glass. Needles follow the left / right level (+ kick), wandering room lights
 //  pulse with bass / mids, the power lamp with the beat. Calm in silence.

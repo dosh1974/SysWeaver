@@ -1312,7 +1312,8 @@
         </member>
         <member name="F:SysWeaver.AI.ComfyUiParams.AuthScheme">
             <summary>
-            The authorization scheme used when an api key is supplied
+            The authorization scheme used when an api key is supplied.
+            An api key of the form "user:password" (or "user:hash") is sent as basic auth (base64 encoded for you) when this is "Bearer" or "Basic".
             </summary>
         </member>
         <member name="F:SysWeaver.AI.ComfyUiParams.ComfyUiToken">
@@ -1428,6 +1429,16 @@
             The full path of the folder where UI format workflows are loaded from (used to annotate subgraph inputs), null if not used
             </summary>
         </member>
+        <member name="M:SysWeaver.AI.ComfyUiService.MakeAuth(System.String,System.String)">
+            <summary>
+            The authorization header for an api key: a key of the form "user:password" (or "user:hash") is sent as basic auth
+            (base64 encoded) when the scheme is "Bearer" (the default) or "Basic"; any other key is sent as it is with the scheme.
+            (A bearer token or an already encoded basic token never contains ':', base64 has no ':')
+            </summary>
+            <param name="scheme">The configured scheme, null or empty = "Bearer"</param>
+            <param name="apiKey">The api key</param>
+            <returns>The header value</returns>
+        </member>
         <member name="F:SysWeaver.AI.ComfyUiService.EndPoint">
             <summary>
             The ComfyUI end point (always ends with a '/')
@@ -1511,6 +1522,35 @@
             <param name="cancel">Optional cancellation token</param>
             <returns></returns>
         </member>
+        <member name="M:SysWeaver.AI.ComfyUiService.DiagnoseWorkflow(SysWeaver.AI.ComfyUiWorkflow,System.Threading.CancellationToken)">
+            <summary>
+            Find out why a workflow returned no output.
+            ComfyUI only runs the output nodes that pass validation; if another output node (ex: a "Preview Any") is valid, the prompt
+            runs "successfully" without the wanted output, and ComfyUI-Connect returns an empty result without the validation errors.
+            The most common cause is a model file (or another combo value) that isn't available on the server, or a node type that isn't installed.
+            This checks every node of the workflow against the node definitions of the server (/object_info).
+            </summary>
+            <param name="wf">The workflow</param>
+            <param name="cancel">Cancellation token</param>
+            <returns>The problems found (empty if none)</returns>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiService.GetNodeDefinition(System.String,System.Collections.Generic.List{System.Text.Json.JsonDocument},System.Threading.CancellationToken)">
+            <summary>
+            Get the definition of a node type from the server
+            </summary>
+            <returns>The definition, null if the node type doesn't exist</returns>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiService.GetComboOptions(System.Text.Json.JsonElement,System.String)">
+            <summary>
+            Get the options of a combo input (old format: [["a", "b"], {...}], new format: ["COMBO", { "options": ["a", "b"] }])
+            </summary>
+            <returns>The options, null if the input isn't a combo (or isn't defined)</returns>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiService.GetNoOutputError(System.String,SysWeaver.AI.ComfyUiWorkflow,System.Threading.CancellationToken)">
+            <summary>
+            The error message when a workflow returned no output, with the result of <see cref="M:SysWeaver.AI.ComfyUiService.DiagnoseWorkflow(SysWeaver.AI.ComfyUiWorkflow,System.Threading.CancellationToken)"/>
+            </summary>
+        </member>
         <member name="M:SysWeaver.AI.ComfyUiService.TextToImage(SysWeaver.AI.TextToImagePrompt)">
             <summary>
             Create an image from a text prompt using a text to image workflow.
@@ -1530,6 +1570,18 @@
             <param name="prompt">The prompt and the source image</param>
             <returns>The image (typically image/png)</returns>
             <exception cref="T:System.Exception">The workflow failed or wasn't found</exception>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiService.GetImageModels">
+            <summary>
+            Get the text to image workflows (the model id is the workflow name), the default workflow first.
+            </summary>
+            <returns>The text to image workflows</returns>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiService.GetImageEditModels">
+            <summary>
+            Get the images to image (image edit) workflows (the model id is the workflow name), the default workflow first.
+            </summary>
+            <returns>The images to image workflows</returns>
         </member>
         <member name="M:SysWeaver.AI.ComfyUiService.ToImageFile(SysWeaver.AI.ComfyResult,SysWeaver.AI.ComfyParams)">
             <summary>

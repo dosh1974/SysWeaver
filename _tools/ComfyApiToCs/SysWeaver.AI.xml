@@ -837,6 +837,52 @@
             A semi-transparent image
             </summary>
         </member>
+        <member name="T:SysWeaver.AI.AiImageEditModel">
+            <summary>
+            Information about an image edit model (image to image) available from an AI service, see <see cref="M:SysWeaver.AI.IAiImageEditService.GetImageEditModels"/>
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiImageEditModel.ToString">
+            <inheritdoc />
+        </member>
+        <member name="F:SysWeaver.AI.AiImageEditModel.Id">
+            <summary>
+            The model id, this is the value to use as the image edit model, ex: "gpt-image-1"
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiImageEditModel.Name">
+            <summary>
+            A human readable name of the model (if available)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiImageEditModel.Description">
+            <summary>
+            A description of the model (if available)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiImageEditModel.Owner">
+            <summary>
+            The organization that owns the model (if available)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiImageEditModel.Created">
+            <summary>
+            When the model was created (if available)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.AiImageEditModel.MaxSourceImages">
+            <summary>
+            The maximum number of source images the model accepts, 0 if unknown
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.AiImageEditModel.From(SysWeaver.AI.AiImageModel,System.Int32)">
+            <summary>
+            Create an edit model from an image model (same id, name etc)
+            </summary>
+            <param name="m">The image model</param>
+            <param name="maxSourceImages">The maximum number of source images, 0 if unknown</param>
+            <returns>The edit model</returns>
+        </member>
         <member name="T:SysWeaver.AI.AiImageModel">
             <summary>
             Information about an image generation model available from an AI service
@@ -2123,6 +2169,13 @@
             </summary>
             <returns>The available models</returns>
         </member>
+        <member name="M:SysWeaver.AI.AiServiceBase.GetImageEditModels">
+            <summary>
+            Get the image edit (image to image) models available from the API (cached, updated at most every 5 minutes).
+            These are the image models that <see cref="M:SysWeaver.AI.AiServiceBase.RateImageModel(System.String,System.Boolean,System.Boolean)"/> accepts for editing.
+            </summary>
+            <returns>The available models</returns>
+        </member>
         <member name="M:SysWeaver.AI.AiServiceBase.RateImageModel(System.String,System.Boolean,System.Boolean)">
             <summary>
             Rate how suitable an image model is, used to select a model when the default image model isn't available (anymore).
@@ -3137,6 +3190,14 @@
             <exception cref="T:System.ArgumentNullException">The prompt or the source image is null</exception>
             <exception cref="T:System.Exception">The image couldn't be created (ex: the model refused or the service failed)</exception>
         </member>
+        <member name="M:SysWeaver.AI.IAiImageEditService.GetImageEditModels">
+            <summary>
+            Get the models that can create an image from a source image and a text prompt, use <see cref="F:SysWeaver.AI.AiImageEditModel.Id"/> as the model of an <see cref="T:SysWeaver.AI.ImageToImagePrompt"/>.
+            For ComfyUI these are the images to image workflows.
+            </summary>
+            <returns>The available models (may be empty)</returns>
+            <exception cref="T:System.Exception">The models couldn't be fetched (ex: the service is unavailable)</exception>
+        </member>
         <member name="T:SysWeaver.AI.IAiImageGenService">
             <summary>
             A service that can create an image from a text prompt (API agnostic).
@@ -3151,6 +3212,14 @@
             <returns>The created image (typically a png image, see <see cref="F:SysWeaver.MemoryFile.Mime"/>)</returns>
             <exception cref="T:System.ArgumentNullException">The prompt is null</exception>
             <exception cref="T:System.Exception">The image couldn't be created (ex: the model refused or the service failed)</exception>
+        </member>
+        <member name="M:SysWeaver.AI.IAiImageGenService.GetImageModels">
+            <summary>
+            Get the models that can create an image from a text prompt, use <see cref="F:SysWeaver.AI.AiImageModel.Id"/> as <see cref="P:SysWeaver.AI.TextToImagePrompt.Model"/>.
+            For ComfyUI these are the text to image workflows.
+            </summary>
+            <returns>The available models (may be empty)</returns>
+            <exception cref="T:System.Exception">The models couldn't be fetched (ex: the service is unavailable)</exception>
         </member>
         <member name="T:SysWeaver.AI.IAiMemory">
             <summary>
@@ -3507,7 +3576,7 @@
         </member>
         <member name="M:SysWeaver.AI.KeyValueStorageAiMemory.GetAiMemoryTable(SysWeaver.Data.TableDataRequest,SysWeaver.Net.HttpServerRequest)">
             <summary>
-            Displays the memory that the AI have stored
+            Displays what the AI has remembered about you (your own entries only)
             </summary>
             <param name="r"></param>
             <param name="context"></param>
