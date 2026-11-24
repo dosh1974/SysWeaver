@@ -1416,6 +1416,13 @@ class MediaPlayerElement {
 class MediaPlayerTexture {
 
     /**
+     * @type {boolean} Set by MediaPlayer for an image / a video drawn by its effect: without EffectSizeFromImage the effect still keeps the
+     * shape of the picture (fitted into the effect's own Width x Height, see MediaPlayerEffect.InitGL). False for an effect with a texture of
+     * its own (it keeps its own size) and for a text (a collage is drawn at the size of the box).
+     */
+    KeepAspect = false;
+
+    /**
      * Creates the provider and an (empty) GL texture.
      * @param {WebGLRenderingContext|WebGL2RenderingContext} gl - The effect's GL context.
      * @param {object} params - The params, already merged over the defaults of the derived class (Crop, EffectSizeFromImage,

@@ -1417,12 +1417,16 @@ class MediaPlayerEffect {
 
         const tex = t.Texture;
         if (tex) {
-            const newSize = await tex.Cache(programData.HaveLod);
+            let newSize = await tex.Cache(programData.HaveLod);
             //  The texture knows its size now: its crop (the media params of the image / text) can be computed
             if (tex.ApplyClip) {
                 tex.ApplyClip();
                 t.ApplyTextue = true;
             }
+            //  A picture drawn by its effect (an image, a video: KeepAspect) at the effect's own size (EffectSizeFromImage false) keeps the
+            //  shape of the picture: the picture fitted into the effect's Width x Height (not stretched to it or to the view)
+            if (!newSize && tex.KeepAspect)
+                newSize = MediaPlayerEffect.FitAspect(tex.Width, tex.Height, p.Width || t.Width, p.Height || t.Height);
             if (newSize) {
                 const w = newSize[0];
                 const h = newSize[1];
@@ -1433,8 +1437,9 @@ class MediaPlayerEffect {
                     t.Height = h;
                     p.Width = w;
                     p.Height = h;
-                    p.AdaptiveSize = false;
                 }
+                //  (also when the picture has the default size, ex: 1920 x 1080: an adaptive effect fills the view and stretches the picture)
+                p.AdaptiveSize = false;
             }
         }
 
@@ -1576,6 +1581,21 @@ class MediaPlayerEffect {
         await t.Create();
 
         return MediaPlayerTools.OnCacheComplete(this, keepHidden);
+    }
+
+    /**
+     * The size of a picture fitted into a box (its aspect kept, as large as fits).
+     * @param {number} pw - Picture width.
+     * @param {number} ph - Picture height.
+     * @param {number} bw - Box width.
+     * @param {number} bh - Box height.
+     * @returns {number[]|null} [width, height] (at least 1 x 1), null without a picture size or a box.
+     */
+    static FitAspect(pw, ph, bw, bh) {
+        if (!(pw > 0) || !(ph > 0) || !(bw > 0) || !(bh > 0))
+            return null;
+        const s = Math.min(bw / pw, bh / ph);
+        return [Math.max(1, Math.round(pw * s)), Math.max(1, Math.round(ph * s))];
     }
 
     /**

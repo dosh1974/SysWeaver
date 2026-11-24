@@ -7,7 +7,7 @@
 | | |
 |---|---|
 | **Layer** | Security |
-| **Kind** | Micro service (`IApiAuditService`) |
+| **Kind** | Micro service (`IApiAuditService`, `IApiAuditReportService`) |
 
 ## Purpose
 
@@ -28,11 +28,13 @@ flowchart LR
 - Records each audited call with its (optionally filtered) input, result or exception, the signed in user and session
 - Clients (IP address, device id, user agent, language and time zone) are de-duplicated into their own table
 - Buffered writes: calls are queued and written in batches every 100 ms, so auditing doesn't slow down the calls
+- *Admin / Audit / Audit browser*: advanced search of the calls joined with their clients (`IApiAuditReportService`, see [`audit/audit.html`](../SysWeaver.HttpServer/srcWeb/audit/README.md))
 - *Admin / Audit* menu with *API calls* and *Clients* tables (`Api/Audit/ApiCallTable`, `Api/Audit/ClientTable`; Admin, Ops or Debug token)
 
 ## Key components
 
 - [`MySqlApiAuditService`](MySqlApiAuditService.cs) — the `IApiAuditService` implementation and its tables
+- [`MySqlAuditQuery`](MySqlAuditQuery.cs) — translates an `ApiAuditMatcher` to SQL (all values as parameters)
 - [`MySqlApiAuditParams`](MySqlApiAuditParams.cs) — the `MySqlDbParams` of the service (the schema defaults to `Audit`)
 
 ## Using it
@@ -46,7 +48,8 @@ flowchart LR
 
 - Only methods explicitly marked with `[WebApiAudit]` are recorded
 - Parameters and results may contain personal data; use `[WebApiAuditFilterParams]` / `[WebApiAuditFilterReturn]` to redact them
-- Requires MySQL; there is no automatic clean-up of old records
+- Times are stored with a resolution of one second, so the duration of a call is only approximate (hidden by default in the audit browser)
+- Requires MySQL (the `SimpleAuditService` in [SysWeaver.MicroService.HttpServer](../SysWeaver.MicroService.HttpServer/README.md) doesn't need a database); there is no automatic clean-up of old records
 
 ## Folder layout
 

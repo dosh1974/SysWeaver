@@ -29,6 +29,7 @@ Some of the files are served as templates with `${Variable}` substitution (by de
 | [`ui/`](ui/README.md) | The UI component library (`Sw.Button`, `Sw.Dialog`, `Sw.Menu`, `Sw.Tabs`, value cells, toasts, icons, design tokens); sources of `sw/ui.js` / `sw/ui.css`, the legacy `ui/compat_common.*` layer, and the component gallery [`ui/gallery.html`](ui/gallery.html) |
 | [`sw/`](sw/bundles.json) | GENERATED bundles (`core.js`, `ui.js`, `ui.css`, `shell.js`, `shell.css`, the migration helpers `compat.js` / `compat.css`) and the bundle manifest `bundles.json` (built by `SwWeb bundle`; edit the sources, not the bundles) |
 | [`app/`](app/README.md) | Home and welcome pages, web app manifest, tag gallery, and the GENERATED legacy bundles `application.js` / `application.css` (old pop-up and menu globals for old format pages) |
+| [`audit/`](audit/README.md) | The audit browser: search the audited API calls (`IApiAuditReportService`) |
 | [`shell/`](shell/README.md) | The application shell (`Sw.Shell`: header, main menu, content frame, history; bundles `sw/shell.js`, `sw/shell.css`) and the legacy compatibility layer of the old application.js |
 | [`common/`](common/README.md) | The templated theme `theme.css`, the GENERATED legacy bundle `common.js` (core + ui + old globals, for old format pages), tab control, animation helpers, backgrounds and vendored scripts (marked, UZIP, MD5) |
 | [`help/`](help/README.md) | Documentation of the template syntax |

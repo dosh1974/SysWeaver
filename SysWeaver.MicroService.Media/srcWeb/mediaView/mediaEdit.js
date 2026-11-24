@@ -363,7 +363,7 @@
             effect,
             {
                 Key: "EffectSizeFromImage", Label: _TF("Size of the picture", "Setting in the media editor"), Type: "bool", Default: true, Group: g, Show: on,
-                Desc: _TF("On: the effect takes the size of the picture; off: the effect's own size", "Description of a setting in the media editor"),
+                Desc: _TF("On: the effect takes the size of the picture; off: the effect's own size (an image or a video keeps its shape)", "Description of a setting in the media editor"),
             },
             {
                 Key: "EffectParams.Speed", Label: _TF("Speed", "Setting in the media editor: the speed of an effect"), Type: "float", Min: -4, Max: 4, Step: 0.05, Unit: "×", Default: 1, Group: g, Show: on, Live: "Speed",
@@ -498,7 +498,7 @@
                         Desc: _TF("The picture has see-through parts: no border is drawn around it", "Description of a setting in the media editor"),
                     },
                     ...CropDefs(null),
-                    ...OverlayEffectDefs(ctx, "image"),
+                    ...OverlayEffectDefs(ctx, "picture"),
                 ];
             case TVideo:
                 return [
@@ -508,7 +508,7 @@
                         Desc: _TF("The video has see-through parts: no border is drawn around it", "Description of a setting in the media editor"),
                     },
                     ...CropDefs(null),
-                    ...OverlayEffectDefs(ctx, "image"),
+                    ...OverlayEffectDefs(ctx, "picture"),
                 ];
             case TAudio:
                 return [...PlaybackDefs(ctx, false), ...OverlayEffectDefs(ctx, "audio")];
@@ -2307,35 +2307,39 @@
         // ---------------------------------------------------------------- menus
 
         /**
-         * Effect files of a library kind (cached).
-         * @param {string} kind "Background", "Image", "Frame", "Icon", "Collage" or "Audio".
+         * Effect files of a group of the library (cached).
+         * @param {object} group The group (MV.EffectGroups: Name, Api).
          * @returns {Promise<string[]>} The names.
          */
-        async EffectNames(kind) {
+        async EffectNames(group) {
             const t = this;
+            const key = group.Name;
             t.FxNames = t.FxNames || {};
             t.FxLists = t.FxLists || {};
-            if (!t.FxNames[kind])
-                t.FxNames[kind] = Sw.Net.Get("Api/Get" + kind + "Effects").catch(() => []).then(x => t.FxLists[kind] = Array.isArray(x) ? x : []);
-            return (await t.FxNames[kind]) || [];
+            if (!t.FxNames[key])
+                t.FxNames[key] = Sw.Net.Get(group.Api).catch(() => []).then(x => t.FxLists[key] = Array.isArray(x) ? x : []);
+            return (await t.FxNames[key]) || [];
         }
 
         /**
-         * The effects of the library as choices: an image's effects (a text collage: the collage effects first), or the background
-         * effects (the Effect type). The current one is listed too when it is an own file.
-         * @param {string} kind "image", "collage" or "background".
+         * Load the names of every group of the library (the effect choices of the settings and the picker need them).
+         * @returns {Promise<void>}
+         */
+        async LoadEffectLibrary() {
+            await Promise.all(Object.values(MV.EffectGroups).map(g => this.EffectNames(g)));
+        }
+
+        /**
+         * The effects of the library as choices, the same groups as the viewer's effects menu (MV.EffectLibrary): a picture's effects (an
+         * image, a video, a text: the picture effects, frames and icons; a text collage: the collage effects first), a sound's, or the
+         * background effects (the Effect type). The current one is listed too when it is an own file.
+         * @param {string} kind "picture", "collage", "audio" or "background".
          * @returns {Array<{Value: string, Label: string, Hint: string}>} The choices ("" = no effect, not for "background").
          */
         EffectOptions(kind) {
             const t = this;
             const L = t.FxLists || {};
-            const groups = kind === "background" ? [["Background", "backgroundEffects/", _TF("Effect", "Kind of an effect in the effect picker of the media editor")]]
-                : kind === "audio" ? [["Audio", "audioEffects/", _TF("Sound effect", "Kind of an effect in the effect picker of the media editor")]]
-                : kind === "collage" ? [["Collage", "collageEffects/", _TF("Collage effect", "Kind of an effect in the effect picker of the media editor")], ["Image", "imageEffects/", _TF("Picture effect", "Kind of an effect in the effect picker of the media editor")]]
-                    : [["Image", "imageEffects/", _TF("Picture effect", "Kind of an effect in the effect picker of the media editor")],
-                        //  (frames around the picture, the picture on an object)
-                        ["Frame", "frameEffects/", _TF("Frame", "Kind of an effect in the effect picker of the media editor: a frame drawn around the picture")],
-                        ["Icon", "iconEffects/", _TF("Icon", "Kind of an effect in the effect picker of the media editor: the picture is put on an object (ex: a logo on a cup)")]];
+            const groups = MV.EffectLibrary(kind);
             const out = kind === "background" ? [] : [{ Value: "", Label: _TF("No effect", "Choice of the effect of a picture in the media editor"), Icon: "close" }];
             //  A sound: null = the default effect of the viewer (MV.DefaultAudioEffect), "" = none
             if (kind === "audio" && MV.DefaultAudioEffect) {
@@ -2343,10 +2347,10 @@
                 const dn = String(Sw.Format.BeautifyName(MediaName(TEffect, MV.DefaultAudioEffect).replace(/\.glsl$/i, "").replace(/[.\s]+$/, ""))).trim();
                 out.unshift({ Value: null, Label: _T("Default ({0})", dn, "Choice of the effect of a sound in the media editor: the default effect, {0} is its name"), Icon: "sparkle" });
             }
-            for (const [g, folder, hint] of groups)
-                for (const n of L[g] || [])
+            for (const g of groups)
+                for (const n of L[g.Name] || [])
                     if (n !== "None")
-                        out.push({ Value: folder + n + ".glsl", Label: Sw.Format.BeautifyName(n), Hint: groups.length > 1 ? hint : undefined, Icon: "sparkle" });
+                        out.push({ Value: g.Folder + n + ".glsl", Label: Sw.Format.BeautifyName(n), Hint: groups.length > 1 ? g.Hint() : undefined, Icon: "sparkle" });
             const cur = kind === "background" ? (t.Type === TEffect ? t.Data : "") : (t.Props.Effect || "");
             if (cur && !out.some(o => o.Value === cur))
                 out.push({ Value: cur, Label: MediaName(TEffect, cur), Hint: _TF("Own file", "Kind of an effect in the effect picker of the media editor"), Icon: "file" });
@@ -2360,10 +2364,10 @@
          */
         async PickEffect(anchor) {
             const t = this;
-            //  (a video: the effect draws its frames, like a picture: the image effects)
+            //  (a video: the effect draws its frames, like a picture: the image effects, frames and icons, as in the viewer)
             const overlay = t.Type === TImage || t.Type === TVideo || t.Type === TText || t.Type === TAudio;
-            const kind = !overlay ? "background" : t.Type === TAudio ? "audio" : t.Type === TText && t.Props.CollageSeparator ? "collage" : "image";
-            await Promise.all(["Background", "Image", "Frame", "Icon", "Collage", "Audio"].map(k => t.EffectNames(k)));
+            const kind = MV.EffectKindOf(t.Type, t.Props);
+            await t.LoadEffectLibrary();
             const opts = t.EffectOptions(kind);
             if (!opts.length) {
                 Sw.Toast(_TF("No effects found in the library", "Shown by the effects button of the media editor when the library is empty"), { Kind: "warning" });
@@ -2616,7 +2620,7 @@
             await MV.Ready;
             t.Layout();
             //  The effect library (the effect choices of the settings need it at once)
-            await Promise.all(["Background", "Image", "Collage", "Audio"].map(k => t.EffectNames(k)));
+            await t.LoadEffectLibrary();
             t.Prefix = await MV.MessagePrefix(location.href + "_" + Date.now() + "_" + Math.random());
             //  A popped out player asks for the settings
             Sw.InterOp.On("*", m => {

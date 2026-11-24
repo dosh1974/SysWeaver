@@ -20,7 +20,8 @@ namespace SysWeaver.MicroService
     /// </summary>
     [WebApiUrl("Audit")]
     [WebMenuPath(null, "Admin/Audit", "Audit", "Audit information (API calls and clients)", "icons/fingerprint.svg", 10)]
-    public sealed class MySqlApiAuditService : IApiAuditService, IDisposable
+    [WebMenuEmbedded(null, "Admin/Audit/Browser", "Audit browser", ApiAuditTools.BrowserUrl, "Search the audited API calls: who did what, when and from where", "icons/search.svg", -1, ApiAuditTools.ReadAuth)]
+    public sealed partial class MySqlApiAuditService : IApiAuditService, IApiAuditReportService, IDisposable
     {
         /// <summary>
         /// Create the service, the database is initialized in the background and queued audit data is written every 100 ms
@@ -134,7 +135,7 @@ namespace SysWeaver.MicroService
                                 ClientId = clientId,
                                 Group = api.AuditGroup.LimitLength(32, ""),
                                 Id = id,
-                                Input = val == null ? null : ser.ToStringWithoutType(val).LimitLength(768, ""),
+                                Input = val == null ? null : ser.ToStringWithoutType(val).LimitLength(MaxDataLength, ""),
                                 UserGuid = auth?.Guid,
                                 Session = temp.SessionToken,
                                 UserName = auth?.Username,
@@ -158,9 +159,9 @@ namespace SysWeaver.MicroService
                             data.UserGuid = auth?.Guid;
                             data.UserName = auth?.Username;
                             if (type == 1)
-                                data.Output = val == null ? null : ser.ToStringWithoutType(val).LimitLength(768, "");
+                                data.Output = val == null ? null : ser.ToStringWithoutType(val).LimitLength(MaxDataLength, "");
                             else
-                                data.Output = (temp.Value as Exception).Message.LimitLength(768, "");
+                                data.Output = (temp.Value as Exception).Message.LimitLength(MaxDataLength, "");
                         }
                     }
                     foreach (var oc in orderedCalls)

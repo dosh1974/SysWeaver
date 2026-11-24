@@ -390,13 +390,18 @@ class MediaPlayer {
         }
         switch (type) {
             case MediaTypes.Image:
+                //  (the effect keeps the shape of the image, also at the effect's own size: KeepAspect, see MediaPlayerEffect.InitGL)
                 if (fx)
-                    return new MediaPlayerEffect(mediaParams.Effect, mediaParams.EffectParams, gl => new MediaPlayerImageTexture(gl, mediaParams, data));
+                    return new MediaPlayerEffect(mediaParams.Effect, mediaParams.EffectParams, gl => {
+                        const tx = new MediaPlayerImageTexture(gl, mediaParams, data);
+                        tx.KeepAspect = true;
+                        return tx;
+                    });
                 return new MediaPlayerImage(data, mediaParams);
             case MediaTypes.Video:
-                //  (with an effect: the effect draws the video, it plays on the video's time line, see #WithVideo)
+                //  (with an effect: the effect draws the video, it plays on the video's time line and keeps its shape, see #WithVideo)
                 if (fx)
-                    return MediaPlayer.#WithVideo(mediaParams.Effect, mediaParams.EffectParams, data, mediaParams);
+                    return MediaPlayer.#WithVideo(mediaParams.Effect, mediaParams.EffectParams, data, mediaParams, true);
                 return new MediaPlayerVideo(data, mediaParams);
             case MediaTypes.Audio:
                 //  (the effect's media line "audio": the 512 x 64 texture, see Create)
@@ -473,11 +478,17 @@ class MediaPlayer {
      * @param {object} effectParams The effect params.
      * @param {string} video Url of the video.
      * @param {object} videoParams The video params (MediaPlayerParamsVideo).
+     * @param {boolean} [keepAspect] The effect keeps the shape of the video, also at its own size (a video with an effect; not an effect
+     *   with a video texture, which has a size of its own): the texture's KeepAspect, see MediaPlayerEffect.InitGL.
      * @returns {MediaPlayerEffect} The player.
      */
-    static #WithVideo(effect, effectParams, video, videoParams) {
+    static #WithVideo(effect, effectParams, video, videoParams, keepAspect) {
         const media = new MediaPlayerVideo(video, videoParams);
-        return new MediaPlayerEffect(effect, effectParams, gl => new MediaPlayerVideoTexture(gl, videoParams, media), media);
+        return new MediaPlayerEffect(effect, effectParams, gl => {
+            const tx = new MediaPlayerVideoTexture(gl, videoParams, media);
+            tx.KeepAspect = !!keepAspect;
+            return tx;
+        }, media);
     }
 
     /**

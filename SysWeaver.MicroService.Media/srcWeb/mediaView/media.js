@@ -109,9 +109,10 @@
     };
 
     /**
-     * The params of a media with the effect the viewer chose (its effects menu, the remembered choice): an image's or a video's effect gets the
-     * size of the view, not the picture's (EffectSizeFromImage = false: an effect is drawn at the player's size, like an effect of its own). The given
-     * params are not changed.
+     * The params of a media with the effect the viewer chose (its effects menu, the remembered choice): an image's or a video's effect is
+     * drawn at the effect's own resolution, not the picture's (EffectSizeFromImage = false: a small picture still gets a sharp effect, a huge
+     * one isn't drawn at its full size); the effect keeps the shape of the picture (MediaPlayerEffect.InitGL, the texture's KeepAspect). The
+     * given params are not changed.
      * @param {number} type The media type.
      * @param {?object} props The media params.
      * @param {string} fx The effect ("" = none).
@@ -125,55 +126,113 @@
     }
 
     /**
-     * The effects the viewer's menu picks for a media type (CreateChrome option Effects): the list of the built in effects (Api), their
-     * folder (relative to this script), the storage key of the last choice (Prefs.Effect), the effect when the settings name none and no
-     * choice was made (a sound: DefaultAudioEffect), and the name of the menu item.
+     * The library of built in effects, one entry per folder (MediaService: Api/Get<Name>Effects lists the names in it). The one list the
+     * viewer's effects menu (EffectKind), the media editor's effect picker and its Effect setting (mediaEdit.js) are made from, so they
+     * offer the same effects. Folder: relative to this script. Menu: the name of its sub menu in the viewer (null: listed directly).
+     * Hint: the kind shown next to an effect in the editor's picker.
+     * @type {Object<string, {Name:string, Api:string, Folder:string, Menu:?function():string, Hint:function():string}>}
+     */
+    const EffectGroups = {
+        Background: {
+            Name: "Background", Api: "Api/GetBackgroundEffects", Folder: "backgroundEffects/", Menu: null,
+            Hint: () => _TF("Effect", "Kind of an effect in the effect picker of the media editor"),
+        },
+        Image: {
+            Name: "Image", Api: "Api/GetImageEffects", Folder: "imageEffects/", Menu: null,
+            Hint: () => _TF("Picture effect", "Kind of an effect in the effect picker of the media editor"),
+        },
+        //  (a frame around the picture, transparent pictures show its inner effect through: SwTransparentImage)
+        Frame: {
+            Name: "Frame", Api: "Api/GetFrameEffects", Folder: "frameEffects/",
+            Menu: () => _TF("Frames", "Sub menu of the effects menu of the media viewer: the effects that draw a frame around an image / a video"),
+            Hint: () => _TF("Frame", "Kind of an effect in the effect picker of the media editor: a frame drawn around the picture"),
+        },
+        //  (the picture on an object)
+        Icon: {
+            Name: "Icon", Api: "Api/GetIconEffects", Folder: "iconEffects/",
+            Menu: () => _TF("Icons", "Sub menu of the effects menu of the media viewer: the effects that put an image / a video on an object (ex: a logo on a cup)"),
+            Hint: () => _TF("Icon", "Kind of an effect in the effect picker of the media editor: the picture is put on an object (ex: a logo on a cup)"),
+        },
+        Collage: {
+            Name: "Collage", Api: "Api/GetCollageEffects", Folder: "collageEffects/", Menu: null,
+            Hint: () => _TF("Collage effect", "Kind of an effect in the effect picker of the media editor"),
+        },
+        Audio: {
+            Name: "Audio", Api: "Api/GetAudioEffects", Folder: "audioEffects/", Menu: null,
+            Hint: () => _TF("Sound effect", "Kind of an effect in the effect picker of the media editor"),
+        },
+    };
+
+    /**
+     * What a kind of media chooses its effect from (the names of EffectGroups, the first group is the main list): "picture" (an image, a
+     * video, a text: the effect draws the picture), "collage" (a text collage: the collage effects, then the picture effects), "audio" (a
+     * sound's visualization) and "background" (the Effect type: an effect of its own).
+     * @type {Object<string, string[]>}
+     */
+    const EffectKinds = {
+        picture: ["Image", "Frame", "Icon"],
+        collage: ["Collage", "Image", "Frame", "Icon"],
+        audio: ["Audio"],
+        background: ["Background"],
+    };
+
+    /**
+     * The effect groups a kind of media chooses from (EffectKinds).
+     * @param {string} kind "picture", "collage", "audio" or "background".
+     * @returns {Array<object>} The groups (EffectGroups entries), empty for an unknown kind.
+     */
+    function EffectLibrary(kind) {
+        return (EffectKinds[kind] || []).map(n => EffectGroups[n]);
+    }
+
+    /**
+     * The effect kind of a media type (EffectKinds), as the viewer and the editor use it.
+     * @param {number} type The media type.
+     * @param {?object} [props] The media params (a text with a CollageSeparator is a collage).
+     * @returns {string} "picture", "collage", "audio" or "background" (the Effect type, and the types without effects).
+     */
+    function EffectKindOf(type, props) {
+        if (type === MediaTypes.Audio)
+            return "audio";
+        if (type === MediaTypes.Text && props && props.CollageSeparator)
+            return "collage";
+        if (type === MediaTypes.Image || type === MediaTypes.Video || type === MediaTypes.Text)
+            return "picture";
+        return "background";
+    }
+
+    /**
+     * The effects the viewer's menu picks for a media type (CreateChrome option Effects): the storage key of the last choice (Prefs.Effect),
+     * the effect when the settings name none and no choice was made (a sound: DefaultAudioEffect), the name of the menu item and the groups
+     * of the library (EffectLibrary: the same as the editor's).
      * @param {number} type The media type.
      * Groups: the lists of the menu, the first listed directly, the others (Text) as sub menus (an image / a video: the frames and the icons).
-     * @returns {?{Api:string, Folder:string, Key:string, Default:string, Text:function():string, Groups:Array<{Api:string, Folder:string, Text:?function():string}>}}
+     * @returns {?{Key:string, Default:string, Text:function():string, Groups:Array<{Api:string, Folder:string, Text:?function():string}>}}
      *   The kind, null: no effect choice.
      */
     function EffectKind(type) {
+        let k = null;
         if (type === MediaTypes.Audio)
-            return WithGroups({
-                Api: "Api/GetAudioEffects", Folder: "audioEffects/", Key: "SysWeaver.Media.AudioEffect", Default: DefaultAudioEffect,
+            k = {
+                Key: "SysWeaver.Media.AudioEffect", Default: DefaultAudioEffect,
                 Text: () => _TF("Visualization", "Menu item of the media viewer with the effects that visualize a sound (a sub menu: none and the built in audio effects)"),
-            });
-        if (type === MediaTypes.Image)
-            return WithGroups({
-                Api: "Api/GetImageEffects", Folder: "imageEffects/", Key: "SysWeaver.Media.ImageEffect", Default: "",
+            };
+        else if (type === MediaTypes.Image)
+            k = {
+                Key: "SysWeaver.Media.ImageEffect", Default: "",
                 Text: () => _TF("Effects", "Menu item of the media viewer with the effects of an image (a sub menu: none and the built in image effects)"),
-            }, PictureGroups());
+            };
         //  (a video with an effect: the effect draws its frames, like a picture: the image effects, frames and icons)
-        if (type === MediaTypes.Video)
-            return WithGroups({
-                Api: "Api/GetImageEffects", Folder: "imageEffects/", Key: "SysWeaver.Media.VideoEffect", Default: "",
+        else if (type === MediaTypes.Video)
+            k = {
+                Key: "SysWeaver.Media.VideoEffect", Default: "",
                 Text: () => _TF("Effects", "Menu item of the media viewer with the effects of a video (a sub menu: none and the built in image effects)"),
-            }, PictureGroups());
-        return null;
-    }
-
-    /**
-     * An effect kind with its groups: its own list first, then the extra groups.
-     * @param {object} k The kind (Api, Folder ...).
-     * @param {Array<object>} [extra] More groups (sub menus).
-     * @returns {object} The kind (Groups set).
-     */
-    function WithGroups(k, extra) {
-        k.Groups = [{ Api: k.Api, Folder: k.Folder, Text: null }].concat(extra || []);
+            };
+        if (!k)
+            return null;
+        //  (the first group directly, the others as sub menus)
+        k.Groups = EffectLibrary(EffectKindOf(type)).map((g, i) => ({ Api: g.Api, Folder: g.Folder, Text: i > 0 ? g.Menu : null }));
         return k;
-    }
-
-    /**
-     * The extra effect groups of a picture (an image, a video): the frames (a frame around the picture, transparent pictures show its inner
-     * effect through: SwTransparentImage) and the icons (the picture on an object).
-     * @returns {Array<{Api:string, Folder:string, Text:function():string}>} The groups.
-     */
-    function PictureGroups() {
-        return [
-            { Api: "Api/GetFrameEffects", Folder: "frameEffects/", Text: () => _TF("Frames", "Sub menu of the effects menu of the media viewer: the effects that draw a frame around an image / a video") },
-            { Api: "Api/GetIconEffects", Folder: "iconEffects/", Text: () => _TF("Icons", "Sub menu of the effects menu of the media viewer: the effects that put an image / a video on an object (ex: a logo on a cup)") },
-        ];
     }
 
     /**
@@ -4191,6 +4250,9 @@
         InApp,
         DefaultAudioEffect,
         PlayerParams,
+        EffectGroups,
+        EffectLibrary,
+        EffectKindOf,
     };
 
     //  Legacy global names (external host pages)

@@ -78,6 +78,7 @@ sequenceDiagram
 - **Web application shell:** an embedded single-page application (the client core `Sw`, the UI component library, the shell with header, menu and content frame, home and welcome pages, themes and file viewers, see [`srcWeb/`](srcWeb/README.md)) that other projects extend with their own pages and menus.
 - **HTTPS and firewall:** certificate binding from certificate provider services (`CertificateBinder`) and optional firewall rules per listen prefix (`FirewallHandler.Instance` picks `WindowsFirewallHandler`, `LinuxFirewallHandler` or `NoFirewallHandler`).
 - **Diagnostics:** tables of APIs, sessions, users, caches, MIME types, template variables and transformer caches.
+- **Audit:** services implementing `IApiAuditService` receive the calls to methods marked `[WebApiAudit]`, services implementing `IApiAuditReportService` make them searchable in the audit browser ([`srcWeb/audit`](srcWeb/audit/README.md)).
 - **In-process API invocation** (`IApiHttpServerEndPoint.InvokeAsync`) for AI tools and other services. It performs no auth, rate limit or cache checks, so callers must check `Auth` themselves.
 
 ## App icon, logo and banner
@@ -227,11 +228,12 @@ The result is serialized by the serializer the `Accept` header asks for (the def
 
 | Folder | Content |
 |---|---|
+| [`Audit/`](Audit/README.md) | Types and tools for searching and reporting audited API calls (`IApiAuditReportService`) |
 | [`Auth/`](Auth/README.md) | Exceptions for missing sessions, missing or existing logins and insufficient tokens |
 | [`CachedTransformer/`](CachedTransformer/README.md) | Base class and contracts of the disc-cached file transformers |
 | [`Security/`](Security/README.md) | Firewall handlers for Windows (netsh) and Linux (ufw, firewalld, nftables) |
 | [`Services/`](Services/README.md) | Service contracts for user images and user storage |
-| [`srcWeb/`](srcWeb/README.md) | Source of the embedded web client: the start page `index.html`, the client core, UI library and application shell (`core/`, `ui/`, `shell/`, bundled into `sw/`), file viewers (`view/`), start pages (`app/`), the theme and legacy bundle (`common/`), brand fonts (`brand/`) and template help (`help/`) |
+| [`srcWeb/`](srcWeb/README.md) | Source of the embedded web client: the start page `index.html`, the client core, UI library and application shell (`core/`, `ui/`, `shell/`, bundled into `sw/`), file viewers (`view/`), start pages (`app/`), the audit browser (`audit/`), the theme and legacy bundle (`common/`), brand fonts (`brand/`) and template help (`help/`) |
 
 ## Relationships
 
