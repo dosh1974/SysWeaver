@@ -210,6 +210,54 @@ namespace SysWeaver.AI
                 Interlocked.Exchange(ref LastUseTicks, DateTime.UtcNow.Ticks);
                 Interlocked.Increment(ref Requests);
             }
+
+            /// <summary>
+            /// The session the server is bound to (see <see cref="Bind"/>), null if none
+            /// </summary>
+            public HttpSession Session { get; private set; }
+
+            Action<HttpSession> OnClose;
+            Action<HttpSession, String> OnLogout;
+            Action<HttpSession> OnLogin;
+
+            /// <summary>
+            /// Bind the server to a session: the tools run as the session, and the server is removed when the session is closed,
+            /// when its user signs out or when another user signs in on it
+            /// </summary>
+            /// <param name="owner">The service that owns the temporary server</param>
+            /// <param name="session">The session</param>
+            public void Bind(McpService owner, HttpSession session)
+            {
+                Session = session;
+                Service.RunAsSession = session;
+                Service.RunAsUser = UserGuid;
+                var guid = Guid;
+                var user = UserGuid;
+                OnClose = _ => owner.RemoveTemp(guid, "the session that started it was closed");
+                OnLogout = (_, _) => owner.RemoveTemp(guid, "the user that started it signed out");
+                OnLogin = s =>
+                {
+                    if (!String.Equals(s.Auth?.Guid, user, StringComparison.Ordinal))
+                        owner.RemoveTemp(guid, "another user signed in on the session that started it");
+                };
+                session.OnClose += OnClose;
+                session.OnAuthLogout += OnLogout;
+                session.OnAuthLogin += OnLogin;
+            }
+
+            /// <summary>
+            /// Stop listening to the events of the bound session (so the session doesn't reference the server)
+            /// </summary>
+            public void Unbind()
+            {
+                var s = Session;
+                if (s == null)
+                    return;
+                Session = null;
+                s.OnClose -= OnClose;
+                s.OnAuthLogout -= OnLogout;
+                s.OnAuthLogin -= OnLogin;
+            }
         }
 
         /// <summary>
@@ -261,9 +309,12 @@ namespace SysWeaver.AI
         /// <param name="userGuid">The guid of the user that creates the server (only that user can remove it)</param>
         /// <param name="onlyForAuths">Optional set of auth tokens, if non null only methods that requires one of the tokens are exposed (see <see cref="AddWebApiTools(object, bool, IReadOnlySet{string}, string)"/>)</param>
         /// <param name="instructions">Optional instructions reported to MCP clients, null to use McpParams.Instructions</param>
+        /// <param name="session">Optional session to bind the server to: every tool call runs as this session (methods that take the request get a request with this session,
+        /// so its user, instead of the API key session of the MCP request), and the server is removed when the session is closed, when its user signs out
+        /// or when another user signs in on it. Null runs the tools as the session of the MCP request (the API key user).</param>
         /// <returns>The guid, API key and url of the server</returns>
-        public McpTempServerInfo CreateTempServer(Object[] instancesOrTypeNames, String userGuid, IReadOnlySet<String> onlyForAuths = null, String instructions = null)
-            => CreateTempServerFrom(instancesOrTypeNames.Nullable().Select(x => new TempServerSource(x, null, null)), userGuid, onlyForAuths, instructions, null);
+        public McpTempServerInfo CreateTempServer(Object[] instancesOrTypeNames, String userGuid, IReadOnlySet<String> onlyForAuths = null, String instructions = null, HttpSession session = null)
+            => CreateTempServerFrom(instancesOrTypeNames.Nullable().Select(x => new TempServerSource(x, null, null)), userGuid, onlyForAuths, instructions, null, session);
 
         /// <summary>
         /// What to expose from an instance on a temporary server
@@ -289,16 +340,19 @@ namespace SysWeaver.AI
         }
 
         /// <summary>
-        /// Create a temporary MCP server (see <see cref="CreateTempServer(object[], string, IReadOnlySet{string}, string)"/>) with the selected [WebApi] methods and AI tools of each instance
+        /// Create a temporary MCP server (see <see cref="CreateTempServer(object[], string, IReadOnlySet{string}, string, HttpSession)"/>) with the selected [WebApi] methods and AI tools of each instance
         /// </summary>
         /// <param name="sources">The instances (or type names) and what to expose of each</param>
         /// <param name="userGuid">The guid of the user that creates the server</param>
         /// <param name="onlyForAuths">Optional auth filter</param>
         /// <param name="instructions">Optional instructions reported to MCP clients, null to use McpParams.Instructions</param>
         /// <param name="warnings">Optional warnings found before (they are kept with the server), null for none</param>
+        /// <param name="session">Optional session to bind the server to (see <see cref="CreateTempServer(object[], string, IReadOnlySet{string}, string, HttpSession)"/>)</param>
         /// <returns>The guid, API key and url of the server</returns>
-        McpTempServerInfo CreateTempServerFrom(IEnumerable<TempServerSource> sources, String userGuid, IReadOnlySet<String> onlyForAuths, String instructions, List<String> warnings)
+        McpTempServerInfo CreateTempServerFrom(IEnumerable<TempServerSource> sources, String userGuid, IReadOnlySet<String> onlyForAuths, String instructions, List<String> warnings, HttpSession session)
         {
+            if ((session != null) && !String.Equals(session.Auth?.Guid, userGuid, StringComparison.Ordinal))
+                throw new InvalidOperationException("The session to bind the temporary MCP server to doesn't have the user " + userGuid.ToQuoted());
             ObjectDisposedException.ThrowIf(Volatile.Read(ref IsDisposed) != 0, this);
             if (IsTemp)
                 throw new InvalidOperationException("A temporary MCP server can't create temporary servers");
@@ -359,6 +413,9 @@ namespace SysWeaver.AI
             }
             var key = SecureRng.GetHashGuid24();
             var temp = new TempServer(service, guid, userGuid, key, token, services.ToArray(), warnings.ToArray());
+            //  Bound before the API key works, so no tool can run as the API key session
+            if (session != null)
+                temp.Bind(this, session);
             TempServers[guid] = temp;
             TempApiKeys[key] = temp;
             lock (TempServers)
@@ -373,6 +430,12 @@ namespace SysWeaver.AI
                     var interval = TimeSpan.FromSeconds(Math.Clamp(TempLifetime.TotalSeconds / 10, 5, 60));
                     TempTimer = new Timer(_ => RemoveExpiredTemps(), null, interval, interval);
                 }
+            }
+            //  The session may have ended (or changed user) before the server was registered (its events found nothing to remove)
+            if ((session != null) && !String.Equals(session.Auth?.Guid, userGuid, StringComparison.Ordinal))
+            {
+                RemoveTemp(guid, "the session that started it ended while it was created");
+                throw new InvalidOperationException("The session ended while the temporary MCP server was created");
             }
             Msg?.AddMessage(MessageLevels.Info, $"{LogPrefix}Created the temporary MCP server {url.ToQuoted()} with {service.Tools.Count} tool(s) for the user {userGuid.ToQuoted()}");
             return new McpTempServerInfo
@@ -641,6 +704,8 @@ namespace SysWeaver.AI
         /// Use <see cref="GetDebugMcpServices"/> to get the services and methods that can be selected.
         /// Without a selection (no request, or no services in it), the monitoring API's are exposed: the service manager, the http server, the explorer, the log file and the charts (logs, performance, statistics, problems, sessions etc).
         /// Only methods that the current user may use can be exposed, the tools of the server only require the API key of the server.
+        /// The server is bound to the session of this request: the tools run as this session and its user (methods that take the request get this session),
+        /// and the server is removed when the session is closed, when the user signs out or when another user signs in on it.
         /// The server is removed McpParams.TempServerLifetimeMinutes (default 60) after the last request to it, or when removed using <see cref="RemoveTempServer"/>.
         /// </summary>
         /// <param name="r">The services and methods to expose, null for the monitoring API's</param>
@@ -688,7 +753,7 @@ namespace SysWeaver.AI
                 throw new HttpResponseException(400, warnings.Count > 0
                     ? "Nothing to expose: " + String.Join(", ", warnings)
                     : "Nothing to expose, select at least one API or AI tool");
-            var info = CreateTempServerFrom(sources, user, null, DebugInstructions, warnings);
+            var info = CreateTempServerFrom(sources, user, null, DebugInstructions, warnings, context.Session);
             info.Url = context.Prefix + info.Url;
             return info;
         }
@@ -742,6 +807,7 @@ namespace SysWeaver.AI
         {
             if (!TempServers.TryRemove(guid, out var t))
                 return false;
+            t.Unbind();
             TempApiKeys.TryRemove(t.ApiKey, out var _);
             //  Invalidates the cached authorizations (AuthManager)
             Interlocked.Increment(ref InternalChangeCounter);

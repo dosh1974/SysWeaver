@@ -287,8 +287,61 @@
     overflow-wrap: anywhere;
 }
 
+/* The table hosts: a fixed height (set by the resize bar under them), the table fits in it (HostFit) and the rows scroll inside */
 .mcpd-table {
-    min-height: 8rem;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* The bar under a table that changes its height (mcp_tools.js resizer), same look as the resize bars of the audit browser */
+.mcpd-resizer {
+    position: relative;
+    height: var(--sw-space-3);
+    cursor: row-resize;
+    touch-action: none;
+    outline: none;
+    border-top: 1px solid var(--sw-line);
+}
+
+    /* The grip */
+    .mcpd-resizer::after {
+        content: "";
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 2.5rem;
+        height: 4px;
+        transform: translate(-50%, -50%);
+        border-radius: var(--sw-radius-pill);
+        background: var(--sw-border);
+    }
+
+    /* A line along the whole bar while it is dragged or has the keyboard focus */
+    .mcpd-resizer::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 50%;
+        height: 1px;
+        background: var(--sw-focus);
+        opacity: 0;
+    }
+
+    .mcpd-resizer.sw-dragging::before, .mcpd-resizer:focus-visible::before {
+        opacity: 1;
+    }
+
+    .mcpd-resizer.sw-dragging::after, .mcpd-resizer:focus-visible::after {
+        background: var(--sw-focus);
+    }
+
+@media (hover: hover) {
+    .mcpd-resizer:hover::after {
+        background: var(--sw-text-3);
+    }
 }
 
 /* ------------------------------------------------------------------ narrow screens */

@@ -11,9 +11,11 @@
  *   (key "SysWeaver.McpDebug.Selection") and the summary line says how many tools from how many services are selected.
  * - "Start debug" calls Api/StartDebugMcp with the selection (only the services with something selected): a temporary MCP server is started,
  *   its guid, url and API key are kept in the session storage (key "McpDebug") so a reload of the page keeps showing it.
- * - The connection card shows the full url of the server, the API key and the authorization header (both redacted: only the last 4
- *   characters are shown), each with a copy button that copies the real value, "Copy config" (an MCP client configuration with the url
- *   and the key) and the exposed services. The status line (Api/CheckDebugMcp: calls, errors, last error, time to expiration)
+ * - The connection card shows the full url of the server and the authorization header (redacted: only the last 4 characters of the key
+ *   are shown), each with a copy button that copies the real value, "Copy config" (an MCP client configuration with the url and the key)
+ *   and the exposed services.
+ * - The Connection, Calls and Tools cards are collapsible (Sw.Card Collapsible, remembered). The Calls and Tools tables are in hosts with a
+ *   fixed height (HostFit) that the bar under them changes (resizer: drag, keyboard, double click resets; remembered). The status line (Api/CheckDebugMcp: calls, errors, last error, time to expiration)
  *   is refreshed every 10 s, when the server is gone (expired or removed elsewhere) the page goes back to the stopped state.
  * - "Stop debug" calls Api/RemoveTempServer.
  * - Two live tables: the MCP call log (Api/CallLogTable) and the MCP tools (Api/ToolTable), with Param = the guid of the debug server
@@ -67,6 +69,87 @@
                 remove();
             }
         });
+    }
+
+    /**
+     * Get or set a remembered height (local storage, a per viewer convenience: a failure is ignored).
+     * @param {string} key The name.
+     * @param {number} [px] The height to store, leave out to get it.
+     * @returns {number} The stored height (0 if none) when getting.
+     */
+    function storedHeight(key, px) {
+        key = "SysWeaver.McpDebug." + key;
+        try {
+            if (px === undefined)
+                return Number(localStorage.getItem(key)) || 0;
+            localStorage.setItem(key, String(Math.round(px)));
+        }
+        catch {
+            //  (private mode or blocked storage: not remembered)
+        }
+        return 0;
+    }
+
+    /**
+     * A bar under an element that changes its height by dragging it (or with the keyboard: Up / Down, Shift for larger steps,
+     * Home / End = the smallest / largest height); a double click (or double tap) or Enter resets the height. The height is remembered.
+     * @param {HTMLElement} target The element to resize.
+     * @param {string} key The name of the remembered height.
+     * @param {string} label The accessible name (and tool tip) of the bar.
+     * @returns {HTMLElement} The bar.
+     */
+    function resizer(target, key, label) {
+        const def = 360;
+        const min = 160;
+        const max = () => Math.max(min, Math.round(window.innerHeight * 0.9));
+        const bar = el("div.mcpd-resizer", {
+            tabIndex: 0,
+            title: label,
+            attrs: { role: "separator", "aria-orientation": "horizontal", "aria-label": label },
+        });
+        const size = px => {
+            const v = Math.round(Math.max(min, Math.min(max(), px)));
+            target.style.height = v + "px";
+            bar.setAttribute("aria-valuenow", String(v));
+            bar.setAttribute("aria-valuemin", String(min));
+            bar.setAttribute("aria-valuemax", String(Math.round(max())));
+        };
+        const store = () => storedHeight(key, target.offsetHeight);
+        size(storedHeight(key) || def);
+        let start = 0;
+        let lastTap = 0;
+        Sw.Drag(bar, {
+            Threshold: 0,
+            OnStart: ev => {
+                ev.preventDefault();
+                const now = performance.now();
+                if (now - lastTap < 320) {
+                    lastTap = 0;
+                    size(def);
+                    store();
+                    return false;
+                }
+                lastTap = now;
+                start = target.offsetHeight;
+            },
+            OnMove: (ev, s) => size(start + s.DY),
+            OnEnd: store,
+        });
+        bar.addEventListener("keydown", ev => {
+            const step = ev.shiftKey ? 40 : 8;
+            const cur = target.offsetHeight;
+            switch (ev.key) {
+                case "ArrowUp": size(cur - step); break;
+                case "ArrowDown": size(cur + step); break;
+                case "Home": size(min); break;
+                case "End": size(max()); break;
+                case "Enter": size(def); break;
+                default: return;
+            }
+            ev.preventDefault();
+            store();
+        });
+        return bar;
     }
 
     /**
@@ -474,10 +557,6 @@
             _TF("MCP url", "Label of the full url of the temporary MCP server"),
             _TF("MCP url", "What the copy button next to the url of the temporary MCP server copies"),
             fullUrl, false);
-        const keyRow = connRow(
-            _TF("API key", "Label of the (redacted) API key of the temporary MCP server"),
-            _TF("API key", "What the copy button next to the API key of the temporary MCP server copies"),
-            () => state ? state.ApiKey : "", true);
         const headerRow = connRow(
             _TF("Header", "Label of the (redacted) http authorization header to use with the temporary MCP server"),
             _TF("authorization header", "What the copy button next to the authorization header of the temporary MCP server copies"),
@@ -487,7 +566,6 @@
         /** Show the url and the (redacted) credentials of the running server. */
         function showConnection() {
             urlRow.ValueE.textContent = fullUrl();
-            keyRow.ValueE.textContent = state ? redact(state.ApiKey) : "";
             headerRow.ValueE.textContent = state ? "Authorization: Bearer " + redact(state.ApiKey) : "";
         }
 
@@ -502,14 +580,23 @@
         const conn = Sw.Card({
             Title: _TF("Connection", "Title of the card with the url and API key of the temporary MCP server"),
             Actions: [copyConfig],
-            Body: el("div.mcpd-conn", null, el("div.mcpd-rows", null, urlRow.E, keyRow.E, headerRow.E), credHint, statusE, exposedE),
+            Collapsible: true, StateKey: "connection",
+            Body: el("div.mcpd-conn", null, el("div.mcpd-rows", null, urlRow.E, headerRow.E), credHint, statusE, exposedE),
         });
         page.Add(conn);
 
         const callsE = el("div.mcpd-table");
         const toolsE = el("div.mcpd-table");
-        const callsCard = Sw.Card({ Title: _TF("Calls", "Title of the card with the latest tool calls of the MCP server"), Body: callsE, Flush: true });
-        const toolsCard = Sw.Card({ Title: _TF("Tools", "Title of the card with the tools served by the MCP server"), Body: toolsE, Flush: true });
+        const callsCard = Sw.Card({
+            Title: _TF("Calls", "Title of the card with the latest tool calls of the MCP server"), Flush: true,
+            Collapsible: true, StateKey: "calls",
+            Body: [callsE, resizer(callsE, "CallsHeight", _TF("Resize the calls", "Accessible name of the bar under the calls table of the MCP debug page that changes its height"))],
+        });
+        const toolsCard = Sw.Card({
+            Title: _TF("Tools", "Title of the card with the tools served by the MCP server"), Flush: true,
+            Collapsible: true, StateKey: "tools",
+            Body: [toolsE, resizer(toolsE, "ToolsHeight", _TF("Resize the tools", "Accessible name of the bar under the tools table of the MCP debug page that changes its height"))],
+        });
         page.Add(callsCard, toolsCard);
 
         /** @type {Array<object>} The live tables (Sw.Table). */
@@ -547,8 +634,9 @@
             toolsE.replaceChildren();
             callsCard.SetSub(p ? _TF("Debug server", "Sub title of a table card when it shows the data of the temporary MCP server") : _TF("Main end point", "Sub title of a table card when it shows the data of the main MCP end point"));
             toolsCard.SetSub(callsCard.SubE.textContent);
-            tables.push(await Sw.Table.Create({ Url: "../Api/CallLogTable", Element: callsE, Param: p, Name: _TF("MCP calls", "Name of the table with the latest MCP tool calls") }));
-            tables.push(await Sw.Table.Create({ Url: "../Api/ToolTable", Element: toolsE, Param: p, Name: _TF("MCP tools", "Name of the table with the MCP tools") }));
+            //  (HostFit: the tables stay in their resizable hosts, the rows scroll inside)
+            tables.push(await Sw.Table.Create({ Url: "../Api/CallLogTable", Element: callsE, Param: p, HostFit: true, Name: _TF("MCP calls", "Name of the table with the latest MCP tool calls") }));
+            tables.push(await Sw.Table.Create({ Url: "../Api/ToolTable", Element: toolsE, Param: p, HostFit: true, Name: _TF("MCP tools", "Name of the table with the MCP tools") }));
         }
 
         /**

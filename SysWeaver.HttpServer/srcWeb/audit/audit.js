@@ -465,7 +465,7 @@ class AuditBrowser {
         t.Axis = Sw.el("div.ab-axis", { attrs: { "aria-hidden": "true" } });
         t.ChartBody = Sw.el("div.ab-chart-body", { id: "ab-chart-body" }, t.Plot, t.Axis);
         t.ChartToggle = new Sw.Button({
-            Icon: "minus", Kind: "ghost", Small: true, Class: "ab-chart-toggle",
+            Icon: "down", Kind: "ghost", Small: true, Class: "ab-chart-toggle",
             Title: _TF("Hide the chart", "Tool tip of a button that hides the chart of the number of calls over time in the audit browser"),
             OnClick: () => t.SetChartOpen(t.ChartBody.hidden),
         });
@@ -577,7 +577,8 @@ class AuditBrowser {
         const t = this;
         t.ChartBody.hidden = !open;
         t.ChartE.classList.toggle("is-collapsed", !open);
-        t.ChartToggle.SetIcon(open ? "minus" : "plus");
+        //  The arrows of every collapsible part (down: open, right: collapsed), as the cards and value lists
+        t.ChartToggle.SetIcon(open ? "down" : "right");
         t.ChartToggle.SetTitle(open
             ? _TF("Hide the chart", "Tool tip of a button that hides the chart of the number of calls over time in the audit browser")
             : _TF("Show the chart", "Tool tip of a button that shows the chart of the number of calls over time in the audit browser"));

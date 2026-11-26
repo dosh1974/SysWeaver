@@ -61,6 +61,18 @@ namespace SysWeaver.Net
         /// <param name="request">The request (alive)</param>
         /// <returns>A function that makes a copy</returns>
         public static Func<ManualHttpServerRequest> Detacher(HttpServerRequest request)
+            => Detacher(request, request?.Session);
+
+        /// <summary>
+        /// Get a function that makes a detached copy of a request that uses another session: the same method, url, prefix, host and client address, no body,
+        /// and the given session (so the user of that session). Used to run work on behalf of another session (ex: the tools of a temporary MCP server run as the
+        /// session that created the server).
+        /// Call it while the request is alive (it reads the request at once); each call of the returned function makes a new copy (dispose it when done).
+        /// </summary>
+        /// <param name="request">The request (alive)</param>
+        /// <param name="session">The session of the copies</param>
+        /// <returns>A function that makes a copy</returns>
+        public static Func<ManualHttpServerRequest> Detacher(HttpServerRequest request, HttpSession session)
         {
             ArgumentNullException.ThrowIfNull(request);
             var method = request.Method;
@@ -68,7 +80,6 @@ namespace SysWeaver.Net
             var prefix = request.Prefix;
             var server = request.Server;
             var host = request.Host;
-            var session = request.Session;
             IPAddress ip = null;
             try
             {

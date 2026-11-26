@@ -238,13 +238,13 @@ namespace SysWeaver.AI
         /// <summary>
         /// The latest tool calls of the MCP end point, with input, output and caller (at most McpParams.CallLogSize calls are kept in memory).
         /// If the Param of the request is the guid of a temporary server (see CreateTempServer), the calls of that server are returned instead.
+        /// Shown on the MCP debug page (Admin > MCP debug).
         /// </summary>
         /// <param name="r">Table request parameters (paging, sorting, filtering)</param>
         /// <returns>A table with one row per call, latest first</returns>
         [WebApi]
         [WebApiAuth(Roles.Admin)]
         [WebApiClientCache(1)]
-        [WebMenuTable(null, "Admin/{0}", "MCP call log", "The latest tool calls of the MCP end point, with input, output and caller", "IconTableLog")]
         public TypedTableData<CallLogRow> CallLogTable(TableDataRequest r)
             => (TryGetTempServer(r?.Param)?.Service ?? this).GetCallLogTable(r);
 

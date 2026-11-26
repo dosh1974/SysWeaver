@@ -186,6 +186,17 @@ namespace SysWeaver.AI
         /// True for a temporary server (see <see cref="CreateTempServer"/>)
         /// </summary>
         readonly bool IsTemp;
+
+        /// <summary>
+        /// A temporary server bound to a session (see <see cref="CreateTempServer"/>): the session that tools are run as, null to run them as the session of the MCP request
+        /// </summary>
+        HttpSession RunAsSession;
+
+        /// <summary>
+        /// The guid of the user of <see cref="RunAsSession"/> when the server was created, a call is refused if the session has another (or no) user
+        /// </summary>
+        String RunAsUser;
+
         readonly String Url;
         readonly int MaxRequestSize;
         readonly String ServerName;
@@ -852,13 +863,13 @@ namespace SysWeaver.AI
         /// <summary>
         /// All tools served by the MCP end point, with kind, auth, description, input schema, implementing service and usage.
         /// If the Param of the request is the guid of a temporary server (see CreateTempServer), the tools of that server are returned instead.
+        /// Shown on the MCP debug page (Admin > MCP debug).
         /// </summary>
         /// <param name="r">Table request parameters (paging, sorting, filtering)</param>
         /// <returns>A table with one row per tool</returns>
         [WebApi]
         [WebApiAuth(Roles.Admin)]
         [WebApiClientCache(4)]
-        [WebMenuTable(null, "Admin/{0}", "MCP tools", "All tools served by the MCP end point, with auth, parameters and usage", "IconTable")]
         public TypedTableData<ToolRow> ToolTable(TableDataRequest r)
             => (TryGetTempServer(r?.Param)?.Service ?? this).GetToolTable(r);
 
@@ -1517,14 +1528,29 @@ namespace SysWeaver.AI
                 throw new RpcException(ErrInvalidParams, err);
             }
             var tool = entry.Tool;
+            //  A temporary server bound to a session: the tool runs as that session (and its user), not as the API key session of the MCP request
+            ManualHttpServerRequest runAs = null;
+            var runAsSession = RunAsSession;
+            if (runAsSession != null)
+            {
+                if (!String.Equals(runAsSession.Auth?.Guid, RunAsUser, StringComparison.Ordinal))
+                {
+                    const String gone = "The session that started this MCP server has ended (or another user signed in on it), the server is closing";
+                    LogCall(r, name, args, gone, true, TimeSpan.Zero, null, null);
+                    throw new RpcException(ErrInvalidRequest, gone);
+                }
+                runAs = ManualHttpServerRequest.Detacher(r, runAsSession)();
+            }
+            using var runAsDispose = runAs;
+            HttpServerRequest ir = (HttpServerRequest)runAs ?? r;
             var started = Stopwatch.GetTimestamp();
             //  Same as the AI chat: a json object with a single property (the method argument)
             var b = args.ValueKind == JsonValueKind.Object ? BinaryData.FromString(args.GetRawText()) : null;
             String text;
             bool isError = false;
             //  Tools may use a tool context (to attach files etc), same as in the AI chat
-            var context = new McpToolContext(r, (mime, data, filename) => StoreFile(r, mime, data, filename));
-            var props = r.Properties;
+            var context = new McpToolContext(ir, (mime, data, filename) => StoreFile(ir, mime, data, filename));
+            var props = ir.Properties;
             props[OpenAiToolExt.RequestAiToolContext] = context;
             using (PerfMon.Track(name))
             {
@@ -1532,8 +1558,8 @@ namespace SysWeaver.AI
                 try
                 {
                     text = entry.File != null
-                        ? await InvokeFile(r, entry, args, context).ConfigureAwait(false)
-                        : ToText(await tool.Invoke(b, r).ConfigureAwait(false));
+                        ? await InvokeFile(ir, entry, args, context).ConfigureAwait(false)
+                        : ToText(await tool.Invoke(b, ir).ConfigureAwait(false));
                 }
                 catch (Exception ex)
                 {

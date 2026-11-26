@@ -74,7 +74,7 @@ namespace SysWeaver.AI
         public int MaxRequestSize = 4 << 20;
 
         /// <summary>
-        /// The number of tool calls that are kept in memory (with input, output and caller) for the call log table (Admin > MCP call log), 0 disables the log
+        /// The number of tool calls that are kept in memory (with input, output and caller) for the call log table (the Calls table of Admin > MCP debug), 0 disables the log
         /// </summary>
         public int CallLogSize = 256;
 
