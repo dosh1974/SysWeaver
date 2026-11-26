@@ -11,4 +11,8 @@
   <PropertyGroup>
 	  <Features>runtime-async=on</Features>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Folder Include="Location\" />
+  </ItemGroup>
 </Project>

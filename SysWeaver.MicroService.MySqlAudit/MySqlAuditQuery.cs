@@ -54,7 +54,9 @@ namespace SysWeaver.MicroService
         const String DurationSql = "(CASE WHEN c.`State`=0 THEN NULL ELSE TIMESTAMPDIFF(MICROSECOND,c.`Begin`,c.`End`)/1000.0 END)";
         const String DateFormat = ",'%Y-%m-%d %H:%i:%s')";
 
-        static readonly String SessionSql = String.Concat("(CASE WHEN IFNULL(c.`Session`,'')='' THEN NULL WHEN CHAR_LENGTH(c.`Session`)>", ApiAuditTools.SessionChars,
+        //  Same as ApiAuditTools.RedactSession: a session id (the hash of the token) is shown as is, a session token (rows of older versions) is redacted
+        static readonly String SessionSql = String.Concat("(CASE WHEN IFNULL(c.`Session`,'')='' THEN NULL WHEN CHAR_LENGTH(c.`Session`)=", SysWeaver.Net.HttpSession.TokenHashLength,
+            " THEN c.`Session` WHEN CHAR_LENGTH(c.`Session`)>", ApiAuditTools.SessionChars,
             " THEN CONCAT(LEFT(c.`Session`,", ApiAuditTools.SessionChars, "),'" + ApiAuditTools.SessionSuffix + "') ELSE '" + ApiAuditTools.SessionSuffix + "' END)");
 
         static readonly String StateTextSql = String.Concat("(CASE c.`State` ", String.Join(' ', Enum.GetValues<ApiAuditStates>().Select(x => String.Concat("WHEN ", (int)x, " THEN '", x, '\''))), " ELSE CAST(c.`State` AS CHAR) END)");

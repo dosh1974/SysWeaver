@@ -348,11 +348,11 @@ namespace SysWeaver.Net
         readonly Dictionary<String, Job> Jobs = new Dictionary<string, Job>(StringComparer.Ordinal);
 
         /// <summary>
-        /// The owner keys of a caller: the first one owns new jobs ("u:" + user guid when signed in, else "s:" + session token), any of them gives access
+        /// The owner keys of a caller: the first one owns new jobs ("u:" + user guid when signed in, else "s:" + session token hash), any of them gives access
         /// (a visitor that signs in keeps the jobs of the session).
         /// </summary>
         /// <param name="userGuid">The guid of the signed in user, null if not signed in</param>
-        /// <param name="sessionToken">The session token, may be null</param>
+        /// <param name="sessionToken">The session token hash (HttpSession.TokenHash, never the token itself), may be null</param>
         /// <returns>The owner keys, the owner of new jobs first</returns>
         public static String[] OwnersOf(String userGuid, String sessionToken)
         {

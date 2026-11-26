@@ -1278,7 +1278,7 @@
         + ".sw-actline:empty{display:none}"
         + ".sw-actline-item{display:flex;align-items:center;gap:8px;min-height:44px;padding:4px 8px 4px 12px;border-radius:var(--sw-radius-md,8px);"
         + "background:var(--sw-bg-1,Canvas);border:1px solid var(--sw-border,GrayText);box-shadow:var(--sw-elev-2,0 4px 16px rgba(0,0,0,.2))}"
-        + ".sw-actline-text{flex:1 1 auto;min-width:0;overflow-wrap:anywhere}"
+        + ".sw-actline-text{flex:1 1 auto;min-width:0;overflow-wrap:anywhere;user-select:text;-webkit-user-select:text}"
         + ".sw-actline-item[data-state=failed]{border-color:var(--sw-danger,#c00)}"
         + ".sw-actline-item>button.sw-actline-btn{min-height:44px;min-width:44px;font:inherit;background:none;border:1px solid var(--sw-border,GrayText);"
         + "border-radius:var(--sw-radius-sm,4px);color:inherit;padding:0 10px;cursor:pointer}"

@@ -17,14 +17,16 @@
 
 | Item | Description |
 |---|---|
-| [`DbUser.cs`](DbUser.cs) | Table `Users`: id, creation time, user name, domain, language and nick name |
+| [`DbUser.cs`](DbUser.cs) | Table `Users`: id, creation time, domain, language and the protected user name and nick name (`Rnd`, lookup hash `NameKey`, encrypted `NameEnc` / `NickEnc`; `UserName` / `NickName` are not stored, filled when read) |
 | [`DbUserAdminRow.cs`](DbUserAdminRow.cs) | A read-only view of table `Users` for the Users page (`UserAdminTable`): the `DbUser` columns plus the row actions (force password reset, undo forced reset, disable, enable) |
 | [`DbAuthMethod.cs`](DbAuthMethod.cs) | Abstract base of sign-in methods: owning user id, creation and last use time |
-| [`DbAuthPassword.cs`](DbAuthPassword.cs) | Table `AuthPasswords`: salted password hash and the "must reset password" flag |
+| [`DbAuthPassword.cs`](DbAuthPassword.cs) | Table `AuthPasswords`: the client salt, the SCRAM verifier (`ScramSalt`, `ScramIterations`, `StoredKey`, null for no password) and the "must reset password" flag |
 | [`DbAuthPassKey.cs`](DbAuthPassKey.cs) | Table `AuthPasskeys`: passkey credential id, device, public key, user handle, relying party id, signature counter, transports, backup state and AAGUID |
-| [`DbEmailAddress.cs`](DbEmailAddress.cs) | Table `Emails`: e-mail address to user mapping |
-| [`DbPhoneNumber.cs`](DbPhoneNumber.cs) | Table `PhoneNumbers`: phone number to user mapping |
-| [`DbAction.cs`](DbAction.cs) | Table `Actions`: pending action tokens (type, expiration, serialized data) sent by e-mail or SMS |
+| [`DbEmailAddress.cs`](DbEmailAddress.cs) | Table `Emails`: e-mail address to user mapping, protected (primary key `Key` = lookup hash, `Rnd`, encrypted `Enc`; `Email` is not stored) |
+| [`DbPhoneNumber.cs`](DbPhoneNumber.cs) | Table `PhoneNumbers`: phone number to user mapping, protected as `Emails` (`Phone` is not stored) |
+| [`IDbProtectedValue.cs`](IDbProtectedValue.cs) | The common shape of the protected value tables (`Emails`, `PhoneNumbers`) |
+| [`DbUserManagerMeta.cs`](DbUserManagerMeta.cs) | Table `UserManagerMeta`: name / value pairs of the service, ex: the fingerprint of the data protection secret |
+| [`DbAction.cs`](DbAction.cs) | Table `Actions`: pending action tokens (type, expiration, serialized data) sent by e-mail or SMS; `Token` is a keyed hash of the token, `Data` is encrypted |
 | [`DbToken.cs`](DbToken.cs) | Table `Tokens`: tokens linked to a user id |
 | [`DbUserData.cs`](DbUserData.cs) | Per-user key/value data: `DbUserDataBase` with the tables `UserDataT` (binary) and `UserDataString` (text) |
 
@@ -32,4 +34,4 @@
 
 - **Part of:** [SysWeaver.MicroService.UserManager](../README.md)
 - **Uses:** [SysWeaver.DbSimpleStack.MySql](../../SysWeaver.DbSimpleStack.MySql/README.md)
-- **Related:** passkey rows are used by [SysWeaver.MicroService.PassKey](../../SysWeaver.MicroService.PassKey/README.md) through the user manager
+- **Related:** passkey rows are used by [SysWeaver.MicroService.PassKey](../../SysWeaver.MicroService.PassKey/README.md) through the `AuthorizerBase` passkey methods of the user manager

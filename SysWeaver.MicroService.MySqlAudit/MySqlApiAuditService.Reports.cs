@@ -29,7 +29,14 @@ namespace SysWeaver.MicroService
                 Storage = "MySql",
                 MaxDataLength = MaxDataLength,
                 TimeResolution = 1000,
+                HaveIpLocation = Manager?.TryGet<IIpLocation>() != null,
             });
+
+        /// <inheritdoc />
+        [WebApi]
+        [WebApiAuth(ApiAuditTools.ReadAuth)]
+        public Task<Location> GetIpLocation(String ip)
+            => ApiAuditTools.GetIpLocation(Manager?.TryGet<IIpLocation>(), ip);
 
         /// <inheritdoc />
         [WebApi]

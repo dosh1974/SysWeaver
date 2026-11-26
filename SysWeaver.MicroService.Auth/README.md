@@ -30,12 +30,13 @@ flowchart LR
 ## Key features
 
 - Browser login and logout pages, plus the *User* menu with *Sign in* (`LoginService`) and *Sign out* (`AuthManagerService`, order 1000: always the last item), shipped as embedded assets
-- Salted client-side hashing with a one-time pad, so the password hash is never sent in a replayable form
+- Salted client-side hashing with a one-time pad: `GetUserSalt` answers `[salt, pad]` (legacy authorizers) or `[salt, pad, "s1", scramSalt, iterations, binding]` (SCRAM, see `SysWeaver.Auth.Core/Scram.cs`); `Login` takes `{OneTimePad, Hash}` (legacy) or `{OneTimePad, ClientNonce, ClientProof}` (SCRAM). Neither can be replayed, and with SCRAM the stored verifier can't be used to sign in. `auth/Auth.js` computes PBKDF2 with `crypto.subtle`, with a pure JS fallback on plain HTTP
 - One-time token login (`TokenAuth`), typically used to hand a session over from another page or app
 - Current user information (`GetUser`) and per-user password policies for the UI
 - E-mail address and international phone number validation APIs (backed by ISO phone prefix data)
 - User images under `auth/UserImages/[Guid]/[Size]`, served by any registered `IUserImageHandler` (for example [CustomUserImage](../SysWeaver.MicroService.CustomUserImage/README.md)), falling back to an `IDefaultUserImageHandler` (for example [Avatar](../SysWeaver.MicroService.Avatar/README.md)) or a generated SVG
-- Login calls are audited (with the password hash filtered out)
+- Login calls are audited (only the user name of the one-time pad is logged, never the hash or proof)
+- `GetUserSalt` and `Login` (and the passkey sign in calls of [SysWeaver.MicroService.PassKey](../SysWeaver.MicroService.PassKey/README.md)) are rate limited per process (permissive) and per client address (`[WebApiIpRateLimit]`, conservative); being audited, `Login` also counts for the intrusion detection of [SysWeaver.HttpServer](../SysWeaver.HttpServer/README.md). There is no Basic fallback in the sign in page: header auth is for API keys (see `SimpleAuthorizer` in [SysWeaver.Auth.Core](../SysWeaver.Auth.Core/README.md))
 - Forced password change: an authorizer throws `PasswordChangeRequiredException` (only after the password was verified, ex: `UserManagerService.ForcePasswordReset`); `Login` then creates no session and answers `AuthInfo.PasswordChangeRequired` with `SentTo` (where the link and code to choose a new password were sent), the sign in page shows that
 
 ## Key components

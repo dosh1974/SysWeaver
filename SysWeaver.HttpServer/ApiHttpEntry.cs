@@ -895,8 +895,28 @@ namespace SysWeaver.Net
                 onStart, onEnd, onException, auditGroup, fixAuditParams, fixAuditReturn,
                 serviceRateLimiter, sessionRateLimiter, decoder
                 );
+            var ilimiter = method.GetCustomAttribute<WebApiIpRateLimitAttribute>(true);
+            if (ilimiter != null)
+            {
+                e.IpRateLimiters = new HttpIpRateLimiters(new HttpRateLimiterParams
+                {
+                    Count = ilimiter.Count,
+                    Duration = ilimiter.Duration,
+                    MaxDelay = ilimiter.MaxDelay,
+                    MaxQueue = ilimiter.MaxQueue,
+                });
+            }
+            //  Intrusion tracking: explicit attribute wins, else audited API's are tracked (if the server tracks them)
+            var it = method.GetCustomAttribute<WebApiIntrusionTrackAttribute>(true);
+            e.IntrusionTrack = it == null ? (auditGroup != null ? (bool?)null : false) : it.Track;
             return e;
         }
+
+        /// <summary>
+        /// Intrusion tracking of this API: true = always tracked (<see cref="WebApiIntrusionTrackAttribute"/>), false = never,
+        /// null = tracked if audited API's are tracked (<see cref="IntrusionDetectionParams.TrackAuditedApis"/>).
+        /// </summary>
+        public bool? IntrusionTrack { get; private set; }
 
         /// <summary>
         /// The audit group from <see cref="WebApiAuditAttribute"/> (<c>&quot;Default&quot;</c> if empty), null if the method isn't audited.
@@ -971,6 +991,18 @@ namespace SysWeaver.Net
         /// Parameters for per session rate limiters (from <see cref="WebApiSessionRateLimitAttribute"/>), null if not limited.
         /// </summary>
         readonly HttpRateLimiterParams SessionRateLimiterParams;
+
+        /// <summary>
+        /// Per client address rate limiters (from <see cref="WebApiIpRateLimitAttribute"/>), null if not limited.
+        /// </summary>
+        HttpIpRateLimiters IpRateLimiters;
+
+        /// <summary>
+        /// Get the rate limiter of this end point for the client address of a request.
+        /// </summary>
+        /// <param name="request">The request</param>
+        /// <returns>The limiter, or null if the method doesn't have a <see cref="WebApiIpRateLimitAttribute"/>.</returns>
+        public HttpRateLimiter IpRateLimiter(HttpServerRequest request) => IpRateLimiters?.Get(request);
 
         /// <summary>
         /// Get (or lazily create) the rate limiter for this end point in the given session.

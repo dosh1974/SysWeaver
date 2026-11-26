@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Threading.Tasks;
+using SysWeaver.Net;
 
 namespace SysWeaver.IpLocation.Sources
 {
+
     /// <summary>
     /// A source of ip locations
     /// </summary>
@@ -19,7 +21,10 @@ namespace SysWeaver.IpLocation.Sources
         /// <param name="ip">The ip address</param>
         /// <returns>The location, null if it isn't known</returns>
         /// <exception cref="Exception">If the look up failed (the next source is then tried)</exception>
-        Task<IpLocation> LookUp(String ip);
+        Task<Location> LookUp(String ip);
     }
+
+
+
 
 }

@@ -1,8 +1,7 @@
 ﻿/*
  * Auth.css - styles of the auth pages (SysWeaver.MicroService.Auth, served as auth/Auth.css).
  *
- * Styles the page frame and widgets of AuthUi.js (Sw.AuthUi): the centered card (form.auth-box, also class
- * SysWeaver-AuthBox for old css hooks), the page icon, fields (Sw.TextBox based .auth-field, phone flag), the status
+ * Styles the page frame and widgets of AuthUi.js (Sw.AuthUi): the centered card (form.auth-box), the page icon, fields (Sw.TextBox based .auth-field, phone flag), the status
  * line, headings, texts, button rows, the segment selector and popups, the login product header and sizing. Used by every auth/ page of the four
  * contributing projects (MicroService.Auth, Auth.Core, MicroService.PassKey, MicroService.UserManager).
  *
@@ -125,14 +124,6 @@ html:not(.Embedded) body.auth-body:has(.auth-tool) {
     .auth-page.auth-tool .auth-icon-wrap.auth-has-image {
         justify-content: flex-start;
     }
-
-/* A box inside a dialog (legacy CreateAuthWrapper): no card styling. */
-form.auth-box.auth-inline {
-    width: auto;
-    padding: 0;
-    background: none;
-    border: none;
-}
 
 /* ===== Page icon ===== */
 
@@ -754,7 +745,7 @@ body.auth-dialog-page {
    The card takes the full row (no 28 / 36 / 48rem width), so Sw.Bleed (ui/page.js) can move it over the page padding to the window
    edges (no side borders, square corners). Last in the file: wins over every page width rule above. */
 @media (max-width: 599px) {
-    :root .auth-page form.auth-box:not(.auth-inline) {
+    :root .auth-page form.auth-box {
         width: auto;
         flex: 1 1 auto;
     }
@@ -797,3 +788,9 @@ body.auth-dialog-page {
         align-items: center;
         min-height: max(var(--sw-control-h), 2.75rem);
     }
+
+/* The status lines, rules, names and values of the auth pages (UX guide INP-30: text that changes from run to run can be selected and copied) */
+:where(.auth-status, .auth-text, .auth-rule, .auth-popup-text, .auth-item-name, .auth-item-line, .auth-item-value) {
+    user-select: text;
+    -webkit-user-select: text;
+}

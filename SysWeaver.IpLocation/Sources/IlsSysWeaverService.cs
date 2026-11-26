@@ -1,7 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace SysWeaver.IpLocation.Sources
@@ -47,7 +45,7 @@ namespace SysWeaver.IpLocation.Sources
         }
 
         /// <inheritdoc />
-        public async Task<IpLocation> LookUp(string ip)
+        public async Task<Net.Location> LookUp(string ip)
         {
             var r = await Remote.GetLocation(ip).ConfigureAwait(false);
             if (r == null)

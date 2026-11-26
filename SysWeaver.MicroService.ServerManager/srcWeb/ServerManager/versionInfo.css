@@ -9,3 +9,9 @@
 .vi-page .sw-fact-value {
     overflow-wrap: anywhere;
 }
+
+/* The title (the service and the version) (UX guide INP-30: text that changes from run to run can be selected and copied) */
+:where(.vi-page .sw-ph-title) {
+    user-select: text;
+    -webkit-user-select: text;
+}

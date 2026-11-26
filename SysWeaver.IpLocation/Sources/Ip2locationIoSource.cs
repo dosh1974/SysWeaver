@@ -2,7 +2,9 @@
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using SysWeaver.Net;
 using SysWeaver.Serialization;
+
 
 namespace SysWeaver.IpLocation.Sources
 {
@@ -62,12 +64,12 @@ namespace SysWeaver.IpLocation.Sources
 #pragma warning restore CS0649
 
         /// <inheritdoc />
-        public async Task<IpLocation> LookUp(string ip)
+        public async Task<Location> LookUp(string ip)
         {
             var url = Api + ip;
             byte[] data = await Client.GetByteArrayAsync(url).ConfigureAwait(false);
             var d = S.Create<Data>(data.AsSpan());
-            return new IpLocation(d.country_code,
+            return new Location(d.country_code,
                 d.latitude,
                 d.longitude,
                 StringExt.JoinNonEmpty("\n", StringExt.JoinNonEmpty(" ", d.zip_code, d.city_name), d.region_name, d.country_name),

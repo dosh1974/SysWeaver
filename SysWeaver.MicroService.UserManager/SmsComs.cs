@@ -78,7 +78,7 @@ namespace SysWeaver.MicroService
         {
             bool haveLang = messages != null;
             var m = haveLang ? messages.GetText(ops) : Messages[(int)ops];
-            //  Localized message folders made before the forced reset template existed: use the reset template
+            //  Localized message folders without the forced reset template use the reset template
             if ((m == null) && haveLang && (ops == UserManagerComOps.ForcedResetPassword))
                 m = messages.GetText(UserManagerComOps.ResetPassword);
             if (m == null)

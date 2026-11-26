@@ -243,7 +243,49 @@ namespace SysWeaver.OsServices
 
 
         /// <summary>
+        /// Test if a registered command line differs from the expected (case insensitive, as Windows paths are).
+        /// </summary>
+        /// <param name="registered">The registered command line.</param>
+        /// <param name="expected">The command line that should be registered.</param>
+        /// <returns>True if the registered command line is outdated.</returns>
+        static bool IsOutdatedCommand(String registered, String expected)
+            => !String.Equals((registered ?? "").Trim(), expected.Trim(), StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Update the registration of an installed service, if the command line, display name or description differs from what <see cref="Install"/> would use
+        /// (ex: the folder or the executable was renamed).
+        /// Everything else is kept: the account (and its password), startup type, failure actions and dependencies.
+        /// </summary>
+        /// <returns>False if the command line is outdated and couldn't be changed (the display name and description are best effort).</returns>
+        bool RepairRegistration()
+        {
+            var p = P;
+            var name = p.Name;
+            if (!Win32ServiceManager.GetRegistration(out var command, out var displayName, name))
+                return true;
+            var expected = ServiceHost.GetCommand("daemon");
+            if (IsOutdatedCommand(command, expected))
+            {
+                if (!Win32ServiceManager.SetCommand(name, expected))
+                {
+                    Console.WriteLine("Failed to update the registered command line from: " + command + ", to: " + expected);
+                    return false;
+                }
+                Console.WriteLine("Updated the registered command line from: " + command + ", to: " + expected);
+            }
+            var expectedName = p.DisplayName;
+            if ((!String.IsNullOrEmpty(expectedName)) && !String.Equals(displayName, expectedName, StringComparison.Ordinal))
+                Win32ServiceManager.SetDisplayName(name, expectedName);
+            var desc = p.Description ?? "";
+            if (!String.Equals(Win32ServiceManager.GetDescription(name, true) ?? "", desc, StringComparison.Ordinal))
+                Win32ServiceManager.SetDescription(name, desc, true);
+            return true;
+        }
+
+        /// <summary>
         /// Install (if needed) and start the service. NOTE: a paused service is not resumed (returns <see cref="ServiceResponse.StartFailed"/>).
+        /// If the service is installed but not running, an outdated registration (command line, display name or description) is updated first, the account etc is kept
+        /// (returns <see cref="ServiceResponse.InstallFailed"/> if the command line couldn't be updated).
         /// </summary>
         /// <returns>The result.</returns>
         public ServiceResponse Start()
@@ -272,6 +314,13 @@ namespace SysWeaver.OsServices
             {
                 if (WaitForWhile(name, ServiceState.Starting, ServiceState.Run) == ServiceState.Run)
                     return ServiceResponse.AlreadyStarting;
+                status = Win32ServiceManager.GetServiceStatus(name);
+            }
+            //  Never change the registration of a service that is running (ex: "start" of another copy of the executable)
+            if ((c == ServiceResponse.AlreadyInstalled) && ((status == ServiceState.Stop) || (status == ServiceState.Stopping)))
+            {
+                if (!RepairRegistration())
+                    return ServiceResponse.InstallFailed;
             }
             try
             {

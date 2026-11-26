@@ -12,7 +12,15 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\SysWeaver.AI\SysWeaver.AI.csproj" />
+    <ProjectReference Include="..\SysWeaver.AI.Tools\SysWeaver.AI.Tools.csproj" />
+    <ProjectReference Include="..\SysWeaver.MicroServices.ServiceManager\SysWeaver.MicroServices.ServiceManager.csproj" />
   </ItemGroup>
+
+  <Target Name="EmbedLocal" BeforeTargets="BeforeBuild">
+    <Exec Command="..\_tools\compress\Compress.exe -Methods br .\srcWeb\*+ .\web" />
+    <ItemGroup>
+      <EmbeddedResource Include="web\**\*.br" Visible="false" />
+    </ItemGroup>
+  </Target>
 
 </Project>

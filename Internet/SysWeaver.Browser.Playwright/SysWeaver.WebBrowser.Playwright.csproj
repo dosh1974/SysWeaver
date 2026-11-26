@@ -15,6 +15,36 @@
 	  <PackageReference Include="Microsoft.Playwright" Version="1.64.1" />
 	</ItemGroup>
 
+	<PropertyGroup>
+		<!-- Bundle Playwright's headless Chromium with every app using this (Windows builds only), set to false (ex: in a Directory.Build.props) to not bundle it -->
+		<SwPlaywrightBundleBrowser Condition="'$(SwPlaywrightBundleBrowser)' == '' and $([MSBuild]::IsOSPlatform('Windows'))">true</SwPlaywrightBundleBrowser>
+	</PropertyGroup>
+
+	<!-- Download the headless Chromium made for this Playwright version (once per version, shared by all builds) and copy it to the output / publish folder of the apps, as .playwright-browsers -->
+	<Target Name="SwPlaywrightBundleBrowser" BeforeTargets="AssignTargetPaths" Condition="'$(SwPlaywrightBundleBrowser)' == 'true'">
+		<PropertyGroup>
+			<_SwPlaywrightVersion>@(PackageReference->WithMetadataValue('Identity', 'Microsoft.Playwright')->'%(Version)')</_SwPlaywrightVersion>
+			<_SwPlaywrightDriver>$(NuGetPackageRoot)microsoft.playwright\$(_SwPlaywrightVersion)\.playwright\</_SwPlaywrightDriver>
+			<_SwPlaywrightCache>$(LOCALAPPDATA)\SysWeaver\PlaywrightBrowsers\$(_SwPlaywrightVersion)\</_SwPlaywrightCache>
+		</PropertyGroup>
+		<ItemGroup>
+			<_SwPlaywrightInstalled Include="$(_SwPlaywrightCache)chromium_headless_shell-*\INSTALLATION_COMPLETE" />
+		</ItemGroup>
+		<Message Condition="'@(_SwPlaywrightInstalled)' == ''" Importance="high" Text="Downloading the Playwright $(_SwPlaywrightVersion) headless Chromium to $(_SwPlaywrightCache)" />
+		<Exec Condition="'@(_SwPlaywrightInstalled)' == ''" Command="&quot;$(_SwPlaywrightDriver)node\win32_x64\node.exe&quot; &quot;$(_SwPlaywrightDriver)package\cli.js&quot; install --only-shell chromium" EnvironmentVariables="PLAYWRIGHT_BROWSERS_PATH=$(_SwPlaywrightCache)" StandardOutputImportance="low" />
+		<ItemGroup>
+			<_SwPlaywrightBrowserFiles Include="$(_SwPlaywrightCache)chromium_headless_shell-*\**" />
+			<Content Include="@(_SwPlaywrightBrowserFiles)">
+				<Link>.playwright-browsers\%(RecursiveDir)%(Filename)%(Extension)</Link>
+				<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+				<CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+				<Visible>false</Visible>
+				<Pack>false</Pack>
+			</Content>
+		</ItemGroup>
+		<Error Condition="'@(_SwPlaywrightBrowserFiles)' == ''" Text="Failed to download the Playwright $(_SwPlaywrightVersion) headless Chromium to $(_SwPlaywrightCache)" />
+	</Target>
+
 	<ItemGroup>
 	  <ProjectReference Include="..\..\SysWeaver.Common\SysWeaver.Common.csproj" />
 	  <ProjectReference Include="..\..\SysWeaver.WebBrowser\SysWeaver.WebBrowser.csproj" />

@@ -85,19 +85,19 @@ namespace SysWeaver.MicroService
 
         async Task<long> FindUser(OrmConnection c, String identifier)
         {
-            var user = await c.FirstOrDefaultAsync<DbUser>(x => x.UserName == identifier).ConfigureAwait(false);
+            var user = await FindDbUserByName(c, identifier).ConfigureAwait(false);
             if (user != null)
                 return user.Id;
             if (AuthMan.ValidateEmailAddress(identifier, false))
             {
-                var mail = await c.FirstOrDefaultAsync<DbEmailAddress>(x => x.Email == identifier).ConfigureAwait(false);
+                var mail = await FindDbEmail(c, identifier).ConfigureAwait(false);
                 if (mail != null)
                     return mail.UserId;
             }
             var pn = identifier;
             if (AuthMan.ValidatePhoneNumber(ref pn, false))
             {
-                var phone = await c.FirstOrDefaultAsync<DbPhoneNumber>(x => x.Phone == pn).ConfigureAwait(false);
+                var phone = await FindDbPhone(c, pn).ConfigureAwait(false);
                 if (phone != null)
                     return phone.UserId;
             }
@@ -107,10 +107,10 @@ namespace SysWeaver.MicroService
 
         async Task<Authorization> InternalAuthUser(OrmConnection c, long userId)
         {
-            var user = await c.FirstOrDefaultAsync<DbUser>(x => x.Id == userId).ConfigureAwait(false);
+            var user = await GetDbUser(c, userId).ConfigureAwait(false);
             if (user == null)
                 return null;
-            var mail = await c.FirstOrDefaultAsync<DbEmailAddress>(x => x.UserId == userId).ConfigureAwait(false);
+            var mail = await GetDbEmail(c, userId).ConfigureAwait(false);
             HashSet<String> tokens = new HashSet<string>(StringComparer.Ordinal);
             foreach (var x in await c.SelectAsync<DbToken>(x => x.UserId == userId).ConfigureAwait(false))
             {
@@ -152,11 +152,13 @@ namespace SysWeaver.MicroService
         /// <returns></returns>
         public override async Task<AuthorizationInfo> FindUserFromGuid(String userGuid)
         {
+            if (PiiReady.Task.IsFaulted)
+                return null;
             var id = GetUserId(userGuid);
             if (id == 0)
                 return null;
             Authorization a;
-            using (var c = await Db.GetAsync().ConfigureAwait(false))
+            using (var c = await DbGetAsync().ConfigureAwait(false))
                 a = await InternalAuthUser(c, id).ConfigureAwait(false);
             if (a == null)
                 return null;
@@ -170,10 +172,10 @@ namespace SysWeaver.MicroService
         /// <returns></returns>
         public override async Task<AuthorizationInfo> FindUser(String userName)
         {
-            if (DisableLogin)
+            if (LoginUnavailable)
                 return null;
             Authorization a;
-            using (var c = await Db.GetAsync().ConfigureAwait(false))
+            using (var c = await DbGetAsync().ConfigureAwait(false))
             {
                 var id = await FindUser(c, userName).ConfigureAwait(false);
                 if (id == 0)
@@ -187,38 +189,13 @@ namespace SysWeaver.MicroService
 
 
         /// <summary>
-        /// The base64 chars of a hash that are encoded on the stack (a SHA-256 hash is 44 chars)
-        /// </summary>
-        const int MaxStackPasswordHashChars = 128;
-
-        /// <summary>
-        /// Constant time compare of a stored password hash (base64) and a hash (the stored hash is password equivalent)
-        /// </summary>
-        static bool IsSamePasswordHash(String storedPwd, byte[] hash)
-        {
-            if (storedPwd == null)
-                return false;
-            //  The base64 text of the hash on the stack (the same chars as AuthTools.HashToString), a hash that doesn't fit uses the string
-            ReadOnlySpan<Byte> hs = hash;
-            scoped ReadOnlySpan<Char> h;
-            Span<Char> b = stackalloc Char[MaxStackPasswordHashChars];
-            if (Convert.TryToBase64Chars(hs, b, out var written))
-                h = b.Slice(0, written);
-            else
-                h = AuthTools.HashToString(hs);
-            return System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
-                System.Runtime.InteropServices.MemoryMarshal.AsBytes(storedPwd.AsSpan()),
-                System.Runtime.InteropServices.MemoryMarshal.AsBytes(h));
-        }
-
-        /// <summary>
-        /// True if a stored password can be used to sign in at all: it exists and has a hash (the placeholder that <see cref="GetSaltAsync"/> stores
-        /// for a user without a password has an empty hash, it must never match).
+        /// True if a stored password can be used to sign in at all: it exists and has a SCRAM verifier (the placeholder that <see cref="GetSaltAsync"/> stores
+        /// for a user without a password has neither, it must never match).
         /// </summary>
         /// <param name="auth">The stored password, may be null</param>
-        /// <returns>True if it has a hash</returns>
+        /// <returns>True if it has a verifier</returns>
         static bool IsUsablePassword(DbAuthPassword auth)
-            => (auth != null) && !String.IsNullOrEmpty(auth.Pwd);
+            => (auth != null) && !String.IsNullOrEmpty(auth.StoredKey);
 
         /// <summary>
         /// Start the password change of a user that signed in with a password that must be changed (<see cref="ForcePasswordReset"/>):
@@ -233,64 +210,26 @@ namespace SysWeaver.MicroService
             => InternalStartPasswordChange(userName, context);
 
         /// <summary>
-        /// Authorize a user
+        /// Sign in a user with a password check (SCRAM)
         /// </summary>
-        /// <param name="userName">The user name (email)</param>
-        /// <param name="hash">The password hash: hash(userName + salt)</param>
+        /// <param name="userName">The user name (email, phone)</param>
+        /// <param name="check">Validates the password proof against the stored password (never null)</param>
         /// <returns>The auth or null</returns>
-        public override async Task<Authorization> BasicAuth(string userName, byte[] hash)
+        async Task<Authorization> PasswordAuth(string userName, Func<DbAuthPassword, bool> check)
         {
-            if (DisableLogin)
+            if (LoginUnavailable)
                 return null;
-            if (!Params.AllowBasicAuth)
-                return null;
-            using (var c = await Db.GetAsync().ConfigureAwait(false))
-            {
-                using var tr = await c.BeginTransactionAsync().ConfigureAwait(false);
-                var id = await FindUser(c, userName).ConfigureAwait(false);
-                if (id == 0)
-                    return null;
-                var auth = await c.FirstOrDefaultAsync<DbAuthPassword>(x => x.UserId == id).ConfigureAwait(false);
-                //  no password (the placeholder of GetSaltAsync has an empty hash) or a password that must be changed first never signs in
-                if (!IsUsablePassword(auth))
-                    return null;
-                if (!IsSamePasswordHash(auth.Pwd, hash))
-                    return null;
-                if (auth.MustResetPassword)
-                    return null;
-                var a = await InternalAuthUser(c, id).ConfigureAwait(false);
-                if (a == null)
-                    return null;
-                auth.LastUsed = DateTime.UtcNow;
-                await c.UpdateAsync(auth, x => new { x.LastUsed }).ConfigureAwait(false);
-                tr.Commit();
-                return a;
-            }
-        }
-
-        /// <summary>
-        /// Authorize a user
-        /// </summary>
-        /// <param name="userName">The user name (email)</param>
-        /// <param name="hash">The password hash: SHA256(UTF8.GetBytes(ToBase64(SHA256(UTF8.GetBytes("userName.FastLower()|password|suffix|salt"))) | oneTimePad) where suffix is the Authorize.HashSuffix</param>
-        /// <param name="oneTimePad">The one time pad used</param>
-        /// <returns>The auth or null</returns>
-        public override async Task<Authorization> SecureAuth(string userName, byte[] hash, String oneTimePad)
-        {
-            if (DisableLogin)
-                return null;
-            using var c = await Db.GetAsync().ConfigureAwait(false);
+            using var c = await DbGetAsync().ConfigureAwait(false);
             using var tr = await c.BeginTransactionAsync().ConfigureAwait(false);
             var id = await FindUser(c, userName).ConfigureAwait(false);
             if (id == 0)
                 return null;
             var auth = await c.FirstOrDefaultAsync<DbAuthPassword>(x => x.UserId == id).ConfigureAwait(false);
-            //  no password (the placeholder of GetSaltAsync has an empty hash, before anyone could sign in as a passkey only user
+            //  no password (the placeholder of GetSaltAsync has no verifier, before anyone could sign in as a passkey only user
             //  with the hash of an empty string) never signs in
             if (!IsUsablePassword(auth))
                 return null;
-            var hh = AuthTools.ComputeHash(auth.Pwd, oneTimePad);
-            if (!System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(hh, hash))
+            if (!check(auth))
                 return null;
             var a = await InternalAuthUser(c, id).ConfigureAwait(false);
             if (a == null)
@@ -298,7 +237,7 @@ namespace SysWeaver.MicroService
                 //  the password is right but an administrator disabled the account (DisableUser): no session, the sign in page says so
                 //  (only to someone who knows the password; anyone else gets the usual "wrong user ID or password")
                 if (await IsDisabled(c, id).ConfigureAwait(false))
-                    throw new AccountDisabledException((await c.FirstOrDefaultAsync<DbUser>(x => x.Id == id).ConfigureAwait(false))?.UserName ?? userName);
+                    throw new AccountDisabledException((await GetDbUser(c, id).ConfigureAwait(false))?.UserName ?? userName);
                 return null;
             }
             //  the password is right but must be changed first (ForcePasswordReset): no session, the login service sends
@@ -321,9 +260,9 @@ namespace SysWeaver.MicroService
         /// <returns>A salt to use or null if the user doesn't exit</returns>
         public override async Task<String> GetSaltAsync(string userName)
         {
-            if (DisableLogin)
+            if (LoginUnavailable)
                 return null;
-            using var c = await Db.GetAsync().ConfigureAwait(false);
+            using var c = await DbGetAsync().ConfigureAwait(false);
             using var tr = await c.BeginTransactionAsync().ConfigureAwait(false);
             var id = String.IsNullOrEmpty(userName) ? 0 : await FindUser(c, userName).ConfigureAwait(false);
             if (id == 0)
@@ -345,7 +284,6 @@ namespace SysWeaver.MicroService
                 Created = now,
                 LastUsed = now,
                 MustResetPassword = true,
-                Pwd = "",
                 UserId = id,
                 Salt = salt,
             }).ConfigureAwait(false);

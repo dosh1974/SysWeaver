@@ -1,3 +1,4 @@
+using System;
 using System.Threading.Tasks;
 using SysWeaver.Data;
 
@@ -36,6 +37,14 @@ namespace SysWeaver.Net
         /// <param name="id">The id of the call</param>
         /// <returns>The API call (with client data), null if it doesn't exist (or if it's pruned)</returns>
         Task<ApiAuditEntry> GetEntry(long id);
+
+        /// <summary>
+        /// Get the estimated location of an ip address, using the ip location source of the service manager (if any).
+        /// Implement it with <see cref="ApiAuditTools.GetIpLocation(IIpLocation, string)"/>.
+        /// </summary>
+        /// <param name="ip">The ip address</param>
+        /// <returns>The location, null if there is no source, or if it isn't known</returns>
+        Task<Location> GetIpLocation(String ip);
 
         /// <summary>
         /// Get the most common values of some fields (with the number of calls), among the calls that match a query

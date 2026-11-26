@@ -196,11 +196,67 @@ namespace SysWeaver.OsServices
             item("restart", "restart the service process.");
             item("execute", "run as a command line program.");
             item("debug", "run as a command line program with more verbose output.");
-            item("hash [user] [password]", "compute and display a simple password hash.");
+            item("hash [user] [password]", "compute and display a users file line with a password verifier (\"$s1$...\", for the simple authorizer of this service).");
             ConsoleTools.ResetColor();
             var ci = i.ToExitCode(ServiceVerbs.Help);
             Environment.Exit(ci);
             return ci;
+        }
+
+        /// <summary>
+        /// Get the binding (<see cref="SimpleAuthorizerParams.AppHashString"/>) and iteration count (<see cref="SimpleAuthorizerParams.ScramIterations"/>)
+        /// of the <see cref="SimpleAuthorizer"/> in the service manifest of this executable, the defaults (entry assembly name, default iterations) if there is none.
+        /// </summary>
+        /// <returns>The binding, the iterations (0 is the default) and a warning (null if none)</returns>
+        static (String Binding, int Iterations, String Warning) GetSimpleAuthorizerBinding()
+        {
+            var binding = EnvInfo.AppAssemblyName;
+            int iterations = 0;
+            String warning = null;
+            var fn = ServiceManager.GetManifestFileName();
+            if (fn == null)
+                return (binding, iterations, null);
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(fn), new System.Text.Json.JsonDocumentOptions
+                {
+                    CommentHandling = System.Text.Json.JsonCommentHandling.Skip,
+                    AllowTrailingCommas = true,
+                });
+                if (doc.RootElement.ValueKind != System.Text.Json.JsonValueKind.Array)
+                    return (binding, iterations, null);
+                bool found = false;
+                foreach (var e in doc.RootElement.EnumerateArray())
+                {
+                    if ((e.ValueKind != System.Text.Json.JsonValueKind.Object) || !e.TryGetProperty("Type", out var t) || (t.ValueKind != System.Text.Json.JsonValueKind.String))
+                        continue;
+                    var tn = t.GetString() ?? "";
+                    if (!tn.StartsWith(typeof(SimpleAuthorizer).FullName + ",", StringComparison.Ordinal))
+                        continue;
+                    var b = EnvInfo.AppAssemblyName;
+                    int it = 0;
+                    if (e.TryGetProperty("Params", out var p) && (p.ValueKind == System.Text.Json.JsonValueKind.Object))
+                    {
+                        if (p.TryGetProperty(nameof(SimpleAuthorizerParams.AppHashString), out var a) && (a.ValueKind == System.Text.Json.JsonValueKind.String) && !String.IsNullOrEmpty(a.GetString()))
+                            b = a.GetString();
+                        if (p.TryGetProperty(nameof(SimpleAuthorizerParams.ScramIterations), out var i) && (i.ValueKind == System.Text.Json.JsonValueKind.Number))
+                            it = i.GetInt32();
+                    }
+                    if (found && ((b != binding) || (it != iterations)))
+                        warning = "The manifest has several simple authorizers with different settings, the first one is used";
+                    if (!found)
+                    {
+                        binding = b;
+                        iterations = it;
+                        found = true;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                warning = "Failed to read the manifest " + fn.ToQuoted() + " (the defaults are used): " + ex.Message;
+            }
+            return (binding, iterations, warning);
         }
 
         static int Hash(ServiceParams p, IServiceHost sm, String user, String password)
@@ -231,14 +287,21 @@ namespace SysWeaver.OsServices
                 Environment.Exit(ServiceResponseHelper.ExitInvalidArguments);
                 return ServiceResponseHelper.ExitInvalidArguments;
             }
+            var (binding, iterations, warning) = GetSimpleAuthorizerBinding();
+            if (warning != null)
+            {
+                ConsoleTools.ForegroundColor = ConsoleColor.DarkYellow;
+                Console.WriteLine(warning);
+            }
             ConsoleTools.ForegroundColor = ConsoleColor.Gray;
-            Console.Write("Hash: ");
+            Console.WriteLine("Binding: " + binding + ", iterations: " + ScramTools.ClampIterations(iterations));
+            Console.Write("User line: ");
             ConsoleTools.ForegroundColor = ConsoleColor.Yellow;
             Console.Write(user);
             ConsoleTools.ForegroundColor = ConsoleColor.Gray;
             Console.Write(":");
             ConsoleTools.ForegroundColor = ConsoleColor.White;
-            Console.WriteLine(AuthTools.ComputeSimplePasswordHash(user, password));
+            Console.WriteLine(AuthTools.ComputeSimpleVerifier(user, password, binding, iterations));
             ConsoleTools.ResetColor();
             ConsoleTools.SetProgress(ConsoleProgressDisplays.Disabled, 0);
             Environment.Exit(ServiceResponseHelper.ExitSuccess);
@@ -733,6 +796,48 @@ namespace SysWeaver.OsServices
         }
 
         /// <summary>
+        /// The maximum size of the error file, when exceeded the next error replaces the content (a service that fails is typically restarted over and over).
+        /// </summary>
+        const long MaxErrorFileSize = 2 << 20;
+
+        /// <summary>
+        /// Append an exception to the error file: "[<see cref="EnvInfo.ExecutableBase"/>].err", i.e. next to the default log file, ex: "MyService.err".
+        /// A process started by the OS has no console, and the exception may happen before there is a log (ex: an assembly that can't be loaded).
+        /// Never throws (the folder may not be writable).
+        /// </summary>
+        /// <param name="what">What failed.</param>
+        /// <param name="ex">The exception.</param>
+        static void WriteError(String what, Exception ex)
+            => WriteError(what + ":" + Environment.NewLine + ex.ToString());
+
+        /// <summary>
+        /// Append an error line to the error file: "[<see cref="EnvInfo.ExecutableBase"/>].err", see <see cref="WriteError(string, Exception)"/>.
+        /// Never throws (the folder may not be writable).
+        /// </summary>
+        /// <param name="text">The error text.</param>
+        static void WriteError(String text)
+        {
+            try
+            {
+                var fn = EnvInfo.ExecutableBase + ".err";
+                //  Only the verb, the other arguments may be secret (the password of "hash")
+                var args = Environment.GetCommandLineArgs();
+                text = String.Concat(
+                    DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss zzz", System.Globalization.CultureInfo.InvariantCulture),
+                    " [", args.Length > 1 ? args[1] : "", "] ",
+                    text, Environment.NewLine, Environment.NewLine);
+                var fi = new FileInfo(fn);
+                if (fi.Exists && (fi.Length > MaxErrorFileSize))
+                    File.WriteAllText(fn, text);
+                else
+                    File.AppendAllText(fn, text);
+            }
+            catch
+            {
+            }
+        }
+
+        /// <summary>
         /// Run this from the main entrypoint of a command line program to run as a service.
         /// The first command line argument is the verb (see <see cref="ServiceVerbs"/>), ex: "install", "start", "debug" or "daemon" (used by the OS).
         /// Services will be loaded and created from service manifest file named: "ExecutableFile.Services.json".
@@ -756,7 +861,8 @@ namespace SysWeaver.OsServices
         /// Verbs that need elevation are re-run elevated using <see cref="IServiceHost.RunElevated"/> when the process isn't elevated.
         /// In console mode ("debug"/"execute") 'Esc' (or SIGINT/SIGTERM/SIGHUP/SIGQUIT) shuts down and 'Space' toggles pause; the process first waits up to 15 seconds for
         /// another console mode instance of the same application (same <see cref="EnvInfo.Executable"/>, compared case insensitive, using a global named mutex) to exit.
-        /// Exceptions are caught and reported as exit code 1 (<see cref="ServiceResponse.GenericError"/>).
+        /// Exceptions are caught and reported as exit code 1 (<see cref="ServiceResponse.GenericError"/>), and appended to the file "[<see cref="EnvInfo.ExecutableBase"/>].err"
+        /// (next to the default log file, ex: "MyService.err"), as are invalid commands (unknown verb or wrong argument count, only the verb is written) and a missing service system.
         /// </remarks>
         public static int Run(ServiceParams p = null, Action<ServiceManager> onStart = null)
         {
@@ -808,6 +914,7 @@ namespace SysWeaver.OsServices
                             }
                             catch (Exception ex)
                             {
+                                WriteError("Failed to create service manager instance for type: " + dtype.FullName.ToQuoted(), ex);
                                 setProgress(ConsoleProgressDisplays.Error, 100);
                                 ConsoleTools.ForegroundColor = ConsoleColor.Yellow;
                                 Console.WriteLine("Failed to create service manager instance for type: \"" + dtype.FullName + "\", exception: " + ex);
@@ -831,6 +938,7 @@ namespace SysWeaver.OsServices
                 }
                 catch (Exception ex)
                 {
+                    WriteError("Failed to load service manager type: " + dname.ToQuoted(), ex);
                     setProgress(ConsoleProgressDisplays.Error, 100);
                     ConsoleTools.ForegroundColor = ConsoleColor.Yellow;
                     Console.WriteLine("Failed to load service manager type: \"" + dname + "\", exception: " + ex);
@@ -851,6 +959,8 @@ namespace SysWeaver.OsServices
                 {
                     if (!Verbs.TryGetValue(args[1].FastToLower(), out verb))
                     {
+                        //  The OS starts a service without a console, so the console output is lost: the file says why (the verb is in the line prefix)
+                        WriteError("Invalid command, unknown verb (" + (al - 1) + " arguments), the executable is: " + EnvInfo.HostExecutable.ToQuoted());
                         setProgress(ConsoleProgressDisplays.Error, 100);
                         Console.WriteLine("Invalid command: " + Environment.CommandLine.ToQuoted());
                         return Usage(p, ServiceResponse.InvalidCommad, serviceManager);
@@ -859,6 +969,8 @@ namespace SysWeaver.OsServices
                     expectedCount += 2;
                     if (al != expectedCount)
                     {
+                        //  Only the counts, the arguments may be secret (ex: the password of "hash")
+                        WriteError("Invalid command, expected " + (expectedCount - 1) + " arguments but got " + (al - 1));
                         setProgress(ConsoleProgressDisplays.Error, 100);
                         Console.WriteLine("Invalid command: " + Environment.CommandLine.ToQuoted());
                         return Usage(p, ServiceResponse.ToManyArgs, serviceManager);
@@ -868,6 +980,7 @@ namespace SysWeaver.OsServices
                 {
                     if (RequireServiceHost.Contains(verb))
                     {
+                        WriteError("Couldn't find a service system for this OS (" + Environment.OSVersion.Platform + "), expected a " + nameof(IServiceHostFactory).ToQuoted() + " type implementation named " + dname.ToQuoted());
                         setProgress(ConsoleProgressDisplays.Error, 100);
                         Header(p, serviceManager);
                         ConsoleTools.ForegroundColor = ConsoleColor.Red;
@@ -1168,8 +1281,9 @@ namespace SysWeaver.OsServices
                 setProgress(ConsoleProgressDisplays.Disabled, 0);
                 return toExitCode == null ? c : toExitCode(c);
             }
-            catch
+            catch (Exception ex)
             {
+                WriteError("Unhandled exception", ex);
                 setProgress(ConsoleProgressDisplays.Error, 100);
                 return ServiceResponseHelper.ExitGenericError;
             }

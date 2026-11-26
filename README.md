@@ -221,7 +221,7 @@ The server renders all other icons and logos from these three files, whether the
 
 ### Security
 
-Authentication is delegated to an `AuthManager` that consults pluggable authorizers (static users, a MySQL user manager, passkeys). Roles are plain tokens — standard ones are Admin, Ops, Dev, Debug and Service. Certificates come from provider services (file, self-signed, own CA, LAN manager, ACME). Sensitive calls can be audited.
+Authentication is delegated to an `AuthManager` that consults pluggable authorizers (static users, a MySQL user manager, passkeys). Roles are plain tokens — standard ones are Admin, Ops, Dev, Debug and Service. Certificates come from provider services (file, self-signed, own CA, LAN manager, ACME). Sensitive calls can be audited. Passwords use a SCRAM style sign in with stored verifiers, personal data, API keys and links are stored protected, and the server rate limits per client address and detects intrusions: see the [security summary](_docs/Security.md).
 
 ### Configuration and folders
 
@@ -494,6 +494,7 @@ flowchart LR
 | [SysWeaver.AI.LlamaSharp](SysWeaver.AI.LlamaSharp/README.md) | Local LLM integration for SysWeaver using LLamaSharp (llama.cpp): an AI service and chat provider that runs GGUF models in process and can call methods of your services as tools. |
 | [SysWeaver.AI.OpenAI](SysWeaver.AI.OpenAI/README.md) | LLM integration for SysWeaver using the OpenAI API (or any compatible endpoint): an AI service and chat provider that can call methods of your services as tools, generate and edit images, tokenize text and keep an AI memory. |
 | [SysWeaver.AI.LlmTranslator](SysWeaver.AI.LlmTranslator/README.md) | A translation back-end that uses a large language model through a SysWeaver AI service. |
+| [SysWeaver.AI.Tools](SysWeaver.AI.Tools/README.md) | Describe service methods as AI tools (name, description, JSON schema of the argument) and invoke them, without depending on an AI provider, chat or sessions. |
 | [SysWeaver.Chat](SysWeaver.Chat/README.md) | A chat framework: rooms/sessions with pluggable providers (simple in-memory rooms, MySQL-persisted rooms, AI assistants), real-time delivery, translation, file and link sharing and a web chat UI. |
 | [SysWeaver.Chat.MySql](SysWeaver.Chat.MySql/README.md) | Chat provider whose rooms and messages are persisted in MySQL. |
 | [SysWeaver.Translation.Google](SysWeaver.Translation.Google/README.md) | A translation back-end that uses Google's public translation web page. |

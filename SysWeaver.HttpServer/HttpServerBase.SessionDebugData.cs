@@ -6,14 +6,14 @@ namespace SysWeaver.Net
     public abstract partial class HttpServerBase
     {
         /// <summary>
-        /// A row in the active sessions debug table (<see cref="ActiveSessions"/>).
+        /// A row in the active sessions debug table (<see cref="ActiveSessions"/>), also returned by <see cref="SessionDetails"/>.
         /// </summary>
         /// <remarks>By default the table shows who (User, Address, UserAgent, Auth), when (Started, LastActivity), the state (Expired) and the
         /// actions; the other columns are [TableDataHide] (still sent, the user can show them with the column picker).</remarks>
         [SysWeaver.Data.TableDataCard("+session@monitoring/cards")]
-        [TableDataPrimaryKey(nameof(Token))]
+        [TableDataPrimaryKey(nameof(TokenHash))]
         [TableDataDefaultOrder("-" + nameof(LastActivity))]
-        sealed class SessionDebugData
+        public sealed class SessionDebugData
         {
             /// <summary>
             /// Create a snapshot of a session.
@@ -23,11 +23,11 @@ namespace SysWeaver.Net
             /// <param name="ended">True if the session is no longer active (it expired or was ended), it is then shown as expired</param>
             /// <param name="endedUser">The user that was signed in to an ended session (its auth is cleared when it ends), null if none or unknown</param>
             /// <param name="flag">True if the server serves the language flags (<see cref="HaveIsoFlags"/>), else <see cref="Flag"/> is null (no image that can't load)</param>
-            public SessionDebugData(HttpSession s, DateTime utcNow, bool ended = false, String endedUser = null, bool flag = true)
+            internal SessionDebugData(HttpSession s, DateTime utcNow, bool ended = false, String endedUser = null, bool flag = true)
             {
                 User = endedUser;
                 var nowTick = utcNow.Ticks;
-                Token = s.Token;
+                TokenHash = s.TokenHash;
                 var st = new DateTime(s.Start, DateTimeKind.Utc);
                 LastActivity = new DateTime(s.LastActivity, DateTimeKind.Utc);
                 var count = s.RequestInProgress;
@@ -63,10 +63,11 @@ namespace SysWeaver.Net
             }
 
             /// <summary>
-            /// Session token, this is the full token, <see cref="ActiveSessions"/> redacts it after the table has been built.
+            /// The session id: the hash of the session token (<see cref="HttpSession.TokenHash"/>), the same id as in the audits and logs.
+            /// The token itself is never shown (anyone knowing it could use the session).
             /// </summary>
             [TableDataHide]
-            public readonly String Token;
+            public readonly String TokenHash;
 
             /// <summary>
             /// True if the session has expired or was ended (it is no longer active)

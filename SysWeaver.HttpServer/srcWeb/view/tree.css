@@ -202,3 +202,9 @@
         white-space: nowrap;
     }
 }
+
+/* The status texts of the tree viewer (UX guide INP-30: text that changes from run to run can be selected and copied) */
+:where(.tv-status, .tv-found) {
+    user-select: text;
+    -webkit-user-select: text;
+}

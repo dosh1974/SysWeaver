@@ -83,6 +83,8 @@ namespace SysWeaver.MicroService
 
         /// <summary>
         /// Default auth for folders and services.
+        /// Synced folders (managed folders and the folders of managed services) also accept the "service_sync" token (<see cref="Roles.ServiceSync"/>),
+        /// so a sync client can push without access to the other server manager API's.
         /// Defaults to <see cref="Roles.Admin"/>.
         /// </summary>
         public String SyncAuth = Roles.Admin;

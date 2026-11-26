@@ -22,7 +22,8 @@ namespace SysWeaver.MicroService
 
         /// <summary>
         /// The auth required to sync this folder.
-        /// null is equal to Roles.Debug
+        /// null is equal to <see cref="Roles.ServiceSync"/> ("service_sync", "debug" or "dev").
+        /// The caller also needs <see cref="FolderSyncParams.ApiAuth"/>.
         /// </summary>
         public String Auth;
 

@@ -37,6 +37,12 @@ namespace SysWeaver
         public const String Service = "Service," + Debug + "," + Dev;
 
         /// <summary>
+        /// API's that folder synchronization clients (ex: SwSyncTool, FolderSyncer) use to push and pull folders.
+        /// A scoped service token ("service_sync"), so an API key with only this token can sync folders but not call other service API's.
+        /// </summary>
+        public const String ServiceSync = "Service_Sync," + Dev;
+
+        /// <summary>
         /// Combined Admin and Ops
         /// </summary>
         public const String AdminOps = Admin + ",Ops";
@@ -94,6 +100,10 @@ namespace SysWeaver
         /// The lower cased tokens of <see cref="DevAdminOps"/>.
         /// </summary>
         public static readonly IReadOnlyList<String> DevAdminOpsTokens = DevAdminOps.FastToLower().Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        /// <summary>
+        /// The lower cased tokens of <see cref="ServiceSync"/>.
+        /// </summary>
+        public static readonly IReadOnlyList<String> ServiceSyncTokens = ServiceSync.FastToLower().Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     }
 

@@ -1508,3 +1508,9 @@ html:has(body.ChatMain), body.ChatMain {
         transition: none;
     }
 }
+
+/* The sender, the time and the attachment and state texts (UX guide INP-30: text that changes from run to run can be selected and copied) */
+:where(.chat-name, .chat-time, .chat-att-title, .chat-att-status-text, .chat-message-text) {
+    user-select: text;
+    -webkit-user-select: text;
+}

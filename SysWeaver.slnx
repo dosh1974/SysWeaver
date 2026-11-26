@@ -59,6 +59,7 @@
   <Project Path="SysWeaver.AI.LlmTranslator/SysWeaver.AI.LlmTranslator.csproj" />
   <Project Path="SysWeaver.AI.McpService/SysWeaver.AI.McpService.csproj" />
   <Project Path="SysWeaver.AI.OpenAI/SysWeaver.AI.OpenAI.csproj" />
+  <Project Path="SysWeaver.AI.Tools/SysWeaver.AI.Tools.csproj" />
   <Project Path="SysWeaver.AI/SysWeaver.AI.csproj" />
   <Project Path="SysWeaver.AspHttpServer/SysWeaver.AspHttpServer.csproj" />
   <Project Path="SysWeaver.Auth.Core/SysWeaver.Auth.Core.csproj" />

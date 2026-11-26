@@ -30,9 +30,11 @@ namespace SysWeaver.Auth
         /// "username:password:token1, token2, token3"
         /// An application specific domain can be appended after another colon or bar, ex: "username:password:tokens:domain".
         /// The password may therefore not contain ':' or '|'.
-        /// Password could be a simple hash (a base64 encoded SHA256, see <see cref="AuthTools.ComputeSimplePasswordHash(string, string)"/>, can be generated using the "Generate password hash" debug page).
-        /// Simple hashes are unique per user per application (entry assembly name).
-        /// Any 44 char password that is valid base64 of 32 bytes is used as a hash (so such a clear text password can't be used).
+        /// Password should be a SCRAM verifier: "$s1$iterations$salt$storedKey" (see <see cref="ScramVerifier"/>, generated using the "Generate password hash" page).
+        /// A verifier can't be used to sign in, it must be brute forced (PBKDF2 per guess) to find the password.
+        /// Password can also be clear text (hashed and turned into a verifier when loaded).
+        /// Verifiers are unique per user per application (<see cref="AppHashString"/>, default is the entry assembly name).
+        /// A 44 char password that is valid base64 of 32 bytes is a password hash, not a password: such users are skipped with a warning.
         /// Clear text passwords must fulfill the <see cref="PasswordPolicy"/>, users with invalid passwords are skipped.
         /// Users with a too long name (over <see cref="AuhorizationLimits.MaxUserNameLength"/> chars) or domain (over <see cref="AuhorizationLimits.MaxDomainName"/> chars) are skipped with a warning message, the other users are still loaded.
         /// User names are case insensitive (the last definition of a name wins), white spaces around the parts are trimmed, empty lines and lines starting with "#" or "//" are ignored.
@@ -46,22 +48,63 @@ namespace SysWeaver.Auth
         public PasswordPolicy PasswordPolicy;
 
         /// <summary>
-        /// If true (and the server accepts basic auth), then users are allowed to login using basic auth.
-        /// Users with the "service" token are always allowed to use basic auth.
+        /// If true (and the server accepts the Authorization header), then the users of the file / configuration are also allowed to login using basic auth.
+        /// By default (false) only API keys can use header auth (basic / bearer), they are meant for services (the users of the file / configuration sign in with the login page).
+        /// Basic auth compares the password hash (no PBKDF2 per request), so it only works for users defined with a clear text password.
         /// </summary>
         public bool AllowBasicAuth;
 
         /// <summary>
-        /// If non-null, API keys can be created and deleted, users logged in using these keys will have the tokens specified here (comma separated).
+        /// If non-null, API keys can be created and deleted, and this is the tokens of a new key when none are given (comma separated).
+        /// Every key has its own tokens: at least one, each "service" or "service_&lt;scope&gt;" (see <see cref="SimpleAuthorizer.NormalizeApiKeyTokens"/>),
+        /// an invalid value here disables API keys (with an error message).
         /// API keys can be used as bearer tokens, and they are allowed to use basic auth (http server still need to allow for it).
+        /// An API key only gets access to what requires one of its tokens, never to what any logged in user may use (an empty requirement, see <see cref="Authorization.IsApiKey"/>).
+        /// Each service token is a token of its own: "service_&lt;scope&gt;" does not fulfill a "service" requirement and "service" does not fulfill a "service_&lt;scope&gt;" requirement.
+        /// A requirement with a service token is also fulfilled by "debug" and "dev" (see <see cref="Authorization.ServiceImpliedTokens"/>).
         /// </summary>
         public String ApiKeyAuth = "Service";
+
+        /// <summary>
+        /// If true (the default) users can be added and removed at run time and their tokens changed (the "Stored users" page, by users with the "admin" or "debug" token),
+        /// they are stored encrypted in <see cref="KeyValueStore.AllApp"/> (see <see cref="SimpleAuthorizer.AddStoredUser"/>).
+        /// </summary>
+        public bool AllowStoredUsers = true;
 
         /// <summary>
         /// The auth (comma separated tokens) required to manage API keys.
         /// null is treated as the default (<see cref="Roles.AdminOps"/>), use <see cref="Roles.Disabled"/> ("-") to disable API key management.
         /// </summary>
         public String ApiKeyManagementAuth = Roles.AdminOps;
+
+        #region Password hashing
+
+        /// <summary>
+        /// The string that binds stored password values to this application.
+        /// It's part of the simple salt (<see cref="AuthTools.ComputeSimpleSalt(string, string)"/>) and of the SCRAM verifier input.
+        /// null (the default) uses the entry assembly name, set it to the same value in all applications that should share a users file.
+        /// Changing it invalidates all stored verifiers.
+        /// </summary>
+        public String AppHashString;
+
+        /// <summary>
+        /// The PBKDF2 iteration count of verifiers created by the server (clear text passwords), 0 or less uses <see cref="ScramTools.DefaultIterations"/>.
+        /// Verifiers in the "$s1$..." format carry their own iteration count.
+        /// </summary>
+        public int ScramIterations;
+
+        #endregion//Password hashing
+
+        #region Passkeys
+
+        /// <summary>
+        /// If true the users can add passkeys and sign in with them (requires the passkey service).
+        /// The passkeys are stored in <see cref="KeyValueStore.AllApp"/>, the users of the file / configuration can't be changed.
+        /// API key users (weak authorizations) can never add passkeys.
+        /// </summary>
+        public bool AllowPasskeys = true;
+
+        #endregion//Passkeys
 
     }
 

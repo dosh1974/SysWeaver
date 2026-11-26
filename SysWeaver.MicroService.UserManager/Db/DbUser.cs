@@ -36,12 +36,9 @@ namespace SysWeaver.MicroService.Db
         
         
         /// <summary>
-        /// The user name
+        /// The user name (not stored in plain text: protected in <see cref="NameKey"/> and <see cref="NameEnc"/>, filled when the row is read by the user manager)
         /// </summary>
-        [Index(true)]
-        [Required]
-        [StringLength(AuhorizationLimits.MaxUserNameLength)]
-        [CaseInsensitive]
+        [Ignore]
         public string UserName { get; set; }
 
         /// <summary>
@@ -61,10 +58,40 @@ namespace SysWeaver.MicroService.Db
 
 
         /// <summary>
-        /// Nick name
+        /// Nick name (not stored in plain text: protected in <see cref="NickEnc"/>, filled when the row is read by the user manager)
         /// </summary>
-        [StringLength(AuhorizationLimits.MaxNickNameLength)]
+        [Ignore]
         public string NickName { get; set; }
+
+        /// <summary>
+        /// The random value of the row, used to encrypt the user name and nick name (replaced on every change), see <see cref="SysWeaver.Auth.DataProtection"/>
+        /// </summary>
+        [TableDataIgnore]
+        [Required]
+        public byte[] Rnd { get; set; }
+
+        /// <summary>
+        /// The lookup hash of the normalized (trimmed, lower case) user name as lower case hex (unique, used to find a user by name)
+        /// </summary>
+        [TableDataIgnore]
+        [Index(true)]
+        [Required]
+        [Ascii]
+        [StringLength(64)]
+        public string NameKey { get; set; }
+
+        /// <summary>
+        /// The encrypted user name (original casing)
+        /// </summary>
+        [TableDataIgnore]
+        [Required]
+        public byte[] NameEnc { get; set; }
+
+        /// <summary>
+        /// The encrypted nick name, null if none
+        /// </summary>
+        [TableDataIgnore]
+        public byte[] NickEnc { get; set; }
     }
 
 }

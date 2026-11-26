@@ -66,7 +66,7 @@ using var s = await CompressedFile.OpenAsync(path, CompManager.GetFromHttp("br")
 - Designed for small-to-medium values and moderate write rates; it is not a database (no queries, transactions or indexing). Every operation reads or writes all copies of a key, and redundancy multiplies disc usage.
 - Keys are used as file names and must be valid file names (no path separators, `:` etc.); invalid keys throw an `ArgumentException`. Keys are never transformed, so callers building keys from arbitrary text must sanitize them (ex: `PathExt.SafeFilename`).
 - The serializer and the compression method aren't stored with the data, so they must not change for an existing store. An unknown serializer or compression code makes `KeyValueStore.Get` throw.
-- Before 2026-10-07 `UserApp`, `AllShared` and `UserShared` were the same instance as `AllApp`; they now have their own locations and read (and copy) a key they don't have from `AllApp`.
+- `UserApp`, `AllShared` and `UserShared` have their own locations and read (and copy) a key they don't have from `AllApp`.
 - **Security**: stores that aren't per user (`AllApp`, `AllShared`, custom stores with `PerUser = false`) use folders that grant all local users read and write access. Don't store secrets or security relevant settings in them (ex: the API keys that `SimpleAuthorizer` keeps in `AllApp`).
 - Locks are not re-entrant (taking the same lock twice from one flow dead locks), rely on cooperative use of a shared lock folder and wait by polling (10 ms, no fairness). `FileMetaData` processing holds a lock per key type, key suffix and content hash, so processing the same key type and suffix from inside its own callback dead locks.
 - Cleanup of caches and temp folders only happens at process exit.

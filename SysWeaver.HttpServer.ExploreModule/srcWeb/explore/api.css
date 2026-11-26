@@ -619,3 +619,9 @@ textarea.api-curl-text {
     .api-curl-note[hidden] {
         display: none;
     }
+
+/* The state texts and the notes of the api inspector (UX guide INP-30: text that changes from run to run can be selected and copied) */
+:where(.api-ph .sw-ph-title, .api-mime, .api-fresh, .api-curl-note, .api-message) {
+    user-select: text;
+    -webkit-user-select: text;
+}

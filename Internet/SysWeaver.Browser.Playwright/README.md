@@ -2,7 +2,7 @@
 
 [⬆ SysWeaver overview](../../README.md)
 
-> Playwright implementation of the browser service: Chromium (an installed Chrome or Edge, or the one downloaded by Playwright), Firefox or WebKit, headless or windowed.
+> Playwright implementation of the browser service: Chromium (a headless Chromium bundled with the app, an installed Chrome or Edge, or the one downloaded by Playwright), Firefox or WebKit, headless or windowed.
 
 | | |
 |---|---|
@@ -30,7 +30,8 @@ Implements `IBrowserService` (and `IBrowserWindowInput` for its windows) from [S
 
 ## Key features
 
-- Engine selection (`Browser`: `Chromium`, `Firefox` or `Webkit`); for Chromium an installed Chrome or Edge is found automatically (Windows: Program Files and the local application data folder; Linux: `/usr/bin/google-chrome`, `chromium`, `chromium-browser`, `microsoft-edge`), or set `ExecutablePath` (path variables allowed) or a Playwright `Channel`
+- Bundled headless Chromium (Windows builds): the build downloads the Playwright headless Chromium (`chromium-headless-shell`) that the referenced Playwright version is made for, once per version to `%LOCALAPPDATA%\SysWeaver\PlaywrightBrowsers\<version>`, and copies it (about 280 MB) to the output and publish folder of every app using this project, as `.playwright-browsers`. Headless Chromium uses it when no `ExecutablePath` or `Channel` is set (`UseBundled`, default on), so an installed browser updating can't break it. Set the MSBuild property `SwPlaywrightBundleBrowser` to `false` (ex: in a `Directory.Build.props`) to not bundle it
+- Engine selection (`Browser`: `Chromium`, `Firefox` or `Webkit`); for Chromium (windowed, or nothing bundled) an installed Chrome or Edge is found automatically (Windows: Program Files and the local application data folder; Linux: `/usr/bin/google-chrome`, `chromium`, `chromium-browser`, `microsoft-edge`), or set `ExecutablePath` (path variables allowed) or a Playwright `Channel`
 - The browser is started on first use and started again when it has died; if a window can't be opened, a new browser is started and the open is tried once more
 - Every window gets its own browser context (isolated, nothing stored), unless `UserDataFolder` is set: then one persistent profile (cookies etc) is shared by all windows
 - Recycling: a new browser is started after `RecycleAfterWindows` windows (default 500); the old one is closed when its windows are closed or after `RecycleWaitMs`
@@ -58,7 +59,8 @@ Implements `IBrowserService` (and `IBrowserWindowInput` for its windows) from [S
 
 ## Limitations and considerations
 
-- Firefox, WebKit and Chromium without an installed Chrome / Edge use the browsers downloaded by Playwright; the code does not download them (use the Playwright command line `install`). Those downloads are per user: a service running as another user won't find them
+- The bundled Chromium is headless only, and is the Windows build (built on Windows); a windowed Chromium uses an installed Chrome / Edge
+- Firefox, WebKit and Chromium without a bundled or installed Chrome / Edge use the browsers downloaded by Playwright; the code does not download them (use the Playwright command line `install`). Those downloads are per user: a service running as another user won't find them
 - A `UserDataFolder` can only be used by one browser process at a time, and the user running the process needs full access to it; recycling is not used with a profile
 - The scale (device scale factor) can only be changed before a page is loaded, and not with a `UserDataFolder`: a scale change replaces the window's context and page
 - Software WebGL rendering is slow, and a long running browser rendering WebGL in software slowly builds up state, which is why browsers are recycled

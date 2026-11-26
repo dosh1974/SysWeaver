@@ -140,6 +140,12 @@
             <exception cref="T:System.Exception">Unknown pre-compression decoder or audit filter method not found.</exception>
             <exception cref="T:System.ArgumentException">The method signature isn't supported (e.g. more than one input parameter).</exception>
         </member>
+        <member name="P:SysWeaver.Net.ApiHttpEntry.IntrusionTrack">
+            <summary>
+            Intrusion tracking of this API: true = always tracked (<see cref="T:SysWeaver.MicroService.WebApiIntrusionTrackAttribute"/>), false = never,
+            null = tracked if audited API's are tracked (<see cref="F:SysWeaver.Net.IntrusionDetectionParams.TrackAuditedApis"/>).
+            </summary>
+        </member>
         <member name="P:SysWeaver.Net.ApiHttpEntry.AuditGroup">
             <summary>
             The audit group from <see cref="T:SysWeaver.MicroService.WebApiAuditAttribute"/> (<c>&quot;Default&quot;</c> if empty), null if the method isn't audited.
@@ -159,6 +165,18 @@
             <summary>
             Parameters for per session rate limiters (from <see cref="T:SysWeaver.MicroService.WebApiSessionRateLimitAttribute"/>), null if not limited.
             </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiHttpEntry.IpRateLimiters">
+            <summary>
+            Per client address rate limiters (from <see cref="T:SysWeaver.MicroService.WebApiIpRateLimitAttribute"/>), null if not limited.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Net.ApiHttpEntry.IpRateLimiter(SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Get the rate limiter of this end point for the client address of a request.
+            </summary>
+            <param name="request">The request</param>
+            <returns>The limiter, or null if the method doesn't have a <see cref="T:SysWeaver.MicroService.WebApiIpRateLimitAttribute"/>.</returns>
         </member>
         <member name="M:SysWeaver.Net.ApiHttpEntry.SessionRateLimiter(SysWeaver.Net.HttpSession)">
             <summary>
@@ -1691,6 +1709,821 @@
             <param name="allowCompression">False if compression is disabled for the API</param>
             <returns>An expression of type ReadOnlyMemory&lt;Byte&gt;, Task&lt;ReadOnlyMemory&lt;Byte&gt;&gt; or ValueTask&lt;ReadOnlyMemory&lt;Byte&gt;&gt;</returns>
         </member>
+        <member name="T:SysWeaver.Net.ApiAuditStates">
+            <summary>
+            The state of an audited API call
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditStates.InProgress">
+            <summary>
+            The call hasn't completed (or the process was terminated before it did)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditStates.Completed">
+            <summary>
+            The call completed without any exception
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditStates.Failed">
+            <summary>
+            The call threw an exception (the output is the message)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Net.ApiAuditEntry">
+            <summary>
+            A "fat" audit entry: one audited API call and the client that made it
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditEntry.Id">
+            <summary>
+            Unique id, one for each API call (a later call has a higher id)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditEntry.Begin">
+            <summary>
+            Time when the execution began
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditEntry.State">
+            <summary>
+            The state of the call
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditEntry.Api">
+            <summary>
+            Name of the API
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditEntry.Group">
+            <summary>
+            The audit group of the API
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditEntry.UserName">
+            <summary>
+            The name of the user that performed this action (can be null if the API was called without any user logged in)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditEntry.Duration">
+            <summary>
+            Number of milliseconds that the call took, null if it hasn't completed
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditEntry.Input">
+            <summary>
+            The (capped) input data as json, null if the API doesn't have any input
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditEntry.Output">
+            <summary>
+            The (capped) output data as json, null if the API doesn't have any output, the plain text exception message if the call failed
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditEntry.Ip">
+            <summary>
+            Ip address of the client
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditEntry.UserAgent">
+            <summary>
+            User agent string of the client
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditEntry.Language">
+            <summary>
+            Language code of the client
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditEntry.TimeZone">
+            <summary>
+            Time zone used by the client
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditEntry.DeviceId">
+            <summary>
+            The device id of the client
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditEntry.Session">
+            <summary>
+            The session that made the call (redacted, see <see cref="M:SysWeaver.Net.ApiAuditTools.RedactSession(System.String)"/>)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditEntry.ClientId">
+            <summary>
+            The id of the client (all calls with the same ip address, device, user agent, language and time zone have the same client id), 0 if unknown
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditEntry.UserGuid">
+            <summary>
+            The guid of the user that performed this action (can be null if the API was called without any user logged in)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditEntry.End">
+            <summary>
+            Time when the execution completed, null if it hasn't completed
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Net.ApiAuditFieldTypes">
+            <summary>
+            The types of audit fields
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditFieldTypes.Text">
+            <summary>
+            Some text
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditFieldTypes.Number">
+            <summary>
+            A number
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditFieldTypes.State">
+            <summary>
+            An <see cref="T:SysWeaver.Net.ApiAuditStates"/> value (compared as a number, the text is the name)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditFieldTypes.Time">
+            <summary>
+            A time stamp (UTC)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Net.ApiAuditField">
+            <summary>
+            A field of <see cref="T:SysWeaver.Net.ApiAuditEntry"/> that can be used in queries
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Net.ApiAuditField.ToString">
+            <inheritdoc/>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditField.Name">
+            <summary>
+            Name of the member in <see cref="T:SysWeaver.Net.ApiAuditEntry"/>
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditField.Type">
+            <summary>
+            The type of the values
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditField.GetText">
+            <summary>
+            Get the text of the field, never null (an empty text if the value is missing).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditField.GetNumber">
+            <summary>
+            Get the number of a <see cref="F:SysWeaver.Net.ApiAuditFieldTypes.Number"/> or <see cref="F:SysWeaver.Net.ApiAuditFieldTypes.State"/> field, the returned value is null if the value is missing.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditField.GetTime">
+            <summary>
+            Get the time of a <see cref="F:SysWeaver.Net.ApiAuditFieldTypes.Time"/> field, the returned value is null if the value is missing.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditField.TimeFormat">
+            <summary>
+            The format of the text of a time (invariant culture)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditField.All">
+            <summary>
+            All fields
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditField.SearchFields">
+            <summary>
+            The fields that are searched by a search term without any field name
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditField.Aliases">
+            <summary>
+            Short names of fields that can be used in search terms
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Net.ApiAuditField.Get(System.String)">
+            <summary>
+            Get a field
+            </summary>
+            <param name="name">The name (case insensitive), can be null</param>
+            <returns>The field, null if it doesn't exist</returns>
+        </member>
+        <member name="M:SysWeaver.Net.ApiAuditField.GetBySearchName(System.String)">
+            <summary>
+            Get a field by the name used in a search term
+            </summary>
+            <param name="name">The name or a short name (case insensitive), can be null</param>
+            <returns>The field, null if it doesn't exist</returns>
+        </member>
+        <member name="T:SysWeaver.Net.ApiAuditCondition">
+            <summary>
+            A parsed condition on a field, see <see cref="T:SysWeaver.Net.ApiAuditMatcher"/>.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditCondition.Field">
+            <summary>
+            The field
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditCondition.Op">
+            <summary>
+            The operation, never <see cref="F:SysWeaver.Data.TableDataFilterOps.NotEqual"/> or <see cref="F:SysWeaver.Data.TableDataFilterOps.NoneOf"/> (they are inverted instead).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditCondition.Invert">
+            <summary>
+            Invert the result of the operation
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditCondition.CaseSensitive">
+            <summary>
+            Text operations are case sensitive
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditCondition.IsText">
+            <summary>
+            True if the operation compares texts (using <see cref="F:SysWeaver.Net.ApiAuditCondition.Texts"/>), else the <see cref="F:SysWeaver.Net.ApiAuditCondition.Numbers"/> or <see cref="F:SysWeaver.Net.ApiAuditCondition.Times"/> are used (depending on the type of the field).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditCondition.Texts">
+            <summary>
+            The texts to compare with, one for all operations except any of (any number) and the range operations (two).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditCondition.Numbers">
+            <summary>
+            The numbers to compare with (number and state fields), see <see cref="F:SysWeaver.Net.ApiAuditCondition.Texts"/>
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditCondition.Times">
+            <summary>
+            The times to compare with (time fields), see <see cref="F:SysWeaver.Net.ApiAuditCondition.Texts"/>
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditCondition.Never">
+            <summary>
+            True if the value is invalid for the field (ex: a text can't be compared to a number), the condition never match anything (even if inverted).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Net.ApiAuditCondition.Create(SysWeaver.Data.TableDataFilter)">
+            <summary>
+            Parse a filter
+            </summary>
+            <param name="f">The filter, can be null</param>
+            <returns>The condition, null if the filter should be ignored (no value, an unknown column or an unknown operation, same as for tables)</returns>
+        </member>
+        <member name="M:SysWeaver.Net.ApiAuditCondition.TryParseTime(System.String,System.DateTime@)">
+            <summary>
+            Parse a time (invariant culture, UTC unless an offset is specified)
+            </summary>
+            <param name="s">The text</param>
+            <param name="time">The time (UTC)</param>
+            <returns>True if the text is a time</returns>
+        </member>
+        <member name="M:SysWeaver.Net.ApiAuditCondition.TryParseNumber(System.String,System.Boolean,System.Double@)">
+            <summary>
+            Parse a number (invariant culture)
+            </summary>
+            <param name="s">The text</param>
+            <param name="isState">The text can be the name of an <see cref="T:SysWeaver.Net.ApiAuditStates"/> value</param>
+            <param name="number">The number</param>
+            <returns>True if the text is a number</returns>
+        </member>
+        <member name="M:SysWeaver.Net.ApiAuditCondition.EqualEnd(System.DateTime)">
+            <summary>
+            The time after a time that is equal to it: a time without any fractions is equal to all times within that second.
+            </summary>
+            <param name="time">The time</param>
+            <returns>The first time that is after (and not equal to) the time</returns>
+        </member>
+        <member name="M:SysWeaver.Net.ApiAuditCondition.Match(SysWeaver.Net.ApiAuditEntry)">
+            <summary>
+            Check if an entry matches the condition
+            </summary>
+            <param name="e">The entry</param>
+            <returns>True if it matches</returns>
+        </member>
+        <member name="T:SysWeaver.Net.ApiAuditTerm">
+            <summary>
+            A parsed search term, see <see cref="F:SysWeaver.Net.ApiAuditQuery.Text"/>
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditTerm.Field">
+            <summary>
+            The field that must contain the text, null if any of the <see cref="F:SysWeaver.Net.ApiAuditField.SearchFields"/> may contain it.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditTerm.Text">
+            <summary>
+            The text (case insensitive)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditTerm.Exclude">
+            <summary>
+            True if the term may not match
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Net.ApiAuditTerm.Match(SysWeaver.Net.ApiAuditEntry)">
+            <summary>
+            Check if an entry matches the term
+            </summary>
+            <param name="e">The entry</param>
+            <returns>True if it matches</returns>
+        </member>
+        <member name="T:SysWeaver.Net.ApiAuditSelection">
+            <summary>
+            Parsed selected values of a field, see <see cref="F:SysWeaver.Net.ApiAuditQuery.Values"/>
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditSelection.Field">
+            <summary>
+            The field
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditSelection.Values">
+            <summary>
+            The values (as text), not empty
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditSelection.Exclude">
+            <summary>
+            True if the field may not have any of the values
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Net.ApiAuditSelection.Match(SysWeaver.Net.ApiAuditEntry)">
+            <summary>
+            Check if an entry matches the selection
+            </summary>
+            <param name="e">The entry</param>
+            <returns>True if it matches</returns>
+        </member>
+        <member name="T:SysWeaver.Net.ApiAuditMatcher">
+            <summary>
+            The interpretation of an <see cref="T:SysWeaver.Net.ApiAuditQuery"/>, can be used to match entries in memory or to build a database query.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditMatcher.MaxTerms">
+            <summary>
+            Maximum number of search terms (the rest are ignored)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Net.ApiAuditMatcher.#ctor(SysWeaver.Net.ApiAuditQuery,System.String)">
+            <summary>
+            Parse a query
+            </summary>
+            <param name="q">The query, can be null</param>
+            <param name="ignoreSelection">Optional name of a field, the selected values of that field are ignored</param>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditMatcher.From">
+            <summary>
+            Must begin at or after this time (UTC), null = no limit
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditMatcher.To">
+            <summary>
+            Must begin before this time (UTC), null = no limit
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditMatcher.Terms">
+            <summary>
+            Search terms, all must match
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditMatcher.Selections">
+            <summary>
+            Selected field values, all must match
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditMatcher.All">
+            <summary>
+            Conditions that all must match
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditMatcher.Any">
+            <summary>
+            If there are any conditions, at least one must match
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Net.ApiAuditMatcher.Match(SysWeaver.Net.ApiAuditEntry)">
+            <summary>
+            Check if an entry matches
+            </summary>
+            <param name="e">The entry</param>
+            <returns>True if it matches</returns>
+        </member>
+        <member name="T:SysWeaver.Net.ApiAuditFieldValues">
+            <summary>
+            A selection of field values, see <see cref="F:SysWeaver.Net.ApiAuditQuery.Values"/>
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditFieldValues.Field">
+            <summary>
+            The name of the field (a member of <see cref="T:SysWeaver.Net.ApiAuditEntry"/>)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditFieldValues.Values">
+            <summary>
+            The values (exact), an empty text matches an empty or missing value
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditFieldValues.Exclude">
+            <summary>
+            True to find the calls that don't have any of the values
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Net.ApiAuditQuery">
+            <summary>
+            Selects audited API calls, all parts must match (a part that is null or empty matches everything)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditQuery.From">
+            <summary>
+            Only calls that began at or after this time (UTC)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditQuery.To">
+            <summary>
+            Only calls that began before this time (UTC)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditQuery.Text">
+            <summary>
+            Search terms separated by white space, all must match (case insensitive, as a part of any of the text fields).
+            - "some text" is a term with white space.
+            - -term only finds calls that don't match the term.
+            - field:term only looks in one field, ex: user:anna, api:login, ip:10.0., input:"some text", state:failed.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditQuery.Values">
+            <summary>
+            Selected field values, all must match
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditQuery.All">
+            <summary>
+            Conditions on any field of <see cref="T:SysWeaver.Net.ApiAuditEntry"/>, all must match.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditQuery.Any">
+            <summary>
+            Conditions on any field of <see cref="T:SysWeaver.Net.ApiAuditEntry"/>, at least one must match.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Net.ApiAuditQuery.CopyFrom(SysWeaver.Net.ApiAuditQuery)">
+            <summary>
+            Copy all values from another query (shallow copy)
+            </summary>
+            <param name="src">The query to copy from, null is the same as an empty query</param>
+        </member>
+        <member name="T:SysWeaver.Net.ApiAuditSearch">
+            <summary>
+            Find audited API calls
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditSearch.Order">
+            <summary>
+            Field names, the first is the primary order, prefix with a '-' for descending order, null or empty is the same as ["-Id"] (the newest call first).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditSearch.Row">
+            <summary>
+            The first entry to return
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditSearch.MaxRowCount">
+            <summary>
+            Maximum number of entries to return (at most <see cref="F:SysWeaver.Net.ApiAuditTools.MaxEntries"/>), 0 = 100
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditSearch.LookAheadCount">
+            <summary>
+            Number of entries after the returned that should be counted (see <see cref="F:SysWeaver.Data.TableDataOrderRequest.LookAheadCount"/>)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Net.ApiAuditFacetRequest">
+            <summary>
+            Get the most common values of some fields
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditFacetRequest.Fields">
+            <summary>
+            The names of the fields to get values for.
+            The selected values (<see cref="F:SysWeaver.Net.ApiAuditQuery.Values"/>) of a field aren't used for that field, so that other values can be selected too.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditFacetRequest.MaxValues">
+            <summary>
+            Maximum number of values to return for each field (at most 1000)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Net.ApiAuditSummaryRequest">
+            <summary>
+            Get totals and a time line
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditSummaryRequest.Steps">
+            <summary>
+            The wanted number of time line steps, the step duration is rounded to something nice (at most 500)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Net.ApiAuditInfo">
+            <summary>
+            Information about an audit storage
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditInfo.Storage">
+            <summary>
+            Name of the storage
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditInfo.RetentionDays">
+            <summary>
+            Number of days that entries are kept, 0 = forever
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditInfo.MaxDataLength">
+            <summary>
+            Maximum number of chars stored of the input and output
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditInfo.TimeResolution">
+            <summary>
+            The resolution of the stored times, number of milliseconds (a duration is only meaningful if it's much longer than this)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditInfo.HaveIpLocation">
+            <summary>
+            True if the service manager has an ip location service (<see cref="T:SysWeaver.Net.IIpLocation"/>), else <see cref="M:SysWeaver.Net.IApiAuditReportService.GetIpLocation(System.String)"/> always returns null
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Net.ApiAuditPage">
+            <summary>
+            Some found API calls
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditPage.Entries">
+            <summary>
+            The found entries
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditPage.RowCount">
+            <summary>
+            The first entry + the number of returned entries + the number of available look ahead entries (same as the row count of table data)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Net.ApiAuditFacetValue">
+            <summary>
+            A value of a field
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditFacetValue.Value">
+            <summary>
+            The value, an empty text if it's missing
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditFacetValue.Count">
+            <summary>
+            Number of calls with this value
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditFacetValue.Failed">
+            <summary>
+            Number of calls with this value that failed
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Net.ApiAuditFacet">
+            <summary>
+            The most common values of a field
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditFacet.Field">
+            <summary>
+            The name of the field
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditFacet.Values">
+            <summary>
+            The values, most common first
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditFacet.More">
+            <summary>
+            True if there are more values than returned
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Net.ApiAuditStep">
+            <summary>
+            One step of a time line
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditStep.Time">
+            <summary>
+            When the step begins (UTC)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditStep.Completed">
+            <summary>
+            Number of calls that completed
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditStep.Failed">
+            <summary>
+            Number of calls that failed
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditStep.InProgress">
+            <summary>
+            Number of calls in progress
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Net.ApiAuditSummary">
+            <summary>
+            Totals and a time line
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditSummary.Completed">
+            <summary>
+            Number of calls that completed
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditSummary.Failed">
+            <summary>
+            Number of calls that failed
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditSummary.InProgress">
+            <summary>
+            Number of calls in progress
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditSummary.Users">
+            <summary>
+            Number of unique users (calls without any user are not counted)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditSummary.Clients">
+            <summary>
+            Number of unique clients
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditSummary.AverageDuration">
+            <summary>
+            Average number of milliseconds of the calls that ended, null if there are none
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditSummary.MaxDuration">
+            <summary>
+            Number of milliseconds of the slowest call that ended, null if there are none
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditSummary.First">
+            <summary>
+            When the first call began (UTC), null if there are no calls
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditSummary.Last">
+            <summary>
+            When the last call began (UTC), null if there are no calls
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditSummary.StepSeconds">
+            <summary>
+            Number of seconds between steps
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditSummary.Steps">
+            <summary>
+            The time line, without any gaps, empty if there are no calls
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Net.ApiAuditTools">
+            <summary>
+            Tools for implementing <see cref="T:SysWeaver.Net.IApiAuditReportService"/>
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditTools.ReadAuth">
+            <summary>
+            The auth that should be required for reading audit data
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditTools.BrowserUrl">
+            <summary>
+            The url of the audit browser page (relative to the site root)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditTools.MaxEntries">
+            <summary>
+            The most entries returned by a single search
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditTools.MaxFacetValues">
+            <summary>
+            The most values returned for a field
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditTools.SessionChars">
+            <summary>
+            The number of chars of a (legacy) session token that are kept when it is redacted
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiAuditTools.SessionSuffix">
+            <summary>
+            The suffix of a redacted session
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Net.ApiAuditTools.RedactSession(System.String)">
+            <summary>
+            Audits store the session id (<see cref="P:SysWeaver.Net.HttpSession.TokenHash"/>), never the session token.
+            Entries written by older versions may hold a session token (or a redacted one): anything that isn't a session id
+            (<see cref="F:SysWeaver.Net.HttpSession.TokenHashLength"/> chars) is redacted, the full token would allow anyone seeing it to hijack the session.
+            </summary>
+            <param name="session">The stored session value, can be null</param>
+            <returns>The session id, or the redacted value</returns>
+        </member>
+        <member name="M:SysWeaver.Net.ApiAuditTools.GetPaging(SysWeaver.Net.ApiAuditSearch,System.Int32@,System.Int32@,System.Int32@)">
+            <summary>
+            Get the paging of a search
+            </summary>
+            <param name="s">The search, can be null</param>
+            <param name="row">The first entry to return</param>
+            <param name="count">The number of entries to return</param>
+            <param name="lookAhead">The number of additional entries to count</param>
+        </member>
+        <member name="M:SysWeaver.Net.ApiAuditTools.GetOrder(System.String[])">
+            <summary>
+            Get the (valid) order of a search, always ends with the id (so that the order is well defined)
+            </summary>
+            <param name="order">The requested order, can be null</param>
+            <returns>The fields to order by</returns>
+        </member>
+        <member name="M:SysWeaver.Net.ApiAuditTools.GetComparison(System.Collections.Generic.List{System.ValueTuple{SysWeaver.Net.ApiAuditField,System.Boolean}})">
+            <summary>
+            Compare two entries using an order
+            </summary>
+            <param name="order">The order, see <see cref="M:SysWeaver.Net.ApiAuditTools.GetOrder(System.String[])"/></param>
+            <returns>A comparison function</returns>
+        </member>
+        <member name="M:SysWeaver.Net.ApiAuditTools.GetStepSeconds(System.DateTime,System.DateTime,System.Int32)">
+            <summary>
+            Get the duration of a time line step
+            </summary>
+            <param name="from">The start of the time line</param>
+            <param name="to">The end of the time line</param>
+            <param name="steps">The wanted number of steps</param>
+            <returns>The number of seconds</returns>
+        </member>
+        <member name="M:SysWeaver.Net.ApiAuditTools.GetStepIndex(System.DateTime,System.Int64)">
+            <summary>
+            Get the start of the time line step that a time is within
+            </summary>
+            <param name="time">The time</param>
+            <param name="stepSeconds">Number of seconds of a step</param>
+            <returns>The number of steps since 1970</returns>
+        </member>
+        <member name="M:SysWeaver.Net.ApiAuditTools.SetSteps(SysWeaver.Net.ApiAuditSummary,SysWeaver.Net.ApiAuditMatcher,System.Int64,System.Collections.Generic.IReadOnlyDictionary{System.Int64,SysWeaver.Net.ApiAuditStep})">
+            <summary>
+            Set the time line of a summary (the first and last time must be set)
+            </summary>
+            <param name="summary">The summary to update</param>
+            <param name="q">The query</param>
+            <param name="stepSeconds">Number of seconds of a step</param>
+            <param name="steps">The steps that have any calls, the key is the <see cref="M:SysWeaver.Net.ApiAuditTools.GetStepIndex(System.DateTime,System.Int64)"/></param>
+        </member>
+        <member name="M:SysWeaver.Net.ApiAuditTools.GetTimeLine(SysWeaver.Net.ApiAuditMatcher,SysWeaver.Net.ApiAuditSummary,System.DateTime@,System.DateTime@)">
+            <summary>
+            Get the start and end of the time line: the requested time range if there is any (but not into the future), else the time of the first and last call.
+            </summary>
+            <param name="q">The query</param>
+            <param name="summary">The summary (the first and last time must be set)</param>
+            <param name="from">The start of the time line</param>
+            <param name="to">The end of the time line (inclusive)</param>
+        </member>
+        <member name="M:SysWeaver.Net.ApiAuditTools.GetSearch(SysWeaver.Data.TableDataRequest)">
+            <summary>
+            Combine a table request with the query in it's param
+            </summary>
+            <param name="r">The table request</param>
+            <returns>The search</returns>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">400: The param isn't a valid query</exception>
+        </member>
+        <member name="M:SysWeaver.Net.ApiAuditTools.GetTable(SysWeaver.Net.IApiAuditReportService,SysWeaver.Data.TableDataRequest,System.Int64)">
+            <summary>
+            Implementation of <see cref="M:SysWeaver.Net.IApiAuditReportService.AuditTable(SysWeaver.Data.TableDataRequest)"/> using <see cref="M:SysWeaver.Net.IApiAuditReportService.Search(SysWeaver.Net.ApiAuditSearch)"/>.
+            </summary>
+            <param name="service">The service</param>
+            <param name="r">The table request</param>
+            <param name="refreshRate">Number of ms the client should wait before refreshing the data</param>
+            <returns>The table</returns>
+        </member>
+        <member name="M:SysWeaver.Net.ApiAuditTools.GetIpLocation(SysWeaver.Net.IIpLocation,System.String)">
+            <summary>
+            Look up the location of an ip address (for the details of a call in the audit browser)
+            </summary>
+            <param name="source">The location source, null if there is none</param>
+            <param name="ip">The ip address</param>
+            <returns>The location, null if there is no source, the ip address is invalid, local, unknown or the look up failed</returns>
+        </member>
         <member name="T:SysWeaver.Net.NoSessionException">
             <summary>
             Thrown when an operation requires an <see cref="T:SysWeaver.Net.HttpSession"/> but the request has none.
@@ -2081,11 +2914,11 @@
         </member>
         <member name="M:SysWeaver.Net.BackgroundJobs.OwnersOf(System.String,System.String)">
             <summary>
-            The owner keys of a caller: the first one owns new jobs ("u:" + user guid when signed in, else "s:" + session token), any of them gives access
+            The owner keys of a caller: the first one owns new jobs ("u:" + user guid when signed in, else "s:" + session token hash), any of them gives access
             (a visitor that signs in keeps the jobs of the session).
             </summary>
             <param name="userGuid">The guid of the signed in user, null if not signed in</param>
-            <param name="sessionToken">The session token, may be null</param>
+            <param name="sessionToken">The session token hash (HttpSession.TokenHash, never the token itself), may be null</param>
             <returns>The owner keys, the owner of new jobs first</returns>
         </member>
         <member name="M:SysWeaver.Net.BackgroundJobs.ResultUrlOf(System.String)">
@@ -3521,6 +4354,47 @@
             The instance for <see cref="F:SysWeaver.Net.HttpCompressionPriority.DefaultMethods"/>.
             </summary>
         </member>
+        <member name="T:SysWeaver.Net.HttpIpRateLimiters">
+            <summary>
+            One rate limiter per client IP address (IPv6 addresses are grouped by their /64 prefix, a single client usually has a whole /64).
+            The client address is <see cref="M:SysWeaver.Net.HttpServerRequest.GetIpAddress"/>, forwarded addresses are only used from trusted proxies.
+            At most <see cref="F:SysWeaver.Net.HttpIpRateLimiters.MaxAddresses"/> addresses are tracked, idle limiters are removed.
+            </summary>
+            <remarks>
+            Per address limits slow down a single attacker, not a distributed one (tor, bot nets), combine with a (permissive) service limit.
+            Thread safe.
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.Net.HttpIpRateLimiters.#ctor(SysWeaver.HttpRateLimiterParams)">
+            <summary>
+            Create per address limiters
+            </summary>
+            <param name="p">The parameters of every per address limiter</param>
+        </member>
+        <member name="F:SysWeaver.Net.HttpIpRateLimiters.MaxAddresses">
+            <summary>
+            The maximum number of tracked addresses (when exceeded, idle limiters are removed, and if that isn't enough the oldest half)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Net.HttpIpRateLimiters.GetKey(System.String)">
+            <summary>
+            Get the key of an address: the address itself, or the /64 prefix of an IPv6 address
+            </summary>
+            <param name="address">The address as text</param>
+            <returns>The key</returns>
+        </member>
+        <member name="M:SysWeaver.Net.HttpIpRateLimiters.Get(SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Get the limiter of the client of a request
+            </summary>
+            <param name="request">The request</param>
+            <returns>The limiter</returns>
+        </member>
+        <member name="P:SysWeaver.Net.HttpIpRateLimiters.Count">
+            <summary>
+            The number of tracked addresses
+            </summary>
+        </member>
         <member name="T:SysWeaver.Net.HttpProxy">
             <summary>
             A module that serves remote http(s) folders under local web folders (one or more end points, see <see cref="T:SysWeaver.Net.HttpProxyEndPoint"/>), with in-memory and on-disc caching.
@@ -4337,6 +5211,41 @@
             <returns>The normalized array, null if <paramref name="languages"/> is null or empty</returns>
             <exception cref="T:System.Exception">Thrown if a language is invalid or occurs more than once</exception>
         </member>
+        <member name="F:SysWeaver.Net.HttpServerBase.Intrusions">
+            <summary>
+            The intrusion detection, null if disabled (<see cref="F:SysWeaver.Net.HttpServerBaseParams.IntrusionDetection"/>)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.HttpServerBase.IntrusionReports">
+            <summary>
+            Intrusion attempts (shown as problems: count, last time, last report)
+            </summary>
+        </member>
+        <member name="E:SysWeaver.Net.HttpServerBase.OnIntrusion">
+            <summary>
+            Called when an intrusion attempt is detected (after it was audited, logged and counted as a problem)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.HttpServerBase.IntrusionAudit">
+            <summary>
+            The pseudo API of intrusion audit entries
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Net.HttpServerBase.TrackIntrusion(SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Track a finished request in the intrusion detection: an error response that wasn't tracked when it was written
+            (ex: a status code without a body) is counted (and delayed, the response is completed when the request is disposed)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Net.HttpServerBase.IntrusionError(SysWeaver.Net.HttpServerRequest,System.Int32)">
+            <summary>
+            Track an error response in the intrusion detection and delay it, call this before the body is written
+            (the body is sent when it's written, a delay after that doesn't slow the client down)
+            </summary>
+            <param name="data">The request</param>
+            <param name="code">The status code of the response</param>
+            <returns>A task that completes after the delay</returns>
+        </member>
         <member name="M:SysWeaver.Net.HttpServerBase.RunOnLogin(SysWeaver.Net.HttpSession)">
             <summary>
             Call this when a user has been set on a session (see <see cref="M:SysWeaver.Net.HttpSession.SetAuth(SysWeaver.Auth.Authorization)"/>).
@@ -4960,10 +5869,15 @@
         </member>
         <member name="M:SysWeaver.Net.HttpServerBase.GetCookieOptions(SysWeaver.Net.HttpServerRequest)">
             <summary>
-            Get the cookie path and attributes to use for a request ("Secure" is added for https requests)
+            Get the cookie path and attributes to use for a request ("Secure" is added for https requests, also when a trusted proxy ended the TLS, and always if <see cref="F:SysWeaver.Net.HttpServerBaseParams.SecureCookies"/> is true)
             </summary>
             <param name="req">The request</param>
             <returns>The cookie path and attributes</returns>
+        </member>
+        <member name="F:SysWeaver.Net.HttpServerBase.AlwaysSecureCookies">
+            <summary>
+            <see cref="F:SysWeaver.Net.HttpServerBaseParams.SecureCookies"/>
+            </summary>
         </member>
         <member name="F:SysWeaver.Net.HttpServerBase.FrameAncestorsCsp">
             <summary>
@@ -4995,6 +5909,25 @@
             <param name="cookieString">The Cookie header value, may be null</param>
             <param name="cookieName">The (case sensitive) name of the cookie</param>
             <returns>The (trimmed) value of the first cookie with that name, empty if not found</returns>
+        </member>
+        <member name="F:SysWeaver.Net.HttpServerBase.Sessions">
+            <summary>
+            The active sessions, keyed by the session token (the secret value of the session cookie).
+            This is the only place where the tokens are kept: never enumerate the keys to expose them, use <see cref="P:SysWeaver.Net.HttpSession.TokenHash"/> to identify a session.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.HttpServerBase.SessionsByHash">
+            <summary>
+            The active sessions, keyed by <see cref="P:SysWeaver.Net.HttpSession.TokenHash"/> (the safe session id), kept in sync with <see cref="F:SysWeaver.Net.HttpServerBase.Sessions"/>
+            (a session is added after it was added to <see cref="F:SysWeaver.Net.HttpServerBase.Sessions"/> and removed when it is removed from it, so it may briefly be missing or remain).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Net.HttpServerBase.FindSessionByTokenHash(System.String)">
+            <summary>
+            Find an active session from its safe id (<see cref="P:SysWeaver.Net.HttpSession.TokenHash"/>, as shown in logs, audits and debug views).
+            </summary>
+            <param name="tokenHash">The hash of the session token, see <see cref="M:SysWeaver.Net.HttpSession.HashToken(System.ReadOnlySpan{System.Char})"/></param>
+            <returns>The session, or null if there is no active session with that id (it ended, expired or its token was rotated by a sign in)</returns>
         </member>
         <member name="F:SysWeaver.Net.HttpServerBase.RunOnLogoutAction">
             <summary>
@@ -5329,13 +6262,28 @@
             <param name="context">Automatically populated by the request handler, don't use</param>
             <returns>The table data</returns>
         </member>
+        <member name="M:SysWeaver.Net.HttpServerBase.GetSessionDebugData(SysWeaver.Net.HttpSession,System.DateTime,SysWeaver.Net.HttpSession,System.Boolean)">
+            <summary>
+            The debug data of an active session (with the end token when it can be ended by the caller)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Net.HttpServerBase.SessionDetails(System.String,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Get the details of a session from its id (the hash of the session token, as shown in logs, audits and the active sessions table).
+            Active sessions are found directly, recently ended or expired sessions (still listed by the active sessions table) are searched.
+            </summary>
+            <param name="tokenHash">The session id (<see cref="P:SysWeaver.Net.HttpSession.TokenHash"/>, 32 chars)</param>
+            <param name="context">Automatically populated by the request handler, don't use</param>
+            <returns>The session details</returns>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">400: the id is missing or malformed; 404: no active or recently ended session has that id (it may have expired, or the user signed in, which gives the session a new id)</exception>
+        </member>
         <member name="M:SysWeaver.Net.HttpServerBase.ActiveUsers(SysWeaver.Data.TableDataRequest)">
             <summary>
             Show a table with active users and their sessions.
             </summary>
             <param name="r">Table parameters</param>
             <returns>The table data</returns>
-            <remarks>The session tokens are redacted (only the first 6 characters are shown).</remarks>
+            <remarks>Sessions are shown by their id (the hash of the session token, <see cref="P:SysWeaver.Net.HttpSession.TokenHash"/>), never by the token.</remarks>
         </member>
         <member name="M:SysWeaver.Net.HttpServerBase.CacheEntries(SysWeaver.Data.TableDataRequest)">
             <summary>
@@ -5369,17 +6317,17 @@
         </member>
         <member name="F:SysWeaver.Net.HttpServerBase.SessionEndKey">
             <summary>
-            Key of the session end tokens (see <see cref="M:SysWeaver.Net.HttpServerBase.SessionEndToken(System.String)"/>), random per process so tokens never survive a restart.
+            Key of the session end tokens (see <see cref="M:SysWeaver.Net.HttpServerBase.SessionEndToken(SysWeaver.Net.HttpSession)"/>), random per process so tokens never survive a restart.
             </summary>
         </member>
-        <member name="M:SysWeaver.Net.HttpServerBase.SessionEndToken(System.String)">
+        <member name="M:SysWeaver.Net.HttpServerBase.SessionEndToken(SysWeaver.Net.HttpSession)">
             <summary>
             The token needed to end a session with <see cref="M:SysWeaver.Net.HttpServerBase.EndSession(System.String,SysWeaver.Net.HttpServerRequest)"/>.
             It is sent with the (authenticated, same origin) <see cref="M:SysWeaver.Net.HttpServerBase.ActiveSessions(SysWeaver.Data.TableDataRequest,SysWeaver.Net.HttpServerRequest)"/> table only, it can't be guessed and it doesn't reveal
             the session token, so a crafted link, a deep link scan or an image (a plain GET, CSRF style) can't end a session.
             </summary>
-            <param name="sessionToken">The (full) session token</param>
-            <returns>The end token, the first 128 bits (base64url) of a HMAC-SHA256 of the session token</returns>
+            <param name="session">The session</param>
+            <returns>The end token, the first 128 bits (base64url) of a HMAC-SHA256 of the session id (<see cref="P:SysWeaver.Net.HttpSession.TokenHash"/>)</returns>
         </member>
         <member name="M:SysWeaver.Net.HttpServerBase.EndSession(System.String,SysWeaver.Net.HttpServerRequest)">
             <summary>
@@ -5528,7 +6476,7 @@
         </member>
         <member name="T:SysWeaver.Net.HttpServerBase.SessionDebugData">
             <summary>
-            A row in the active sessions debug table (<see cref="M:SysWeaver.Net.HttpServerBase.ActiveSessions(SysWeaver.Data.TableDataRequest,SysWeaver.Net.HttpServerRequest)"/>).
+            A row in the active sessions debug table (<see cref="M:SysWeaver.Net.HttpServerBase.ActiveSessions(SysWeaver.Data.TableDataRequest,SysWeaver.Net.HttpServerRequest)"/>), also returned by <see cref="M:SysWeaver.Net.HttpServerBase.SessionDetails(System.String,SysWeaver.Net.HttpServerRequest)"/>.
             </summary>
             <remarks>By default the table shows who (User, Address, UserAgent, Auth), when (Started, LastActivity), the state (Expired) and the
             actions; the other columns are [TableDataHide] (still sent, the user can show them with the column picker).</remarks>
@@ -5543,9 +6491,10 @@
             <param name="endedUser">The user that was signed in to an ended session (its auth is cleared when it ends), null if none or unknown</param>
             <param name="flag">True if the server serves the language flags (<see cref="P:SysWeaver.Net.HttpServerBase.HaveIsoFlags"/>), else <see cref="F:SysWeaver.Net.HttpServerBase.SessionDebugData.Flag"/> is null (no image that can't load)</param>
         </member>
-        <member name="F:SysWeaver.Net.HttpServerBase.SessionDebugData.Token">
+        <member name="F:SysWeaver.Net.HttpServerBase.SessionDebugData.TokenHash">
             <summary>
-            Session token, this is the full token, <see cref="M:SysWeaver.Net.HttpServerBase.ActiveSessions(SysWeaver.Data.TableDataRequest,SysWeaver.Net.HttpServerRequest)"/> redacts it after the table has been built.
+            The session id: the hash of the session token (<see cref="P:SysWeaver.Net.HttpSession.TokenHash"/>), the same id as in the audits and logs.
+            The token itself is never shown (anyone knowing it could use the session).
             </summary>
         </member>
         <member name="F:SysWeaver.Net.HttpServerBase.SessionDebugData.Expired">
@@ -5656,7 +6605,7 @@
         </member>
         <member name="F:SysWeaver.Net.HttpServerBase.SessionDebugData.EndToken">
             <summary>
-            The token needed to end the session (see <see cref="M:SysWeaver.Net.HttpServerBase.SessionEndToken(System.String)"/>), null for expired sessions, the caller's own session and sessions without a signed in user
+            The token needed to end the session (see <see cref="M:SysWeaver.Net.HttpServerBase.SessionEndToken(SysWeaver.Net.HttpSession)"/>), null for expired sessions, the caller's own session and sessions without a signed in user
             (ending an anonymous session only makes the browser start a new one with its next request, so it is not offered)
             </summary>
         </member>
@@ -5726,7 +6675,7 @@
             A row in the active users debug table (<see cref="M:SysWeaver.Net.HttpServerBase.ActiveUsers(SysWeaver.Data.TableDataRequest)"/>).
             </summary>
             <remarks>
-            <see cref="F:SysWeaver.Net.HttpServerBase.UserDebugData.Sessions"/> contains redacted session tokens (only the first 6 characters, same as <see cref="M:SysWeaver.Net.HttpServerBase.ActiveSessions(SysWeaver.Data.TableDataRequest,SysWeaver.Net.HttpServerRequest)"/>).
+            <see cref="F:SysWeaver.Net.HttpServerBase.UserDebugData.Sessions"/> contains the session ids (<see cref="P:SysWeaver.Net.HttpSession.TokenHash"/>, same as <see cref="M:SysWeaver.Net.HttpServerBase.ActiveSessions(SysWeaver.Data.TableDataRequest,SysWeaver.Net.HttpServerRequest)"/>), never the tokens.
             </remarks>
         </member>
         <member name="M:SysWeaver.Net.HttpServerBase.UserDebugData.#ctor(SysWeaver.Net.HttpServerBase.UserData,System.Int64)">
@@ -5768,7 +6717,7 @@
         </member>
         <member name="F:SysWeaver.Net.HttpServerBase.UserDebugData.Sessions">
             <summary>
-            Information about each session that the user is logged in to (token, duration, address and user agent).
+            Information about each session that the user is logged in to (session id, duration, address and user agent).
             </summary>
         </member>
         <member name="M:SysWeaver.Net.HttpServerBase.AddData(SysWeaver.Net.HttpServerRequest,SysWeaver.Data.DataScopes,SysWeaver.Data.BaseTableData,System.Int32)">
@@ -5822,7 +6771,7 @@
         <member name="P:SysWeaver.Net.HttpServerBase.AllDataReferences">
             <summary>
             Enumerate over all data references (global, any user and all active sessions).
-            The key value pair is the session token and session for session data, else both are null.
+            The key value pair is the session id (<see cref="P:SysWeaver.Net.HttpSession.TokenHash"/>, never the token) and session for session data, else both are null.
             </summary>
             <remarks>Enumerating creates an (empty) data storage for every session that doesn't have one.</remarks>
         </member>
@@ -6223,7 +7172,15 @@
             but not for requests that other sites make (images, forms, fetch, frames on another site): a basic cross site request forgery protection.
             "Strict": the cookies are not even sent when following a link from another site (the user appears signed out on the first page).
             Ignored when <see cref="F:SysWeaver.Net.HttpServerBaseParams.CorsCookies"/> is true (that uses "SameSite=None;Secure").
-            The "Secure" attribute is always added for https requests.
+            The "Secure" attribute is added for https requests (see <see cref="F:SysWeaver.Net.HttpServerBaseParams.SecureCookies"/>).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.HttpServerBaseParams.SecureCookies">
+            <summary>
+            If true the session and device id cookies always get the "Secure" attribute (the browser only sends them over https).
+            If false (the default) "Secure" is added when the request is https: the connection is https, or a trusted proxy (<see cref="F:SysWeaver.Net.HttpServerBaseParams.TrustedProxies"/>)
+            says that the client used https ("Forwarded: proto=https" or "X-Forwarded-Proto: https").
+            Set it to true when the server is only reached through a proxy that ends TLS and doesn't send these headers.
             </summary>
         </member>
         <member name="F:SysWeaver.Net.HttpServerBaseParams.FrameAncestors">
@@ -6333,6 +7290,12 @@
         <member name="F:SysWeaver.Net.HttpServerBaseParams.SessionLimits">
             <summary>
             Optional, request limiter for each individual session
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.HttpServerBaseParams.IntrusionDetection">
+            <summary>
+            The simple intrusion detection: error responses (scanning) and calls to key API's (sign in, audited API's) per client address,
+            intrusion attempts are audited and shown as problems, see <see cref="F:SysWeaver.Net.HttpServerBaseParams.IntrusionDetection"/>. Enabled by default, null uses the defaults.
             </summary>
         </member>
         <member name="F:SysWeaver.Net.HttpServerBaseParams.MinCompressSize">
@@ -6998,6 +7961,11 @@
             </summary>
             <param name="length">The length in bytes</param>
         </member>
+        <member name="F:SysWeaver.Net.HttpServerRequest.IntrusionTracked">
+            <summary>
+            True when the intrusion detection already tracked (and delayed) the error response of this request
+            </summary>
+        </member>
         <member name="M:SysWeaver.Net.HttpServerRequest.SetResStatusCode(System.Int32)">
             <summary>
             Set the status code of the response.
@@ -7096,6 +8064,12 @@
         <member name="P:SysWeaver.Net.HttpServerRequest.ProxyIpAddress">
             <summary>
             The address of the proxy the request came through (the connection) when <see cref="P:SysWeaver.Net.HttpServerRequest.IsForwarded"/> is true, else null.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Net.HttpServerRequest.IsHttps">
+            <summary>
+            True if the client used https: the connection is https, or the connection comes from a trusted proxy (<see cref="F:SysWeaver.Net.HttpServerBaseParams.TrustedProxies"/>)
+            that ended the TLS and says so ("proto=https" in the first element of the "Forwarded" header, else "https" as the first "X-Forwarded-Proto" value).
             </summary>
         </member>
         <member name="M:SysWeaver.Net.HttpServerRequest.ResolveClientIp">
@@ -7633,8 +8607,36 @@
         <member name="F:SysWeaver.Net.HttpSession.Token">
             <summary>
             The session token (the value of the session cookie). This is a secret, anyone knowing it can use the session.
+            It is only used as the key of the server's session map (and in the session cookie), never expose it: use <see cref="P:SysWeaver.Net.HttpSession.TokenHash"/> to identify a session
+            (logs, audits, debug views, errors).
             Do NOT assign, the server replaces the token when a user logs in (see <see cref="M:SysWeaver.Net.HttpServerBase.RunOnLogin(SysWeaver.Net.HttpSession,SysWeaver.Net.HttpServerRequest)"/>).
             </summary>
+        </member>
+        <member name="P:SysWeaver.Net.HttpSession.TokenHash">
+            <summary>
+            A safe id of the session: the hash of the session token, see <see cref="M:SysWeaver.Net.HttpSession.HashToken(System.ReadOnlySpan{System.Char})"/>.
+            It can't be used to access the session, so it can be shown in logs, audits, debug views and errors to correlate them with a session.
+            It changes when the token is rotated (a user logs in), use <see cref="M:SysWeaver.Net.HttpServerBase.FindSessionByTokenHash(System.String)"/> to find an active session from it.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.HttpSession.TokenHashLength">
+            <summary>
+            The number of chars of a <see cref="P:SysWeaver.Net.HttpSession.TokenHash"/>.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Net.HttpSession.HashToken(System.ReadOnlySpan{System.Char})">
+            <summary>
+            Compute the safe id of a session token: base64url (no padding) of the first 192 bits of SHA256(UTF8(token)), <see cref="F:SysWeaver.Net.HttpSession.TokenHashLength"/> (32) chars.
+            A token has at least 144 random bits, so the hash can't be reversed (no key is needed, and the id is the same after a restart).
+            </summary>
+            <param name="token">The session token</param>
+            <returns>The hash, 32 ASCII chars [A-Za-z0-9-_]</returns>
+        </member>
+        <member name="M:SysWeaver.Net.HttpSession.SetToken(System.String)">
+            <summary>
+            Replace the token (and the <see cref="P:SysWeaver.Net.HttpSession.TokenHash"/>), only called by the server while holding <see cref="F:SysWeaver.Net.HttpSession.TokenLock"/>.
+            </summary>
+            <param name="token">The new token</param>
         </member>
         <member name="F:SysWeaver.Net.HttpSession.TokenLock">
             <summary>
@@ -7957,6 +8959,68 @@
             Not used.
             </summary>
         </member>
+        <member name="T:SysWeaver.Net.IApiAuditReportService">
+            <summary>
+            Interface for services that can search and report the API calls stored by an <see cref="T:SysWeaver.Net.IApiAuditService"/> (typically the same service implements both).
+            All reports work on "fat" entries (<see cref="T:SysWeaver.Net.ApiAuditEntry"/>, the call and its client in one row), so any report can be filtered on both.
+            The web page audit/audit.html (the audit browser) uses the methods below as web API's, so an implementation must:
+            - Have a [WebApiUrl("Audit")] attribute on the class (the page calls Api/Audit/[Method]).
+            - Have a [WebApi] and a [WebApiAuth] (with <see cref="F:SysWeaver.Net.ApiAuditTools.ReadAuth"/>) attribute on every method.
+              Note that a [WebApiAuth] attribute on an interface method isn't used, a missing attribute on the class makes the audit data public!
+            </summary>
+            <remarks>
+            Implementations should use an <see cref="T:SysWeaver.Net.ApiAuditMatcher"/> for the interpretation of a query, so that all services give the same result.
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.Net.IApiAuditReportService.GetInfo">
+            <summary>
+            Get information about the audit storage
+            </summary>
+            <returns>Information about the audit storage</returns>
+        </member>
+        <member name="M:SysWeaver.Net.IApiAuditReportService.Search(SysWeaver.Net.ApiAuditSearch)">
+            <summary>
+            Find audited API calls
+            </summary>
+            <param name="search">What to find, the order and the page to return, null returns the newest calls</param>
+            <returns>The found API calls (with client data)</returns>
+        </member>
+        <member name="M:SysWeaver.Net.IApiAuditReportService.GetEntry(System.Int64)">
+            <summary>
+            Get a single audited API call
+            </summary>
+            <param name="id">The id of the call</param>
+            <returns>The API call (with client data), null if it doesn't exist (or if it's pruned)</returns>
+        </member>
+        <member name="M:SysWeaver.Net.IApiAuditReportService.GetIpLocation(System.String)">
+            <summary>
+            Get the estimated location of an ip address, using the ip location source of the service manager (if any).
+            Implement it with <see cref="M:SysWeaver.Net.ApiAuditTools.GetIpLocation(SysWeaver.Net.IIpLocation,System.String)"/>.
+            </summary>
+            <param name="ip">The ip address</param>
+            <returns>The location, null if there is no source, or if it isn't known</returns>
+        </member>
+        <member name="M:SysWeaver.Net.IApiAuditReportService.GetFacets(SysWeaver.Net.ApiAuditFacetRequest)">
+            <summary>
+            Get the most common values of some fields (with the number of calls), among the calls that match a query
+            </summary>
+            <param name="request">The query and the fields to get values for</param>
+            <returns>The values of every (known) requested field</returns>
+        </member>
+        <member name="M:SysWeaver.Net.IApiAuditReportService.GetSummary(SysWeaver.Net.ApiAuditSummaryRequest)">
+            <summary>
+            Get totals and a time line of the calls that match a query
+            </summary>
+            <param name="request">The query and the number of time line steps</param>
+            <returns>Totals and a time line</returns>
+        </member>
+        <member name="M:SysWeaver.Net.IApiAuditReportService.AuditTable(SysWeaver.Data.TableDataRequest)">
+            <summary>
+            Audited API calls (with client data) as a table.
+            </summary>
+            <param name="r">The table request, the param is an optional json serialized <see cref="T:SysWeaver.Net.ApiAuditQuery"/> (it's combined with the filters and the search text of the request)</param>
+            <returns>The table</returns>
+        </member>
         <member name="T:SysWeaver.Net.IApiAuditService">
             <summary>
             Interface for audit services.
@@ -8193,6 +9257,13 @@
             <param name="session">The session of the current request</param>
             <returns>The rate limiter to use for this session, or null for no limit</returns>
         </member>
+        <member name="M:SysWeaver.Net.IHttpRequestHandler.IpRateLimiter(SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            An optional rate limiter per client IP address.
+            </summary>
+            <param name="request">The current request</param>
+            <returns>The rate limiter to use for the client address of the request, or null for no limit</returns>
+        </member>
         <member name="T:SysWeaver.Net.HttpServerEndpointTypes">
             <summary>
             The kind of an <see cref="T:SysWeaver.Net.IHttpServerEndPoint"/>, used when enumerating end points (diagnostic tables, explorers, menus).
@@ -8390,6 +9461,167 @@
             <returns>Pairs of key (a file extension or mime type) and transformer function.
             A transformer returns true if it handled the request (by updating the <see cref="T:SysWeaver.Net.HttpRequestTransformerState"/>), false to pass.
             The sequence is enumerated on registration and again on unregistration, so it should return the same (equal) delegates each time.</returns>
+        </member>
+        <member name="T:SysWeaver.Net.IntrusionDetectionParams">
+            <summary>
+            Parameters of the simple intrusion detection of the http server (see <see cref="T:SysWeaver.Net.IntrusionDetection"/>).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.IntrusionDetectionParams.Enabled">
+            <summary>
+            Set to false to disable the intrusion detection
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.IntrusionDetectionParams.WindowSeconds">
+            <summary>
+            The tracking window in seconds: the state of a client address is kept this long after its last tracked request,
+            and an intrusion is reported at most once per window and address.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.IntrusionDetectionParams.ErrorStatusCodes">
+            <summary>
+            The response status codes that count as an error (ex: scanning a site for API's or files)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.IntrusionDetectionParams.ErrorThreshold">
+            <summary>
+            An intrusion is reported when a client address got errors for this many different urls (within the window)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.IntrusionDetectionParams.ApiThreshold">
+            <summary>
+            An intrusion is reported when a client address made this many calls to tracked API's (within the window).
+            Tracked API's are the audited ones (<see cref="T:SysWeaver.MicroService.WebApiAuditAttribute"/>, if <see cref="F:SysWeaver.Net.IntrusionDetectionParams.TrackAuditedApis"/> is true)
+            and the ones with a <see cref="T:SysWeaver.MicroService.WebApiIntrusionTrackAttribute"/>.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.IntrusionDetectionParams.TrackAuditedApis">
+            <summary>
+            If true, all audited API's are tracked (ex: sign in attempts, administration, data exports)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.IntrusionDetectionParams.MinDelayMs">
+            <summary>
+            The minimum random delay (in ms) added to error responses (and to tracked API calls of an address that triggered an intrusion within the window)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.IntrusionDetectionParams.MaxDelayMs">
+            <summary>
+            The maximum random delay (in ms), 0 or less disables the delay
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.IntrusionDetectionParams.MaxReportChars">
+            <summary>
+            The maximum number of chars of the url list in an intrusion report
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.IntrusionDetectionParams.MaxAddresses">
+            <summary>
+            The maximum number of tracked addresses (bounds the memory use), when reached new addresses share one state (reported as address "*", ex: a distributed scan)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Net.IntrusionInfo">
+            <summary>
+            The details of a detected intrusion attempt
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.IntrusionInfo.Kind">
+            <summary>
+            The kind: "errors" (many error responses, ex: scanning for API's / files) or "api" (many calls to tracked API's, ex: password guessing, data exfiltration)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.IntrusionInfo.Address">
+            <summary>
+            The client address (an IPv6 address is reported as its /64 network)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.IntrusionInfo.Requests">
+            <summary>
+            The number of tracked requests since the last report of this address (or since tracking started)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.IntrusionInfo.UrlCount">
+            <summary>
+            The number of different urls
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.IntrusionInfo.Urls">
+            <summary>
+            The urls (with the number of requests when more than one), limited to <see cref="F:SysWeaver.Net.IntrusionDetectionParams.MaxReportChars"/> chars
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Net.IntrusionInfo.ToString">
+            <inheritdoc/>
+        </member>
+        <member name="T:SysWeaver.Net.IntrusionDetection">
+            <summary>
+            A simple intrusion detection: tracks error responses and calls to key API's per client address, and reports an intrusion attempt
+            (<see cref="E:SysWeaver.Net.IntrusionDetection.Detected"/>) when an address passes a threshold within a time window. Error responses get a random delay (slows down scanning).
+            </summary>
+            <remarks>
+            Per address detection doesn't catch a distributed attack (each address stays below the thresholds), it catches a single scanner or guesser.
+            Thread safe.
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.Net.IntrusionDetection.#ctor(SysWeaver.Net.IntrusionDetectionParams)">
+            <summary>
+            Create the detection
+            </summary>
+            <param name="p">Parameters, null for the defaults</param>
+        </member>
+        <member name="P:SysWeaver.Net.IntrusionDetection.TrackAuditedApis">
+            <summary>
+            True if audited API's are tracked
+            </summary>
+        </member>
+        <member name="E:SysWeaver.Net.IntrusionDetection.Detected">
+            <summary>
+            Called when an intrusion attempt is detected (at most once per window and address and kind)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Net.IntrusionDetection.IsError(System.Int32)">
+            <summary>
+            True if a status code counts as an error
+            </summary>
+            <param name="statusCode">The status code</param>
+            <returns>True if tracked</returns>
+        </member>
+        <member name="F:SysWeaver.Net.IntrusionDetection.OverflowAddress">
+            <summary>
+            The address of the shared state used when <see cref="F:SysWeaver.Net.IntrusionDetectionParams.MaxAddresses"/> is reached
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.IntrusionDetection.ApproxCount">
+            <summary>
+            The approximate number of tracked addresses (incremented on create, synced with the cache when the limit is reached)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Net.IntrusionDetection.OnError(SysWeaver.Net.HttpServerRequest,System.String)">
+            <summary>
+            Track a finished request with an error status code, a random delay is returned (await it before the response is completed)
+            </summary>
+            <param name="request">The request</param>
+            <param name="url">The requested url</param>
+            <returns>A task that completes after the delay</returns>
+        </member>
+        <member name="M:SysWeaver.Net.IntrusionDetection.OnApi(SysWeaver.Net.HttpServerRequest,System.String)">
+            <summary>
+            Track a call to a key API (ex: sign in), an address that triggered an intrusion within the window gets a random delay
+            </summary>
+            <param name="request">The request</param>
+            <param name="url">The API url</param>
+            <returns>A task that completes after the delay (completed if no delay)</returns>
+        </member>
+        <member name="T:SysWeaver.Net.IntrusionDetectedException">
+            <summary>
+            A detected intrusion attempt (used for the problems list and the audit entry, never thrown)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Net.IntrusionDetectedException.#ctor(System.String)">
+            <summary>
+            Create the exception
+            </summary>
+            <param name="message">The details</param>
         </member>
         <member name="T:SysWeaver.Net.LanguageInfo">
             <summary>
@@ -8788,7 +10020,8 @@
             </summary>
             <remarks>
             All request headers except Host, Upgrade-Insecure-Requests and Transfer-Encoding are forwarded, including Cookie and Authorization.
-            <see cref="M:SysWeaver.Net.ProxyTools.GetFromRequest(SysWeaver.Net.HttpServerRequest,System.Nullable{System.Int32})"/> adds the address of the connection to the X-Forwarded-For header (appended to the value it may already have).
+            <see cref="M:SysWeaver.Net.ProxyTools.GetFromRequest(SysWeaver.Net.HttpServerRequest,System.Nullable{System.Int32})"/> adds the address of the connection to the X-Forwarded-For header (appended to the value it may already have),
+            and adds X-Forwarded-Proto ("https" or "http", see <see cref="P:SysWeaver.Net.HttpServerRequest.IsHttps"/>) if the request doesn't have it.
             </remarks>
         </member>
         <member name="F:SysWeaver.Net.ProxyTools.AllowMultipleHeaders">

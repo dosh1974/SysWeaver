@@ -1356,6 +1356,29 @@
             The one time pad used (from GetUserSalt)
             </summary>
         </member>
+        <member name="P:SysWeaver.SysWeaverHttpClientExt.LoginReq.ClientProof">
+            <summary>
+            The SCRAM client proof (base64), see ScramInfo in SysWeaver.Auth.Core
+            </summary>
+        </member>
+        <member name="P:SysWeaver.SysWeaverHttpClientExt.LoginReq.ClientNonce">
+            <summary>
+            The SCRAM client nonce
+            </summary>
+        </member>
+        <member name="M:SysWeaver.SysWeaverHttpClientExt.ScramClientProof(System.String,System.String,System.String,System.Int32,System.String,System.String,System.String)">
+            <summary>
+            Compute the SCRAM client proof (see ScramInfo / ScramTools in SysWeaver.Auth.Core, kept here to avoid a dependency)
+            </summary>
+            <param name="hash">The legacy hash H</param>
+            <param name="binding">The application binding</param>
+            <param name="salt">The SCRAM salt (base64)</param>
+            <param name="iterations">The PBKDF2 iteration count, at least 4096 (the server minimum)</param>
+            <param name="username">The user name (as sent to GetUserSalt)</param>
+            <param name="oneTimePad">The one time pad</param>
+            <param name="clientNonce">The client nonce</param>
+            <returns>The base64 encoded client proof</returns>
+        </member>
         <member name="M:SysWeaver.SysWeaverHttpClientExt.SysWeaverLogin(System.Net.Http.HttpClient,System.String,System.String,System.String)">
             <summary>
             Login to a SysWeaver service
@@ -1367,7 +1390,8 @@
             A 44 character base64 string that decodes to 32 bytes is treated as the already salted password hash.</param>
             <returns>User information, check <see cref="P:SysWeaver.SysWeaverHttpClientExt.AuthInfo.Succeeded"/></returns>
             <remarks>
-            Requests a salt and one time pad from "Api/auth/GetUserSalt" and then posts the double SHA256 hash to "Api/auth/Login".
+            Requests a salt and one time pad from "Api/auth/GetUserSalt" and then posts the SCRAM proof (when the server asks for it, see ScramInfo in SysWeaver.Auth.Core)
+            or the legacy double SHA256 hash to "Api/auth/Login".
             </remarks>
             <exception cref="T:SysWeaver.Net.HttpResponseException">A request failed (non 2xx response).</exception>
             <exception cref="T:System.IO.InvalidDataException">The salt response doesn't contain a salt and a one time pad.</exception>

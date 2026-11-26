@@ -7,8 +7,9 @@ namespace SysWeaver.MicroService
 {
 
     /// <summary>
-    /// The sign in web api of the <see cref="AuthManagerService"/>: hands out the salt and a one-time pad for a user name, signs in with a
-    /// salted password hash bound to that pad (so it can't be replayed) and reports the password policies. Adds "Sign in" to the user menu.
+    /// The sign in web api of the <see cref="AuthManagerService"/>: hands out the salt (and the SCRAM parameters) and a one-time pad for a user name,
+    /// signs in with a SCRAM client proof (or the legacy salted password hash) bound to that pad (so it can't be replayed) and reports the password policies.
+    /// Adds "Sign in" to the user menu.
     /// </summary>
     [WebApiUrl("auth")]
     [WebMenuEmbedded("User", "User/Login", "Sign in", "auth/Login.html?parent=1&loc=.", "Click to enter credentials", "IconLogin", 1, null, true)]
@@ -39,29 +40,32 @@ namespace SysWeaver.MicroService
         /// <param name="username">The user to get some salt for</param>
         /// <param name="context">Context, handled internally</param>
         /// <returns>The salt and one time pad to use for password hashing.
-        /// [0] = Salt.
+        /// [0] = Salt (the legacy salt, used to compute the legacy hash H).
         /// [1] = One time pad.
+        /// If the user's authorizer supports SCRAM (see <see cref="ScramInfo"/>, unknown users get fake values of the same shape):
+        /// [2] = "s1" (<see cref="ScramTools.SchemeName"/>).
+        /// [3] = The SCRAM salt (base64).
+        /// [4] = The PBKDF2 iteration count.
+        /// [5] = The application binding string.
         /// </returns>
         [WebApi]
+        //  Process wide: permissive (many users, many sites), per address: conservative (password guessing from one client)
+        [WebApiServiceRateLimit(200, 1, 400, 5)]
+        [WebApiIpRateLimit(20, 60, 10, 10)]
         public async Task<String[]> GetUserSalt(String username, HttpServerRequest context)
         {
             var a = context.Session.Auth;
-            String data;
-            if (a == null)
-            {
-                var am = Am;
-                data = await am.Auth.GetSalt(username).ConfigureAwait(false);
-            }
-            else
-            {
-                data = await a.Auth.GetSaltAsync(username).ConfigureAwait(false);
-            }
-            return [data, Manager.CreateOneTimePad(username)];
+            var p = await Am.Auth.GetLoginParams(username, a?.Auth).ConfigureAwait(false);
+            var pad = Manager.CreateOneTimePad(username);
+            var scram = p.Item2;
+            if (scram == null)
+                return [p.Item1, pad];
+            return [p.Item1, pad, ScramTools.SchemeName, scram.Salt, scram.Iterations.ToString(System.Globalization.CultureInfo.InvariantCulture), scram.Binding ?? ""];
         }
 
 
         /// <summary>
-        /// Try to login a user
+        /// Try to login a user, using the SCRAM proof if <see cref="LoginRequest.ClientProof"/> is set, else the legacy one time hash
         /// </summary>
         /// <param name="login">Parameters</param>
         /// <param name="context">Context, handled internally</param>
@@ -69,6 +73,8 @@ namespace SysWeaver.MicroService
         [WebApi]
         [WebApiAudit(AuthTools.AuditGroup)]
         [WebApiAuditFilterParams(nameof(AuditInputFilter_Login))]
+        [WebApiServiceRateLimit(100, 1, 200, 5)]
+        [WebApiIpRateLimit(20, 60, 10, 10)]
         public async Task<AuthInfo> Login(LoginRequest login, HttpServerRequest context)
         {
             var s = context?.Session;
@@ -82,7 +88,10 @@ namespace SysWeaver.MicroService
             Authorization auth;
             try
             {
-                auth = await am.UserHash(username, login.Hash ?? "", login.OneTimePad).ConfigureAwait(false);
+                if (login.ClientProof != null)
+                    auth = await am.ScramAuth(username, login.OneTimePad, login.ClientNonce, login.ClientProof).ConfigureAwait(false);
+                else
+                    auth = await am.UserHash(username, login.Hash ?? "", login.OneTimePad).ConfigureAwait(false);
             }
             catch (PasswordChangeRequiredException ex)
             {

@@ -33,7 +33,7 @@ menus with submenus, searchable selections, value cells ...).
 | `editors.js` | sw/ui.js | `PropertyEditor` |
 | `cells.js` | sw/ui.js | `Sw.Cells` (value cell renderers for TableData formats), `Sw.Markdown` |
 | `code.js` | (on demand) | `Sw.CodeEditor` (code editor), `Sw.CodeLanguages`, `Sw.GlslDocs` |
-| `compat_common.js` | common/common.js (legacy bundle = core + ui + this) | Every global of the old `common/common.js` mapped onto Sw (old element based classes `ColorIcon`, `Button`, `ProgressBar`, `ValueFormat.createLink` keep their `icon-WxH` / `Sysweaver-Button` / `SysWeaver-*` elements styled by `common/theme.css`); sets the old cell class names on `Sw.Cells.Classes`; links `sw/ui.css` and `compat_common.css` on old pages. Not for new pages |
+| `compat_common.js` | common/common.js (legacy bundle = core + ui + this) | Every global of the legacy `common/common.js` mapped onto Sw (old element based classes `ColorIcon`, `Button`, `ProgressBar`, `ValueFormat.createLink` keep their `icon-WxH` / `Sysweaver-Button` / `SysWeaver-*` elements styled by `common/theme.css`); sets the old cell class names on `Sw.Cells.Classes`; links `sw/ui.css` and `compat_common.css` on old pages. Not for new pages |
 | `compat_common.css` | (linked by compat_common.js) | Old look of the Sw cell elements on old pages (links, tag pills) |
 | `tokens.css`, `components.css`, `overlays.css`, `cells.css`, `code.css`, `icons.css`, `page.css` | sw/ui.css (in this order) | design tokens, component styles, SysWeaver icon classes, the page anatomy |
 | `gallery.html`, `gallery.js` | - | the component gallery (every component in every state; testing and reviews) |
@@ -164,7 +164,7 @@ themes, the app colours (Application theme) and a brand follow automatically **w
 | Type | `--sw-text-xs` 12, `-sm` 13, `-md` 14 (body, controls; density), `-lg` 16, `-xl` 20, `-2xl` 26, `-3xl` 32 (rem), `--sw-lh`, `--sw-lh-tight`; fonts `--sw-sans`, `--sw-head` (headings), `--sw-mono`, `--sw-serif` | numbers `font-variant-numeric: tabular-nums` (no monospace for numbers) |
 | Density | `--sw-control-h` (28 / 34 / 44) and `--sw-control-h-sm` (24 / 28 / 36): the only two control heights (small buttons, chips, the buttons inside a field or a tab, menu tools use the small one; the shell top bar buttons the default one); every form element takes the page font (no browser default font), `--sw-row-h` (32 / 40 / 48), `--sw-nav-row-h`, `--sw-icon`, `--sw-cell-px`, `--sw-text-md` | sizes of your own controls and rows |
 | Layout | `--sw-side-w`, `--sw-rail-w`, `--sw-top-h`, `--sw-page-max` (100rem), `--sw-form-max` (75rem), `--sw-read-max` (45rem), `--sw-label-w` | |
-| Motion | `--sw-ease`, `--sw-dur-1` (hover, 50 ms), `--sw-dur-2` (menus, switches, 100 ms), `--sw-dur-3` (drawers, dialogs, 150 ms), each times the theme's motion scale `--sw-motion` (1 = normal; registered `<time>` properties, so scripts read "0.1s"); slide distances `--sw-dist-1` (small shifts, 2 px), `--sw-dist-2` (menus, tool tips, toasts, 4 px), `--sw-dist-3` (dialogs, sheets, drawers, 16 px). Per theme: Pro `--sw-motion: 0.25` (12 / 25 / 38 ms) and 1 / 2 / 8 px; Hacker `--sw-motion: 4` while the motion review lasts (200 / 400 / 600 ms: every transition is easy to see; it was 0 = no animation); an app sets its own scale in `app/app.css` (`:root { --sw-motion: 0.5; }`). Example: `transition: opacity var(--sw-dur-2) var(--sw-ease), transform var(--sw-dur-2) var(--sw-ease); transform: translateY(var(--sw-dist-2));` | `prefers-reduced-motion` wins over every theme: no movement (the slide distances 0, `--sw-zoom` 1, the shell's width animation off), the fades and colour changes keep their durations (opacity and colour are not motion; with everything at 1 ms the app looked dead with Windows "Animation effects" off). Only motion is reduced: use the tokens for every transition and keyframe; there is no blanket rule on every element (an element without a transition must not get one), and a colour fade in place with its own fixed duration keeps it |
+| Motion | `--sw-ease`, `--sw-dur-1` (hover, 50 ms), `--sw-dur-2` (menus, switches, 100 ms), `--sw-dur-3` (drawers, dialogs, 150 ms), each times the theme's motion scale `--sw-motion` (1 = normal; registered `<time>` properties, so scripts read "0.1s"); slide distances `--sw-dist-1` (small shifts, 2 px), `--sw-dist-2` (menus, tool tips, toasts, 4 px), `--sw-dist-3` (dialogs, sheets, drawers, 16 px). Per theme: Pro `--sw-motion: 0.25` (12 / 25 / 38 ms) and 1 / 2 / 8 px; Hacker `--sw-motion: 4` while the motion review lasts (200 / 400 / 600 ms: every transition is easy to see); an app sets its own scale in `app/app.css` (`:root { --sw-motion: 0.5; }`). Example: `transition: opacity var(--sw-dur-2) var(--sw-ease), transform var(--sw-dur-2) var(--sw-ease); transform: translateY(var(--sw-dist-2));` | `prefers-reduced-motion` wins over every theme: no movement (the slide distances 0, `--sw-zoom` 1, the shell's width animation off), the fades and colour changes keep their durations (opacity and colour are not motion; with everything at 1 ms the app looked dead with Windows "Animation effects" off). Only motion is reduced: use the tokens for every transition and keyframe; there is no blanket rule on every element (an element without a transition must not get one), and a colour fade in place with its own fixed duration keeps it |
 
 **Density**: `html[data-density="compact" | "comfortable" | "touch"]` (`Sw.Theme.Density.Set(name)` / `Set(null)` = automatic, the
 Settings menu of the shell, the url parameter `?density=`; stored in localStorage `SysWeaver.Density`, every window follows). Automatic:
@@ -177,11 +177,11 @@ Settings menu of the shell; stored in localStorage `SysWeaver.TextSize`, every w
 (that also scales px borders and breaks pointer and element positions in scripts) and not a font size per element. Size in rem, not px,
 so a page follows it; media queries in rem keep the browser's size (the drawer threshold does not move).
 
-**Old token names** stay as aliases (`--sw-bg-1` = `--sw-surface`, `--sw-bg-2` / `--sw-bg-inset` = `--sw-surface-sunken`, `--sw-bg-3` =
+**Legacy token names** are aliases (`--sw-bg-1` = `--sw-surface`, `--sw-bg-2` / `--sw-bg-inset` = `--sw-surface-sunken`, `--sw-bg-3` =
 `--sw-surface-strong`, `--sw-line` = `--sw-border`, `--sw-line-strong`, `--sw-muted` = `--sw-text-2`, `--sw-faint` = `--sw-text-3`,
 `--sw-accent1-fg` = `--sw-text-accent`, `--sw-shadow` = `--sw-elev-1`, `--sw-backdrop` = `--sw-scrim`, `--sw-touch` = `--sw-control-h`,
 `--sw-size` = `--sw-text-md`, `--sw-speed` = `--sw-dur-2`), so old pages keep working; new code uses the role names (`SwWeb migrate`
-renames the uses, [PORTING.md B1](../PORTING.md#b1-old-token-names-aliases)). Overriding an alias (`--sw-touch: 52px`) no longer
+renames the uses, [PORTING.md B1](../PORTING.md#b1-old-token-names-aliases)). Overriding an alias (`--sw-touch: 52px`) does not
 restyles the components: set the new token (B2).
 `--sw-focus` (every focus ring) is a fixed blue per scheme, never the accent2 / danger red: light `#1a66d6`, dark schemes (dark,
 application) `#6cb6ff`, hacker `#3fd2ff`, pro `#7cc4ff` (contrast >= 4.5:1 on the theme background); a theme may set `--ThemeFocus`.
@@ -219,8 +219,8 @@ Status colors are never series colors. Used by the chart viewer's default "Theme
 
 | Function | Description |
 |---|---|
-| `Sw.el(tag, props, ...children)` | Create an element. `tag` may have classes (`"div.a.b"`). Props: `class, text, html, title, attrs, style, dataset, on: {event: fn}` or any element property. Children: nodes, texts and numbers; **arrays are flattened** (any depth: `Sw.el("div", null, [a, b], c)` = `Sw.el("div", null, a, b, c)`); a **component** (`{E}`, ex: a `Sw.Button`) adds its `E`; `null` / `undefined` / `false` are skipped; any other object is left out with a console error (it used to become the text "[object Object]"). An array or a component in the `props` place is the first child |
-| `Sw.Icon(name, cls)` | An inline svg icon (24×24, stroked; `Sw.Icons.List()` names), or for icon classes / urls a mask icon (`Sw.IconClass`). An **unknown name** shows a neutral dashed square (`svg.sw-icon-unknown`, `data-icon` = the name) and logs one console warning per name; it used to show "info", which reads as a real meaning |
+| `Sw.el(tag, props, ...children)` | Create an element. `tag` may have classes (`"div.a.b"`). Props: `class, text, html, title, attrs, style, dataset, on: {event: fn}` or any element property. Children: nodes, texts and numbers; **arrays are flattened** (any depth: `Sw.el("div", null, [a, b], c)` = `Sw.el("div", null, a, b, c)`); a **component** (`{E}`, ex: a `Sw.Button`) adds its `E`; `null` / `undefined` / `false` are skipped; any other object is left out with a console error (never the text "[object Object]"). An array or a component in the `props` place is the first child |
+| `Sw.Icon(name, cls)` | An inline svg icon (24×24, stroked; `Sw.Icons.List()` names), or for icon classes / urls a mask icon (`Sw.IconClass`). An **unknown name** shows a neutral dashed square (`svg.sw-icon-unknown`, `data-icon` = the name) and logs one console warning per name |
 | `Sw.Icons.Add(name, svgInner)`, `Has(name)`, `List()` | Register / query inline icons |
 | `Sw.IconClass(image, {Size, Color, Title, Class})` | Mask icon from a SysWeaver icon class (`"IconReload"`) or an url (`"../icons/x.svg"`; a trailing `*` = full color image). Drawn in the text color, or `Color` (css color or an old `IconColorTheme*` name) |
 | `Sw.SetIconClass(el, image)` | Change the image of a mask icon |
@@ -244,11 +244,11 @@ Status colors are never series colors. Used by the chart viewer's default "Theme
 | `Sw.Keys.Add(combo, fn, {Title, InInputs, Global, Replace, Scope})` | Keyboard shortcut (`"Mod+K"` = Ctrl, or Cmd on Apple); `Sw.Keys.List()` / `Format(combo)` for help screens. The newest registration of a combination wins and only it is listed; a second registration gives a developer warning (with both titles) unless `Replace: true`; a combination the browser keeps (Mod+W / T / N / Q, Ctrl+Tab, Ctrl+PageUp / PageDown, Alt+F4) gives one too. **`Scope: element`** (or a component): the shortcut runs only while that element is connected and shown (not in a hidden tab panel, `inert`, `display: none`), so two lists in tabs can each register "/" for their own search: the newest *shown* one runs, no duplicate warning, `List()` lists the shown ones. Register the page keys of a component that can sit in a tab with its root as the scope: `Sw.Keys.Add("/", () => search.Focus(), { Title, Scope: list.E })`. A scope element that has never been shown when its key is pressed (nothing runs) gives a developer warning; the options are checked (DevMode) |
 | `Sw.Drag(el, {OnStart, OnMove, OnEnd, OnTap, Threshold, Button, Touch})` | Pointer drag helper with capture |
 | `Sw.Clipboard.Copy(value, {Toast, Generic, What, Button})` | Copy (works on plain http too). From a copy button (the `Button` option, or automatic when it runs in the `OnClick` of a `Sw.Button` with a copy icon or `Copy: true`) it **confirms in place** (`Sw.Clipboard.Confirm`: a check mark for 1.5 s, the tool tip "Copied", announced "API key copied" with `What`), no toast; else an info toast names the value (INP-31). A failure is a fail toast. `Toast: true` adds the toast to an in place confirmation, `false` shows none |
-| `Sw.Clipboard.CopyOnClick(el, value, {Keyboard, AddTitle, What, Generic})` | A copy action on a value, as the original `copyOnClick` (INP-31 1.6.0): **a plain left click copies the value** (a toast names it; not with a modifier, while text is selected in it or on a link / control inside it; a click on such an inner link / control is left untouched: not cancelled or stopped, so the link navigates and a Ctrl / Shift / middle click keeps its new tab); Ctrl+C on the focused value (no text selected) copies the value (a toast names it), and its menu (pure right click, long press, Menu key, Shift+F10) has "Copy value" and "Select text". `Keyboard: true` makes the value a Tab stop on which Enter / Space copy, as the original `copyOnClick(…, true)`, announced as a button (`role="button"` with the description "Copies the value to the clipboard", unless the element has a role of its own; WCAG 4.1.2). On a button element a click copies and confirms in place. Returns the tool tip hint ("Click to copy "…" to the clipboard", the original text); `Sw.Clipboard.RemoveCopy(el)` removes it. |
+| `Sw.Clipboard.CopyOnClick(el, value, {Keyboard, AddTitle, What, Generic})` | A copy action on a value, like the legacy `copyOnClick` (INP-31): **a plain left click copies the value** (a toast names it; not with a modifier, while text is selected in it or on a link / control inside it; a click on such an inner link / control is left untouched: not cancelled or stopped, so the link navigates and a Ctrl / Shift / middle click keeps its new tab); Ctrl+C on the focused value (no text selected) copies the value (a toast names it), and its menu (pure right click, long press, Menu key, Shift+F10) has "Copy value" and "Select text". `Keyboard: true` makes the value a Tab stop on which Enter / Space copy (like the legacy `copyOnClick(…, true)`), announced as a button (`role="button"` with the description "Copies the value to the clipboard", unless the element has a role of its own; WCAG 4.1.2). On a button element a click copies and confirms in place. Returns the tool tip hint ("Click to copy "…" to the clipboard"); `Sw.Clipboard.RemoveCopy(el)` removes it. |
 | `Sw.CopyButton({ Value or Get, What, Title, Label, Generic, Small, Kind, Text })` | The copy button next to a value: a ghost icon button (44 px hit area on touch), copies exactly the value, confirms in place. Give repeated ones a `Label` with the item ("Copy the API key of MailService") |
 | `Sw.Clipboard.Read()` | Read text |
 | `Sw.Clipboard.LinkUrl(a)` / `Sw.Clipboard.LinkItem(a, name)` | The absolute address of an `<a href>` (null for none, a script or an in page anchor) / a **Copy link** menu item for it (`{ Text, Title, Icon, OnClick }`, "Copy link: <name>" when a menu lists several links; null when there is no copyable link). The data table cell menu uses it for link cells |
-| `Sw.Clipboard.AltClickLinks(root)` | **Alt+click** on a link inside `root` copies its address (a toast names it) instead of the browser's Alt+click (a download in Chromium); plain, Ctrl / Meta / Shift and middle clicks keep the browser's link gestures (UX guide INP-2 exception). Returns a function that removes the handler. Used by the data tables and the explore listing (the original copied on any modifier click) |
+| `Sw.Clipboard.AltClickLinks(root)` | **Alt+click** on a link inside `root` copies its address (a toast names it) instead of the browser's Alt+click (a download in Chromium); plain, Ctrl / Meta / Shift and middle clicks keep the browser's link gestures (UX guide INP-2 exception). Returns a function that removes the handler. Used by the data tables and the explore listing |
 | `Sw.Color` | `HsvToRgb`, `RgbToHsv`, `ToHex`, `FromHex` (0..1 floats), `ParseCss(css)` → `[r, g, b, a]`, `Luma(r, g, b)` |
 | `Sw.FadeSrc(el, {ShowError, FadeIn, FadeDelay, Channel, Parent, UseEvent})`, `Sw.UnfadeSrc(el)` | Smooth image / iframe loading: hidden while loading, faded in; attributes `data-sw-fade`, `data-sw-fadein`, `data-sw-fadedelay`, `data-sw-fadechannel="name,ms"`, `data-sw-fadeparent`, `data-sw-useevent` work automatically |
 | `Sw.CreateImg(o)`, `Sw.CreateIFrame(o)` | Create a smoothly loading img / iframe (old positional arguments accepted) |
@@ -347,7 +347,7 @@ label: put it in a `Sw.Field`.
 * `Fader`: a mixer cap across the track (a tall cap on a horizontal fader, a wide one on a vertical fader) whose line marks the value, no fill (crossfaders, channel faders, scrub handles). Size it on a page scope with `--sw-fader-cap` (across the track) and `--sw-fader-cap-w` (along it).
 
 ### NumberBox
-`new Sw.NumberBox({ Min, Max, Step, Value, Width, Label, AriaLabel, Hint, Title, Disabled, Required, Validate(v), Format(v), OnChange })`: commits on Enter / blur, arrows step; Escape keeps the typed text (as the original inputs; `EscapeReverts: true` reverts it). `Get()` returns the number, also while it is still being typed (a form read on a button click), and null for an empty box (`Value: null` or `Required`).
+`new Sw.NumberBox({ Min, Max, Step, Value, Width, Label, AriaLabel, Hint, Title, Disabled, Required, Validate(v), Format(v), OnChange })`: commits on Enter / blur, arrows step; Escape keeps the typed text (`EscapeReverts: true` reverts it). `Get()` returns the number, also while it is still being typed (a form read on a button click), and null for an empty box (`Value: null` or `Required`).
 `Label` is visible (see Form fields; `.Input` is the input). The box grows with a long value (`field-sizing: content`, at least 6em); without
 a `Step` the value is shown as it is ("1", "0.25"), not as "1.000".
 
@@ -355,10 +355,10 @@ a `Step` the value is shown as it is ("1", "0.25"), not as "1.000".
 `new Sw.TextBox({ Value, Placeholder, Label, AriaLabel, Hint, Title, Type, Multiline, Rows, Clear, Reveal, Copy, Icon, MaxLength, AutoComplete, InputMode, SpellCheck, Width, Disabled, ReadOnly, Mono, Required, Validate(v), OnInput, OnChange, OnEnter })`
 * `Clear`: a clear button, `Reveal`: show / hide a password, `Icon`: a leading icon, `Validate`: an error text or null (checked on change).
 * `Copy`: `true`, or what it copies (ex: `"user ID"`: "Copy the user ID", "user ID copied"): a small copy button in the box (`Sw.CopyButton`, class `sw-text-copy`, the right most button; property `CopyBtn`). It is always there, so nothing moves while typing (LAY-9): while the box is empty it is disabled with the reason "There is nothing to copy yet". A mouse / touch helper, not a tab stop (the keyboard copies in the box with Ctrl+C). Never on a password (a developer warning; no button).
-* Escape keeps the typed text, as the original inputs did (it goes on: it closes a dialog, see Dialogs). `EscapeReverts: true` makes Escape revert uncommitted typing instead (only then the event is stopped, so Escape in an unchanged box still closes a dialog); the revert dispatches `input` like typing (a dialog and the page compare the value again).
+* Escape keeps the typed text (it goes on: it closes a dialog, see Dialogs). `EscapeReverts: true` makes Escape revert uncommitted typing instead (only then the event is stopped, so Escape in an unchanged box still closes a dialog); the revert dispatches `input` like typing (a dialog and the page compare the value again).
 * `Draft: "context"` (or `{ Context, Dirty }`): the text is kept as a draft while typing and restored on the next load (UX guide SAF-11, `Sw.Draft`); the "Draft restored" notice goes on its own line under the field row. `ClearDraft()` after the text was sent or saved (`Sw.Form` does it); `Destroy()`, or the box leaving the page (a closed dialog), disposes the draft handle. Never for passwords.
 * A valid commit, or `Set()` from code, clears a shown message (also one set by a form, FRM-3).
-* Unsaved typing marks the page dirty only with `Dirty: true` ([unsaved edits](#unsaved-edits-of-the-controls-saf-10); the original never asked).
+* Unsaved typing marks the page dirty only with `Dirty: true` ([unsaved edits](#unsaved-edits-of-the-controls-saf-10)).
 * `.Input` is the input element. Methods: `Get`, `Set`, `Commit`, `Focus(select)`, `SetError(text)`, `Validate()`, `SetDisabled`, `ClearDraft()`, `IsDirty()`, `MarkClean()`.
 
 ### Select
@@ -458,7 +458,7 @@ The controls implement these UX guide 1.0 rules; use the same helpers in your ow
   `Work`: the leave question says the true consequence, `Sw.Page.WorkText`); `Sw.Work.Scope(fn)` / `Sw.Work.Promise(scope)` collect
   the requests a handler starts. **`Sw.Work.Current(el)`** → `Promise<boolean>` | null: the work running now (inside the synchronous
   part of a click's work: that work; else the busy work of a button / field in the element's form, card, section or dialog), true when
-  it succeeded, false when it failed or was stopped. `Sw.Draft` clears a draft only after it (FD R4 F6: `d.Clear(); return Send(...)`
+  it succeeded, false when it failed or was stopped. `Sw.Draft` clears a draft only after it (`d.Clear(); return Send(...)`
   that fails keeps the text); `Sw.Form` and a button whose successful write carried a drafted text clear the drafts after the success.
   It never waits for itself: asked for the work of the element that runs it (`await Sw.Work.Current(b.E)` in b's own OnClick) it answers
   null with a developer warning; await your own request instead (`{ Then: true }`: you only chain on it, no self rule).
@@ -515,19 +515,19 @@ The controls implement these UX guide 1.0 rules; use the same helpers in your ow
   (`Sw.Menu.Show` in `OnClick`, page markup) only declares `aria-haspopup="menu"`: the library then turns a pure right click (and the
   Menu key, Shift+F10) on it into a click, so every menu button answers the right mouse button.
 * **Copy (INP-31):** `Sw.CopyButton({ Value, What })` next to the value; `Sw.Clipboard.CopyOnClick(el)` for a value without a button
-  (a plain click copies, as the original; also Ctrl+C and its menu). A secret is never quoted (SEC-1): `Secret: true` on `CopyButton` / `Clipboard.Copy`,
+  (a plain click copies; also Ctrl+C and its menu). A secret is never quoted (SEC-1): `Secret: true` on `CopyButton` / `Clipboard.Copy`,
   and a value that looks like one (an api key `name:key`, a token, a long random string, a password field: `Sw.Clipboard.LooksSecret`)
   is announced as "Copied text to the clipboard" (with `What`: "API key copied"); `Show: true` quotes it anyway. A copy button with
   `Get` announces only "API key copied" (no "done"); an empty value is not copied (an error, no "Copied").
 * **Touch targets (INP-24):** in the touch density (also the mobile layout and touch screens without a chosen density) small buttons,
   chips, segments, tab close, field buttons and the action / toggle buttons of value cells (`sw-cell-action`, `sw-cell-toggle`) get a
   44 px hit area (an invisible `::after`), the visual size stays.
-* **Usage hints (TIP-8):** the ui library has no usage hint component: the learned hints (`Sw.Help.Learned`, "Show hints again") were
-  removed (owner, OWN3-Shell-4: no page used them). Make the UI explain itself; instructions a field needs go into the field `Hint`.
+* **Usage hints (TIP-8):** the ui library has no usage hint component (no learned hints, no "Show hints again").
+  Make the UI explain itself; instructions a field needs go into the field `Hint`.
 
 ### Unsaved edits of the controls (SAF-10)
 
-**Opt in (parity with the original, P3-A-4):** the original pages never asked "Leave site?", so a control marks the page only with
+**Opt in:** a control marks the page only with
 `Dirty: true` (or the leave sentence). TextBox, NumberBox, Select, Toggle and Segmented with it mark the page dirty by themselves
 (`Sw.Page.SetDirty`), so leaving with unsaved edits asks "Leave without saving? Your changes to Mail settings are lost." without page code:
 
@@ -547,12 +547,12 @@ The controls implement these UX guide 1.0 rules; use the same helpers in your ow
   control's save runs is not sent at once; when the save ends only the newest waiting value is sent (unless it is the server's value
   already), so the shown value is always the one the server ends with; a failure of the last save puts the server's value back and
   says why.
-* **An opted-in control is tracked whenever the user changes it** (S5-A-4): there is no save-path detection (the automatic
+* **An opted-in control is tracked whenever the user changes it**: there is no save-path detection (the automatic
   "is there a Save on the page" rules, the untracked-edit warning and the learned save button went with the opt in). **Dirty belongs to
   the page** for the cleaning (A3-10): any button whose work succeeded and sent the edited values cleans them, also those of another
   card (texts of 3+ characters and objects, which a payload carries clearly) and a `Sw.Form`'s fields (`form.SentBy`); a button whose
   write carried none of them leaves them dirty with a developer warning ("mark it `Saves: true`, or `Saves: false`").
-* **Only the user's changes are edits** (FD R4 F2): a value written by code (`Set()`, `.value`, a dispatched event: the server's
+* **Only the user's changes are edits**: a value written by code (`Set()`, `.value`, a dispatched event: the server's
   customer number after Create, a normalised value) is never an edit and never a "newer edit"; `IsDirty()` is true only after a user
   change. `Sw.Edits.UserSince(root, since)` = the user changed a field / control inside `root` after `since` (a `performance.now()`
   time: trusted `input` / `change` events and the Sw controls' user changes), `Sw.Edits.UserAt(root)` = the time of the last one (0 =
@@ -561,13 +561,13 @@ The controls implement these UX guide 1.0 rules; use the same helpers in your ow
   `Sw.OnClick`, Enter, a pick: `Sw.Work.InUser()`) is the user's edit, like typing: a "Same as billing" button that copies the address
   with `ship.Set(bill.Get())` makes the card dirty, and leaving asks first. Not in dialogs, toolbars and tables (a dialog compares its
   own values; a value its work writes is no newer edit). Say it explicitly with the second argument: `Set(v, { User: false })` (loading
-  data inside a click: the new base), `Set(v, { User: true })` (always the user's); `{ Silent: true }` = the old `Set(v, true)`.
+  data inside a click: the new base), `Set(v, { User: true })` (always the user's); `{ Silent: true }` = the legacy `Set(v, true)`.
 
   ```js
   new Sw.Button({ Text: "Same as billing", OnClick: () => ship.Set(bill.Get()) });   // dirty: the user asked for it
   new Sw.Button({ Text: "Reload", OnClick: async () => { const a = await load(); ship.Set(a.Ship); } }); // after an await: data, clean
   ```
-* **An auto save that never answers** (FD R4 P7): after `Sw.Edits.SlowMs` (10 s) the control says "Weekly digest: still saving…" (a
+* **An auto save that never answers**: after `Sw.Edits.SlowMs` (10 s) the control says "Weekly digest: still saving…" (a
   muted line under it, `.sw-ctl-status`) and a developer warning asks for a time limit; after `Sw.Edits.GiveUpMs` (30 s) it is a
   failure like any other ("not saved. There was no answer from the server. The previous value is back."), the newest waiting change
   goes next; an answer that still comes later and succeeds puts the value back ("saved after all").
@@ -695,8 +695,8 @@ On narrow screens dialogs are sheets (full width at the bottom, a handle), on lo
   **Confirmations are never dirty:** `Role: "alertdialog"` (Confirm, Alert, `Sw.Cells.ConfirmDanger` with its type to confirm input) has
   `AutoDirty: false` by default (`AutoDirty: true` for an alertdialog with real input). A save closes without asking.
 * **One leave sentence per dialog:** the dialog reports its whole state to the page as one entry (unsaved input only after the page's
-  own `handle.SetDirty(true)`; the automatic field tracking asks "Discard changes?" inside the dialog but adds no "Leave site?", as the
-  original; work that stops with the page always counts) (`Sw.Page.SetDirty("dlg:…")`): dirty
+  own `handle.SetDirty(true)`; the automatic field tracking asks "Discard changes?" inside the dialog but adds no "Leave site?";
+  work that stops with the page always counts) (`Sw.Page.SetDirty("dlg:…")`): dirty
   "Your changes in the dialog "Rename server" are not saved." (Leave without saving?), busy with work that stops with the page "Upload
   stops." (Leave this page?), both "… are not saved, and Save may not finish."; its footer buttons add no sentence of their own (`Leave: false`).
   Closing the dialog clears it.
@@ -768,7 +768,7 @@ On narrow screens dialogs are sheets (full width at the bottom, a handle), on lo
     bottom row with about 6 em, else takes a row of its own above (sheets always; a low window shows the time only). The footer only
     grows upwards. The idle footer comes back when the work ends.
   - **Labels never break inside a word (TXT-17).** Footer labels wrap only between words; in a low window (400 % zoom, a phone in
-    landscape) the footer buttons that need more than one row wrap into compact rows, never a sideways scroll (S6-D1, WCAG 1.4.10
+    landscape) the footer buttons that need more than one row wrap into compact rows, never a sideways scroll (WCAG 1.4.10
     reflow: `sw-foot-wrap`, one line per label, the primary action last at the bottom right; more than two rows share two,
     `sw-foot-grid2`, two per row), and a label longer than its place is cut with … and has the full text as the tool tip. `Sw.Dialog.CheckLabels(root)` →
     the problems ("the label "…" breaks inside a word", "… is cut without its full text as the tool tip"); developer mode runs it on
@@ -798,8 +798,8 @@ On narrow screens dialogs are sheets (full width at the bottom, a handle), on lo
   Waivers }` (`?only=<theme|WxH>`, `?quick`, `?bundle`); the page title starts with PASSED / FAILED and `Passed` is true only with 0
   problems. **Run it with visible (classic) scroll bars**, as users of Windows desktops see them: a headless Chromium / Edge without
   `--hide-scrollbars` (Playwright: drop it from the default arguments); a scroll bar that appears at 320x180 is seen only then, which hidden scroll bars never
-  show (P2-A-12: the pinned busy footer was 10 px off with one). It also fails when a footer scrolls sideways or a footer button lies
-  outside the box (S6-D1, with the case `save.3.s6d1.one`: the busy three-button dialog with "Save and restart" and a title of two lines). A problem can only be accepted as a **written waiver** (`Waivers` in `ui/dialogtest.js`, with its reason, listed here).
+  show. It also fails when a footer scrolls sideways or a footer button lies
+  outside the box (the case `save.3.s6d1.one`: the busy three-button dialog with "Save and restart" and a title of two lines). A problem can only be accepted as a **written waiver** (`Waivers` in `ui/dialogtest.js`, with its reason, listed here).
   **Waivers: none** (0 problems in all 20 frames, 800 cases). Integrate / smoke: fail when `Passed` is false.
 * **Close attempts:** × , footer Cancel / Close (a button without OnClick whose Value is null / false, or `Dismiss: true | "cancel" | "close"`),
   Escape, an outside click, the sheet swipe, Back (`Sw.Popup.CloseTop`), tab close / reload (`beforeunload`). Clean: closes. Dirty: asks
@@ -830,7 +830,7 @@ Drag the title bar (dead zone 4 px, 10 px on touch), drag an edge or corner (8 p
 dialog menu (⋮ "Dialog options") has Move, Size, Maximize / Restore, Reset position; Move / Size show step buttons (50 px, 44 px on touch),
 Revert and Done; arrows step 10 px (Shift 50), Enter keeps, Escape reverts; the new position is announced. Every dialog kind remembers its
 position and size: `Id` names the kind; without it a stable id is derived from the page path, the title (numbers taken out) and the button
-labels. Stored in local storage `SysWeaver.Dialog.<site>.<Id>` (per site root; the old `SysWeaver.Dialog.<Id>` is still read) and
+labels. Stored in local storage `SysWeaver.Dialog.<site>.<Id>` (per site root; the legacy `SysWeaver.Dialog.<Id>` is still read) and
 restored clamped (the whole dialog inside the viewport, at most the viewport, never narrower than the content). While the user moves it
 (drag, Move mode) it moves freely both ways: the title bar's height stays on screen, and sideways at least 160 px of it (`MinOnScreen`);
 a resize keeps the whole width on screen. Desktop dialogs have no transitions: position and size follow the pointer in the same frame. A press on the title bar
@@ -859,7 +859,7 @@ Every dialog, framework or app, follows these rules; `Sw.Dialog.Confirm` / `Prom
 explanation" (C# `TableDataActionsExAttribute`),
    gives the title and the text, and its explanation replaces "This cannot be undone.". Titles wrap (a long address is never cut).
 3. **Wording:** buttons are verbs that say what happens ("Remove key", "Delete", "Create key", "Save"), "Cancel" for the way out.
-   No "Yes" / "No", no exclamation marks, no shouting in new texts (the framework shows a caller's button text as given, so ported texts such as "Yes, remove it!" read as in the original), sentences end
+   No "Yes" / "No", no exclamation marks, no shouting in new texts (the framework shows a caller's button text as given, so ported texts such as "Yes, remove it!" read as given), sentences end
    with a full stop, product names match the page ("API key", not "API-key"). Don't end the text with "Are you sure?": the title asks.
 4. **Focus:** an input of the body gets the focus; otherwise Cancel when the footer has a danger button (a destructive action is never the
    default, Enter on Cancel cancels); otherwise the primary button. `Focus` overrides it. This holds however the dialog was opened (a click,
@@ -934,7 +934,7 @@ menus and dialogs are modal layers and don't register. Toasts are registered by 
 and registered overlay (see the toast placement rule): the check that finds a cover also moves the toast. A large focusable region (a
 grid, a chart or a scroll area with `tabindex`: a fifth of the window or 40 % of its height) is not a control here; its own buttons are.
 A control that another layer covers at its middle (ex: a dialog's scrim while it leaves) can't be used now and is not counted (the same
-rule as the toast placement), and the toasts are placed again right before their check (F10: the check saw the place of a moment ago).
+rule as the toast placement), and the toasts are placed again right before their check.
 ```js
 const off = Sw.Overlay.Register(line, { Name: "Activity line", Owns: ".my-line-target" });   // checked on changes, resize and scroll
 Sw.Overlay.Check();          // → ["\"Toasts\" covers \"Next\""]: every registered overlay now (self-tests, smoke runs; also without DevMode)
@@ -1123,7 +1123,7 @@ every edited value of the form cleans it too (`form.SentBy(text)`, called by `Sw
 - `Submit`: a button (Sw.Button or element) whose click validates and then calls `OnSubmit(values)` (busy while a returned promise
   runs). `Gate: "required"` disables it (aria-disabled, the reason "Fill in <labels> first" as tool tip and on an attempt) while a required field is empty (default: always enabled, a click shows what is missing: UX guide FRM-7). A field marked `Required` here also gets `aria-required` on its input.
 - Server errors for one field: `form.SetError("Mail", text)`.
-- **Unsaved edits (SAF-10), opt in with `Dirty: true` / a sentence** (the original never asked; P3-A-4): while a field the user edited differs from its value before the user's first edit
+- **Unsaved edits (SAF-10), opt in with `Dirty: true` / a sentence**: while a field the user edited differs from its value before the user's first edit
   (values set by code, also after the form was made and in a field never focused, a draft restore and a click or key that changed
   nothing are no edits) the page is dirty: leaving asks "Leave without saving? Your changes to `Title` are lost." (`Title: "the
   invitation"`; without a Title the title of its card / section; `Dirty: "own sentence"`; without `Dirty` the form never asks).
@@ -1189,12 +1189,12 @@ page.Add(Sw.Card({ Body: steps }));
 ```
 
 ### Value cells (cells.js)
-`Sw.Cells.Update(el, type, value, flash, format, nextValue, onRefresh)` renders a value like the old `ValueFormat.update`: the format
+`Sw.Cells.Update(el, type, value, flash, format, nextValue, onRefresh)` renders a value like the legacy `ValueFormat.update`: the format
 `"Name;arg1;arg2..."` (TableDataColumn.Format: Default, Number, Url, Tags, PerRowFormat, ByteSize, ByteSpeed, Toggle, Actions, Img,
 Duration, Json, Text, MD, Uptime, WebColor) picks the renderer, else the C# type (numbers, DateTime, TimeSpan, Boolean, Type), else Default.
-* Url target prefixes: `+` / none = new tab, `*` = same window, `^` = top, `-` = parent. A link (`CreateLink`) keeps the browser's link gestures with a modifier key (Ctrl+click = new tab, INP-2); `OnLink` on other elements only focuses on a modifier click (it used to copy the url).
+* Url target prefixes: `+` / none = new tab, `*` = same window, `^` = top, `-` = parent. A link (`CreateLink`) keeps the browser's link gestures with a modifier key (Ctrl+click = new tab, INP-2); `OnLink` on other elements only focuses on a modifier click (it does not copy the url).
 * Links to other sites (Url and Img cells; `Sw.Cells.External(url)`, `Sw.Cells.ExternalLink(url, text, ext)`): always a new tab with `rel="noopener noreferrer"`, an external icon after the text (`a.sw-link-ext`, `.sw-link-ext-icon`) and the tool tip "Opens <host> in a new tab (another web site)" after the server title. A web search (Google, Bing, DuckDuckGo, Yahoo `/search`) is named as one: the search icon before the text and "Search the web: opens <host> in a new tab and sends this search to it:" with the searched text. Offline (`navigator.onLine` false, or `Sw.Cells.Internet = false` set by an app that knows the internet is not reachable) these links are plain text (`span.sw-link-off`; an Img cell shows the picture without a link) with "Needs the internet (not connected): <url>" in the tool tip; explore/table.js renders the cells again on the browser's online / offline events.
-* Actions: `text|title|url|icon` per button; `&url` opens in the same tab, `@url` in a new tab, anything else is a GET request; then `onRefresh()`. Destructive actions (`Sw.Cells.IsDestructiveAction`: Kill, Delete, Remove, Stop, Uninstall, Reboot, Reset ... in the text, the title or the link method name, or a title that warns "can not be undone") ask first: a dialog titled with the action ("Kill the process?") that names the item (`Sw.Cells.ItemName`: the row's `data-sw-item`, set by explore/table.js from the key columns), Cancel focused, the action as a danger button; this is `Sw.Cells.ConfirmDanger(o)` ({Title, Item, ItemLabel, Text, Warning, OkText, OkIcon, OkTitle, CancelTitle} -> Promise<boolean>), the one confirmation of destructive actions (also used by edit/text.js Delete / Reload): warning icon, question title, item, "This cannot be undone.", Cancel / verb. Kill on process id 0, or id 4 named "System" (Windows), is disabled (the server sends no per row availability). TimeSpan / Duration cells use one short style per column: µs / ms below 10 s, "48.3 s", then two units ("9 min 19 s", "1 h 18 min", "2 d 18 h"). Tags are filled pills as the original (`sw-tag`: `--sw-accent1` with bold `--sw-on-accent` text, `--sw-radius-sm`; owner report 4 #9); the "🔑" tag of an empty list has the tool tip "Any signed in user". An auth requirement column (C# `TableDataAuth`, the Tags format with the 6th part "Auth") shows `Sw.Cells.AuthTag(value)`: null = the "Open" tag in the second accent (`sw-tag-open`: anyone, no sign in; it stands out from the token tags), "" = the outlined "Any signed in user" tag (`sw-tag-signedin`), else one tag per token; the api inspector and the explore listing use the same tags. Img cells with a short word value (ex: POST / GET) use the value as alt text and tool tip instead of the image url.
+* Actions: `text|title|url|icon` per button; `&url` opens in the same tab, `@url` in a new tab, anything else is a GET request; then `onRefresh()`. Destructive actions (`Sw.Cells.IsDestructiveAction`: Kill, Delete, Remove, Stop, Uninstall, Reboot, Reset ... in the text, the title or the link method name, or a title that warns "can not be undone") ask first: a dialog titled with the action ("Kill the process?") that names the item (`Sw.Cells.ItemName`: the row's `data-sw-item`, set by explore/table.js from the key columns), Cancel focused, the action as a danger button; this is `Sw.Cells.ConfirmDanger(o)` ({Title, Item, ItemLabel, Text, Warning, OkText, OkIcon, OkTitle, CancelTitle} -> Promise<boolean>), the one confirmation of destructive actions (also used by edit/text.js Delete / Reload): warning icon, question title, item, "This cannot be undone.", Cancel / verb. Kill on process id 0, or id 4 named "System" (Windows), is disabled (the server sends no per row availability). TimeSpan / Duration cells use one short style per column: µs / ms below 10 s, "48.3 s", then two units ("9 min 19 s", "1 h 18 min", "2 d 18 h"). Tags are filled pills (`sw-tag`: `--sw-accent1` with bold `--sw-on-accent` text, `--sw-radius-sm`); the "🔑" tag of an empty list has the tool tip "Any signed in user". An auth requirement column (C# `TableDataAuth`, the Tags format with the 6th part "Auth") shows `Sw.Cells.AuthTag(value)`: null = the "Open" tag in the second accent (`sw-tag-open`: anyone, no sign in; it stands out from the token tags), "" = the outlined "Any signed in user" tag (`sw-tag-signedin`), else one tag per token; the api inspector and the explore listing use the same tags. Img cells with a short word value (ex: POST / GET) use the value as alt text and tool tip instead of the image url.
 * Toggle: true / false texts and titles, the api url. Failed requests show a fail toast.
 * **Row action results (Actions / Toggle requests; FBK-2, FBK-5, FOC-1):** the server's outcome decides: a failed request **or a
   `false` answer** is "not done" (never "done" unless the server said so). Before any toast the button dispatches a bubbling
@@ -1212,7 +1212,7 @@ Duration, Json, Text, MD, Uptime, WebColor) picks the renderer, else the C# type
   and its word is no user data (Cancel never asks "Discard changes?"); the Item line is left out when the title shows its values.
 * Json / Text / MD cells show a shortened text; click / Enter opens the full text in a dialog (markdown via `common/marked.js`, loaded on
   demand, raw html restricted to formatting tags, script urls removed).
-* Uptime / empty DateTime cells stay live (one shared timer). Img cells: a picture that fails to load shows the cell value as text (`span.sw-cell-img-text`, ex: "GET", "SE") instead of a broken image; `iso_data/` flags are requested directly, as the original (no `Api/HaveService` probe); without the IsoDataService a flag fails to load and the value is shown as text. Number cells round to the format's decimals as the original ("Number;4": 0.0000); a Number format with a fifth option (C# `TableDataCurrency`: an ISO 4217 code or a template like "{1}" = the next column) is an amount, shown with the currency symbol (and, for negative decimals, its decimals) from `iso_data/currencies.js` (loaded on demand) and the same separators for every currency ("$1 234.50", "1 234.50 kr"), else "1 234.50 XYZ". Most cells have a copy action, as the original: a plain click copies the value (`Sw.Clipboard.CopyOnClick`), also Ctrl+C on the focused value and its menu (right click / long press). Disabled cell actions are aria-disabled with the reason as tool tip. Read only Boolean cells show "☑ True" / "☐ False" (null too; False in the second accent), as the original; Toggle cells are the original's check box pill (`button.sw-cell-toggle[role=checkbox]`: a check box and the text, filled with `--sw-accent2` when checked, a light tint of it when not; owner report 4 #8) and an Actions button of the same row with the same request is left out; an empty Tags value shows "🔑", as the original. Duration / TimeSpan cells use the original one unit text (`Sw.Format.TimeSpan`: "0", "2 672.1 ms", "559.0 seconds", "78 minutes", "66 hours", "11 days"; a number of whole seconds without the decimal: "1 second", "30 seconds", over 1 500 000 000 s "∞", ex: the cache durations of the APIs table, C# `TableDataDuration` on an int), Uptime cells the original elapsed text (`Sw.Format.DurationMs`: "41 seconds", "16 minutes"), a "{0} s" Number cell is a plain number ("3 600 s"), sizes use the units KB, MB, GB ("12.3 KB", "5.0 MB", "716.7 GB"), a SysWeaver.MessageLevels value is its number (the level name in the tool tip), and a tiny number rounds as the original ("0.000"; P2-A).
+* Uptime / empty DateTime cells stay live (one shared timer). Img cells: a picture that fails to load shows the cell value as text (`span.sw-cell-img-text`, ex: "GET", "SE") instead of a broken image; `iso_data/` flags are requested directly (no `Api/HaveService` probe); without the IsoDataService a flag fails to load and the value is shown as text. Number cells round to the format's decimals ("Number;4": 0.0000); a Number format with a fifth option (C# `TableDataCurrency`: an ISO 4217 code or a template like "{1}" = the next column) is an amount, shown with the currency symbol (and, for negative decimals, its decimals) from `iso_data/currencies.js` (loaded on demand) and the same separators for every currency ("$1 234.50", "1 234.50 kr"), else "1 234.50 XYZ". Most cells have a copy action: a plain click copies the value (`Sw.Clipboard.CopyOnClick`), also Ctrl+C on the focused value and its menu (right click / long press). Disabled cell actions are aria-disabled with the reason as tool tip. Read only Boolean cells show "☑ True" / "☐ False" (null too; False in the second accent); Toggle cells are a check box pill (`button.sw-cell-toggle[role=checkbox]`: a check box and the text, filled with `--sw-accent2` when checked, a light tint of it when not) and an Actions button of the same row with the same request is left out; an empty Tags value shows "🔑". Duration / TimeSpan cells use a one unit text (`Sw.Format.TimeSpan`: "0", "2 672.1 ms", "559.0 seconds", "78 minutes", "66 hours", "11 days"; a number of whole seconds without the decimal: "1 second", "30 seconds", over 1 500 000 000 s "∞", ex: the cache durations of the APIs table, C# `TableDataDuration` on an int), Uptime cells an elapsed text (`Sw.Format.DurationMs`: "41 seconds", "16 minutes"), a "{0} s" Number cell is a plain number ("3 600 s"), sizes use the units KB, MB, GB ("12.3 KB", "5.0 MB", "716.7 GB"), a SysWeaver.MessageLevels value is its number (the level name in the tool tip), and a tiny number rounds to zero ("0.000").
 * Renderers: `Sw.Cells.Default`, `Number`, `Url`, `Img`, `Tags` (and `Sw.Cells.AuthTag(auth)`, the tag of an auth requirement), `PerRowFormat`, `ByteSize`, `ByteSpeed`, `Toggle`, `Actions`, `TimeSpan`
   (`Duration`), `Json`, `LongText`, `MarkDown`, `DateTimeLive` (`Uptime`), `DateTime`, `Boolean`, `Type`, `WebColor` (old signature
   `(el, value, formats, nextValue, flash, type, onRefresh)`); maps `TypeFormatters`, `FormatFormatters`; helpers `Reset`, `SetText`,
@@ -1261,7 +1261,7 @@ Every icon class named by the server (C# `IconClass` values, contract Appendix B
 theme (`Sw.IconClass` elements use the text color; old `ColorIcon` elements their `IconColorTheme*` class). `IconLogo`, `IconCurrentUser(Fill)`
 and `IconFile*` are full color background images. `IconWorking` is animated. The four color classes `IconColorThemeBackground/Main/Acc1/Acc2`
 are defined too. Pages may override a class in their own style sheet. Icon "classes" may also be urls (`icons/x.svg`, `../icons/x.svg`,
-a trailing `*` for full color images). `IconOk` (dialog OK / confirm buttons) is a check mark drawn by an inline data: svg (the icon module has no check mark file; it used to be the `fav_on.svg` heart). The gallery lists every class; Debug / Icons (explore/icons.html) shows each svg with its class names and copies the class name.
+a trailing `*` for full color images). `IconOk` (dialog OK / confirm buttons) is a check mark drawn by an inline data: svg (the icon module has no check mark file). The gallery lists every class; Debug / Icons (explore/icons.html) shows each svg with its class names and copies the class name.
 
 **One outline style.** The shell menu, the rail and the top bar menus draw the IconModule icons as their line twins (`Sw.LineIcon(image, cls)`,
 `Sw.Icons.LineOf(image)`, the `LineIcons` table in base.js: home, alert, list, fileText, chart, db, session, puzzle, cpu, shield ...; one
@@ -1270,7 +1270,7 @@ monochrome mask: draw it as a 24 px outline with a 1.5 to 2 px stroke, or give i
 `Sw.Icons.AddLine("orders.svg", name)` in `app/app.js`.
 
 **One icon per page.** The rail shows icons only, so two menu items must never show the same glyph. Distinct classes for
-framework pages that used to share one: `IconProblems` (warning), `IconLogFile`, `IconSessionCache`, `IconFolderManaged` / `IconFolderShared` /
+framework pages that would otherwise share one: `IconProblems` (warning), `IconLogFile`, `IconSessionCache`, `IconFolderManaged` / `IconFolderShared` /
 `IconFolderRemote`, `IconTableRefs`, `IconTableEmails`, `IconTableMessages`, `IconAiImageModels`, `IconAiTextModels`, `IconEndPoints`,
 `IconTableClients`, `IconLoadedServices`, `IconKeyFiles`, `IconBackgroundEffects`, `IconImageEffects`, `IconCollageEffects`. The shell
 (`shell/menu.js` `MenuIcons` / `DistinctIcons`) applies them by page when a server still sends the shared icon (only when two pages of

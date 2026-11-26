@@ -75,7 +75,7 @@ namespace SysWeaver.MicroService
                 throw new HttpResponseException(400, "Enter a user id: your email address, phone number or user name");
             var code = CleanUpShortCode(request?.Code);
             long id;
-            using (var c = await Db.GetAsync().ConfigureAwait(false))
+            using (var c = await DbGetAsync().ConfigureAwait(false))
                 id = await FindUser(c, identifier).ConfigureAwait(false);
             if (id == 0)
                 return TryUnknownCode(identifier);
@@ -138,13 +138,13 @@ namespace SysWeaver.MicroService
                 throw new NoUserLoggedInException();
             var id = user.Id;
             List<String> targets;
-            using (var c = await Db.GetAsync().ConfigureAwait(false))
+            using (var c = await DbGetAsync().ConfigureAwait(false))
                 targets = await GetUserComTargets(c, id).ConfigureAwait(false);
             if (targets.Count <= 0)
                 throw new UserHaveNoComs();
             var now = DateTime.UtcNow;
             var tokens = await AddAction(id, DbAction.DeleteUser, UserSubject(id), now + DeleteUserTimeout, context, now + DeleteUserShortTimeout).ConfigureAwait(false);
-            //  The same form as the other links ("?<token>"); the page still reads the older "?token=<token>" links
+            //  The same form as the other links ("?<token>")
             String link = String.Concat(LinkRoot(context), "auth/DeleteAccount.html?",
                 HttpUtility.UrlEncode(tokens.Item1));
 
@@ -181,16 +181,17 @@ namespace SysWeaver.MicroService
             if (id == 0)
                 throw new TokenExpiredException();
             String name;
-            using (var c = await Db.GetAsync().ConfigureAwait(false))
+            using (var c = await DbGetAsync().ConfigureAwait(false))
             {
                 using var tr = await c.BeginTransactionAsync().ConfigureAwait(false);
-                var user = await c.FirstOrDefaultAsync<DbUser>(x => x.Id == id).ConfigureAwait(false);
+                var user = await GetDbUser(c, id).ConfigureAwait(false);
                 if (user == null)
                     throw new UserNoLongerExistException(id);
                 await ThrowIfDisabled(c, id).ConfigureAwait(false);
                 var userGuid = MakeGuid(id);
                 name = user.UserName;
                 await c.DeleteAllAsync<DbUser>(x => x.Id == id).ConfigureAwait(false);
+                InvalidateUserList();
                 await c.DeleteAllAsync<DbEmailAddress>(x => x.UserId == id).ConfigureAwait(false);
                 await c.DeleteAllAsync<DbPhoneNumber>(x => x.UserId == id).ConfigureAwait(false);
                 await c.DeleteAllAsync<DbAuthPassKey>(x => x.UserId == id).ConfigureAwait(false);
@@ -252,19 +253,19 @@ namespace SysWeaver.MicroService
             var user = ValidatePasswordRequestData(request, context);
             if (user == null)
                 throw new AuthenticationFailedException();
-            using var c = await Db.GetAsync().ConfigureAwait(false);
+            using var c = await DbGetAsync().ConfigureAwait(false);
             using var tr = await c.BeginTransactionAsync().ConfigureAwait(false);
             var id = user.Id;
             var authData = await c.FirstOrDefaultAsync<DbAuthPassword>(x => x.UserId == id).ConfigureAwait(false);
             if (!ValidatePasswordRequestPassword(request, authData))
                 throw new AuthenticationFailedException();
-            authData.Pwd = request.NewHash;
+            SetPasswordHash(authData, request.NewHash);
             authData.MustResetPassword = false;
-            await c.UpdateAsync(authData, x => new { x.Pwd, x.MustResetPassword }).ConfigureAwait(false);
+            await c.UpdateAsync(authData, x => new { x.ScramSalt, x.ScramIterations, x.StoredKey, x.MustResetPassword }).ConfigureAwait(false);
             //  A password change revokes every outstanding link of the user whose meaning depends on the old state (see ActionTokenGroups)
             await RevokeOnEvent(c, id, AccountEvents.PasswordChanged).ConfigureAwait(false);
             tr.Commit();
-            Manager.AddMessage(MessageLevels.Info, $"User \"{user.UserName}\" (#{id}) changed their password");
+            Manager.AddMessage(MessageLevels.Info, $"User #{id} changed their password");
             return true;
         }
 
@@ -284,6 +285,9 @@ namespace SysWeaver.MicroService
         /// <returns>The identifier (trimmed), never the e-mail addresses and phone numbers of the account: show it as "if an account uses ..."</returns>
         /// <exception cref="HttpResponseException">400: no identifier</exception>
         [WebApi]
+        //  Sends messages and looks up accounts: limited per client address
+        [WebApiServiceRateLimit(100, 1, 200, 5)]
+        [WebApiIpRateLimit(10, 60, 5, 10)]
         public Task<String[]> ForgotPassword(String identifier, HttpServerRequest context)
         {
             identifier = identifier?.Trim();
@@ -529,12 +533,12 @@ namespace SysWeaver.MicroService
             List<String> targets;
             long id;
             DbUser user;
-            using (var c = await Db.GetAsync().ConfigureAwait(false))
+            using (var c = await DbGetAsync().ConfigureAwait(false))
             {
                 id = await FindUser(c, identifier).ConfigureAwait(false);
                 if (id == 0)
                     throw new UserDoNotExistException(identifier);
-                user = await c.FirstOrDefaultAsync<DbUser>(x => x.Id == id).ConfigureAwait(false);
+                user = await GetDbUser(c, id).ConfigureAwait(false);
                 if (user == null)
                     throw new UserDoNotExistException(identifier);
                 //  A disabled account gets no reset message (it can't sign in in any way until it is enabled again); ForgotPassword
@@ -626,7 +630,7 @@ namespace SysWeaver.MicroService
             Authorization auth;
             //  What happened, for the audit log line
             String how;
-            using (var c = await Db.GetAsync().ConfigureAwait(false))
+            using (var c = await DbGetAsync().ConfigureAwait(false))
             {
                 using var tr = await c.BeginTransactionAsync().ConfigureAwait(false);
                 //  A disabled account: its links don't work until it is enabled again (nothing is changed)
@@ -634,8 +638,8 @@ namespace SysWeaver.MicroService
                 var authData = await c.FirstOrDefaultAsync<DbAuthPassword>(x => x.UserId == id).ConfigureAwait(false);
                 var isNew = authData == null;
                 //  An administrator required a new password: the current one may not be chosen again (the client sends the hash of the
-                //  new password made with the current salt, NewPasswordData.CurrentSalt; older clients send none and are not checked)
-                if (!isNew && authData.MustResetPassword && IsUsablePassword(authData) && IsSameStoredHash(authData.Pwd, login.CurrentHash))
+                //  new password made with the current salt, NewPasswordData.CurrentSalt; null is not checked)
+                if (!isNew && authData.MustResetPassword && IsUsablePassword(authData) && IsSamePassword(authData, login.CurrentHash))
                     return new UserLoginResponse { Error = UserErrors.SamePassword };
                 how = isNew ? "added a password" : (authData.MustResetPassword ? "chose a new password after a forced reset" : "reset their password with the code sent to them");
                 var now = DateTime.UtcNow;
@@ -646,13 +650,13 @@ namespace SysWeaver.MicroService
                         UserId = id,
                     };
                 authData.Salt = salt;
-                authData.Pwd = login.NewHash;
+                SetPasswordHash(authData, login.NewHash);
                 authData.MustResetPassword = false;
                 authData.LastUsed = now;
                 if (isNew)
                     await c.InsertAsync(authData).ConfigureAwait(false);
                 else
-                    await c.UpdateAsync(authData, x => new { x.Salt, x.Pwd, x.MustResetPassword, x.LastUsed }).ConfigureAwait(false);
+                    await c.UpdateAsync(authData, x => new { x.Salt, x.ScramSalt, x.ScramIterations, x.StoredKey, x.MustResetPassword, x.LastUsed }).ConfigureAwait(false);
                 auth = await InternalAuthUser(c, id).ConfigureAwait(false);
                 if (auth == null)
                     throw await NoAuthException(c, id).ConfigureAwait(false);
@@ -661,7 +665,7 @@ namespace SysWeaver.MicroService
                 await RevokeOnEvent(c, id, AccountEvents.PasswordChanged).ConfigureAwait(false);
                 await tr.CommitAsync().ConfigureAwait(false);
             }
-            Manager.AddMessage(MessageLevels.Info, $"User \"{auth.Username}\" (#{id}) {how}");
+            Manager.AddMessage(MessageLevels.Info, $"User #{id} {how}");
             var ret = new UserLoginResponse
             {
                 Username = auth.Username,
@@ -703,7 +707,7 @@ namespace SysWeaver.MicroService
             if (t.UserId > 0)
             {
                 var uid = t.UserId;
-                using var c = await Db.GetAsync().ConfigureAwait(false);
+                using var c = await DbGetAsync().ConfigureAwait(false);
                 var pwd = await c.FirstOrDefaultAsync<DbAuthPassword>(x => x.UserId == uid).ConfigureAwait(false);
                 if ((pwd != null) && pwd.MustResetPassword && IsUsablePassword(pwd))
                 {
@@ -712,20 +716,6 @@ namespace SysWeaver.MicroService
                 }
             }
             return res;
-        }
-
-        /// <summary>
-        /// True if a hash sent by a client (base64 text) equals a stored password hash (constant time).
-        /// </summary>
-        /// <param name="stored">The stored hash</param>
-        /// <param name="sent">The sent hash, null or empty never matches</param>
-        /// <returns>True if they are the same</returns>
-        static bool IsSameStoredHash(String stored, String sent)
-        {
-            if (String.IsNullOrEmpty(stored) || String.IsNullOrEmpty(sent))
-                return false;
-            return System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
-                System.Text.Encoding.UTF8.GetBytes(stored), System.Text.Encoding.UTF8.GetBytes(sent));
         }
 
         /// <summary>
@@ -742,7 +732,7 @@ namespace SysWeaver.MicroService
                 throw new NoUserLoggedInException();
             var id = user.Id;
             List<String> targets;
-            using (var c = await Db.GetAsync().ConfigureAwait(false))
+            using (var c = await DbGetAsync().ConfigureAwait(false))
             {
                 targets = await GetUserComTargets(c, id).ConfigureAwait(false);
                 if (targets.Count <= 0)
@@ -792,7 +782,7 @@ namespace SysWeaver.MicroService
                 throw new NoUserLoggedInException();
             var id = user.Id;
             List<String> targets;
-            using (var c = await Db.GetAsync().ConfigureAwait(false))
+            using (var c = await DbGetAsync().ConfigureAwait(false))
             {
                 targets = await GetUserComTargets(c, id).ConfigureAwait(false);
                 if (targets.Count <= 0)
@@ -838,17 +828,17 @@ namespace SysWeaver.MicroService
             if (id == 0)
                 throw new TokenExpiredException();
             String name;
-            using (var c = await Db.GetAsync().ConfigureAwait(false))
+            using (var c = await DbGetAsync().ConfigureAwait(false))
             {
                 using var tr = await c.BeginTransactionAsync().ConfigureAwait(false);
                 await ThrowIfDisabled(c, id).ConfigureAwait(false);
-                name = (await c.FirstOrDefaultAsync<DbUser>(x => x.Id == id).ConfigureAwait(false))?.UserName ?? "?";
+                name = (await GetDbUser(c, id).ConfigureAwait(false))?.UserName ?? "?";
                 await c.DeleteAllAsync<DbAuthPassword>(x => x.UserId == id).ConfigureAwait(false);
                 await DeleteAction(c, token, DbAction.DeletePassword, context).ConfigureAwait(false);
                 await RevokeOnEvent(c, id, AccountEvents.PasswordRemoved).ConfigureAwait(false);
                 await tr.CommitAsync().ConfigureAwait(false);
             }
-            Manager.AddMessage(MessageLevels.Info, $"User \"{name}\" (#{id}) removed their password");
+            Manager.AddMessage(MessageLevels.Info, $"User #{id} removed their password");
             context.Session.InvalidateCache();
             context.Server.PushMessageUser(MakeGuid(id), new PushMessage("reload"));
             return true;
@@ -906,14 +896,14 @@ namespace SysWeaver.MicroService
             var am = AuthMan;
             List<String> targets;
             String existingEmail;
-            using (var c = await Db.GetAsync().ConfigureAwait(false))
+            using (var c = await DbGetAsync().ConfigureAwait(false))
             {
                 //var authData = await c.FirstOrDefaultAsync<DbAuthPassword>(x => x.UserId == userId).ConfigureAwait(false);
                 targets = await GetUserComTargets(c, userId).ConfigureAwait(false);
                 existingEmail = targets.FirstOrDefault(x => am.ValidateEmailAddress(x, false));
                 if (IsSameComTarget(existingEmail, newEmail))
                     throw new EmailAlreadyAssignedException(newEmail);
-                if (await c.FirstOrDefaultAsync<DbEmailAddress>(x => x.Email == newEmail).ConfigureAwait(false) != null)
+                if (await FindDbEmail(c, newEmail).ConfigureAwait(false) != null)
                     throw new EmailInUseException(newEmail);
             }
 
@@ -963,7 +953,7 @@ namespace SysWeaver.MicroService
             am.ValidateEmailAddress(newEmail);
             var userId = user.Id;
             List<String> targets;
-            using (var c = await Db.GetAsync().ConfigureAwait(false))
+            using (var c = await DbGetAsync().ConfigureAwait(false))
             {
                 var authData = await c.FirstOrDefaultAsync<DbAuthPassword>(x => x.UserId == userId).ConfigureAwait(false);
                 if (!ValidatePasswordRequestPassword(request, authData))
@@ -980,7 +970,7 @@ namespace SysWeaver.MicroService
                     if (existingEmail != null)
                         throw new UserAlreadyHaveEmail();
                 }
-                if (await c.FirstOrDefaultAsync<DbEmailAddress>(x => x.Email == newEmail).ConfigureAwait(false) != null)
+                if (await FindDbEmail(c, newEmail).ConfigureAwait(false) != null)
                     throw new EmailInUseException(newEmail);
             }
 
@@ -1027,7 +1017,7 @@ namespace SysWeaver.MicroService
             var am = AuthMan;
             if (am == null)
                 throw new Exception("Email not supported!");
-            using (var c = await Db.GetAsync().ConfigureAwait(false))
+            using (var c = await DbGetAsync().ConfigureAwait(false))
             {
                 var authData = await c.FirstOrDefaultAsync<DbAuthPassword>(x => x.UserId == userId).ConfigureAwait(false);
                 if (!ValidatePasswordRequestPassword(request, authData))
@@ -1058,7 +1048,7 @@ namespace SysWeaver.MicroService
                     "[Link]", link
                 );
             }).ConfigureAwait(false);
-            using (var c = await Db.GetAsync().ConfigureAwait(false))
+            using (var c = await DbGetAsync().ConfigureAwait(false))
             {
                 using var tr = await c.BeginTransactionAsync().ConfigureAwait(false);
                 await c.DeleteAllAsync<DbEmailAddress>(x => x.UserId == userId).ConfigureAwait(false);
@@ -1094,10 +1084,10 @@ namespace SysWeaver.MicroService
             String noticeName, noticeLanguage;
             //  The account before the change, for the undo link in the notice
             String oldUserName, oldNickName, oldPhone;
-            using (var c = await Db.GetAsync().ConfigureAwait(false))
+            using (var c = await DbGetAsync().ConfigureAwait(false))
             {
                 using var tr = await c.BeginTransactionAsync().ConfigureAwait(false);
-                var user = await c.FirstOrDefaultAsync<DbUser>(x => x.Id == userId).ConfigureAwait(false);
+                var user = await GetDbUser(c, userId).ConfigureAwait(false);
                 if (user == null)
                     throw new UserNoLongerExistException(userId);
                 await ThrowIfDisabled(c, userId).ConfigureAwait(false);
@@ -1105,10 +1095,10 @@ namespace SysWeaver.MicroService
                 noticeLanguage = user.Language;
                 oldUserName = user.UserName;
                 oldNickName = user.NickName;
-                oldPhone = (await c.FirstOrDefaultAsync<DbPhoneNumber>(x => x.UserId == userId).ConfigureAwait(false))?.Phone;
-                if (await c.FirstOrDefaultAsync<DbEmailAddress>(x => x.Email == newEmail).ConfigureAwait(false) != null)
+                oldPhone = (await GetDbPhone(c, userId).ConfigureAwait(false))?.Phone;
+                if (await FindDbEmail(c, newEmail).ConfigureAwait(false) != null)
                     throw new EmailInUseException(newEmail);
-                var existing = await c.FirstOrDefaultAsync<DbEmailAddress>(x => x.UserId == userId).ConfigureAwait(false);
+                var existing = await GetDbEmail(c, userId).ConfigureAwait(false);
                 //  A restore link (sent to a removed address) never replaces a newer address
                 if ((existing != null) && SubjectTokens.HasTag(token, DbAction.AddEmail, UserSubject(userId, RestoreVariant)))
                 {
@@ -1126,11 +1116,11 @@ namespace SysWeaver.MicroService
                         if (user.NickName.FastEquals(existingEmail))
                         {
                             user.NickName = newEmail;
-                            await c.UpdateAsync(user, x => new { x.UserName, x.NickName }).ConfigureAwait(false);
+                            await UpdateUserNames(c, user).ConfigureAwait(false);
                         }
                         else
                         {
-                            await c.UpdateAsync(user, x => new { x.UserName }).ConfigureAwait(false);
+                            await UpdateUserNames(c, user).ConfigureAwait(false);
                         }
                     }
                     else
@@ -1138,12 +1128,12 @@ namespace SysWeaver.MicroService
                         if (user.NickName.FastEquals(existingEmail))
                         {
                             user.NickName = newEmail;
-                            await c.UpdateAsync(user, x => new { x.NickName }).ConfigureAwait(false);
+                            await UpdateUserNames(c, user).ConfigureAwait(false);
                         }
                     }
                     await c.DeleteAsync(existing).ConfigureAwait(false);
                 }
-                await c.InsertAsync(new DbEmailAddress
+                await InsertEmail(c, new DbEmailAddress
                 {
                     Email = newEmail,
                     UserId = userId,
@@ -1234,7 +1224,7 @@ namespace SysWeaver.MicroService
             am.ValidatePhoneNumber(ref newPhone);
             var id = user.Id;
             List<String> targets;
-            using (var c = await Db.GetAsync().ConfigureAwait(false))
+            using (var c = await DbGetAsync().ConfigureAwait(false))
             {
                 var authData = await c.FirstOrDefaultAsync<DbAuthPassword>(x => x.UserId == id).ConfigureAwait(false);
                 if (!ValidatePasswordRequestPassword(request, authData))
@@ -1251,7 +1241,7 @@ namespace SysWeaver.MicroService
                     if (existingPhone != null)
                         throw new UserAlreadyHavePhone();
                 }
-                if (await c.FirstOrDefaultAsync<DbPhoneNumber>(x => x.Phone == newPhone).ConfigureAwait(false) != null)
+                if (await FindDbPhone(c, newPhone).ConfigureAwait(false) != null)
                     throw new PhoneInUseException(newPhone);
             }
 
@@ -1298,7 +1288,7 @@ namespace SysWeaver.MicroService
             var am = AuthMan;
             if (am == null)
                 throw new Exception("Phone not supported!");
-            using (var c = await Db.GetAsync().ConfigureAwait(false))
+            using (var c = await DbGetAsync().ConfigureAwait(false))
             {
                 var authData = await c.FirstOrDefaultAsync<DbAuthPassword>(x => x.UserId == userId).ConfigureAwait(false);
                 if (!ValidatePasswordRequestPassword(request, authData))
@@ -1329,7 +1319,7 @@ namespace SysWeaver.MicroService
                     "[Link]", link
                 );
             }).ConfigureAwait(false);
-            using (var c = await Db.GetAsync().ConfigureAwait(false))
+            using (var c = await DbGetAsync().ConfigureAwait(false))
             {
                 using var tr = await c.BeginTransactionAsync().ConfigureAwait(false);
                 await c.DeleteAllAsync<DbPhoneNumber>(x => x.UserId == userId).ConfigureAwait(false);
@@ -1361,16 +1351,16 @@ namespace SysWeaver.MicroService
             var userId = data.UserId;
             var newPhone = data.Phone;
             String existingPhone = null;
-            using (var c = await Db.GetAsync().ConfigureAwait(false))
+            using (var c = await DbGetAsync().ConfigureAwait(false))
             {
                 using var tr = await c.BeginTransactionAsync().ConfigureAwait(false);
-                var user = await c.FirstOrDefaultAsync<DbUser>(x => x.Id == userId).ConfigureAwait(false);
+                var user = await GetDbUser(c, userId).ConfigureAwait(false);
                 if (user == null)
                     throw new UserNoLongerExistException(userId);
                 await ThrowIfDisabled(c, userId).ConfigureAwait(false);
-                if (await c.FirstOrDefaultAsync<DbPhoneNumber>(x => x.Phone == newPhone).ConfigureAwait(false) != null)
+                if (await FindDbPhone(c, newPhone).ConfigureAwait(false) != null)
                     throw new PhoneInUseException(newPhone);
-                var existing = await c.FirstOrDefaultAsync<DbPhoneNumber>(x => x.UserId == userId).ConfigureAwait(false);
+                var existing = await GetDbPhone(c, userId).ConfigureAwait(false);
                 //  A restore link (sent to a removed number) never replaces a newer number
                 if ((existing != null) && SubjectTokens.HasTag(token, DbAction.AddPhone, UserSubject(userId, RestoreVariant)))
                 {
@@ -1388,10 +1378,10 @@ namespace SysWeaver.MicroService
                         if (user.NickName.FastEquals(existingPhone))
                         {
                             user.NickName = newPhone;
-                            await c.UpdateAsync(user, x => new { x.UserName, x.NickName }).ConfigureAwait(false);
+                            await UpdateUserNames(c, user).ConfigureAwait(false);
                         }else
                         {
-                            await c.UpdateAsync(user, x => new { x.UserName }).ConfigureAwait(false);
+                            await UpdateUserNames(c, user).ConfigureAwait(false);
                         }
                     }
                     else
@@ -1399,12 +1389,12 @@ namespace SysWeaver.MicroService
                         if (user.NickName.FastEquals(existingPhone))
                         {
                             user.NickName = newPhone;
-                            await c.UpdateAsync(user, x => new { x.NickName }).ConfigureAwait(false);
+                            await UpdateUserNames(c, user).ConfigureAwait(false);
                         }
                     }
                     await c.DeleteAsync(existing).ConfigureAwait(false);
                 }
-                await c.InsertAsync(new DbPhoneNumber
+                await InsertPhone(c, new DbPhoneNumber
                 {
                     Phone = newPhone,
                     UserId = userId,

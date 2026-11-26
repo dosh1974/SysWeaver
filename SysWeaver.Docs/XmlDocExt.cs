@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Xml.Linq;
 using System.Xml.XPath;
 
@@ -672,7 +673,116 @@ namespace SysWeaver.Docs
             var c = x.Element(childName);
             if (c == null)
                 return null;
-            return c.Value;
+            return GetText(c);
+        }
+
+        /// <summary>
+        /// The text of a documentation element, with the references rendered as text (XElement.Value drops self closing tags such as &lt;see cref="..."/&gt;):
+        /// &lt;see cref&gt; / &lt;seealso cref&gt; give the name of the referenced type or member (or their own text if they have any), &lt;see langword&gt; the keyword,
+        /// &lt;see href&gt; the url, &lt;paramref&gt; / &lt;typeparamref&gt; the name, &lt;para&gt; and &lt;br/&gt; a line break; other elements (ex: &lt;c&gt;) give their text.
+        /// </summary>
+        /// <param name="e">The element</param>
+        /// <returns>The text (not trimmed)</returns>
+        static String GetText(XElement e)
+        {
+            var sb = new StringBuilder();
+            AppendText(sb, e);
+            return sb.ToString();
+        }
+
+        static void AppendText(StringBuilder sb, XElement e)
+        {
+            foreach (var n in e.Nodes())
+            {
+                if (n is XText t)
+                {
+                    sb.Append(t.Value);
+                    continue;
+                }
+                if (n is not XElement c)
+                    continue;
+                switch (c.Name.LocalName)
+                {
+                    case "see":
+                    case "seealso":
+                        {
+                            //  <see cref="X">text</see>: the text is what the author wants shown
+                            if (c.Nodes().Any())
+                            {
+                                AppendText(sb, c);
+                                break;
+                            }
+                            var cref = c.Attribute("cref")?.Value;
+                            if (!String.IsNullOrEmpty(cref))
+                            {
+                                sb.Append(CrefText(cref));
+                                break;
+                            }
+                            var word = c.Attribute("langword")?.Value;
+                            if (!String.IsNullOrEmpty(word))
+                            {
+                                sb.Append(word);
+                                break;
+                            }
+                            sb.Append(c.Attribute("href")?.Value);
+                        }
+                        break;
+                    case "paramref":
+                    case "typeparamref":
+                        sb.Append(c.Attribute(AttrName)?.Value);
+                        break;
+                    case "para":
+                        sb.Append('\n');
+                        AppendText(sb, c);
+                        sb.Append('\n');
+                        break;
+                    case "br":
+                        sb.Append('\n');
+                        break;
+                    default:
+                        AppendText(sb, c);
+                        break;
+                }
+            }
+        }
+
+        /// <summary>
+        /// The text of a cref: the name of a type ("T:Ns.MyType" => "MyType"), the type and member name of a member ("M:Ns.MyType.Method(System.String)" => "MyType.Method"),
+        /// the type name of a constructor; generic arity suffixes and arguments are removed. An unresolved cref ("!:text") gives its text.
+        /// </summary>
+        /// <param name="cref">The cref attribute value (as written by the compiler)</param>
+        /// <returns>The text</returns>
+        static String CrefText(String cref)
+        {
+            var kind = 'T';
+            if ((cref.Length > 2) && (cref[1] == ':'))
+            {
+                kind = cref[0];
+                cref = cref.Substring(2);
+            }
+            if (kind == '!')
+                return cref;
+            //  The parameters of a method, and generic arguments
+            var i = cref.IndexOf('(');
+            if (i >= 0)
+                cref = cref.Substring(0, i);
+            i = cref.IndexOf('{');
+            if (i >= 0)
+                cref = cref.Substring(0, i);
+            var parts = cref.Split('.');
+            for (int p = 0; p < parts.Length; ++p)
+            {
+                var b = parts[p].IndexOf('`');
+                if (b >= 0)
+                    parts[p] = parts[p].Substring(0, b);
+            }
+            var last = parts[parts.Length - 1];
+            if ((kind == 'T') || (kind == 'N') || (parts.Length < 2))
+                return last;
+            var type = parts[parts.Length - 2];
+            if (last == "#ctor")
+                return type;
+            return String.Concat(type, ".", last.Replace('#', '.'));
         }
 
         const String AttrName = "name";
@@ -964,7 +1074,7 @@ namespace SysWeaver.Docs
                                                                     continue;
                                                                 if (!indices.ContainsKey(pname))
                                                                     continue;
-                                                                ps[indices[pname]] = new DocParameterInfo(pm.Value);
+                                                                ps[indices[pname]] = new DocParameterInfo(GetText(pm));
                                                             }
                                                         }
                                                     }

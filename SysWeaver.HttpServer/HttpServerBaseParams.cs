@@ -42,9 +42,17 @@ namespace SysWeaver.Net
         /// but not for requests that other sites make (images, forms, fetch, frames on another site): a basic cross site request forgery protection.
         /// "Strict": the cookies are not even sent when following a link from another site (the user appears signed out on the first page).
         /// Ignored when <see cref="CorsCookies"/> is true (that uses "SameSite=None;Secure").
-        /// The "Secure" attribute is always added for https requests.
+        /// The "Secure" attribute is added for https requests (see <see cref="SecureCookies"/>).
         /// </summary>
         public String CookieSameSite = "Lax";
+
+        /// <summary>
+        /// If true the session and device id cookies always get the "Secure" attribute (the browser only sends them over https).
+        /// If false (the default) "Secure" is added when the request is https: the connection is https, or a trusted proxy (<see cref="TrustedProxies"/>)
+        /// says that the client used https ("Forwarded: proto=https" or "X-Forwarded-Proto: https").
+        /// Set it to true when the server is only reached through a proxy that ends TLS and doesn't send these headers.
+        /// </summary>
+        public bool SecureCookies;
 
         /// <summary>
         /// Who may show the pages of this server in a frame (clickjacking protection): the value of the Content-Security-Policy "frame-ancestors" directive that is sent with every response.
@@ -157,6 +165,12 @@ namespace SysWeaver.Net
         /// Optional, request limiter for each individual session
         /// </summary>
         public HttpRateLimiterParams SessionLimits;
+
+        /// <summary>
+        /// The simple intrusion detection: error responses (scanning) and calls to key API's (sign in, audited API's) per client address,
+        /// intrusion attempts are audited and shown as problems, see <see cref="IntrusionDetection"/>. Enabled by default, null uses the defaults.
+        /// </summary>
+        public IntrusionDetectionParams IntrusionDetection;
 
         /// <summary>
         /// Responses with a known length (in memory or a seekable stream) that are smaller than this number of bytes are sent uncompressed (no Content-Encoding header),

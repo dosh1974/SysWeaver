@@ -693,6 +693,28 @@ html.SwMobile[data-theme="pro"] {
     -webkit-user-select: text;
 }
 
+/*
+ * Content of the framework components that can be selected and copied (UX guide INP-30): text that changes from run to run (values, states,
+ * errors, messages, hints) and every status / alert region. Titles, labels, menus and buttons stay chrome. Zero specificity: a component or a
+ * page that sets user-select itself always wins (within this block the order decides: the buttons come last).
+ */
+:where([role="status"], [role="alert"],
+    .sw-badge, .sw-tag, .sw-rows-text, .sw-rows-meta, .sw-kpi-value, .sw-kpi-sub, .sw-facts dd, .sw-card-fields > dd, .sw-card-sub,
+    .sw-card-rich :is(h3, dd, .sw-card-sub, .sw-card-text, .sw-card-more > :not(summary), .sw-card-lead-figure),
+    .sw-ph-desc, .sw-ph-status, .sw-empty-text, .sw-empty.sw-error .sw-empty-title, .sw-state-text, .sw-state.sw-error .sw-state-title,
+    .sw-field-hint, .sw-text-error, .sw-ctl-status, .sw-form-status, .sw-prop-help, .sw-prop-error, .sw-prop-hintpart,
+    .sw-cell-confirm, .sw-cell-img-text, .sw-denied-text, .sw-denied-reason, .sw-working-text, .sw-dialog-progress-time,
+    .sw-serverblock-text, .sw-serverblock-time, .sw-serverblock-note) {
+    user-select: text;
+    -webkit-user-select: text;
+}
+
+/* Buttons and the like never, also inside selectable content (ex: a KPI tile or a row that is a button) */
+:where(button, summary, [role="button"], [role="tab"], [role="menuitem"], [role="option"], [role="switch"]),
+:where(button, summary, [role="button"], [role="tab"], [role="menuitem"], [role="option"], [role="switch"]) :where(*) {
+    user-select: none;
+    -webkit-user-select: none;
+}
 .sw-scroll {
     overflow: auto;
     scrollbar-width: thin;

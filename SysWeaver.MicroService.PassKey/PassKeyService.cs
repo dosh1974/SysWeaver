@@ -17,10 +17,10 @@ namespace SysWeaver.MicroService
 
 
     /// <summary>
-    /// Service that provides sign in and passkey management using FIDO2 passkeys (WebAuthn), users are handled by the <see cref="UserManagerService"/>.
+    /// Service that provides sign in and passkey management using FIDO2 passkeys (WebAuthn), the passkeys are stored by the authorizers that support them (<see cref="AuthorizerBase.SupportPasskeys"/>, ex: the user manager and the simple authorizer).
     /// </summary>
     [IsMicroService]
-    [RequiredDep<UserManagerService>]
+    [RequiredDep<AuthManagerService>]
     [OptionalDep<IQrCodeService>]
     //  Menu icons: svg urls of this module (srcWeb/icons), so the shell needs no passkey icon class (the classes stay in auth/Passkey.css for older shells).
     [WebApiUrl("auth/passkey")]
@@ -28,7 +28,7 @@ namespace SysWeaver.MicroService
     [WebMenuEmbedded("User", "User/AddPassKeyOther", "Add passkey (other device)", "auth/AddPassKeyOnOtherDevice.html", "Click to show a QR code that can be used to add a passkey on some other device", "IconAddPasskeyOther", 32, "", false, nameof(SysWeaver) + "." + nameof(MicroService) + "." + nameof(PassKeyService) + "." + nameof(PassKeyService.CanCreateRemotePassKey))]
     [WebMenuEmbedded("User", "User/MyPassKeys", "My passkeys", "auth/MyPassKeys.html", "Click to see and manage your passkeys", "icons/passkey_use.svg", 33, "", false, nameof(SysWeaver) + "." + nameof(MicroService) + "." + nameof(PassKeyService) + "." + nameof(PassKeyService.CanManagePassKeys))]
     [WebMenuEmbedded("User", "User/UsePassKey", "Sign in with passkey", "auth/UsePassKey.html", "Click to sign in using a passkey", "icons/passkey_use.svg", 2, null, true, nameof(SysWeaver) + "." + nameof(MicroService) + "." + nameof(PassKeyService) + "." + nameof(PassKeyService.CanSignInWithPassKey))]
-    public sealed class PassKeyService
+    public sealed class PassKeyService : IDisposable
     {
 
         #region Dynamic menu
@@ -38,6 +38,8 @@ namespace SysWeaver.MicroService
             var s = context.Session;
             if ((s == null) || (s.Auth != null))
                 return TaskExt.FalseTask;
+            if (!PassKeyAuths.Any())
+                return TaskExt.FalseTask;
             return PassKeyTools.CanUse(PassKeyTools.GetOrigin(context.Prefix)) ? TaskExt.TrueTask : TaskExt.FalseTask;
         }
 
@@ -46,13 +48,13 @@ namespace SysWeaver.MicroService
             var s = context.Session;
             if (s == null)
                 return false;
-            var um = Um;
-            var uid = um.GetUid(s.Auth);
-            if (uid == 0)
+            var auth = s.Auth;
+            var a = GetAuthorizer(auth);
+            if (a == null)
                 return false;
             if (!PassKeyTools.CanUse(PassKeyTools.GetOrigin(context.Prefix)))
                 return false;
-            return !(await um.HaveAssignedPassKey(s.DeviceId, uid).ConfigureAwait(false));
+            return !(await a.HaveAssignedPassKey(auth, s.DeviceId).ConfigureAwait(false));
         }
 
         Task<bool> CanCreateRemotePassKey(HttpServerRequest context, WebMenuItem item)
@@ -62,8 +64,8 @@ namespace SysWeaver.MicroService
                 return TaskExt.FalseTask;
             if (QR == null)
                 return TaskExt.FalseTask;
-            var uid = Um.GetUid(s.Auth);
-            if (uid == 0)
+            var a = GetAuthorizer(s.Auth);
+            if ((a == null) || !a.SupportPasskeyTokens)
                 return TaskExt.FalseTask;
             return PassKeyTools.CanUse(PassKeyTools.GetOrigin(context.Prefix)) ? TaskExt.TrueTask : TaskExt.FalseTask;
         }
@@ -73,23 +75,67 @@ namespace SysWeaver.MicroService
             var s = context.Session;
             if (s == null)
                 return false;
-            var um = Um;
-            return await um.HaveAnyPassKeys(um.GetUid(s.Auth)).ConfigureAwait(false);
+            var auth = s.Auth;
+            var a = GetAuthorizer(auth);
+            if (a == null)
+                return false;
+            return await a.HaveAnyPassKeys(auth).ConfigureAwait(false);
         }
 
         #endregion//Dynamic menu
+
+        #region Authorizers
+
+        /// <summary>
+        /// All authorizers that can store passkeys, in priority order
+        /// </summary>
+        IEnumerable<AuthorizerBase> PassKeyAuths => Am.Auth.Authorizers.Where(x => x.SupportPasskeys);
+
+        /// <summary>
+        /// All authorizers that support the token based passkey methods, in priority order
+        /// </summary>
+        IEnumerable<AuthorizerBase> PassKeyTokenAuths => PassKeyAuths.Where(x => x.SupportPasskeyTokens);
+
+        /// <summary>
+        /// Get the authorizer that stores the passkeys of a signed in user
+        /// </summary>
+        /// <param name="auth">The user</param>
+        /// <returns>The authorizer of the user, null if no user is signed in or the authorizer of the user doesn't support passkeys</returns>
+        static AuthorizerBase GetAuthorizer(Authorization auth)
+        {
+            var a = auth?.Auth;
+            return (a != null) && a.SupportPasskeys ? a : null;
+        }
+
+        /// <summary>
+        /// Find a passkey in any authorizer that supports passkeys
+        /// </summary>
+        /// <param name="credentialId">The credential id (standard base64 of the raw id)</param>
+        /// <returns>The authorizer and the passkey, null if no authorizer have the passkey</returns>
+        async Task<Tuple<AuthorizerBase, PassKeyData>> FindPassKey(String credentialId)
+        {
+            foreach (var a in PassKeyAuths)
+            {
+                var key = await a.GetPassKey(credentialId).ConfigureAwait(false);
+                if (key != null)
+                    return Tuple.Create(a, key);
+            }
+            return null;
+        }
+
+        #endregion//Authorizers
 
 
         /// <summary>
         /// Create the service
         /// </summary>
-        /// <param name="manager">The service manager (the <see cref="UserManagerService"/> is required, an <see cref="IQrCodeService"/> is optional)</param>
+        /// <param name="manager">The service manager (the <see cref="AuthManagerService"/> is required, an <see cref="IQrCodeService"/> is optional)</param>
         /// <param name="p">Parameters, null to use the defaults</param>
         public PassKeyService(ServiceManager manager, PassKeyParams p)
         {
             p = p ?? new PassKeyParams();
             M = manager;
-            Um = manager.Get<UserManagerService>();
+            LazyAm = manager.GetWhenReady<AuthManagerService>(x => Am = x);
             Params = p;
             RpName = p.RpName ?? EnvInfo.AppName;
             RpId = String.IsNullOrWhiteSpace(p.RpId) ? null : p.RpId.Trim();
@@ -115,10 +161,18 @@ namespace SysWeaver.MicroService
             AdditionalOrigins = origins.ToArray();
         }
 
+        public void Dispose()
+        {
+            LazyAm?.Dispose();
+        }
+
         readonly IQrCodeService QR;
         readonly ServiceManager M;
         readonly PassKeyParams Params;
-        readonly UserManagerService Um;
+
+        readonly IDisposable LazyAm;
+        AuthManagerService Am;
+
         readonly String RpName;
         readonly String RpId;
         readonly TimeSpan LifeTime;
@@ -160,7 +214,8 @@ namespace SysWeaver.MicroService
             public AssertionOptions AssertionOptions;
             public CredentialCreateOptions CreateOptions;
             public String Token;
-            public long UserId;
+            public String UserGuid;
+            public AuthorizerBase Authorizer;
             public Byte[] UserHandle;
         }
 
@@ -265,7 +320,7 @@ namespace SysWeaver.MicroService
         /// </summary>
         /// <param name="context">The request context</param>
         /// <returns>The QR code as svg</returns>
-        /// <exception cref="NoUserLoggedInException">If no user is signed in</exception>
+        /// <exception cref="NoUserLoggedInException">If no user is signed in, or the authorizer of the user doesn't support passkey tokens (<see cref="AuthorizerBase.SupportPasskeyTokens"/>)</exception>
         [WebApi("GetQR.svg")]
         [WebApiRaw("svg")]
         [WebApiClientCache(10)]
@@ -275,7 +330,9 @@ namespace SysWeaver.MicroService
             var qr = QR;
             if (qr == null)
                 throw new Exception("QR code generation support isn't added to the service");
-            var token = await Um.GetShareDeviceToken(context).ConfigureAwait(false);
+            var auth = context.Session.Auth;
+            var a = GetAuthorizer(auth);
+            var token = (a != null) && a.SupportPasskeyTokens ? await a.GetPassKeyShareToken(auth).ConfigureAwait(false) : null;
             if (token == null)
                 throw new NoUserLoggedInException();
             String link = String.Concat(context.Prefix ?? "", "auth/AddPassKey.html?token=", Uri.EscapeDataString(token));
@@ -286,10 +343,17 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// The number of minutes that a QR code (from GetQR.svg) is valid
         /// </summary>
-        /// <returns>The number of minutes</returns>
+        /// <param name="context">The request context</param>
+        /// <returns>The number of minutes (for the authorizer of the signed in user, else for the first authorizer that supports passkey tokens), 0 if not supported</returns>
         [WebApi]
         [WebApiClientCache(60)]
-        public int GetQRLifeTime() => (int)Um.ShareDeviceTokenLifeTime.TotalMinutes;
+        public int GetQRLifeTime(HttpServerRequest context)
+        {
+            var a = GetAuthorizer(context?.Session?.Auth);
+            if ((a == null) || !a.SupportPasskeyTokens)
+                a = PassKeyTokenAuths.FirstOrDefault();
+            return a == null ? 0 : (int)a.PassKeyShareTokenLifeTime.TotalMinutes;
+        }
 
 
         #region API
@@ -302,6 +366,9 @@ namespace SysWeaver.MicroService
         /// <param name="context"></param>
         /// <returns>The options to pass to navigator.credentials.get</returns>
         [WebApi]
+        //  Process wide: permissive, per address: conservative (the same limits as the password sign in)
+        [WebApiServiceRateLimit(200, 1, 400, 5)]
+        [WebApiIpRateLimit(20, 60, 10, 10)]
         public Task<PassKeyGetOptions> GetAuthChallenge(HttpServerRequest context)
             => Task.FromResult(InternalGetAuthChallenge(context, []));
 
@@ -312,6 +379,9 @@ namespace SysWeaver.MicroService
         /// <param name="context"></param>
         /// <returns>The options to pass to navigator.credentials.get</returns>
         [WebApi]
+        //  Tells if a user has passkeys (user enumeration): the same limits as GetUserSalt
+        [WebApiServiceRateLimit(200, 1, 400, 5)]
+        [WebApiIpRateLimit(20, 60, 10, 10)]
         public async Task<PassKeyGetOptions> GetUserAuthChallenge(String userIdentifier, HttpServerRequest context)
         {
             if (context.Session.Auth != null)
@@ -319,10 +389,72 @@ namespace SysWeaver.MicroService
             userIdentifier = userIdentifier?.Trim();
             if (String.IsNullOrEmpty(userIdentifier))
                 return PassKeyGetOptions.Fail(PassKeyErrors.NoPassKeys);
-            var keys = await Um.GetPassKeys(userIdentifier).ConfigureAwait(false);
-            if ((keys == null) || (keys.Count <= 0))
-                return PassKeyGetOptions.Fail(PassKeyErrors.NoPassKeys);
+            //  The passkeys of the user in all authorizers that know the user
+            List<PassKeyData> keys = new List<PassKeyData>();
+            foreach (var a in PassKeyAuths)
+            {
+                var k = await a.FindPassKeys(userIdentifier).ConfigureAwait(false);
+                if (k != null)
+                    keys.AddRange(k);
+            }
+            if (keys.Count <= 0)
+            {
+                //  One in eight user names (fixed per name) without passkeys get a challenge too: a challenge doesn't tell that the user exists
+                var fake = GetDecoyCredential(userIdentifier);
+                if (fake == null)
+                    return PassKeyGetOptions.Fail(PassKeyErrors.NoPassKeys);
+                return InternalGetAuthChallenge(context, [fake]);
+            }
             return InternalGetAuthChallenge(context, keys.Select(x => PassKeyTools.ToDescriptor(x.CredentialId, x.Transports)).ToList());
+        }
+
+        /// <summary>
+        /// The decoy credential of a user identifier without passkeys: for one in eight identifiers (pseudo random, the same every time for an identifier:
+        /// (SHA256(secret + identifier)[0] &amp; 7) == 0) a made up credential (stable per identifier), else null.
+        /// The secret is per application (<see cref="KeyValueStore.AllApp"/>), so the decoys can't be told apart from real users by computing them.
+        /// </summary>
+        /// <param name="userIdentifier">The (trimmed) user identifier</param>
+        /// <returns>The decoy credential, or null</returns>
+        internal static PublicKeyCredentialDescriptor GetDecoyCredential(String userIdentifier)
+        {
+            var id = Encoding.UTF8.GetBytes(userIdentifier.FastToLower());
+            var key = DecoyKey;
+            var b = new Byte[key.Length + id.Length];
+            key.CopyTo(b, 0);
+            id.CopyTo(b, key.Length);
+            var h = SHA256.HashData(b);
+            if ((h[0] & 7) != 0)
+                return null;
+            //  A credential id of a common size (32 bytes), derived from the identifier
+            var cred = HMACSHA256.HashData(key, b);
+            return new PublicKeyCredentialDescriptor(PublicKeyCredentialType.PublicKey, cred, (h[1] & 1) == 0 ? [AuthenticatorTransport.Internal, AuthenticatorTransport.Hybrid] : [AuthenticatorTransport.Internal]);
+        }
+
+        /// <summary>
+        /// The application secret of the decoy credentials, stored in <see cref="KeyValueStore.AllApp"/> (the decoys are the same after a restart)
+        /// </summary>
+        static readonly Byte[] DecoyKey = GetDecoyKey();
+
+        static Byte[] GetDecoyKey()
+        {
+            const String name = "PassKeyService.DecoyKey";
+            try
+            {
+                var s = KeyValueStore.AllApp.TryGet<String>(name);
+                if (!String.IsNullOrEmpty(s))
+                {
+                    var k = Convert.FromBase64String(s);
+                    if (k.Length == 32)
+                        return k;
+                }
+                var n = RandomNumberGenerator.GetBytes(32);
+                KeyValueStore.AllApp.Set(name, Convert.ToBase64String(n));
+                return n;
+            }
+            catch
+            {
+                return RandomNumberGenerator.GetBytes(32);
+            }
         }
 
         PassKeyGetOptions InternalGetAuthChallenge(HttpServerRequest context, IReadOnlyList<PublicKeyCredentialDescriptor> allow)
@@ -360,6 +492,8 @@ namespace SysWeaver.MicroService
         /// <param name="context"></param>
         /// <returns>The result, with the signed in user on success</returns>
         [WebApi]
+        [WebApiServiceRateLimit(100, 1, 200, 5)]
+        [WebApiIpRateLimit(20, 60, 10, 10)]
         public async Task<PassKeyResult> Auth(PassKeyGetResponse response, HttpServerRequest context)
         {
             var session = context.Session;
@@ -371,10 +505,12 @@ namespace SysWeaver.MicroService
             if ((response.rawId == null) || (response.response == null))
                 return PassKeyResult.Fail(PassKeyErrors.VerificationFailed);
             var credId = Convert.ToBase64String(response.rawId);
-            var key = await Um.GetPassKey(credId).ConfigureAwait(false);
-            if (key == null)
+            var found = await FindPassKey(credId).ConfigureAwait(false);
+            if (found == null)
                 return PassKeyResult.Fail(PassKeyErrors.UnknownCredential);
-            var expectedHandle = key.UserHandle ?? Encoding.UTF8.GetBytes(Um.MakeGuid(key.UserId));
+            var author = found.Item1;
+            var key = found.Item2;
+            var expectedHandle = key.UserHandle ?? Encoding.UTF8.GetBytes(key.UserGuid ?? "");
             IsUserHandleOwnerOfCredentialIdAsync callback = (args, ct) => Task.FromResult(args.UserHandle.AsSpan().SequenceEqual(expectedHandle));
             VerifyAssertionResult res;
             try
@@ -393,7 +529,7 @@ namespace SysWeaver.MicroService
                 M.AddMessage(MessageLevels.Warning, $"Passkey sign in failed: {e.Message}");
                 return PassKeyResult.Fail(PassKeyErrors.VerificationFailed, e.Message);
             }
-            var auth = await Um.UsePassKey(credId, res.SignCount, res.IsBackedUp).ConfigureAwait(false);
+            var auth = await author.UsePassKey(credId, res.SignCount, res.IsBackedUp).ConfigureAwait(false);
             if (auth == null)
                 return PassKeyResult.Fail(PassKeyErrors.UnknownCredential);
             return await SignIn(auth, context).ConfigureAwait(false);
@@ -426,7 +562,7 @@ namespace SysWeaver.MicroService
 
         #region Create
 
-        PassKeyCreateOptions InternalGetCreateChallenge(HttpServerRequest context, Ceremony c, Fido2User user, IEnumerable<PassKeyCredential> exclude)
+        PassKeyCreateOptions InternalGetCreateChallenge(HttpServerRequest context, Ceremony c, Fido2User user, IEnumerable<PassKeyData> exclude)
         {
             var rp = GetRp(context);
             if (rp == null)
@@ -466,14 +602,18 @@ namespace SysWeaver.MicroService
         public async Task<PassKeyCreateOptions> GetCreateChallenge(HttpServerRequest context)
         {
             var auth = context.Session.Auth;
-            var uid = Um.GetUid(auth);
-            if (uid == 0)
+            var a = GetAuthorizer(auth);
+            if (a == null)
                 return PassKeyCreateOptions.Fail(PassKeyErrors.NotSignedIn);
-            var keys = await Um.GetPassKeys(uid).ConfigureAwait(false);
+            //  null: the authorizer doesn't allow this user to have passkeys (ex: an API key)
+            var keys = await a.GetPassKeys(auth).ConfigureAwait(false);
+            if (keys == null)
+                return PassKeyCreateOptions.Fail(PassKeyErrors.NotSignedIn);
             return InternalGetCreateChallenge(context, new Ceremony
             {
                 Kind = CeremonyKinds.Attach,
-                UserId = uid,
+                UserGuid = auth.Guid,
+                Authorizer = a,
             }, GetUser(auth), keys);
         }
 
@@ -489,25 +629,22 @@ namespace SysWeaver.MicroService
         {
             if (context.Session.Auth != null)
                 return PassKeyCreateOptions.Fail(PassKeyErrors.AlreadySignedIn);
-            Authorization auth;
-            try
+            //  The first authorizer that knows the token
+            foreach (var a in PassKeyTokenAuths)
             {
-                auth = await Um.GetPassKeyTokenUser(token, context).ConfigureAwait(false);
+                var r = await a.GetPassKeyTokenUser(token, context).ConfigureAwait(false);
+                var auth = r?.Auth;
+                if (auth == null)
+                    continue;
+                var keys = await a.GetPassKeys(auth).ConfigureAwait(false);
+                return InternalGetCreateChallenge(context, new Ceremony
+                {
+                    Kind = CeremonyKinds.Token,
+                    Token = token,
+                    Authorizer = a,
+                }, GetUser(auth), keys);
             }
-            catch (TokenExpiredException)
-            {
-                return PassKeyCreateOptions.Fail(PassKeyErrors.TokenExpired);
-            }
-            catch (UserNoLongerExistException)
-            {
-                return PassKeyCreateOptions.Fail(PassKeyErrors.TokenExpired);
-            }
-            var keys = await Um.GetPassKeys(auth).ConfigureAwait(false);
-            return InternalGetCreateChallenge(context, new Ceremony
-            {
-                Kind = CeremonyKinds.Token,
-                Token = token,
-            }, GetUser(auth), keys);
+            return PassKeyCreateOptions.Fail(PassKeyErrors.TokenExpired);
         }
 
         /// <summary>
@@ -521,7 +658,18 @@ namespace SysWeaver.MicroService
         {
             if (context.Session.Auth != null)
                 return PassKeyCreateOptions.Fail(PassKeyErrors.AlreadySignedIn);
-            var data = await Um.GetNewUserData(token, context).ConfigureAwait(false);
+            //  The first authorizer that knows the token
+            PassKeyNewUserInfo data = null;
+            AuthorizerBase author = null;
+            foreach (var a in PassKeyTokenAuths)
+            {
+                data = await a.GetPassKeyNewUserInfo(token, context).ConfigureAwait(false);
+                if (data != null)
+                {
+                    author = a;
+                    break;
+                }
+            }
             if (data == null)
                 return PassKeyCreateOptions.Fail(PassKeyErrors.TokenExpired);
             var name = data.Email ?? data.Phone ?? data.UserName;
@@ -536,6 +684,7 @@ namespace SysWeaver.MicroService
             {
                 Kind = CeremonyKinds.NewUser,
                 Token = token,
+                Authorizer = author,
             }, user, null);
         }
 
@@ -544,22 +693,24 @@ namespace SysWeaver.MicroService
         /// </summary>
         /// <param name="response">The response of navigator.credentials.create</param>
         /// <param name="context"></param>
-        /// <returns>The result</returns>
+        /// <returns>The result, <see cref="PassKeyErrors.AlreadyRegistered"/> if the authorizer refused to store the passkey (<see cref="AuthorizerBase.AddPassKey"/> returned false)</returns>
         [WebApi]
         [WebApiAuth]
         public async Task<PassKeyResult> Create(PassKeyCreateResponse response, HttpServerRequest context)
         {
             var session = context.Session;
-            var uid = Um.GetUid(session.Auth);
-            if (uid == 0)
+            var auth = session.Auth;
+            var a = GetAuthorizer(auth);
+            if (a == null)
                 return PassKeyResult.Fail(PassKeyErrors.NotSignedIn);
             var c = TakeCeremony(session, response?.challengeId, CeremonyKinds.Attach);
-            if ((c == null) || (c.UserId != uid))
+            if ((c == null) || (c.Authorizer != a) || !String.Equals(c.UserGuid, auth.Guid, StringComparison.Ordinal))
                 return PassKeyResult.Fail(PassKeyErrors.ChallengeExpired);
             var v = await Verify(c, response, context).ConfigureAwait(false);
             if (v.Item2 != null)
                 return v.Item2;
-            await Um.AttachPassKey(v.Item1, context).ConfigureAwait(false);
+            if (!await a.AddPassKey(auth, v.Item1).ConfigureAwait(false))
+                return PassKeyResult.Fail(PassKeyErrors.AlreadyRegistered);
             return PassKeyResult.Ok;
         }
 
@@ -581,25 +732,15 @@ namespace SysWeaver.MicroService
             var v = await Verify(c, response, context).ConfigureAwait(false);
             if (v.Item2 != null)
                 return v.Item2;
-            Authorization auth;
-            try
-            {
-                auth = c.Kind == CeremonyKinds.NewUser
-                    ? await Um.CreateUserWithPassKey(c.Token, v.Item1, context).ConfigureAwait(false)
-                    : await Um.AttachPassKeyUsingToken(c.Token, v.Item1, context).ConfigureAwait(false);
-            }
-            catch (TokenExpiredException)
-            {
+            var a = c.Authorizer;
+            if (a == null)
                 return PassKeyResult.Fail(PassKeyErrors.TokenExpired);
-            }
-            catch (UserNoLongerExistException)
-            {
-                return PassKeyResult.Fail(PassKeyErrors.TokenExpired);
-            }
-            catch (UserAlreadyExistException)
-            {
-                return PassKeyResult.Fail(PassKeyErrors.AccountExists);
-            }
+            var r = c.Kind == CeremonyKinds.NewUser
+                ? await a.CreateUserWithPassKey(c.Token, v.Item1, context).ConfigureAwait(false)
+                : await a.AddPassKeyUsingToken(c.Token, v.Item1, context).ConfigureAwait(false);
+            var auth = r?.Auth;
+            if (auth == null)
+                return PassKeyResult.Fail((r?.Error ?? PassKeyTokenErrors.TokenExpired) == PassKeyTokenErrors.UserAlreadyExist ? PassKeyErrors.AccountExists : PassKeyErrors.TokenExpired);
             return await SignIn(auth, context).ConfigureAwait(false);
         }
 
@@ -607,12 +748,12 @@ namespace SysWeaver.MicroService
         /// Verify a new credential
         /// </summary>
         /// <returns>The credential to store, or an error result</returns>
-        async Task<Tuple<PassKeyCredential, PassKeyResult>> Verify(Ceremony c, PassKeyCreateResponse response, HttpServerRequest context)
+        async Task<Tuple<PassKeyData, PassKeyResult>> Verify(Ceremony c, PassKeyCreateResponse response, HttpServerRequest context)
         {
             if ((response.rawId == null) || (response.response == null))
-                return Tuple.Create<PassKeyCredential, PassKeyResult>(null, PassKeyResult.Fail(PassKeyErrors.VerificationFailed));
+                return Tuple.Create<PassKeyData, PassKeyResult>(null, PassKeyResult.Fail(PassKeyErrors.VerificationFailed));
             IsCredentialIdUniqueToUserAsyncDelegate callback = async (args, ct) =>
-                (await Um.GetPassKey(Convert.ToBase64String(args.CredentialId)).ConfigureAwait(false)) == null;
+                (await FindPassKey(Convert.ToBase64String(args.CredentialId)).ConfigureAwait(false)) == null;
             RegisteredPublicKeyCredential res;
             try
             {
@@ -626,12 +767,12 @@ namespace SysWeaver.MicroService
             catch (Fido2VerificationException e)
             {
                 if (e.Code == Fido2ErrorCode.NonUniqueCredentialId)
-                    return Tuple.Create<PassKeyCredential, PassKeyResult>(null, PassKeyResult.Fail(PassKeyErrors.AlreadyRegistered));
+                    return Tuple.Create<PassKeyData, PassKeyResult>(null, PassKeyResult.Fail(PassKeyErrors.AlreadyRegistered));
                 M.AddMessage(MessageLevels.Warning, $"Passkey creation failed: {e.Message}");
-                return Tuple.Create<PassKeyCredential, PassKeyResult>(null, PassKeyResult.Fail(PassKeyErrors.VerificationFailed, e.Message));
+                return Tuple.Create<PassKeyData, PassKeyResult>(null, PassKeyResult.Fail(PassKeyErrors.VerificationFailed, e.Message));
             }
             var session = context.Session;
-            return Tuple.Create<PassKeyCredential, PassKeyResult>(new PassKeyCredential
+            return Tuple.Create<PassKeyData, PassKeyResult>(new PassKeyData
             {
                 CredentialId = Convert.ToBase64String(res.Id),
                 PublicKey = res.PublicKey,
@@ -662,7 +803,9 @@ namespace SysWeaver.MicroService
         {
             var session = context.Session;
             var deviceId = session.DeviceId;
-            var keys = await Um.GetPassKeys(session.Auth).ConfigureAwait(false);
+            var auth = session.Auth;
+            var a = GetAuthorizer(auth);
+            var keys = (a == null ? null : await a.GetPassKeys(auth).ConfigureAwait(false)) ?? [];
             return keys.OrderByDescending(x => x.LastUsed).Select(x => new PassKeyInfo
             {
                 Id = x.CredentialId,
@@ -684,7 +827,11 @@ namespace SysWeaver.MicroService
         [WebApi]
         [WebApiAuth]
         public async Task<bool> RenamePassKey(PassKeyRenameRequest request, HttpServerRequest context)
-            => await Um.RenamePassKey(request.Id, request.Name, context).ConfigureAwait(false) ? true : throw HttpResponseException.Gone("Can't rename the passkey: it was not found (it may already be removed), refresh the list");
+        {
+            var auth = context.Session.Auth;
+            var a = GetAuthorizer(auth) ?? throw new NoUserLoggedInException();
+            return await a.RenamePassKey(auth, request.Id, request.Name).ConfigureAwait(false) ? true : throw HttpResponseException.Gone("Can't rename the passkey: it was not found (it may already be removed), refresh the list");
+        }
 
         /// <summary>
         /// Remove a passkey from the signed in user, the last sign in method (passkey or password) of a user can't be removed
@@ -696,14 +843,14 @@ namespace SysWeaver.MicroService
         [WebApiAuth]
         public async Task<PassKeyResult> DeletePassKey(String id, HttpServerRequest context)
         {
-            try
+            var auth = context.Session.Auth;
+            var a = GetAuthorizer(auth) ?? throw new NoUserLoggedInException();
+            return (await a.DeletePassKey(auth, id).ConfigureAwait(false)) switch
             {
-                return (await Um.DeletePassKey(id, context).ConfigureAwait(false)) ? PassKeyResult.Ok : PassKeyResult.Fail(PassKeyErrors.UnknownCredential);
-            }
-            catch (LastSignInMethodException)
-            {
-                return PassKeyResult.Fail(PassKeyErrors.LastSignInMethod);
-            }
+                PassKeyDeleteResults.Deleted => PassKeyResult.Ok,
+                PassKeyDeleteResults.LastSignInMethod => PassKeyResult.Fail(PassKeyErrors.LastSignInMethod),
+                _ => PassKeyResult.Fail(PassKeyErrors.UnknownCredential),
+            };
         }
 
         #endregion//Manage

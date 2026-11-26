@@ -132,3 +132,9 @@
     color: var(--sw-danger);
 }
 
+
+/* The name of the type (UX guide INP-30: text that changes from run to run can be selected and copied) */
+:where(.sw-type-title) {
+    user-select: text;
+    -webkit-user-select: text;
+}

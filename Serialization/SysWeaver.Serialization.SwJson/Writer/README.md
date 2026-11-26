@@ -18,7 +18,7 @@ The writer itself, [`JsonWriter`](../JsonWriter.cs) together with [`JsonWriter.F
 | Item | Description |
 |---|---|
 | [`BufferWriter.cs`](BufferWriter.cs) | Growable, pinned byte buffer written through raw pointers (`Ensure` before writing; growing invalidates old pointers; must be disposed to release the pin and rented buffers) |
-| [`FastFormat.cs`](FastFormat.cs) | Fast UTF-8 formatting of values to a pointer, culture invariant and documented as identical to the .NET formatting previously used (verified by tests) |
+| [`FastFormat.cs`](FastFormat.cs) | Fast UTF-8 formatting of values to a pointer, culture invariant and documented as identical to the .NET formatting (verified by tests) |
 | [`EnumExt.cs`](EnumExt.cs) | Small enumerable helper used only while building the writers (not on the hot path) |
 
 ## Relationships

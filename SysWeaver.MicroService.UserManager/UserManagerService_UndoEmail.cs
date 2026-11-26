@@ -85,24 +85,24 @@ namespace SysWeaver.MicroService
             String currentPhone = null;
             bool phoneRestored = false;
             int passKeys = 0;
-            using (var c = await Db.GetAsync().ConfigureAwait(false))
+            using (var c = await DbGetAsync().ConfigureAwait(false))
             {
                 using var tr = await c.BeginTransactionAsync().ConfigureAwait(false);
-                var user = await c.FirstOrDefaultAsync<DbUser>(x => x.Id == userId).ConfigureAwait(false);
+                var user = await GetDbUser(c, userId).ConfigureAwait(false);
                 if (user == null)
                     throw new UserNoLongerExistException(userId);
                 await ThrowIfDisabled(c, userId).ConfigureAwait(false);
-                var other = await c.FirstOrDefaultAsync<DbEmailAddress>(x => x.Email == oldEmail).ConfigureAwait(false);
+                var other = await FindDbEmail(c, oldEmail).ConfigureAwait(false);
                 if ((other != null) && (other.UserId != userId))
                     throw HttpResponseException.Refused(String.Concat("The address ", oldEmail.ToQuoted(), " now belongs to another account: contact the support of this site to get your account back"));
                 //  The address
-                var current = await c.FirstOrDefaultAsync<DbEmailAddress>(x => x.UserId == userId).ConfigureAwait(false);
+                var current = await GetDbEmail(c, userId).ConfigureAwait(false);
                 currentEmail = current?.Email;
                 if (!oldEmail.FastEquals(currentEmail))
                 {
                     if (current != null)
                         await c.DeleteAsync(current).ConfigureAwait(false);
-                    await c.InsertAsync(new DbEmailAddress
+                    await InsertEmail(c, new DbEmailAddress
                     {
                         Email = oldEmail,
                         UserId = userId,
@@ -112,7 +112,7 @@ namespace SysWeaver.MicroService
                 bool nameChanged = false;
                 if ((currentEmail != null) && user.UserName.FastEquals(currentEmail) && !user.UserName.FastEquals(data.OldUserName)
                     && !String.IsNullOrEmpty(data.OldUserName)
-                    && (await c.FirstOrDefaultAsync<DbUser>(x => x.UserName == data.OldUserName && x.Id != userId).ConfigureAwait(false) == null))
+                    && (((await FindDbUserByName(c, data.OldUserName).ConfigureAwait(false))?.Id ?? userId) == userId))
                 {
                     user.UserName = data.OldUserName;
                     nameChanged = true;
@@ -123,18 +123,18 @@ namespace SysWeaver.MicroService
                     nameChanged = true;
                 }
                 if (nameChanged)
-                    await c.UpdateAsync(user, x => new { x.UserName, x.NickName }).ConfigureAwait(false);
+                    await UpdateUserNames(c, user).ConfigureAwait(false);
                 //  The phone number at the time of the change
-                var phone = await c.FirstOrDefaultAsync<DbPhoneNumber>(x => x.UserId == userId).ConfigureAwait(false);
+                var phone = await GetDbPhone(c, userId).ConfigureAwait(false);
                 currentPhone = phone?.Phone;
                 if (!String.Equals(currentPhone, data.OldPhone, StringComparison.Ordinal))
                 {
                     if (phone != null)
                         await c.DeleteAsync(phone).ConfigureAwait(false);
                     var oldPhone = data.OldPhone;
-                    if ((oldPhone != null) && (await c.FirstOrDefaultAsync<DbPhoneNumber>(x => x.Phone == oldPhone).ConfigureAwait(false) == null))
+                    if ((oldPhone != null) && (await FindDbPhone(c, oldPhone).ConfigureAwait(false) == null))
                     {
-                        await c.InsertAsync(new DbPhoneNumber
+                        await InsertPhone(c, new DbPhoneNumber
                         {
                             Phone = oldPhone,
                             UserId = userId,
@@ -149,9 +149,9 @@ namespace SysWeaver.MicroService
                 var pwd = await c.FirstOrDefaultAsync<DbAuthPassword>(x => x.UserId == userId).ConfigureAwait(false);
                 if (pwd != null)
                 {
-                    pwd.Pwd = "";
+                    SetPasswordHash(pwd, null);
                     pwd.MustResetPassword = true;
-                    await c.UpdateAsync(pwd, x => new { x.Pwd, x.MustResetPassword }).ConfigureAwait(false);
+                    await c.UpdateAsync(pwd, x => new { x.ScramSalt, x.ScramIterations, x.StoredKey, x.MustResetPassword }).ConfigureAwait(false);
                 }
                 //  This link is used, the other undo links and every other link of the account stop working
                 await DeleteAction(c, token, DbAction.UndoEmail, null).ConfigureAwait(false);

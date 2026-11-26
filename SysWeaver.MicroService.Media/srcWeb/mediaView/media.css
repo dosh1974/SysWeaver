@@ -1094,3 +1094,9 @@ body.MediaPreview {
 .IconMediaPreviewOnce, .MediaIconOnce {
     mask-image: url("../icons/preview_once.svg");
 }
+
+/* The error and notice texts of the media pages, the title and the values of the statistics (UX guide INP-30: text that changes from run to run can be selected and copied) */
+:where(.MediaRefusedText, .MediaFontNotice, .media-edit-note, .media-title, Media-StatValue) {
+    user-select: text;
+    -webkit-user-select: text;
+}

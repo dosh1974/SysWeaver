@@ -76,6 +76,7 @@ namespace SysWeaver.Auth
         /// </summary>
         /// <param name="requiredTokens">A list of comma separated tokens (case insensitive, white spaces are trimmed)</param>
         /// <returns>A readonly list of unique lower case tokens.
+        /// A requirement with a service token ("service" or "service_&lt;scope&gt;") also gets the <see cref="ServiceImpliedTokens"/> ("debug" and "dev", appended if missing).
         /// Null if <paramref name="requiredTokens"/> is null (no auth required), <see cref="AuthTools.Empty"/> if it's empty (any logged in user) and <see cref="AuthTools.NoAuth"/> if it's "-" (no one).</returns>
         public static IReadOnlyList<String> GetRequiredTokens(String requiredTokens)
         {
@@ -86,7 +87,37 @@ namespace SysWeaver.Auth
                 return AuthTools.Empty;
             if ((s.Length == 1) && (s[0] == '-'))
                 return AuthTools.NoAuth;
-            return GetUniqueTokens(requiredTokens);
+            return AddServiceImplied(GetUniqueTokens(requiredTokens));
+        }
+
+        /// <summary>
+        /// Append the <see cref="ServiceImpliedTokens"/> (if missing) to unique lower case tokens that contains a service token
+        /// </summary>
+        static String[] AddServiceImplied(String[] tokens)
+        {
+            bool isService = false;
+            foreach (var t in tokens)
+                if (IsServiceToken(t))
+                {
+                    isService = true;
+                    break;
+                }
+            if (!isService)
+                return tokens;
+            var implied = ServiceImpliedTokens;
+            int missing = 0;
+            foreach (var x in implied)
+                if (Array.IndexOf(tokens, x) < 0)
+                    ++missing;
+            if (missing == 0)
+                return tokens;
+            var r = new String[tokens.Length + missing];
+            tokens.CopyTo(r, 0);
+            int n = tokens.Length;
+            foreach (var x in implied)
+                if (Array.IndexOf(tokens, x) < 0)
+                    r[n++] = x;
+            return r;
         }
 
         /// <summary>
@@ -209,12 +240,116 @@ namespace SysWeaver.Auth
             AuthContext = authContext;
         }
 
+        /// <summary>
+        /// The lower case "service" token. Each service token ("service" or "service_&lt;scope&gt;") is a token of its own: a "service" requirement is only fulfilled by "service".
+        /// A requirement with a service token is also fulfilled by the "debug" and "dev" tokens (see <see cref="GetRequiredTokens(string)"/>).
+        /// </summary>
+        public const String ServiceToken = "service";
+
+        /// <summary>
+        /// The start of a scoped service token ("service_&lt;scope&gt;", ex: an API key that may only call some services)
+        /// </summary>
+        public const String ServiceScopePrefix = "service_";
+
+        /// <summary>
+        /// The lower case tokens that are added to every requirement with a service token ("service" or "service_&lt;scope&gt;"): developers may call any service API
+        /// </summary>
+        public static IReadOnlyList<String> ServiceImpliedTokens => ImpliedTokens.Tokens;
+
+        /// <summary>
+        /// Holds <see cref="ServiceImpliedTokens"/> (initialized before the static fields of Authorization that parse requirements)
+        /// </summary>
+        static class ImpliedTokens
+        {
+            public static readonly String[] Tokens = ["debug", "dev"];
+        }
+
+        /// <summary>
+        /// Check if a token is a service token ("service" or "service_&lt;scope&gt;"), case insensitive (same result as lower casing the token with ToLowerInvariant first)
+        /// </summary>
+        /// <param name="token">The token</param>
+        /// <returns>True for a service token</returns>
+        public static bool IsServiceToken(ReadOnlySpan<Char> token)
+        {
+            var l = ServiceToken.Length;
+            if ((token.Length < l) || ((token.Length > l) && (token[l] != '_')))
+                return false;
+            //  Per char ToLowerInvariant: the same as the lower cased token (FastToLower), ex: 'ſ' isn't 's'
+            for (int i = 0; i < l; ++i)
+            {
+                if (Char.ToLowerInvariant(token[i]) != ServiceToken[i])
+                    return false;
+            }
+            return true;
+        }
+
 
         /// <summary>
         /// If true, a weak auth method was used (Basic auth, Bearer token etc).
         /// If false, a proper login request was used
         /// </summary>
         public readonly bool WeakMethod;
+
+        /// <summary>
+        /// Optional: the client addresses (networks) this authorization may be used from, null (the default) means any address.
+        /// Checked by the http server on every request that requires auth (ex: an API key restricted to some servers).
+        /// </summary>
+        public IReadOnlyList<System.Net.IPNetwork> AllowedNetworks { get; init; }
+
+        /// <summary>
+        /// True for an API key: it only fulfills requirements that name one of its tokens (ex: "Service"),
+        /// never the "any logged in user" requirement (an empty token list), see <see cref="AuthExt.IsValid(Authorization, string)"/>.
+        /// </summary>
+        public bool IsApiKey { get; init; }
+
+        /// <summary>
+        /// True if this authorization may be used from a client address (see <see cref="AllowedNetworks"/>)
+        /// </summary>
+        /// <param name="address">The client address as text, ex: "10.0.0.5"</param>
+        /// <returns>True if allowed (always true if <see cref="AllowedNetworks"/> is null)</returns>
+        public bool IsAddressAllowed(String address)
+        {
+            var n = AllowedNetworks;
+            if (n == null)
+                return true;
+            if (!System.Net.IPAddress.TryParse(address, out var ip))
+                return false;
+            if (ip.IsIPv4MappedToIPv6)
+                ip = ip.MapToIPv4();
+            foreach (var x in n)
+                if (x.Contains(ip))
+                    return true;
+            return false;
+        }
+
+        /// <summary>
+        /// Parse a comma (or space / semicolon) separated list of addresses and networks, ex: "10.0.0.5, 192.168.1.0/24, 2001:db8::/32".
+        /// </summary>
+        /// <param name="list">The list, null or empty returns null (any address)</param>
+        /// <returns>The networks, or null for any address</returns>
+        /// <exception cref="ArgumentException">An entry isn't a valid address or network</exception>
+        public static IReadOnlyList<System.Net.IPNetwork> ParseNetworks(String list)
+        {
+            if (String.IsNullOrWhiteSpace(list))
+                return null;
+            var r = new List<System.Net.IPNetwork>();
+            foreach (var e in list.Split([',', ';', ' '], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                if (e.Contains('/'))
+                {
+                    if (!System.Net.IPNetwork.TryParse(e, out var net))
+                        throw new ArgumentException("Invalid network " + e.ToQuoted(), nameof(list));
+                    r.Add(net);
+                    continue;
+                }
+                if (!System.Net.IPAddress.TryParse(e, out var ip))
+                    throw new ArgumentException("Invalid address " + e.ToQuoted(), nameof(list));
+                if (ip.IsIPv4MappedToIPv6)
+                    ip = ip.MapToIPv4();
+                r.Add(new System.Net.IPNetwork(ip, ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork ? 32 : 128));
+            }
+            return r.Count == 0 ? null : r;
+        }
 
         
         /// <summary>
@@ -393,8 +528,8 @@ namespace SysWeaver.Auth
         /// </summary>
         /// <param name="auth">The authorization, null means not logged in</param>
         /// <param name="requiredTokens">A list of comma separated tokens (case insensitive).
-        /// Null means no auth required (always true), empty means that any logged in user is valid and "-" means that no one is valid</param>
-        /// <returns>True if the requirement is fulfilled, i.e. at least one of the tokens is present</returns>
+        /// Null means no auth required (always true), empty means that any logged in user except an API key (<see cref="Authorization.IsApiKey"/>) is valid and "-" means that no one is valid</param>
+        /// <returns>True if the requirement is fulfilled, i.e. at least one of the tokens is present (each service token is a token of its own, a requirement with a service token is also fulfilled by "debug" and "dev", see <see cref="Authorization.ServiceImpliedTokens"/>)</returns>
         public static bool IsValid(this Authorization auth, String requiredTokens = null)
         {
             if (requiredTokens == null)
@@ -407,6 +542,8 @@ namespace SysWeaver.Auth
                 return false;
             //  The tokens are parsed in place (no split array) and looked up with spans (no allocation)
             IReadOnlySet<String> ts = null;
+            //  True if the requirement has a service token ("debug" and "dev" are then also valid, same as GetRequiredTokens)
+            bool isService = false;
             int start = 0;
             for (; ; )
             {
@@ -429,11 +566,23 @@ namespace SysWeaver.Auth
                     }
                     //  Lower cased on the stack and looked up with a span (the same chars as LowerToken, no allocation for the frozen sets)
                     //  A single token (the whole string) uses the string overload (an already lower case token is looked up as is)
-                    if ((end - a) == requiredTokens.Length ? ts.ContainsLower(requiredTokens) : ts.ContainsLower(s.Slice(start + a, end - a)))
+                    var rt = s.Slice(start + a, end - a);
+                    if ((end - a) == requiredTokens.Length ? ts.ContainsLower(requiredTokens) : ts.ContainsLower(rt))
                         return true;
+                    if (!isService)
+                        isService = Authorization.IsServiceToken(rt);
                 }
                 if (e < 0)
-                    return ts == null;
+                {
+                    //  No tokens: any logged in user, except API keys (they only get access to what requires one of their tokens)
+                    if (ts == null)
+                        return !auth.IsApiKey;
+                    if (isService)
+                        foreach (var x in Authorization.ServiceImpliedTokens)
+                            if (ts.Contains(x))
+                                return true;
+                    return false;
+                }
                 start += e + 1;
             }
         }
@@ -443,8 +592,8 @@ namespace SysWeaver.Auth
         /// </summary>
         /// <param name="auth">The authorization, null means not logged in</param>
         /// <param name="requiredTokens">Tokens as returned by <see cref="Authorization.GetRequiredTokens(string)"/> (must be all lower case).
-        /// Null means no auth required (always true), empty means that any logged in user is valid and <see cref="AuthTools.NoAuth"/> (reference equality) means that no one is valid</param>
-        /// <returns>True if the requirement is fulfilled, i.e. at least one of the tokens is present</returns>
+        /// Null means no auth required (always true), empty means that any logged in user except an API key (<see cref="Authorization.IsApiKey"/>) is valid and <see cref="AuthTools.NoAuth"/> (reference equality) means that no one is valid</param>
+        /// <returns>True if the requirement is fulfilled, i.e. at least one of the tokens is present (each service token is a token of its own, a requirement with a service token is also fulfilled by "debug" and "dev", see <see cref="Authorization.ServiceImpliedTokens"/>)</returns>
         public static bool IsValid(this Authorization auth, IReadOnlyList<String> requiredTokens)
         {
             if (requiredTokens == null)
@@ -454,14 +603,16 @@ namespace SysWeaver.Auth
             if (auth == null)
                 return false;
             var tl = requiredTokens.Count;
+            //  No tokens: any logged in user, except API keys (they only get access to what requires one of their tokens)
             if (tl <= 0)
-                return true;
+                return !auth.IsApiKey;
             var ts = auth.Tokens;
             if (ts == null)
                 return false;
             for (int i = 0; i < tl; ++i)
             {
-                if (ts.Contains(requiredTokens[i]))
+                var rt = requiredTokens[i];
+                if (ts.Contains(rt))
                     return true;
             }
             return false;

@@ -237,6 +237,39 @@ namespace SysWeaver.OsServices.ServiceManager
         }
 
         /// <summary>
+        /// Get the registered command line and display name of a service (read-only, no elevation needed)
+        /// </summary>
+        /// <param name="command">The command line of the service (executable path, quoted if needed, and arguments), null on error</param>
+        /// <param name="displayName">The display name of the service, null on error</param>
+        /// <param name="serviceName">The name of the service</param>
+        /// <returns>True if succeeded</returns>
+        public static bool GetRegistration(out string command, out string displayName, string serviceName)
+        {
+            var t = GetServiceConfig(serviceName, true);
+            command = t?.lpBinaryPathName;
+            displayName = t?.lpDisplayName;
+            return t != null;
+        }
+
+        /// <summary>
+        /// Change the registered command line of a service, nothing else (ex: the account and its password) is changed. Used the next time that the service is started.
+        /// </summary>
+        /// <param name="serviceName">The name of the service</param>
+        /// <param name="command">The command line of the service (executable path, quoted if needed, and arguments)</param>
+        /// <returns>True if succeeded, false on any error</returns>
+        public static bool SetCommand(string serviceName, string command)
+            => SetServiceConfig(serviceName, ServiceTypes.SERVICE_NO_CHANGE, StartTypes.SERVICE_NO_CHANGE, ServiceErrors.SERVICE_NO_CHANGE, command, null, null, null, null, null, true);
+
+        /// <summary>
+        /// Change the display name of a service, nothing else is changed.
+        /// </summary>
+        /// <param name="serviceName">The name of the service</param>
+        /// <param name="displayName">The new display name</param>
+        /// <returns>True if succeeded, false on any error (ex: another service has the name)</returns>
+        public static bool SetDisplayName(string serviceName, string displayName)
+            => SetServiceConfig(serviceName, ServiceTypes.SERVICE_NO_CHANGE, StartTypes.SERVICE_NO_CHANGE, ServiceErrors.SERVICE_NO_CHANGE, null, null, null, null, null, displayName, true);
+
+        /// <summary>
         /// Takes a service name, a service display name and the path to the service executable and installs (if needed) and starts the windows service (currently unused).
         /// </summary>
         /// <param name="serviceName">The service name that this service will have</param>
@@ -508,7 +541,7 @@ namespace SysWeaver.OsServices.ServiceManager
                 try
                 {
 
-                    return ChangeServiceConfig(service, dwServiceType, dwStartType, dwErrorControl, lpBinaryPathName, lpLoadOrderGroup, out var x, lpDependencies, lpServiceStartName, lpPassword, lpDisplayName);
+                    return ChangeServiceConfig(service, dwServiceType, dwStartType, dwErrorControl, lpBinaryPathName, lpLoadOrderGroup, nint.Zero, lpDependencies, lpServiceStartName, lpPassword, lpDisplayName);
                 }
                 finally
                 {
@@ -1005,11 +1038,11 @@ namespace SysWeaver.OsServices.ServiceManager
         static extern bool QueryServiceConfig2(nint hService, uint dwInfoLevel, nint buffer, uint cbBufSize, out uint pcbBytesNeeded);
 
         /// <summary>
-        /// ChangeServiceConfigW, lpDependencies: see <see cref="CreateService"/> (null for no change).
+        /// ChangeServiceConfigW, lpDependencies: see <see cref="CreateService"/> (null for no change), lpdwTagId: zero, no tag is requested (there is no load order group).
         /// </summary>
         [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true, EntryPoint = "ChangeServiceConfigW")]
         static extern bool ChangeServiceConfig(nint hService, ServiceTypes dwServiceType, StartTypes dwStartType, ServiceErrors dwErrorControl, string lpBinaryPathName,
-            string lpLoadOrderGroup, out uint lpdwTagId, string lpDependencies, string lpServiceStartName, string lpPassword, string lpDisplayName);
+            string lpLoadOrderGroup, nint lpdwTagId, string lpDependencies, string lpServiceStartName, string lpPassword, string lpDisplayName);
 
         [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true, EntryPoint = "ChangeServiceConfig2W")]
         static extern bool ChangeServiceConfig2(nint hService, uint dwInfoLevel, nint lpInfo);

@@ -49,10 +49,17 @@ namespace SysWeaver.WebBrowser
 
         /// <summary>
         /// The browser executable, variables can be used (see PathTemplate).
-        /// If null and no Channel is specified, an installed Chrome or Edge is used for Chromium (the browser downloaded by Playwright if none is found).
+        /// If null and no Channel is specified, Chromium uses the headless Chromium bundled with the app when running headless (see UseBundled),
+        /// else an installed Chrome or Edge (the browser downloaded by Playwright if none is found).
         /// Firefox and Webkit always use the browser downloaded by Playwright (those are per user, a service running as another user won't find them).
         /// </summary>
         public String ExecutablePath;
+
+        /// <summary>
+        /// When running Chromium headless without an ExecutablePath or Channel, use the headless Chromium that is bundled with the app (the ".playwright-browsers" folder) if it exists.
+        /// It's the exact version that the Playwright version is made for, so it doesn't break when an installed browser updates.
+        /// </summary>
+        public bool UseBundled = true;
 
         /// <summary>
         /// Optional Playwright browser channel, ex: "chrome", "msedge" or "chromium", ignored if ExecutablePath is specified.
@@ -343,6 +350,27 @@ namespace SysWeaver.WebBrowser
             return c.FirstOrDefault(File.Exists);
         }
 
+        /// <summary>
+        /// The folder (in the app folder) where the build puts the bundled headless Chromium
+        /// </summary>
+        const String BundledFolder = ".playwright-browsers";
+
+        /// <summary>
+        /// Find the headless Chromium bundled with the app
+        /// </summary>
+        /// <returns>The executable, null if there is none</returns>
+        static String FindBundledChromium()
+        {
+            var folder = Path.Combine(AppContext.BaseDirectory, BundledFolder);
+            if (!Directory.Exists(folder))
+                return null;
+            var name = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "chrome-headless-shell.exe" : "chrome-headless-shell";
+            //  The highest revision if there are several (ex: an app folder that was updated in place)
+            return Directory.EnumerateFiles(folder, name, SearchOption.AllDirectories)
+                .OrderByDescending(x => x, StringComparer.OrdinalIgnoreCase)
+                .FirstOrDefault();
+        }
+
         IEnumerable<String> GetChromiumArgs(bool interactive)
         {
             var p = Params;
@@ -392,9 +420,14 @@ namespace SysWeaver.WebBrowser
                 if (!File.Exists(exe))
                     throw new Exception("The browser executable \"" + exe + "\" doesn't exist!");
             }
+            else if (isChromium && String.IsNullOrEmpty(p.Channel))
+            {
+                //  The bundled shell can only run headless
+                exe = ((headless && p.UseBundled) ? FindBundledChromium() : null) ?? FindChromium();
+            }
             else
             {
-                exe = (isChromium && String.IsNullOrEmpty(p.Channel)) ? FindChromium() : null;
+                exe = null;
             }
 
             var args = new List<String>();

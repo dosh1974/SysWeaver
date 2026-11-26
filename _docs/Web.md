@@ -7,7 +7,7 @@
 | | |
 |---|---|
 | **Repository** | [SysWeaver](../README.md) |
-| **Kind** | Architecture overview (front end rewrite, 2026-10) |
+| **Kind** | Architecture overview |
 
 New here? Start with **[Your first page in 5 minutes](WebQuickStart.md)**, then browse the **component gallery** (`/ui/gallery.html` on any SysWeaver server, source [`ui/gallery.html`](../SysWeaver.HttpServer/srcWeb/ui/gallery.html)).
 
@@ -54,7 +54,7 @@ One namespace, `Sw`, in three layers. Each layer is a set of small source module
 
 - A page (or another project) can use the **core alone** and still get server push messages, InterOp, themes, layout classes and requests. The UI adds the visible parts (loader, error toasts, server block) through core events and hooks.
 - A page that renders **its own UI** and only needs the messaging (server events, session keep-alive, InterOp, server time, layout classes, the legacy `SessionManager` / `SysWeaverInit` names) loads the small bundle `sw/session.js` (no theme, no components); `sw/theme.js` adds the theme, `sw/net.js` the requests. The bundles share their source files and each source runs once per page. See [WebMessaging.md](WebMessaging.md).
-- The core is **wire compatible** with the old `common.js`: old and new pages in the same browser share one session master, exchange InterOp messages and use the same storage keys.
+- The core is **wire compatible** with the legacy `common.js`: legacy and new pages in the same browser share one session master, exchange InterOp messages and use the same storage keys.
 - **Vanilla JavaScript**, classic scripts (no ES modules, no frameworks, no external resources), each file an IIFE with `"use strict"`, JSDoc on every file, class and member. Touch, mouse and keyboard everywhere; desktop, phone portrait and phone landscape; every theme.
 - **Conventions**: classes take one options object with PascalCase keys (`new Sw.Button({ Text, Icon, OnClick })`), the root element is `.E`, values use `Get()` / `Set(value, silent)`, callbacks `OnInput` / `OnChange`. Public members are PascalCase; see "API conventions" in the [core](../SysWeaver.HttpServer/srcWeb/core/README.md#api-conventions) and [ui](../SysWeaver.HttpServer/srcWeb/ui/README.md#api-conventions) READMEs.
 
@@ -155,7 +155,7 @@ The `Default` menu is one tree. Item ids are paths (`"Monitoring/{0}"`), folders
 The full contract (what must keep working) is listed per folder. The parts every page author meets:
 
 - **Api calls**: `[WebApi]` methods are published under `/Api/<class url>/<method>`; many services put their url next to their pages (`[WebApiUrl("../chat")]`), so pages call bare relative names. A method takes one argument: `Sw.Net.Send(url, arg)` sends small arguments as GET (`?json`, `?_d<base64url deflate>`, `?_u<base64url>`), larger ones as a JSON POST with `$type` first (`Sw.Net.ToTypedJson`). Debug builds POST by default (`//DEBUG_BEGIN` block); set the web server Params `"OptimizedSend": true` (`*.Services.json`, default false) to use the release encodings in a debug build too (the server publishes it in the templated `app/manifest.json` as `sysweaver_optimized_send`).
-- **Auth**: the client never sends tokens; everything relies on the session cookie `SysWeaver.Session.<AppName>`. Unauthenticated api calls are answered with 401 and the sign in page in the `X-Login-Url` header (browser navigations and pages / files get a 302 to `auth/Login.html`; older servers send the 302 for api calls too): `Sw.Net` emits `auth.redirect` and navigates there.
+- **Auth**: the client never sends tokens; everything relies on the session cookie `SysWeaver.Session.<AppName>`. Unauthenticated api calls are answered with 401 and the sign in page in the `X-Login-Url` header (browser navigations and pages / files get a 302 to `auth/Login.html`; a 302 for an api call is handled the same way): `Sw.Net` emits `auth.redirect` and navigates there.
 - **Errors**: a non-200 response throws `Sw.Net.Error` (`Status`, `StatusText`, `Text`, `Url`); `Retry` / `ErrHandler` options retry.
 - **Tables**: `TableDataRequest{Cc, Row, MaxRowCount, LookAheadCount, Order[], Filters[], Param, SearchText}` → `TableData{Cols[], Rows[], RowCount, Title, Cc, RefreshRate}`, rendered by `Sw.Table` (paging, sorting, filters, search, export, phone cards, live refresh by the `Cc` change counter). Tables may hold billions of rows, so the server never counts more than asked: `Sw.Table` sends `LookAheadCount: 1` and `RowCount` means "at least this many rows" ("1-25, more follow" while more rows follow, the exact total only on the last page). Don't ask for a large look ahead just to show a total.
 - **File viewers / editors**: `Api/GetExtensionViewer` / `Api/GetExtensionEditor` (registered by services with `TryAddExtensionViewer` / `TryAddExtensionEditor`), opened with `Sw.Page.View` / `Sw.Page.Edit`.
@@ -185,7 +185,7 @@ For architects and operators: what a deployed app serves, how to work on the pag
   - the session cookie `SysWeaver.Session.<AppName>` (http-only; the client never sends tokens) and `SysWeaver.DeviceId`; unauthenticated api calls get a 401 with `X-Login-Url: <sign in page>`, other requests a 302 to `auth/Login.html`;
   - `app/app.js` / `app/app.css` (served empty unless the application supplies them) and the generated icons (`icon.svg`, `favicon.ico`, `logo.svg` ...);
   - optional services are optional on the client too: pages ask the server before they load or show an optional feature (`Api/HaveService "<service type>"`, once per page: the sign in page loads the passkey plug-in only when `SysWeaver.MicroService.PassKeyService` runs, tables show language / country values as plain text without `IsoDataService`), so an app without them gets no 404s and works without the feature;
-  - `Sw.Access` asks the server which apis the session may call and which role they need (`Api/auth/CanCall`, open to everyone; older servers: `Api/debug/GetApiInfo`, now Dev / Debug only); when the role can't be read the pages still work and only become less specific (actions are disabled after their first refusal, the not-allowed state says "your role" instead of naming it; see `core/README.md`, "Dependency on GetApiInfo");
+  - `Sw.Access` asks the server which apis the session may call and which role they need (`Api/auth/CanCall`, open to everyone; on servers without it: `Api/debug/GetApiInfo`, which is restricted to Dev / Debug); when the role can't be read the pages still work and only become less specific (actions are disabled after their first refusal, the not-allowed state says "your role" instead of naming it; see `core/README.md`, "Dependency on GetApiInfo");
   - the site may run below a path (reverse proxy): pages use relative urls only (`SwWeb check` warns about `/...` urls), and the core derives the site root from the location of `sw/core.js` (`Sw.Url.Root`).
 
 ## Working offline
@@ -199,7 +199,7 @@ For architects and operators: what a deployed app serves, how to work on the pag
 
   | Feature | Online | Offline |
   |---|---|---|
-  | Password leak check (`auth/Auth.js` `CheckLeak`, sign in, password hash, user manager pages): `api.pwnedpasswords.com` | "Password is safe (not leaked)!" / "This password is part of N data leaks" | As before the rewrite: the request fails (offline it fails fast; behind a firewall that drops it, "Checking password .." stays until the browser gives up) and the result line says "Password leak check failed!" (a warning with the reason as tool tip). The request and its timing are the original ones (one GET per changed valid password, at once, no time limit). It never blocks signing in or saving a password. **A deployment can turn it off** (an offline / air-gapped site, or a policy against third party requests): `:root { --sw-password-leak-check: off; }` in the app's `app/app.css` reaches every page, also the stand-alone sign in page (alternatives: `<meta name="sw-password-leak-check" content="off">` in a page, `window.SysWeaverPasswordLeakCheck = false` in `app/app.js`). Then no request is made and no result is shown. Default: on. |
+  | Password leak check (`auth/Auth.js` `CheckLeak`, sign in, password hash, user manager pages): `api.pwnedpasswords.com` | "Password is safe (not leaked)!" / "This password is part of N data leaks" | The request fails (offline it fails fast; behind a firewall that drops it, "Checking password .." stays until the browser gives up) and the result line says "Password leak check failed!" (a warning with the reason as tool tip). One GET is sent per changed valid password, at once, with no time limit. It never blocks signing in or saving a password. **A deployment can turn it off** (an offline / air-gapped site, or a policy against third party requests): `:root { --sw-password-leak-check: off; }` in the app's `app/app.css` reaches every page, also the stand-alone sign in page (alternatives: `<meta name="sw-password-leak-check" content="off">` in a page, `window.SysWeaverPasswordLeakCheck = false` in `app/app.js`). Then no request is made and no result is shown. Default: on. |
   | Map view / map demo (`mediaView/MapView.html`): Google Maps embed / OpenStreetMap | The map | The map site is probed first (`no-cors` favicon GET, at most 4 s, remembered 30 s per session): a neutral "Map not available" placeholder instead of an empty frame. |
   | YouTube media (`mediaPlayer/media_player_youtube.js`): `youtube-nocookie.com` embed | The video | Same probe (`MediaPlayerTools.Reachable`): a "Video not available" placeholder; the player counts as loaded and its commands do nothing. The embed handshake gives up after 10 s per try. |
   | Content that points to another site (a `FontUrl` or media url in a link, an image in a chat / markdown message) | Loaded | User content, not part of the app: the usual load error, or the default font with a notice. |
@@ -209,13 +209,13 @@ For architects and operators: what a deployed app serves, how to work on the pag
 
 ## Push messages and the session manager
 
-- **One master window per browser origin** (Web Lock `SysWeaver.SessionManager` plus a Ping / Pong); it long-polls `Api/application/GetMessages {Cc, MessageTypes}` and rebroadcasts each message over InterOp. When the master closes it hands over (`MasterClosed {Cc, ServerEvents}`). When the master dies without a handover (crashed / killed tab), the new master asks every window for its subscriptions (`SessionManager.GetEvents`, answered with `SessionManager.OwnedEvents {To, Events}`), so no window loses its messages. Old (`common.js`) and new windows share the same master.
+- **One master window per browser origin** (Web Lock `SysWeaver.SessionManager` plus a Ping / Pong); it long-polls `Api/application/GetMessages {Cc, MessageTypes}` and rebroadcasts each message over InterOp. When the master closes it hands over (`MasterClosed {Cc, ServerEvents}`). When the master dies without a handover (crashed / killed tab), the new master asks every window for its subscriptions (`SessionManager.GetEvents`, answered with `SessionManager.OwnedEvents {To, Events}`), so no window loses its messages. Legacy (`common.js`) and new windows share the same master.
 - **Frames** get server messages through their top window's session manager. A same origin host page that does NOT load the SysWeaver core (ex: a plain test page embedding `chat/chat.html`) has none: add `top=true` to the frame url (`chat.html?...&top=true`) and the frame acts as a top window (`Sw.Page.IsTop`, it takes part in the master election and gets the top window reactions: reloads on login / logout / new server instance). Hosts that load `sw/core.js` don't need it.
 - **Subscriptions** are reference counted: `Sw.Session.Subscribe(type, fn)` / `Unsubscribe`. Types are lower case; the server drops messages of types nobody subscribed to. Example: chat uses `chat.{post|replace|remove|clear}.<provider>.<chatId>`.
 - **Server side**: `request.Session.PushMessage(...)`, `request.Server.PushMessageUser(...)`, `PushMessageAllUsers(...)`, `PushMessageAllSessions(new PushMessage("my.type"))`.
 - **Forced types** reach every session: `user.login`, `user.logout`, `server.*`, `reload`, `refresh`, `filereload`. Default reactions in the core (top windows): reload on a new server instance (a window that knows no instance yet, ex: a new tab, does not reload; it learns the instance from the master), on `reload` / `refresh` / `user.login` / `user.logout` (unless `Sw.Session.IgnoreUserChanges()`; auth pages opt out), cache flush and `src` / `href` refresh on `filereload`. The ui shows the full page block overlay (`Sw.ServerBlock`) on `server.pause` / `restart` / `shutdown` / `error`.
 - `Sw.Session.ServerTime()` is the latency corrected server time.
-- The full description (requests, election, reactions, theme hand-shake, classes, differences from the original): [WebMessaging.md](WebMessaging.md).
+- The full description (requests, election, reactions, theme hand-shake, classes, legacy names): [WebMessaging.md](WebMessaging.md).
 
 ## Window, frame and tab messaging
 
@@ -258,17 +258,16 @@ The global functions **`_T`, `_TF`, `_TH`, `_TFH`** keep exactly these names and
 
 ## Legacy pages and the compatibility layer
 
-Old pages, other projects and the srcData templates keep working unchanged:
+Legacy format pages, other projects and the srcData templates are served through generated compatibility bundles:
 
-| Old include | Now | Contents |
+| Legacy include | Served as | Contents |
 |---|---|---|
-| `common/common.js` | GENERATED: core + ui + `ui/compat_common.js` | Every global of the old common.js (`sendRequest`, `getRequest`, `Fail`, `Info`, `ValueFormat`, `ColorIcon`, `AddLoading`, `PageLoaded`, `InterOp`, `SessionManager`, `includeJs`, `Open` ...) mapped onto `Sw` |
+| `common/common.js` | GENERATED: core + ui + `ui/compat_common.js` | Every legacy common.js global (`sendRequest`, `getRequest`, `Fail`, `Info`, `ValueFormat`, `ColorIcon`, `AddLoading`, `PageLoaded`, `InterOp`, `SessionManager`, `includeJs`, `Open` ...) mapped onto `Sw` |
 | `app/application.js` / `.css` | GENERATED: shell + `shell/compat_application.js` | `PopUp`, `Confirm`, `PopUpMenu`, `PopUpSelection`, `PopUpEdit`, `WebMenu`, `MainMenu`, `App`, `AppParams` ... |
-| `explore/table.js`, `edit/Edit.js`, `auth/*.js` ... | rewritten internally | Old global names kept next to the new `Sw.*` names |
+| `explore/table.js`, `edit/Edit.js`, `auth/*.js` ... | built on `Sw` | Legacy global names kept next to the `Sw.*` names |
 
 - **Migrating**: `SwWeb migrate <folder>` switches a folder to the new format (includes, token level renames of old globals to `Sw.*`, idempotent, reports what it can't rewrite). Pages that still use old names after the run also load `sw/compat.js` / `sw/compat.css` (the old globals on top of the already loaded core / ui) until `SwWeb check --strict` reports no `legacy-compat` warnings. See [WebQuickStart](WebQuickStart.md#7-migrate-an-old-page) and [SwWeb](https://github.com/dosh1974/SysWeaver.Tools/blob/main/SwWeb/README.md). The rule by rule porting guide (old UI and Design v2, with what `migrate` / `check --design` handle): [`PORTING.md`](../SysWeaver.HttpServer/srcWeb/PORTING.md).
-- The old to new name maps are in the core, ui and shell READMEs (LEGACY sections).
-- Before the rewrite (analysis of 2026-10-17) the client was one ~200-global `common.js` plus `application.js` (shell and pop-ups in one file), pages built DOM in large closures, and naming mixed `sendRequest` / `Fail` styles. The rewrite split it into core / ui / shell, kept every page path, url parameter, message type, CSS variable and icon class, and moved old names into the generated compatibility bundles.
+- The legacy to `Sw` name maps are in the core, ui and shell READMEs (LEGACY sections).
 
 ## Client state and storage keys
 

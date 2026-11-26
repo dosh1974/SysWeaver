@@ -86,11 +86,11 @@ MyService start
 | Verb | Effect |
 |---|---|
 | `install`, `uninstall`, `reinstall` | Register/remove the OS service (elevation is requested when needed) |
-| `start`, `stop`, `pause`, `continue`, `restart`, `status` | Control the installed service (`start` installs first if needed) |
+| `start`, `stop`, `pause`, `continue`, `restart`, `status` | Control the installed service (`start` installs first if needed, on Windows it also updates an outdated command line, display name or description of an installed service, the account is kept) |
 | `debug` | Run in the console showing all message levels |
 | `execute` | Run in the console with normal verbosity |
 | `daemon` | The entry point used by the OS service manager |
-| `hash [user] [password]` | Utility to compute a simple password hash for configuration |
+| `hash [user] [password]` | Prints a users file line `user:$s1$...` (a SCRAM verifier, `AuthTools.ComputeSimpleVerifier`) for the `SimpleAuthorizer` of this service: the binding (`AppHashString`) and `ScramIterations` are read from the service manifest, else the defaults (entry assembly name). Add the tokens (and domain) to the line, see [SysWeaver.Auth.Core](../SysWeaver.Auth.Core/README.md) |
 | `help` (also `-h`, `/h`, `-help`, `/help`, `-?`, `/?`, `?`; or none, in a console) | Usage; with no arguments and no console, `start` is used |
 
 Verbs are matched case insensitively. Before starting, console mode waits up to 15 seconds for another console mode instance of the *same application* (same executable / entry assembly path, tracked with a global named mutex) to exit, ex: the old process during a restart.
@@ -113,6 +113,8 @@ Verbs are matched case insensitively. Before starting, console mode waits up to 
 
 `status` exits with the LSB status codes: 0 = running, 3 = stopped, 4 = unknown, and 150 + the `ServiceStatus` value for the others (151 = not installed, 153 = starting, 154 = stopping, 156 = resuming, 157 = pausing, 158 = paused).
 A verb that is re-run elevated exits with the exit code of the elevated process; if the elevation itself fails (ex: `sudo` isn't installed) the exit code is 1, and a code outside 0-255 also becomes 1.
+
+An exception (exit code 1), or a service system that couldn't be loaded or created, is also appended to `[ExecutableBase].err` (next to the default log file, ex: `MyService.err`). Look there when the service doesn't start and nothing is logged (ex: Windows error 1053, "The service did not respond to the start or control request in a timely fashion"). When the file is larger than 2 MB, the next error replaces the content.
 
 ## Limitations and considerations
 

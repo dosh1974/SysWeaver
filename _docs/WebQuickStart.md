@@ -133,11 +133,11 @@ Sw.Session.Subscribe("hello.changed", msg => redraw(msg.Value));
 //  The layout classes are on html and body (SwMobile, SwNarrow, SwPortrait ...): use them in own.css
 ```
 
-- The old names work too: `SessionManager.AddMessageHandler(type, fn)`, `SysWeaverIgnoreUserChanges()`, `GetServerTime()`, `InterOp.Post(...)`, `PostTop(...)`.
-- When the server is paused, restarts or the connection is lost ("Server communication lost.", after 3 failed polls: about 10-15 s), a small self-styled dialog blocks the page, and no key reaches your own listeners (as every page of the original). It is movable and resizable, × / Escape hide it so the page can be read meanwhile, and it goes when the server is back; the page reloads by itself only when the server that answers is a new instance (a restart), never after a network drop. Draw your own: `Sw.Events.On("server.block", info => ...)` and `Sw.Events.On("server.unblock", ...)` (your handler replaces the overlay), or `<html data-sw-no-block>` for none; `Sw.Session.BlockOnLost = false` keeps the page usable while the connection is lost.
+- The legacy names work too: `SessionManager.AddMessageHandler(type, fn)`, `SysWeaverIgnoreUserChanges()`, `GetServerTime()`, `InterOp.Post(...)`, `PostTop(...)`.
+- When the server is paused, restarts or the connection is lost ("Server communication lost.", after 3 failed polls: about 10-15 s), a small self-styled dialog blocks the page, and no key reaches your own listeners. It is movable and resizable, × / Escape hide it so the page can be read meanwhile, and it goes when the server is back; the page reloads by itself only when the server that answers is a new instance (a restart), never after a network drop. Draw your own: `Sw.Events.On("server.block", info => ...)` and `Sw.Events.On("server.unblock", ...)` (your handler replaces the overlay), or `<html data-sw-no-block>` for none; `Sw.Session.BlockOnLost = false` keeps the page usable while the connection is lost.
 - **Your own look**: such a page (`sw/session.js` without `sw/ui.css`) has no Sw components and no `--sw-*` tokens, so `SwWeb check --design` skips the Design v2 rules for it and its css. A page that loads the components but keeps its own look declares it: `<meta name="sw-own-look" content="why">` (or `data-sw-own-look` on html / body).
 - **Follow the SysWeaver theme choice with your own theming**: `Sw.Session.RequestedTheme` (a theme forced for this page: `?useTheme=`, a host frame's `theme.use`) or `Sw.Session.StoredTheme` (the user's choice), and `Sw.Events.On("theme.request", e => applyMyTheme(e.Theme || e.Stored))` when it changes.
-- **Sign in on such a page**: add `<script defer src="../sw/net.js"></script>` and `<script defer src="../auth/Auth.js"></script>` after `sw/session.js` (`Sw.Auth`, the old `loginRequest` / `logoutRequest`); `sw/net.js` also gives `Sw.Net.Send` for your own api calls.
+- **Sign in on such a page**: add `<script defer src="../sw/net.js"></script>` and `<script defer src="../auth/Auth.js"></script>` after `sw/session.js` (`Sw.Auth`, the legacy `loginRequest` / `logoutRequest`); `sw/net.js` also gives `Sw.Net.Send` for your own api calls.
 
 **Recipe 2: messaging + the SysWeaver theme** (the page uses the theme colours in its own css, `var(--ThemeBackground)` ...):
 
@@ -279,7 +279,7 @@ public sealed class GreetingService
   ```
 
 - **Test with a user of each role.** Sign in as a user without the role, open the page from the menu and directly: you should see the not-allowed state or disabled buttons, and no error toasts.
-- `Sw.Access` asks the server which apis the session may call and the role they need (`Api/auth/CanCall`, open to everyone). Older servers only have the api info (`Api/debug/GetApiInfo`, Dev / Debug only): there pages still work, a guarded button is disabled after its first refusal, and the texts say "your role" instead of the role name ([core README](../SysWeaver.HttpServer/srcWeb/core/README.md), "Dependency on GetApiInfo").
+- `Sw.Access` asks the server which apis the session may call and the role they need (`Api/auth/CanCall`, open to everyone). On servers without it only the api info is available (`Api/debug/GetApiInfo`, Dev / Debug only): there pages still work, a guarded button is disabled after its first refusal, and the texts say "your role" instead of the role name ([core README](../SysWeaver.HttpServer/srcWeb/core/README.md), "Dependency on GetApiInfo").
 
 ## 6. Test it
 

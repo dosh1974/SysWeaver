@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using SysWeaver.IpLocation.Caches;
 using SysWeaver.IpLocation.Sources;
 using SysWeaver.MicroService;
+using SysWeaver.Net;
 
 namespace SysWeaver.IpLocation
 {
@@ -15,7 +16,7 @@ namespace SysWeaver.IpLocation
     [RequiredDep<IIpLocationSource>]
     [OptionalDep<IIpLocationCache>]
     [WebApiUrl("IpLocation")]
-    public sealed class IpLocationService : IHaveStats, IPerfMonitored
+    public sealed class IpLocationService : IIpLocation, IHaveStats, IPerfMonitored
     {
         /// <summary>
         /// Create the service, all location sources of the manager are used (oldest first)
@@ -50,15 +51,15 @@ namespace SysWeaver.IpLocation
         /// <returns>A copy of the location, null if no source could find it</returns>
         [WebApi]
         [WebApiAuth(Roles.Service)]
-        public async Task<IpLocation> GetLocation(string ip)
+        public async Task<Location> GetLocation(string ip)
         {
             using var _ = PerfMon.Track(nameof(GetLocation));
             var t = await Cache.Get(ip, InternalGetLocationFunc).ConfigureAwait(false);
-            return t == null ? null : new IpLocation(t);
+            return t == null ? null : new Location(t);
 
         }
 
-        readonly Func<String, Task<IpLocation>> InternalGetLocationFunc;
+        readonly Func<String, Task<Location>> InternalGetLocationFunc;
         readonly ExceptionTracker SourceFails = new ExceptionTracker();
 
         /// <inheritdoc />
@@ -69,7 +70,7 @@ namespace SysWeaver.IpLocation
         /// A source that times out is not tried again for this ip (it already used up its whole time out, a retry would only add to it),
         /// when all sources timed out the look up ends at once.
         /// </summary>
-        async Task<IpLocation> InternalGetLocation(string ip)
+        async Task<Location> InternalGetLocation(string ip)
         {
             var pf = PerfMon;
             using var _ = pf.Track(nameof(InternalGetLocation));

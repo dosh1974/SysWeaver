@@ -3,6 +3,7 @@ using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Configuration;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -19,14 +20,18 @@ using SysWeaver.Net;
 
 namespace SysWeaver.AI
 {
+
+
     /// <summary>
     /// Serves MCP (Model Context Protocol) requests using the Streamable HTTP transport.
     /// A single end point (McpParams.Url) accepts JSON-RPC messages using POST, responses are returned as json (application/json),
     /// except "tools/call" requests from clients that accepts server sent events (see McpParams.StreamToolCalls), they get an event stream with keep alives while the tool runs.
     /// The service is stateless (no Mcp-Session-Id) and doesn't offer a server initiated event stream (GET returns 405).
     /// Clients authenticates using an API key: "Authorization: Bearer &lt;key&gt;" or "x-api-key: &lt;key&gt;".
+    /// Temporary MCP servers (see <see cref="CreateTempServer"/>) are served at "mcp_{guid}", the service is the authorizer of their API keys.
     /// </summary>
-    public sealed class McpService : IHttpServerModule, IPerfMonitored, IDisposable
+    [WebMenuEmbedded(null, "Admin/McpDebug", "MCP debug", "mcp_tools/index.html", "Let an AI agent analyze this service using a temporary MCP end point", "IconTable", 0, Roles.Admin)]
+    public sealed partial class McpService : AuthorizerBase, IMcpService, IHttpServerModule, IPerfMonitored, IDisposable
     {
         const String LogPrefix = "[Mcp] ";
 
@@ -37,14 +42,34 @@ namespace SysWeaver.AI
         /// <param name="p">The parameters</param>
         /// <param name="msg">Optional message host</param>
         public McpService(ServiceManager sm = null, McpParams p = null, IMessageHost msg = null)
+            : this(sm, p, msg, false, null)
+        {
+        }
+
+        /// <summary>
+        /// Create an MCP service
+        /// </summary>
+        /// <param name="sm">Optional service manager</param>
+        /// <param name="p">The parameters</param>
+        /// <param name="msg">Optional message host</param>
+        /// <param name="isTemp">True for a temporary server (see <see cref="CreateTempServer"/>), it's served by the service that created it</param>
+        /// <param name="defaultToolAuth">The auth of tools that doesn't specify any auth, null to use McpParams.Auth</param>
+        McpService(ServiceManager sm, McpParams p, IMessageHost msg, bool isTemp, String defaultToolAuth)
         {
             p = p ?? new McpParams();
+            Params = p;
+            IsTemp = isTemp;
             Msg = msg;
             var url = (p.Url ?? "").Trim().Trim('/');
             if (url.Length <= 0)
                 throw new ArgumentException("The MCP url may not be empty", nameof(p));
             Url = url;
-            OnlyForPrefixes = [url];
+            GuidPrefixValue = "MCP." + url;
+            //  Temporary servers are served by this service
+            OnlyForPrefixes = isTemp ? [url] : [url, TempUrlPrefix];
+            TempLifetime = TimeSpan.FromMinutes(Math.Max(1, p.TempServerLifetimeMinutes));
+            CallLogSize = Math.Max(0, p.CallLogSize);
+            CallLogMaxLength = Math.Max(256, p.CallLogMaxLength);
             MaxRequestSize = Math.Max(1024, p.MaxRequestSize);
             FileLifetime = TimeSpan.FromMinutes(Math.Max(1, p.FileLifetimeMinutes));
             FilesPrefix = url + "/files/";
@@ -62,7 +87,7 @@ namespace SysWeaver.AI
             AllowedOrigins = new HashSet<String>(origins, StringComparer.OrdinalIgnoreCase);
             var auth = Authorization.GetRequiredTokens(p.Auth);
             RequiresAuth = auth != null;
-            DefaultToolAuth = p.Auth;
+            DefaultToolAuth = defaultToolAuth ?? p.Auth;
             UnauthorizedHandler = new McpRequestHandler("Unauthorized", null, Unauthorized);
             PostHandler = new McpRequestHandler(nameof(Post), auth, Post);
             MethodNotAllowedHandler = new McpRequestHandler("MethodNotAllowed", auth, MethodNotAllowed);
@@ -110,6 +135,7 @@ namespace SysWeaver.AI
         /// <inheritdoc />
         public void Dispose()
         {
+            DisposeTempServers();
             var sm = Manager;
             if (sm == null)
                 return;
@@ -150,6 +176,16 @@ namespace SysWeaver.AI
 
         readonly IMessageHost Msg;
         readonly ServiceManager Manager;
+
+        /// <summary>
+        /// The parameters (used to create temporary servers with the same settings)
+        /// </summary>
+        readonly McpParams Params;
+
+        /// <summary>
+        /// True for a temporary server (see <see cref="CreateTempServer"/>)
+        /// </summary>
+        readonly bool IsTemp;
         readonly String Url;
         readonly int MaxRequestSize;
         readonly String ServerName;
@@ -170,9 +206,11 @@ namespace SysWeaver.AI
         /// </summary>
         sealed class McpTool
         {
-            public McpTool(AiTool tool, Object instance, MethodInfo method, bool isWebApi, FileOutput file)
+            public McpTool(AiTool tool, Object instance, MethodInfo method, bool isWebApi, FileOutput file, IReadOnlyList<String> overrideAuth)
             {
                 Tool = tool;
+                Auth = overrideAuth ?? tool.Auth;
+                IsAuthOverridden = overrideAuth != null;
                 Service = (instance?.GetType() ?? method.DeclaringType)?.FullName;
                 Method = method;
                 IsWebApi = isWebApi;
@@ -181,6 +219,17 @@ namespace SysWeaver.AI
             }
 
             public readonly AiTool Tool;
+
+            /// <summary>
+            /// The auth required to see and call the tool: the auth of the method (Tool.Auth), or the auth that replaced it (see AddWebApiTools).
+            /// The end point itself doesn't check any auth when invoked, so this is the only check.
+            /// </summary>
+            public readonly IReadOnlyList<String> Auth;
+
+            /// <summary>
+            /// True if <see cref="Auth"/> replaced the auth of the method
+            /// </summary>
+            public readonly bool IsAuthOverridden;
 
             /// <summary>
             /// Non null if the tool returns a file (a WebApiRawAttribute method with binary output), the file is attached to the tool result
@@ -286,7 +335,7 @@ namespace SysWeaver.AI
         /// <param name="fn">Optional tool name, default is computed from the AiToolPrefixAttribute and AiToolNameAttribute (type name + method name)</param>
         /// <returns>True if the tool was added, false if a tool with the same name already exists</returns>
         public bool AddTool(Object instance, MethodInfo method, String fn = null)
-            => TryAddTool(instance, method, fn, false, false, false) != null;
+            => TryAddTool(instance, method, fn, false, false, false, null, null) != null;
 
         /// <summary>
         /// Register a method as a tool
@@ -297,8 +346,10 @@ namespace SysWeaver.AI
         /// <param name="isWebApi">True if the method is added as a WebApi (McpParams.WebApis), false if it's an AI tool</param>
         /// <param name="isFile">True if the method returns raw data (WebApiRawAttribute), the data is attached to the tool result as a file (or proxied, see <paramref name="proxyData"/>)</param>
         /// <param name="proxyData">True if the data of a file method is kept in memory and the url is returned instead of attaching the data (McpWebApiInstance.ProxyData)</param>
-        /// <returns>The tool if it was added, null if it couldn't be created or if a tool with the same name already exists</returns>
-        AiTool TryAddTool(Object instance, MethodInfo method, String fn, bool isWebApi, bool isFile, bool proxyData)
+        /// <param name="onlyForAuths">Optional filter (lower case tokens, see <see cref="IsAuthIncluded"/>), the tool is only added if the auth of the method passes it</param>
+        /// <param name="overrideAuth">Optional auth that replaces the auth of the method (null to keep the auth of the method)</param>
+        /// <returns>The tool if it was added, null if it couldn't be created, was filtered out or if a tool with the same name already exists</returns>
+        AiTool TryAddTool(Object instance, MethodInfo method, String fn, bool isWebApi, bool isFile, bool proxyData, HashSet<String> onlyForAuths, IReadOnlyList<String> overrideAuth)
         {
             AiTool tool;
             FileOutput file = null;
@@ -307,7 +358,7 @@ namespace SysWeaver.AI
                 if (isFile)
                 {
                     fn = String.IsNullOrEmpty(fn) ? AiTool.GetToolName(method) : fn;
-                    var ep = ApiHttpEntry.Create(AiServiceBase.IoParams, instance, method, fn, PerfMon, DefaultToolAuth);
+                    var ep = ApiHttpEntry.Create(AiTool.IoParams, instance, method, fn, PerfMon, DefaultToolAuth);
                     tool = AiTool.Create(fn, ep, GetFileFunction(fn, ep, proxyData));
                     file = new FileOutput(ep, method.GetCustomAttribute<WebApiRawAttribute>(true)?.Mime, proxyData);
                 }
@@ -322,7 +373,12 @@ namespace SysWeaver.AI
                 Msg?.AddMessage(MessageLevels.Warning, $"{LogPrefix}Failed to add the method {method.Name.ToQuoted()} of {method.DeclaringType?.Name.ToQuoted()} as a tool", ex);
                 return null;
             }
-            if (!Tools.TryAdd(tool.Name, new McpTool(tool, instance, method, isWebApi, file)))
+            if ((onlyForAuths != null) && !IsAuthIncluded(tool.Auth, onlyForAuths))
+            {
+                Msg?.AddMessage(MessageLevels.Debug, $"{LogPrefix}The auth of the method {method.Name.ToQuoted()} of {method.DeclaringType?.Name.ToQuoted()} isn't included, ignoring it");
+                return null;
+            }
+            if (!Tools.TryAdd(tool.Name, new McpTool(tool, instance, method, isWebApi, file, overrideAuth)))
             {
                 Msg?.AddMessage(MessageLevels.Debug, $"{LogPrefix}A tool named {tool.Name.ToQuoted()} already exists, ignoring the method {method.Name.ToQuoted()} of {(method.DeclaringType?.Name.ToQuoted())}");
                 return null;
@@ -348,6 +404,34 @@ namespace SysWeaver.AI
                 if (IsHidden(m))
                     continue;
                 if (AddTool(instance, m))
+                    ++count;
+            }
+            return count;
+        }
+
+        /// <summary>
+        /// Register some AI tools (methods with an AiToolAttribute or an OpenAiUseAttribute) of an instance, optionally replacing their auth.
+        /// Methods with an AiHideMcpAttribute are ignored.
+        /// </summary>
+        /// <param name="instance">The instance</param>
+        /// <param name="onlyForAuths">Optional auth filter (see <see cref="AddWebApiTools(object, bool, IReadOnlySet{string}, string)"/>)</param>
+        /// <param name="overrideAuth">Optional auth (comma separated tokens) that replaces the auth of the added tools, null or empty keeps the auth of each method</param>
+        /// <param name="include">Optional method filter, only methods it returns true for are added (null for all)</param>
+        /// <returns>The number of tools added</returns>
+        int AddAiTools(Object instance, IReadOnlySet<String> onlyForAuths, String overrideAuth, Func<MethodInfo, bool> include)
+        {
+            if (instance == null)
+                return 0;
+            var filter = GetAuthFilter(onlyForAuths);
+            var forceAuth = String.IsNullOrEmpty(overrideAuth) ? null : Authorization.GetRequiredTokens(overrideAuth);
+            int count = 0;
+            foreach (var m in AiTool.GetToolMethods(instance.GetType()))
+            {
+                if (IsHidden(m))
+                    continue;
+                if ((include != null) && !include(m))
+                    continue;
+                if (TryAddTool(instance, m, null, false, false, false, filter, forceAuth) != null)
                     ++count;
             }
             return count;
@@ -393,8 +477,46 @@ namespace SysWeaver.AI
         /// <summary>
         /// Check if the user of a request is allowed to use a tool
         /// </summary>
-        static bool CanUse(HttpServerRequest r, AiTool tool)
+        static bool CanUse(HttpServerRequest r, McpTool tool)
             => r.Session?.IsValid(tool.Auth) ?? (tool.Auth == null);
+
+        /// <summary>
+        /// Check if the auth of a method passes an auth filter (see <see cref="AddWebApiTools(object, bool, IReadOnlySet{string}, string)"/>):
+        /// open methods (no auth) are always included, methods that any logged in user may use are included if the filter contains "",
+        /// methods that no one may use ("-") are included if the filter contains "-", else the method is included if any of its tokens is in the filter.
+        /// </summary>
+        /// <param name="auth">The required tokens of the method (as returned by Authorization.GetRequiredTokens)</param>
+        /// <param name="filter">The filter, lower case tokens</param>
+        /// <returns>True if the method should be included</returns>
+        static bool IsAuthIncluded(IReadOnlyList<String> auth, HashSet<String> filter)
+        {
+            if (auth == null)
+                return true;
+            if (ReferenceEquals(auth, AuthTools.NoAuth))
+                return filter.Contains("-");
+            if (auth.Count <= 0)
+                return filter.Contains("");
+            foreach (var x in auth)
+                if (filter.Contains(x))
+                    return true;
+            return false;
+        }
+
+        /// <summary>
+        /// Normalize an auth filter (tokens are lower case, same as Authorization.GetRequiredTokens)
+        /// </summary>
+        static HashSet<String> GetAuthFilter(IReadOnlySet<String> onlyForAuths)
+        {
+            if (onlyForAuths == null)
+                return null;
+            var f = new HashSet<String>(StringComparer.Ordinal);
+            foreach (var x in onlyForAuths)
+            {
+                var t = (x ?? "").Trim();
+                f.Add(t == "-" ? t : t.FastToLower());
+            }
+            return f;
+        }
 
         #endregion//Tools
 
@@ -456,6 +578,7 @@ namespace SysWeaver.AI
             return specs.ToArray();
         }
 
+
         /// <summary>
         /// Register all [WebApi] methods of an instance as tools, each tool keeps the auth of the method (WebApiAuthAttribute or IRunTimeWebApiAuth, else McpParams.Auth).
         /// Methods with an AiHideMcpAttribute, disabled methods (WebApiOptionalAttribute) and methods returning pre-compressed data (WebApiRawAttribute) are ignored.
@@ -463,8 +586,41 @@ namespace SysWeaver.AI
         /// <param name="instance">The instance</param>
         /// <param name="proxyData">True if the data returned by all WebApiRaw methods is kept in memory and the url is returned (McpWebApiInstance.ProxyData)</param>
         /// <returns>The number of tools added</returns>
-        int AddWebApiTools(Object instance, bool proxyData)
+        public int AddWebApiTools(Object instance, bool proxyData)
+            => AddWebApiTools(instance, proxyData, null, null);
+
+        /// <summary>
+        /// Register [WebApi] methods of an instance as tools, optionally only methods with some auth and optionally replacing the auth of the methods.
+        /// Methods with an AiHideMcpAttribute, disabled methods (WebApiOptionalAttribute) and methods returning pre-compressed data (WebApiRawAttribute) are ignored.
+        /// </summary>
+        /// <param name="instance">The instance</param>
+        /// <param name="proxyData">True if the data returned by all WebApiRaw methods is kept in memory and the url is returned (McpWebApiInstance.ProxyData)</param>
+        /// <param name="onlyForAuths">Optional set of auth tokens (case insensitive), if non null only methods that requires one of the tokens are added.
+        /// Methods without auth (open) are always added, methods that any logged in user may use are only added if the set contains "",
+        /// methods that no one may use are only added if the set contains "-".
+        /// Ex: a set with only "" adds the methods that any user may use and the open methods.
+        /// The auth of a method is the WebApiAuthAttribute (or IRunTimeWebApiAuth) of the method, else McpParams.Auth.</param>
+        /// <param name="overrideAuth">Optional auth (comma separated tokens) that replaces the auth of all added methods (the tools are only listed for, and can only be called by, users with this auth).
+        /// Null or empty keeps the auth of each method.
+        /// Note that a method that checks the user itself (using the request) still sees the user of the MCP request.</param>
+        /// <returns>The number of tools added</returns>
+        public int AddWebApiTools(Object instance, bool proxyData, IReadOnlySet<String> onlyForAuths, String overrideAuth)
+            => AddWebApiTools(instance, proxyData, onlyForAuths, overrideAuth, null);
+
+        /// <summary>
+        /// Register [WebApi] methods of an instance as tools (see <see cref="AddWebApiTools(object, bool, IReadOnlySet{string}, string)"/>), optionally only some methods
+        /// </summary>
+        /// <param name="instance">The instance</param>
+        /// <param name="proxyData">True if the data returned by all WebApiRaw methods is kept in memory and the url is returned</param>
+        /// <param name="onlyForAuths">Optional auth filter</param>
+        /// <param name="overrideAuth">Optional auth that replaces the auth of all added methods</param>
+        /// <param name="include">Optional method filter, only methods it returns true for are added (null for all)</param>
+        /// <returns>The number of tools added</returns>
+        int AddWebApiTools(Object instance, bool proxyData, IReadOnlySet<String> onlyForAuths, String overrideAuth, Func<MethodInfo, bool> include)
         {
+            ArgumentNullException.ThrowIfNull(instance);
+            var filter = GetAuthFilter(onlyForAuths);
+            var forceAuth = String.IsNullOrEmpty(overrideAuth) ? null : Authorization.GetRequiredTokens(overrideAuth);
             lock (WebApiTools)
             {
                 if (WebApiTools.ContainsKey(instance))
@@ -475,6 +631,8 @@ namespace SysWeaver.AI
                     if (m.GetCustomAttributeWithInterface<WebApiAttribute>(true) == null)
                         continue;
                     if (IsHidden(m))
+                        continue;
+                    if ((include != null) && !include(m))
                         continue;
                     try
                     {
@@ -495,7 +653,7 @@ namespace SysWeaver.AI
                         continue;
                     }
                     var isFile = (raw != null) && (proxyData || (raw.Mime == null) || !IsText(BaseMime(raw.Mime)));
-                    var tool = TryAddTool(instance, m, null, true, isFile, isFile && proxyData);
+                    var tool = TryAddTool(instance, m, null, true, isFile, isFile && proxyData, filter, forceAuth);
                     if (tool != null)
                         added.Add(tool.Name);
                 }
@@ -581,7 +739,7 @@ namespace SysWeaver.AI
         /// </summary>
         /// <param name="instance">The instance</param>
         /// <returns>The number of tools removed</returns>
-        int RemoveWebApiTools(Object instance)
+        public int RemoveWebApiTools(Object instance)
         {
             String[] names;
             lock (WebApiTools)
@@ -623,6 +781,13 @@ namespace SysWeaver.AI
             /// </summary>
             [TableDataAuth]
             public String Auth;
+
+            /// <summary>
+            /// The auth of the method if the auth of the tool replaced it (temporary servers), else null
+            /// </summary>
+            [TableDataAuth]
+            [TableDataHide]
+            public String MethodAuth;
 
             /// <summary>
             /// The description of the tool, as sent to MCP clients
@@ -685,7 +850,8 @@ namespace SysWeaver.AI
         }
 
         /// <summary>
-        /// All tools served by the MCP end point, with kind, auth, description, input schema, implementing service and usage
+        /// All tools served by the MCP end point, with kind, auth, description, input schema, implementing service and usage.
+        /// If the Param of the request is the guid of a temporary server (see CreateTempServer), the tools of that server are returned instead.
         /// </summary>
         /// <param name="r">Table request parameters (paging, sorting, filtering)</param>
         /// <returns>A table with one row per tool</returns>
@@ -694,6 +860,9 @@ namespace SysWeaver.AI
         [WebApiClientCache(4)]
         [WebMenuTable(null, "Admin/{0}", "MCP tools", "All tools served by the MCP end point, with auth, parameters and usage", "IconTable")]
         public TypedTableData<ToolRow> ToolTable(TableDataRequest r)
+            => (TryGetTempServer(r?.Param)?.Service ?? this).GetToolTable(r);
+
+        TypedTableData<ToolRow> GetToolTable(TableDataRequest r)
         {
             var endPoint = "/" + Url;
             var rows = Tools.Values.Select(x =>
@@ -704,7 +873,8 @@ namespace SysWeaver.AI
                 {
                     Name = t.Name,
                     Kind = x.IsWebApi ? (x.File != null ? (x.File.Proxy ? "WebApi (url)" : "WebApi (file)") : "WebApi") : "Tool",
-                    Auth = AuthToString(t.Auth),
+                    Auth = AuthToString(x.Auth),
+                    MethodAuth = x.IsAuthOverridden ? AuthToString(t.Auth) : null,
                     Description = t.Tool.FunctionDescription,
                     Parameter = t.Arg?.Name,
                     InputSchema = t.Tool.FunctionParameters?.ToString(),
@@ -923,6 +1093,18 @@ namespace SysWeaver.AI
         public IHttpRequestHandler Handler(HttpServerRequest context)
         {
             var url = context.LocalUrl.AsSpan();
+            //  Temporary servers (and their files and data)
+            if ((!IsTemp) && url.StartsWith(TempUrlPrefix, StringComparison.Ordinal))
+            {
+                var g = url.Slice(TempUrlPrefix.Length);
+                var e = g.IndexOf('/');
+                if (e >= 0)
+                    g = g.Slice(0, e);
+                if (!TempServerLookup.TryGetValue(g, out var temp))
+                    return null;
+                temp.Touch();
+                return temp.Service.Handler(context);
+            }
             //  The server adds "index.html" to urls ending with a '/'
             if (context.DidIndex && url.EndsWith(IndexSuffix, StringComparison.Ordinal))
                 url = url.Slice(0, url.Length - IndexSuffix.Length);
@@ -1300,7 +1482,7 @@ namespace SysWeaver.AI
         {
             w.WriteStartObject();
             w.WriteStartArray("tools");
-            foreach (var t in Tools.Values.Select(x => x.Tool).Where(x => CanUse(r, x)).OrderBy(x => x.Name, StringComparer.Ordinal))
+            foreach (var t in Tools.Values.Where(x => CanUse(r, x)).Select(x => x.Tool).OrderBy(x => x.Name, StringComparer.Ordinal))
             {
                 var f = t.Tool;
                 w.WriteStartObject();
@@ -1318,12 +1500,24 @@ namespace SysWeaver.AI
 
         async Task<Action<Utf8JsonWriter>> CallTool(HttpServerRequest r, JsonElement p)
         {
-            var name = GetString(p, "name") ?? throw new RpcException(ErrInvalidParams, "Missing tool name");
+            var name = GetString(p, "name");
+            JsonElement args = default;
+            if (p.ValueKind == JsonValueKind.Object)
+                p.TryGetProperty("arguments", out args);
+            if (name == null)
+            {
+                LogCall(r, null, args, "Missing tool name", true, TimeSpan.Zero, null, null);
+                throw new RpcException(ErrInvalidParams, "Missing tool name");
+            }
             //  Tools that the user isn't allowed to use are hidden
-            if ((!Tools.TryGetValue(name, out var entry)) || (!CanUse(r, entry.Tool)))
-                throw new RpcException(ErrInvalidParams, "Unknown tool " + name.ToQuoted());
+            if ((!Tools.TryGetValue(name, out var entry)) || (!CanUse(r, entry)))
+            {
+                var err = "Unknown tool " + name.ToQuoted();
+                LogCall(r, name, args, err, true, TimeSpan.Zero, null, null);
+                throw new RpcException(ErrInvalidParams, err);
+            }
             var tool = entry.Tool;
-            p.TryGetProperty("arguments", out var args);
+            var started = Stopwatch.GetTimestamp();
             //  Same as the AI chat: a json object with a single property (the method argument)
             var b = args.ValueKind == JsonValueKind.Object ? BinaryData.FromString(args.GetRawText()) : null;
             String text;
@@ -1355,9 +1549,11 @@ namespace SysWeaver.AI
                     props.TryRemove(OpenAiToolExt.RequestAiToolContext, out var _);
                 }
             }
+            var elapsed = Stopwatch.GetElapsedTime(started);
             entry.OnCall(isError);
             var files = context.Files;
             var links = context.Links;
+            LogCall(r, name, args, text, isError, elapsed, files, links);
             var linkBase = new Uri(r.Prefix + Url);
             //  Tools made for the AI chat returns urls relative to the chat page, the MCP client needs an absolute url
             if (!isError && IsRelativeUrl(text) && Uri.TryCreate(linkBase, text, out var abs))

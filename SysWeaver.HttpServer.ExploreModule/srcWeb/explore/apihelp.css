@@ -78,3 +78,9 @@ body {
         color: var(--sw-text-2);
         font-weight: 600;
     }
+
+/* The texts, values and samples of the api help (UX guide INP-30: text that changes from run to run can be selected and copied) */
+:where(.apihelp-p, .apihelp-note, .apihelp-code, .apihelp-sample > pre, .apihelp-table td) {
+    user-select: text;
+    -webkit-user-select: text;
+}

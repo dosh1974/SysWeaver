@@ -17,6 +17,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\SysWeaver.AI.Tools\SysWeaver.AI.Tools.csproj" />
     <ProjectReference Include="..\SysWeaver.Chat\SysWeaver.Chat.csproj" />
     <ProjectReference Include="..\SysWeaver.HttpServer\SysWeaver.HttpServer.csproj" />
     <ProjectReference Include="..\SysWeaver.IsoData\SysWeaver.IsoData.csproj" />

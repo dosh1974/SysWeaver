@@ -43,7 +43,7 @@ A provider derives from `AiServiceBase` and implements `CreateAiChatSession`, `C
 - [`IAiService`](IAiService.cs) — the provider agnostic AI service contract (chat provider, tool cache, sessions, completion, models)
 - [`AiServiceBase`](AiServiceBase.cs) — base class for providers: chat provider, tool registration, commands, default tools
 - [`AiChatSessionBase`](AiChatSessionBase.cs) / [`AiQuerySessionBase`](AiQuerySessionBase.cs) — base classes for conversation and stateless query sessions (tools, memory tools, system prompt)
-- [`JsonSchema`](JsonSchema.cs) — JSON schema generation from .NET types and XML documentation
+- [`AiToolExt`](AiToolExt.cs) — use a tool as a chat command (`AsCommand`); the tools and their JSON schemas are in [SysWeaver.AI.Tools](../SysWeaver.AI.Tools/README.md)
 - [`KeyValueStorageAiMemory`](KeyValueStorageAiMemory.cs) — per user AI memory
 
 ## Using it
@@ -83,6 +83,6 @@ ai.AddChat(chat, "Weather");
 ## Relationships
 
 - **Project:** [`SysWeaver.AI.csproj`](SysWeaver.AI.csproj)
-- **Builds on:** [SysWeaver.Chat](../SysWeaver.Chat/README.md), [SysWeaver.HttpServer](../SysWeaver.HttpServer/README.md), [SysWeaver.IsoData](../SysWeaver.IsoData/README.md), [SysWeaver.Media.Png](../SysWeaver.Media.Png/README.md), [SysWeaver.MicroServices.ServiceManager](../SysWeaver.MicroServices.ServiceManager/README.md)
-- **Used by:** [SysWeaver.AI.OpenAI](../SysWeaver.AI.OpenAI/README.md), [SysWeaver.AI.Google](../SysWeaver.AI.Google/README.md), [SysWeaver.AI.Anthropic](../SysWeaver.AI.Anthropic/README.md), [SysWeaver.AI.LlamaSharp](../SysWeaver.AI.LlamaSharp/README.md), [SysWeaver.AI.HostService](../SysWeaver.AI.HostService/README.md), [SysWeaver.AI.McpService](../SysWeaver.AI.McpService/README.md)
+- **Builds on:** [SysWeaver.AI.Tools](../SysWeaver.AI.Tools/README.md), [SysWeaver.Chat](../SysWeaver.Chat/README.md), [SysWeaver.HttpServer](../SysWeaver.HttpServer/README.md), [SysWeaver.IsoData](../SysWeaver.IsoData/README.md), [SysWeaver.Media.Png](../SysWeaver.Media.Png/README.md), [SysWeaver.MicroServices.ServiceManager](../SysWeaver.MicroServices.ServiceManager/README.md)
+- **Used by:** [SysWeaver.AI.OpenAI](../SysWeaver.AI.OpenAI/README.md), [SysWeaver.AI.Google](../SysWeaver.AI.Google/README.md), [SysWeaver.AI.Anthropic](../SysWeaver.AI.Anthropic/README.md), [SysWeaver.AI.LlamaSharp](../SysWeaver.AI.LlamaSharp/README.md), [SysWeaver.AI.HostService](../SysWeaver.AI.HostService/README.md)
 - **Third-party:** Newtonsoft.Json

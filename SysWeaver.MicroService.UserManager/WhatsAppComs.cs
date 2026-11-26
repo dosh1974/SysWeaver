@@ -81,7 +81,7 @@ namespace SysWeaver.MicroService
         {
             bool haveLang = messages != null;
             var m = haveLang ? messages.GetWhatsApp(ops.ToString()) : Messages[(int)ops];
-            //  Localized message folders made before the forced reset template existed: use the reset template (as SmsComs)
+            //  Localized message folders without the forced reset template use the reset template (as SmsComs)
             if ((m == null) && haveLang && (ops == UserManagerComOps.ForcedResetPassword))
                 m = messages.GetWhatsApp(nameof(UserManagerComOps.ResetPassword));
             if (m == null)

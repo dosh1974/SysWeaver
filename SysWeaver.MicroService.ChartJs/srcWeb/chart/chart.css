@@ -490,3 +490,9 @@ body.ChartWithNote {
 SysWeaver-Chart .ChartMenuButton {
     z-index: 2;
 }
+
+/* The notes and the error texts of a chart page (UX guide INP-30: text that changes from run to run can be selected and copied) */
+:where(.ChartNote, .ChartMissing) {
+    user-select: text;
+    -webkit-user-select: text;
+}

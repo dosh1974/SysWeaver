@@ -106,8 +106,12 @@ namespace SysWeaver.MicroService
                 return res;
             }
             DbAction d;
-            using (var c = await Db.GetAsync().ConfigureAwait(false))
-                d = await c.FirstOrDefaultAsync<DbAction>(x => x.Token == token).ConfigureAwait(false);
+            using (var c = await DbGetAsync().ConfigureAwait(false))
+                {
+                    //  Only a keyed hash of the token is stored (a copy of the database has no working links)
+                    var key = ActionKey(token);
+                    d = await c.FirstOrDefaultAsync<DbAction>(x => x.Token == key).ConfigureAwait(false);
+                }
             if (d == null)
             {
                 var cause = DeadCause(token);
@@ -126,36 +130,36 @@ namespace SysWeaver.MicroService
                     case DbAction.ResetPassword:
                     case DbAction.AddPassword:
                     case ActionTokenGetResetChallenge:
-                        uid = Data.FromData<InternalNewPasswordData>(d.Data)?.UserId ?? 0;
+                        uid = Data.FromData<InternalNewPasswordData>(ActionData(d))?.UserId ?? 0;
                         break;
                     case DbAction.DeletePassword:
                     case DbAction.DeleteUser:
-                        uid = Data.FromData<long>(d.Data);
+                        uid = Data.FromData<long>(ActionData(d));
                         break;
                     case DbAction.AddEmail:
                         {
-                            var e = Data.FromData<InternalNewEmailData>(d.Data);
+                            var e = Data.FromData<InternalNewEmailData>(ActionData(d));
                             uid = e?.UserId ?? 0;
                             target = e?.Email;
                         }
                         break;
                     case DbAction.AddPhone:
                         {
-                            var p = Data.FromData<InternalNewPhoneData>(d.Data);
+                            var p = Data.FromData<InternalNewPhoneData>(ActionData(d));
                             uid = p?.UserId ?? 0;
                             target = p?.Phone;
                         }
                         break;
                     case DbAction.UndoEmail:
                         {
-                            var u = Data.FromData<InternalUndoEmailData>(d.Data);
+                            var u = Data.FromData<InternalUndoEmailData>(ActionData(d));
                             uid = u?.UserId ?? 0;
                             target = u?.OldEmail;
                         }
                         break;
                     case DbAction.CreateUser:
                         {
-                            var n = Data.FromData<NewUserData>(d.Data);
+                            var n = Data.FromData<NewUserData>(ActionData(d));
                             target = n?.Email ?? n?.Phone;
                             account = String.IsNullOrEmpty(n?.UserName) ? target : n.UserName;
                         }
@@ -182,8 +186,8 @@ namespace SysWeaver.MicroService
             }
             if (uid > 0)
             {
-                using var c = await Db.GetAsync().ConfigureAwait(false);
-                var user = await c.FirstOrDefaultAsync<DbUser>(x => x.Id == uid).ConfigureAwait(false);
+                using var c = await DbGetAsync().ConfigureAwait(false);
+                var user = await GetDbUser(c, uid).ConfigureAwait(false);
                 if (user == null)
                 {
                     res.State = ActionTokenStates.Revoked;
@@ -202,8 +206,8 @@ namespace SysWeaver.MicroService
                 if (restore)
                 {
                     var newer = d.Type == DbAction.AddEmail
-                        ? (await c.FirstOrDefaultAsync<DbEmailAddress>(x => x.UserId == uid).ConfigureAwait(false)) != null
-                        : (await c.FirstOrDefaultAsync<DbPhoneNumber>(x => x.UserId == uid).ConfigureAwait(false)) != null;
+                        ? (await GetDbEmail(c, uid).ConfigureAwait(false)) != null
+                        : (await GetDbPhone(c, uid).ConfigureAwait(false)) != null;
                     if (newer)
                     {
                         res.State = ActionTokenStates.Revoked;

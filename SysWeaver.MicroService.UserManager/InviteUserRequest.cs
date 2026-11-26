@@ -55,7 +55,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Optional (<see cref="UserManagerService.ResetPassword"/> only): the hash of the new password made with the salt of the current password
         /// (<see cref="NewPasswordData.CurrentSalt"/>). When an administrator required the new password (<see cref="NewPasswordData.Forced"/>) a hash
-        /// that equals the current password is refused (the result has the error <see cref="UserErrors.SamePassword"/>). Null (older clients): not checked.
+        /// that equals the current password is refused (the result has the error <see cref="UserErrors.SamePassword"/>). Null: not checked.
         /// </summary>
         public String CurrentHash { get; set; }
     }

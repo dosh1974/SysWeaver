@@ -85,6 +85,7 @@ namespace SysWeaver
                 m.AddMessage(MessageLevels.Info, $"{LogPrefix}OS version:      {EnvInfo.OsVersion}");
                 m.AddMessage(MessageLevels.Info, $"{LogPrefix}OS architecture: {RuntimeInformation.OSArchitecture.ToString()}");
                 m.AddMessage(MessageLevels.Info, $"{LogPrefix}Key folder:      {Folders.KeyFolder.ToQuoted()}");
+                m.AddMessage(MessageLevels.Info, $"{LogPrefix}Username:        {Environment.UserName}");
                 void w(String title, IReadOnlyList<String> folders)
                 {
                     m.AddMessage(MessageLevels.Info, $"{LogPrefix}{title}{(folders.Count != 1 ? "s:" : ":")}");

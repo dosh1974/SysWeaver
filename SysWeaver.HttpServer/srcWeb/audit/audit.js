@@ -5,11 +5,14 @@
  *
  * Server api (C# IApiAuditReportService, all take the same query, so the totals, the value lists and the table always agree):
  * Api/Audit/GetInfo, GetSummary (totals and the time line), GetFacets (the most common values of a field), GetEntry (one call),
- * AuditTable (the rows; the query is the table Param as json).
+ * AuditTable (the rows; the query is the table Param as json), GetIpLocation (the location of an ip address, if the server has an
+ * ip location service: GetInfo().HaveIpLocation).
  *
  * Parts: search box (terms, "phrases", -exclude, field:term), time range, conditions (any field, all / any must match), filter chips,
- * the time line (drag to select a range), value lists (click a value to only show it, or exclude it), the table (Sw.Table: sort, columns,
- * export, live refresh) and the details of a call (click a row; every value can be used as a filter).
+ * the time line (drag to select a range; + / - hides it, the bar under it changes its height), value lists (click a value to only show
+ * it, or exclude it; the bar next to them changes their width), the table (Sw.Table: sort, columns, export, live refresh) and the details
+ * of a call (click a row; every value can be used as a filter; the location of the ip address with a flag).
+ * Remembered in local storage ("SysWeaver.Audit.*"): the chart height, if the chart is hidden and the width of the value lists.
  *
  * Url parameters: `q` = the state as json (the address follows the state, so a page can be bookmarked and shared),
  * `id` = show the details of this call.
@@ -49,7 +52,7 @@ class AuditBrowser {
                 Ip: _TF("IP address", "Name of a value of an audited server call: the network address of the client"),
                 UserAgent: _TF("User agent", "Name of a value of an audited server call: the text that identifies the web browser of the client"),
                 DeviceId: _TF("Device", "Name of a value of an audited server call: the id of the device that the call was made from"),
-                Session: _TF("Session", "Name of a value of an audited server call: the (partly hidden) id of the session"),
+                Session: _TF("Session", "Name of a value of an audited server call: the id of the session (a hash, not the secret session token)"),
                 ClientId: _TF("Client", "Name of a value of an audited server call: the id of the client (ip address, device and web browser)"),
                 Language: _TF("Language", "Name of a value of an audited server call: the language of the client"),
                 TimeZone: _TF("Time zone", "Name of a value of an audited server call: the time zone of the client"),
@@ -329,7 +332,18 @@ class AuditBrowser {
         t.FacetsE = Sw.el("aside.ab-facets", { attrs: { "aria-label": _TF("Filter by value", "Accessible name of the lists of values that can be used as filters in the audit browser") } });
         t.BuildFacets(t.FacetsE);
         t.TableE = Sw.el("div.ab-table.sw-table-fill");
-        t.Page.Add(t.Bar, t.Chips, t.ChartE, Sw.el("div.ab-main.sw-fill", null, t.FacetsE, t.TableE));
+        //  The width of the value lists (the bar is hidden on narrow screens, the lists are in a dialog there)
+        const minFacets = 160;
+        const facetSplit = AuditBrowser.Resizer({
+            Vertical: true, Key: "FacetWidth", Default: 256, Min: minFacets,
+            Max: () => Math.max(minFacets, Math.min(640, Math.round(window.innerWidth * 0.5))),
+            Label: _TF("Resize the value lists", "Accessible name of the bar between the value lists and the table of the audit browser that changes the width of the value lists"),
+            Get: () => t.FacetsE.offsetWidth,
+            Set: px => {
+                t.FacetsE.style.flexBasis = px + "px";
+            },
+        });
+        t.Page.Add(t.Bar, t.Chips, t.ChartE, t.ChartSplit, Sw.el("div.ab-main.sw-fill", null, t.FacetsE, facetSplit, t.TableE));
         t.ShowState();
         t.Refresh();
         t.Table = await Sw.Table.Create({
@@ -449,7 +463,26 @@ class AuditBrowser {
             title: "",
         });
         t.Axis = Sw.el("div.ab-axis", { attrs: { "aria-hidden": "true" } });
-        t.ChartE = Sw.el("section.sw-card.ab-chart-card", null, t.ChartHead, t.Plot, t.Axis);
+        t.ChartBody = Sw.el("div.ab-chart-body", { id: "ab-chart-body" }, t.Plot, t.Axis);
+        t.ChartToggle = new Sw.Button({
+            Icon: "minus", Kind: "ghost", Small: true, Class: "ab-chart-toggle",
+            Title: _TF("Hide the chart", "Tool tip of a button that hides the chart of the number of calls over time in the audit browser"),
+            OnClick: () => t.SetChartOpen(t.ChartBody.hidden),
+        });
+        t.ChartToggle.E.setAttribute("aria-controls", t.ChartBody.id);
+        t.ChartE = Sw.el("section.sw-card.ab-chart-card", null, Sw.el("div.ab-chart-top", null, t.ChartToggle.E, t.ChartHead), t.ChartBody);
+        //  The height of the chart (the bar under it)
+        const minPlot = 40;
+        const maxPlot = () => Math.max(minPlot, Math.round(window.innerHeight * 0.5));
+        t.ChartSplit = AuditBrowser.Resizer({
+            Key: "ChartHeight", Default: 72, Min: minPlot, Max: maxPlot,
+            Label: _TF("Resize the chart", "Accessible name of the bar under the chart of the audit browser that changes the height of the chart"),
+            Get: () => t.Plot.offsetHeight,
+            Set: px => {
+                t.Plot.style.height = px + "px";
+            },
+        });
+        t.SetChartOpen(AuditBrowser.Pref("ChartClosed") !== "1", true);
         const index = ev => {
             const r = t.Plot.getBoundingClientRect();
             const n = t.Summary ? t.Summary.Steps.length : 0;
@@ -533,6 +566,115 @@ class AuditBrowser {
             if (start < 0)
                 hide();
         });
+    }
+
+    /**
+     * Show or hide the chart (the totals are always shown).
+     * @param {boolean} open - Show the chart.
+     * @param {boolean} [init] - Building the page: don't remember it or refresh.
+     */
+    SetChartOpen(open, init) {
+        const t = this;
+        t.ChartBody.hidden = !open;
+        t.ChartE.classList.toggle("is-collapsed", !open);
+        t.ChartToggle.SetIcon(open ? "minus" : "plus");
+        t.ChartToggle.SetTitle(open
+            ? _TF("Hide the chart", "Tool tip of a button that hides the chart of the number of calls over time in the audit browser")
+            : _TF("Show the chart", "Tool tip of a button that shows the chart of the number of calls over time in the audit browser"));
+        t.ChartToggle.E.setAttribute("aria-expanded", open ? "true" : "false");
+        t.ShowChartParts();
+        if (init)
+            return;
+        AuditBrowser.Pref("ChartClosed", open ? "0" : "1");
+        //  (the number of steps depends on the width of the chart)
+        if (open)
+            t.Refresh(true);
+    }
+
+    /**
+     * Show the bar under the chart only when the chart is shown.
+     */
+    ShowChartParts() {
+        const t = this;
+        t.ChartSplit.hidden = t.ChartE.hidden || t.ChartBody.hidden;
+    }
+
+    /**
+     * Get or set a remembered setting of the page (local storage, may not be available).
+     * @param {string} key - The name of the setting.
+     * @param {string} [value] - The value to set, leave out to get the value.
+     * @returns {?string} The value (when getting), null if there is none.
+     */
+    static Pref(key, value) {
+        key = "SysWeaver.Audit." + key;
+        try {
+            if (value === undefined)
+                return localStorage.getItem(key);
+            localStorage.setItem(key, value);
+        }
+        catch {
+            //  (private mode or blocked storage: not remembered)
+        }
+        return null;
+    }
+
+    /**
+     * A bar that changes the size of something by dragging it (or with the keyboard when it has focus).
+     * Double click (or double tap) or Enter resets the size, Home / End = the smallest / largest size.
+     * @param {object} o - Options: Vertical (true: a vertical bar that changes a width, else a horizontal bar that changes a height),
+     * Key (name of the remembered setting), Default, Min (px), Max() (px), Get() (the current size, px), Set(px), Label (accessible name).
+     * @returns {HTMLElement} The bar.
+     */
+    static Resizer(o) {
+        const bar = Sw.el("div.ab-resizer" + (o.Vertical ? ".ab-resizer-v" : ".ab-resizer-h"), {
+            tabIndex: 0,
+            title: o.Label,
+            attrs: { role: "separator", "aria-orientation": o.Vertical ? "vertical" : "horizontal", "aria-label": o.Label },
+        });
+        const size = px => {
+            const v = Math.round(Math.max(o.Min, Math.min(o.Max(), px)));
+            o.Set(v);
+            bar.setAttribute("aria-valuenow", String(v));
+            bar.setAttribute("aria-valuemin", String(o.Min));
+            bar.setAttribute("aria-valuemax", String(Math.round(o.Max())));
+        };
+        const store = () => AuditBrowser.Pref(o.Key, String(Math.round(o.Get())));
+        const saved = Number(AuditBrowser.Pref(o.Key));
+        size(saved > 0 ? saved : o.Default);
+        let start = 0;
+        let lastTap = 0;
+        Sw.Drag(bar, {
+            Threshold: 0,
+            OnStart: ev => {
+                ev.preventDefault();
+                const now = performance.now();
+                if (now - lastTap < 320) {
+                    lastTap = 0;
+                    size(o.Default);
+                    store();
+                    return false;
+                }
+                lastTap = now;
+                start = o.Get();
+            },
+            OnMove: (ev, s) => size(start + (o.Vertical ? s.DX : s.DY)),
+            OnEnd: store,
+        });
+        bar.addEventListener("keydown", ev => {
+            const step = ev.shiftKey ? 40 : 8;
+            const cur = o.Get();
+            switch (ev.key) {
+                case o.Vertical ? "ArrowLeft" : "ArrowUp": size(cur - step); break;
+                case o.Vertical ? "ArrowRight" : "ArrowDown": size(cur + step); break;
+                case "Home": size(o.Min); break;
+                case "End": size(o.Max()); break;
+                case "Enter": size(o.Default); break;
+                default: return;
+            }
+            ev.preventDefault();
+            store();
+        });
+        return bar;
     }
 
     /** The fields with value lists, the first are open by default. */
@@ -654,7 +796,8 @@ class AuditBrowser {
         const t = this;
         const gen = ++t.Gen;
         try {
-            const steps = Math.max(20, Math.min(120, Math.floor(t.Plot.clientWidth / 12) || 60));
+            //  (the chart may be hidden, the card has about the same width)
+            const steps = Math.max(20, Math.min(120, Math.floor((t.Plot.clientWidth || t.ChartE.clientWidth) / 12) || 60));
             const s = await Sw.Net.Send("../Api/Audit/GetSummary", Object.assign(t.FullQuery(), { Steps: steps }));
             if (gen !== t.Gen || t.Selecting)
                 return;
@@ -728,6 +871,7 @@ class AuditBrowser {
         //  (bottom up: completed, failed, in progress)
         t.Plot.replaceChildren(...steps.map(x => Sw.el("div.ab-step", null, part("ab-progress", x.InProgress), part("ab-failed", x.Failed), part("ab-completed", x.Completed))));
         t.ChartE.hidden = !steps.length;
+        t.ShowChartParts();
         if (!steps.length)
             return;
         const first = new Date(steps[0].Time);
@@ -1037,18 +1181,20 @@ class AuditBrowser {
         const json = (field, value) => {
             if (value === null || value === undefined || value === "")
                 return null;
-            let text = value;
-            try {
-                text = JSON.stringify(JSON.parse(value), null, 4);
-            }
-            catch {
-                //  (an error message or capped data)
-            }
+            //  (null = not json, ex: an error message; capped json is indented as far as it goes)
+            const text = Sw.Format.JsonPretty(value);
             return Sw.el("section", null,
                 Sw.el("div.ab-json-head", null, Sw.el("h3", { text: AuditBrowser.Titles[field] }), Sw.CopyButton({ Value: value, What: AuditBrowser.Titles[field], Small: true }).E || null),
-                Sw.el("pre.ab-json.sw-selectable", { text: text, attrs: { tabindex: "0" } }));
+                //  (the same colors as the json popup of a table cell, JsonToHtml escapes the text)
+                text !== null
+                    ? Sw.el("pre.ab-json.sw-code-json.sw-selectable", { html: Sw.Format.JsonToHtml(text), attrs: { tabindex: "0" } })
+                    : Sw.el("pre.ab-json.sw-selectable", { text: value, attrs: { tabindex: "0" } }));
         };
         const kind = { Completed: "ok", Failed: "danger", InProgress: "info" }[state];
+        const ipProp = prop("Ip", d.Ip, true);
+        const locE = t.Info.HaveIpLocation && d.Ip ? Sw.el("section", null,
+            Sw.el("h3", { text: _TF("Location", "Title of the part with the estimated location of the ip address, in the details of an audited server call") }),
+            Sw.el("p.ab-help", { text: _TF("Looking up the location…", "Shown while the location of an ip address is looked up, in the details of an audited server call") })) : null;
         const content = Sw.el("div.ab-details", null,
             Sw.el("div.ab-cols", null,
                 section(_TF("Call", "Title of the part with information about the call itself, in the details of an audited server call"),
@@ -1063,12 +1209,13 @@ class AuditBrowser {
                     prop("UserName", d.UserName, true),
                     prop("UserGuid", d.UserGuid, true),
                     prop("Session", d.Session, true),
-                    prop("Ip", d.Ip, true),
+                    ipProp,
                     prop("DeviceId", d.DeviceId, true),
                     prop("ClientId", d.ClientId, true),
                     prop("Language", d.Language, true),
                     prop("TimeZone", d.TimeZone, true),
-                    prop("UserAgent", d.UserAgent, true))),
+                    prop("UserAgent", d.UserAgent, true)),
+                locE),
             json("Input", d.Input),
             json("Output", d.Output));
         handle = Sw.Dialog.Open({
@@ -1078,7 +1225,68 @@ class AuditBrowser {
             AutoDirty: false,
             Buttons: [{ Text: _TF("Close", "Text of a button that closes a dialog"), Dismiss: true }],
         });
+        if (locE)
+            t.ShowLocation(d.Ip, locE, ipProp ? ipProp.querySelector("dd") : null);
         await handle.Result;
+    }
+
+    /**
+     * Look up the location of an ip address and show it in the details of a call.
+     * @param {string} ip - The ip address.
+     * @param {HTMLElement} e - The section of the location (has a title and a "looking up" text).
+     * @param {?HTMLElement} ipE - The value of the ip address, the flag is added in front of it.
+     * @returns {Promise<void>}
+     */
+    async ShowLocation(ip, e, ipE) {
+        let l = null;
+        try {
+            l = await Sw.Net.Send("../Api/Audit/GetIpLocation", ip);
+        }
+        catch (ex) {
+            console.warn("audit: ip location look up failed", ex);
+        }
+        const help = e.querySelector(".ab-help");
+        if (!l) {
+            help.textContent = _TF("The location is unknown.", "Shown instead of the location of an ip address when it couldn't be found, in the details of an audited server call");
+            return;
+        }
+        const cc = typeof l.IsoCountry === "string" && /^[A-Za-z]{2}$/.test(l.IsoCountry) ? l.IsoCountry.toUpperCase() : null;
+        let country = cc;
+        if (cc)
+            try {
+                country = new Intl.DisplayNames([Sw.I18n && Sw.I18n.Language ? Sw.I18n.Language() : "en"], { type: "region" }).of(cc) || cc;
+            }
+            catch {
+                //  (an old browser: the code)
+            }
+        //  (the flags are served by the optional iso data module: no flag if it isn't there)
+        const flag = () => cc ? Sw.el("img.ab-flag", { attrs: { src: "../iso_data/country/" + cc.toLowerCase() + ".svg", alt: "" }, on: { error: ev => ev.target.remove() } }) : null;
+        if (ipE && cc)
+            ipE.prepend(flag(), " ");
+        const row = (title, value, content) => {
+            if (value === null || value === undefined || value === "")
+                return null;
+            return Sw.el("div", null, Sw.el("dt", { text: title }), Sw.el("dd", null, content || String(value)), Sw.CopyButton({ Value: String(value), What: title, Small: true }).E || null);
+        };
+        const place = [l.City, l.RegionCode].filter(x => x).join(", ");
+        const lat = Number(l.Latitude);
+        const lon = Number(l.Longitude);
+        const haveCoord = isFinite(lat) && isFinite(lon) && (lat !== 0 || lon !== 0);
+        const coord = haveCoord ? Sw.Format.Number(lat, 4) + ", " + Sw.Format.Number(lon, 4) : null;
+        const map = haveCoord ? Sw.el("a", {
+            text: coord, target: "_blank", rel: "noopener noreferrer",
+            href: "https://www.openstreetmap.org/?mlat=" + lat + "&mlon=" + lon + "#map=11/" + lat + "/" + lon,
+            title: _TF("Show on a map", "Tool tip of a link that shows a location on a map"),
+        }) : null;
+        const props = [
+            row(_TF("Country", "Name of a value of the location of an ip address: the country"), country, cc ? Sw.el("span.ab-country", null, flag(), country + (country !== cc ? " (" + cc + ")" : "")) : null),
+            row(_TF("Place", "Name of a value of the location of an ip address: the city and the region"), place),
+            row(_TF("Address", "Name of a value of the location of an ip address: the address (zip code, city, region and so on)"), l.Address, l.Address ? Sw.el("span.ab-address", { text: l.Address }) : null),
+            row(_TF("Coordinates", "Name of a value of the location of an ip address: the latitude and longitude"), coord, map),
+            row(_TF("Network", "Name of a value of the location of an ip address: the autonomous system (the network or organization that owns the address)"), l.AutonomousSystem),
+            row(_TF("Source", "Name of a value of the location of an ip address: the service that provided the location"), l.Source),
+        ].filter(x => x);
+        help.replaceWith(Sw.el("dl.ab-props", null, ...props));
     }
 
     /**

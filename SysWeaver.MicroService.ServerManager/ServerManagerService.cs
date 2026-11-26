@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ExCSS;
+using System;
 using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -50,6 +51,20 @@ namespace SysWeaver.MicroService
         /// The per service check still applies (a user may only act on the services that its role allows, others are refused with 403).
         /// </summary>
         public IReadOnlyDictionary<String, String> MethodAuths { get; }
+
+        /// <summary>
+        /// The auth of a synced folder (a managed folder or the folder of a managed service): the given auth and the "service_sync" token (<see cref="Roles.ServiceSync"/>),
+        /// so that sync clients (ex: SwSyncTool with an API key) can push new versions without getting access to the other server manager API's.
+        /// null, "" (any signed in user) and "-" (no one) are kept as is (null makes the folder sync service use <see cref="Roles.ServiceSync"/>).
+        /// </summary>
+        /// <param name="auth">The auth (comma separated tokens)</param>
+        /// <returns>The auth with the sync token</returns>
+        static String WithSyncToken(String auth)
+        {
+            if (String.IsNullOrWhiteSpace(auth) || (auth.Trim() == "-"))
+                return auth;
+            return String.Concat(auth, ",", Roles.ServiceSync);
+        }
 
         /// <summary>
         /// Get the union of the auth of some managed services.
@@ -146,7 +161,7 @@ namespace SysWeaver.MicroService
             Syncer = s;
             foreach (var f in p.Folders.Nullable())
             {
-                f.Auth = f.Auth ?? p.SyncAuth;
+                f.Auth = WithSyncToken(f.Auth ?? p.SyncAuth);
                 s.AddManagedFolder(f).RunAsync();
             }
 
@@ -264,7 +279,7 @@ namespace SysWeaver.MicroService
                 Name = f.Name,
                 DiscFolder = df,
                 Compress = p.CompressServices,
-                Auth = f.SyncAuth ?? p.SyncAuth,
+                Auth = WithSyncToken(f.SyncAuth ?? p.SyncAuth),
                 RemoveBackupsDays = RemoveServiceBackupsDays,
                 OnNewFolderAsync = OnNewFolder,
                 OnActivateAsync = OnServiceActivate,
@@ -563,19 +578,29 @@ namespace SysWeaver.MicroService
             if (!Services.TryGetValue(name.FastToLower(), out var info))
                 return null;
             var timeout = SwapStopTimeout;
-            var r = await RunServiceVerb(info, "uninstall", timeout).ConfigureAwait(false);
-            if (r == null)
-                return null;
-            if (r.TimedOut)
+            var status = await CheckServiceStatus(info).ConfigureAwait(false);
+            switch (status)
             {
-                //  A hanging service must not block the activation: kill it and continue (the swap retries the renames while the files are released)
-                Manager.AddMessage(MessageLevels.Warning, $"{LogPrefix}The uninstall of service \"{name}\" didn't finish within {timeout.TotalSeconds} seconds, killing the processes running from {path.ToQuoted()}");
-                await KillProcessesIn(path).ConfigureAwait(false);
-                return null;
+                case ServiceStatus.StartPending:
+                case ServiceStatus.Running:
+                case ServiceStatus.ContinuePending:
+                case ServiceStatus.PausePending:
+                case ServiceStatus.Paused:
+                    var r = await RunServiceVerb(info, "stop", timeout).ConfigureAwait(false);
+                    if (r == null)
+                        return null;
+                    if (r.TimedOut)
+                    {
+                        //  A hanging service must not block the activation: kill it and continue (the swap retries the renames while the files are released)
+                        Manager.AddMessage(MessageLevels.Warning, $"{LogPrefix}The uninstall of service \"{name}\" didn't finish within {timeout.TotalSeconds} seconds, killing the processes running from {path.ToQuoted()}");
+                        await KillProcessesIn(path).ConfigureAwait(false);
+                        return null;
+                    }
+                    var res = SmServiceCli.GetExitCode("stop", r.Exited, r.TimedOut, r.ExitCode, r.Output);
+                    if (res != 0)
+                        return new Exception("Failed to stop service \"" + name + "\", error: " + res);
+                    break;
             }
-            var res = SmServiceCli.GetExitCode("uninstall", r.Exited, r.TimedOut, r.ExitCode, r.Output);
-            if (res != 0)
-                return new Exception("Failed to uninstall service \"" + name + "\", error: " + res);
             return null;
         }
 

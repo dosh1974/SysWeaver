@@ -92,7 +92,7 @@ The flag of a message toggles between the original and the translation (`Transla
 - Output: when the server sends `Voices` and the browser has speech synthesis. New messages of other users are spoken with the voice of the sender (or the default voice entry), matched by language / gender / exact local name; streamed replaces speak only complete phrases and queue while speaking; volume = setting / 100.
 - Input: needs `SpeechRecognition` + `SpeechGrammarList`. Push-to-talk (mic button) records one sentence (auto send optional); open mic (desktop only, wake words from `SpeechName` `"word|prefix"`) listens continuously and sends each sentence. Interim text is inserted live; sentences are capitalized, questions get "?", a final stop word (abort, stop, cancel, reset, restart) aborts.
 
-### Persistence (localStorage, unchanged keys)
+### Persistence (localStorage)
 
 `<s>` = "" (default), "." + chatId (`SettingsName` "*") or "." + `SettingsName`: `SysWeaver.Chat.ShowTimeStamp<s>`, `.SpeechGenVol<s>`, `.SpeechGen<s>`, `.SpeechSend<s>` (auto send), `.UseMarkDown<s>`, `.Preview<s>` ("true" / "false" / "null"), `.Size<s>` (list height fraction). Per chat: `SysWeaver.Chat.SpeechListen<chatId>` (no dot), `.Hide.<chatId>` (json array of senders whose new messages start hidden), `.Input.<chatId>`, `.Data.<chatId>` (draft), `.Lang.<chatId>` (input language override).
 
@@ -114,7 +114,7 @@ The flag of a message toggles between the original and the translation (`Transla
 | `Composer` | Class (CanPost): `E`, `Write` (textarea), `Send`, `Mic`, `Attach` (Sw.Button), `Pad` (the buttons beside the text box), `MinHeight` (the least input height of a user split), `Preview` (row), `PreviewMsg`, `UseMarkDown`, `AutoMarkDown`, `FormatOf(text)`, `ShowPreview`, `PreviewOn`, `DataCount`, `CanSend`, `DoSend(noFocus)`, `Changed()`, `InsertText(text, select)`, `SetData(data)`, `SetMarkDown(md)`, `TogglePreview()`, `Clear()`, `RemoveAttachment(url, deleteFile)`, `AttachFiles()`, `Upload(files)`, `SelectLanguage()`, `StartListening(ignoreKeyword, noOpenMic)`, `StopListening()`, `SetMicState(recording, openMic)`, `Focus()`, `Ready()`, `WatchSize()` (layout classes `.chat-compact`, `.chat-tight`, `.chat-pad-row`, `.chat-labels`), `AutoGrow()` (text box height in the automatic split), `Flag` / `FlagLabel` (input language button and its touch label). Helpers: `setButtonName(b, text)`, `attachHint(b)`, `addTouchLabel(b, text)` name icon buttons and add the touch labels. |
 | `Attachments` | Static: `Describe(view, url)`, `Render(row, data)`, `Item(row, url, view)`, `Status(url)` (the working indicator image of an unfinished message), `Framed(box, info, menu, main, source)` (the info bar of an embedded page), `MenuItems(row, info)`, `ScopeItems(view, method, url)`, `Store(view, method, url, scope)`. |
 
-Legacy globals (old API, kept for other pages): `Chat` (`addChat` = `Add`, `chatColor` = `Color`, `FlagIsWorking`, `FlagCanRemove`, `IsMobile`, `Platform`), `ChatOptions` (= `Options`), `chatMain` (= `Main`).
+Legacy globals (for other pages): `Chat` (`addChat` = `Add`, `chatColor` = `Color`, `FlagIsWorking`, `FlagCanRemove`, `IsMobile`, `Platform`), `ChatOptions` (= `Options`), `chatMain` (= `Main`).
 
 ### `speech.js`
 

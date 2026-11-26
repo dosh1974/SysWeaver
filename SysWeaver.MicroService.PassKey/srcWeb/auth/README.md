@@ -57,7 +57,7 @@ Includes: `../sw/core.js`, `../sw/ui.js`, `Auth.js`, `AuthUi.js`, `Passkey.js`, 
 | `new PassKeyChallenge(challengeName, arg, submitName, isCreate)` | `Fetch()`, `Run()` -> `{Error, User?, Message?}`, `UserName` (after Fetch), `Options`, `Fetched`. |
 | `PassKey.Errors` | None 0, NotSupported 1, AlreadySignedIn 2, NotSignedIn 3, ChallengeExpired 4, UnknownCredential 5, NoPassKeys 6, VerificationFailed 7, AlreadyRegistered 8, TokenExpired 9, AccountExists 10, LastSignInMethod 11, Cancelled -1, AlreadyOnDevice -2. |
 | `PassKey.IsSupported()`, `IsAutofillSupported()`, `ErrorText(result)` | Support checks, texts. |
-| `PassKey.IsAvailable(refresh)` | Promise: `IsSupported()` (no request: this script is only loaded where the passkey service runs, `Sw.AuthUi.LoadPassKeys` asks `Api/HaveService` first; a failing challenge hides the passkey button, as before). `refresh` is ignored. Used by the Login, ChoosePassword and ResetPassword pages. |
+| `PassKey.IsAvailable(refresh)` | Promise: `IsSupported()` (no request: this script is only loaded where the passkey service runs, `Sw.AuthUi.LoadPassKeys` asks `Api/HaveService` first; a failing challenge hides the passkey button). `refresh` is ignored. Used by the Login, ChoosePassword and ResetPassword pages. |
 | `PassKey.SignIn(user?)`, `Attach()`, `AttachUsingToken(token)`, `NewAccount(token)` | Ceremony factories. |
 | `PassKey.Autofill(onResult)` | `{Start, Stop}`. |
 | `PassKey.Get(c, submit, extra)`, `Create(c, submit)`, `Call(name, arg)`, `GetLoggedInUser()`, `GetPassKeys()`, `Rename(id, name)`, `Remove(id, userGuid)` | Wrappers. |
@@ -74,4 +74,4 @@ Globals `usePassKeyMain`, `addPassKeyMain`, `addPassKeyOtherMain`, `myPassKeysMa
 | `.auth-item-value` | The live times in the list (plain text instead of the table cell look). |
 | `.IconAddPasskey`, `.IconUsePasskey`, `.IconPasskeyKey`, `.IconPasskeyRename` | The passkey icon classes (mask images `../icons/passkey_*.svg` of this module). |
 
-The layout, list, dialog and button styles are in `Auth.css`. `IconAddPasskeyOther` (qr_code.svg of the icon module) stays in `sw/ui.css`; `sw/ui.css` also still defines the four passkey classes (compatibility; not removed until every app is checked). The PassKey menu items use the svg urls (`icons/passkey_add.svg`, `icons/passkey_use.svg`) so the shell needs no passkey class.
+The layout, list, dialog and button styles are in `Auth.css`. `IconAddPasskeyOther` (qr_code.svg of the icon module) stays in `sw/ui.css`; `sw/ui.css` also defines the four passkey classes (compatibility). The PassKey menu items use the svg urls (`icons/passkey_add.svg`, `icons/passkey_use.svg`) so the shell needs no passkey class.

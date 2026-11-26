@@ -38,15 +38,120 @@
     padding: var(--sw-space-3) var(--sw-space-4) var(--sw-space-2);
 }
 
+    .ab-chart-card.is-collapsed {
+        padding-bottom: var(--sw-space-3);
+    }
+
+    /* (the bar under the chart is the space) */
+    .ab-chart-card:has(+ .ab-resizer:not([hidden])) {
+        margin-bottom: 0;
+    }
+
+.ab-chart-top {
+    display: flex;
+    align-items: center;
+    gap: var(--sw-space-2);
+}
+
+    .ab-chart-top > .ab-chart-toggle {
+        flex: none;
+        margin: calc(-1 * var(--sw-space-1)) 0 calc(-1 * var(--sw-space-1)) calc(-1 * var(--sw-space-2));
+    }
+
+.ab-chart-body {
+    margin-top: var(--sw-space-2);
+}
+
 .ab-chart-head {
+    flex: 1 1 auto;
+    min-width: 0;
     display: flex;
     flex-wrap: wrap;
     gap: var(--sw-space-1) var(--sw-space-4);
     align-items: baseline;
     font-size: var(--sw-text-sm);
     color: var(--sw-text-2);
-    margin-bottom: var(--sw-space-2);
     font-variant-numeric: tabular-nums;
+}
+
+/* Resize bars: under the chart (its height) and between the value lists and the table (their width) */
+
+.ab-resizer {
+    position: relative;
+    flex: none;
+    touch-action: none;
+    outline: none;
+}
+
+    .ab-resizer[hidden] {
+        display: none;
+    }
+
+.ab-resizer-h {
+    height: var(--sw-space-3);
+    cursor: row-resize;
+}
+
+.ab-resizer-v {
+    width: var(--sw-space-4);
+    cursor: col-resize;
+}
+
+    /* The grip */
+    .ab-resizer::after {
+        content: "";
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        border-radius: var(--sw-radius-pill);
+        background: var(--sw-border);
+    }
+
+    .ab-resizer-h::after {
+        width: 2.5rem;
+        height: 4px;
+    }
+
+    .ab-resizer-v::after {
+        width: 4px;
+        height: 2.5rem;
+    }
+
+    /* A line along the whole bar while it is dragged or has the keyboard focus */
+    .ab-resizer::before {
+        content: "";
+        position: absolute;
+        background: var(--sw-focus);
+        opacity: 0;
+    }
+
+    .ab-resizer-h::before {
+        left: 0;
+        right: 0;
+        top: 50%;
+        height: 1px;
+    }
+
+    .ab-resizer-v::before {
+        top: 0;
+        bottom: 0;
+        left: 50%;
+        width: 1px;
+    }
+
+    .ab-resizer.sw-dragging::before, .ab-resizer:focus-visible::before {
+        opacity: 1;
+    }
+
+    .ab-resizer.sw-dragging::after, .ab-resizer:focus-visible::after {
+        background: var(--sw-focus);
+    }
+
+@media (hover: hover) {
+    .ab-resizer:hover::after {
+        background: var(--sw-text-3);
+    }
 }
 
     .ab-chart-head b {
@@ -180,10 +285,10 @@ html[data-theme="hacker"] .ab-completed {
 
 /* Value lists | table */
 
+/* (no gap: the resize bar is the space) */
 .ab-main.sw-fill {
     display: flex;
     flex-direction: row;
-    gap: var(--sw-space-4);
     min-height: 0;
 }
 
@@ -383,6 +488,25 @@ html[data-theme="hacker"] .ab-completed {
         padding: var(--sw-space-1) 0;
     }
 
+/* The location of the ip address */
+.ab-flag {
+    height: 1em;
+    width: auto;
+    vertical-align: -0.125em;
+    border-radius: var(--sw-radius-sm);
+    box-shadow: 0 0 0 1px var(--sw-border);
+}
+
+.ab-country {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sw-space-2);
+}
+
+.ab-address {
+    white-space: pre-line;
+}
+
 .ab-json {
     margin: 0;
     padding: var(--sw-space-3);
@@ -396,6 +520,12 @@ html[data-theme="hacker"] .ab-completed {
     font-family: var(--sw-mono);
     font-size: var(--sw-text-sm);
     color: var(--sw-text);
+}
+
+/* (wins over the no wrapping of .sw-code-json, independent of the style sheet order) */
+pre.ab-json {
+    margin: 0;
+    white-space: pre-wrap;
 }
 
 .ab-json-head {
@@ -442,7 +572,7 @@ html[data-theme="hacker"] .ab-completed {
 }
 
 @media (max-width: 899px) {
-    .ab-main > .ab-facets {
+    .ab-main > .ab-facets, .ab-main > .ab-resizer {
         display: none;
     }
 
@@ -464,4 +594,10 @@ html[data-theme="hacker"] .ab-completed {
 
 .ab-dialog-facets > .ab-facets {
     border: 0;
+}
+
+/* The counts, the values of a call and the location texts (UX guide INP-30: text that changes from run to run can be selected and copied) */
+:where(.ab-key, .ab-props > div > dd, .ab-help, .ab-axis > span) {
+    user-select: text;
+    -webkit-user-select: text;
 }

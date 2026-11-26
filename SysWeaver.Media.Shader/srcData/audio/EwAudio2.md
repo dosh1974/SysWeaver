@@ -1,7 +1,7 @@
 # EwAudio2
 
-Audio: the rows (v), bands and slots (u) of the audio texture of an audio effect (`//  media: audio`; the kind was called
-`audio2`, still read). `legacyaudio` is ShaderToy's 512 x 2 texture, another layout.
+Audio: the rows (v), bands and slots (u) of the audio texture of an audio effect (`//  media: audio`; the kind
+`audio2` is also read). `legacyaudio` is ShaderToy's 512 x 2 texture, another layout.
 
 ## Signature
 

@@ -27,7 +27,7 @@ namespace SysWeaver.MicroService
         public AvatarService(AvatarParams p)
         {
             p = p ?? new AvatarParams();
-            Auth = AuthTools.GetList(p.Auth);
+            Auth = Authorization.GetRequiredTokens(p.Auth);
             var folder = p.DiscFolder;
             AsyncHandler = Handle;
             UseTransparent = p.UseTransparent;

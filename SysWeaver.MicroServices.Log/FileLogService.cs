@@ -119,7 +119,7 @@ namespace SysWeaver.MicroService
         [WebApiAuth(Roles.Admin)]
         public DeleteLogFileToken GetDeleteLogFileToken(HttpServerRequest context)
         {
-            var session = context?.Session?.Token ?? throw new HttpResponseException(409, "Your session has ended: sign in again to delete the log file");
+            var session = context?.Session?.TokenHash ?? throw new HttpResponseException(409, "Your session has ended: sign in again to delete the log file");
             var token = DeleteTokens.Issue(DeleteTokenPurpose, session, true, out var exp);
             var h = H;
             var fi = new FileInfo(h.Filename);
@@ -156,7 +156,7 @@ namespace SysWeaver.MicroService
                 var t = r?.Token;
                 if (String.IsNullOrEmpty(t))
                     throw new HttpResponseException(409, "The delete was not confirmed: choose Delete again and confirm it");
-                if (!DeleteTokens.TryUse(t, DeleteTokenPurpose, context?.Session?.Token ?? "", out _))
+                if (!DeleteTokens.TryUse(t, DeleteTokenPurpose, context?.Session?.TokenHash ?? "", out _))
                     throw new HttpResponseException(409, "The confirmation is no longer valid (it expired, was used, or a newer one was asked for): choose Delete again and confirm it");
             }
             var fd = M.FileDeleter;

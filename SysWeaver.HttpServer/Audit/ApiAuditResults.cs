@@ -27,6 +27,11 @@ namespace SysWeaver.Net
         /// The resolution of the stored times, number of milliseconds (a duration is only meaningful if it's much longer than this)
         /// </summary>
         public int TimeResolution = 1;
+
+        /// <summary>
+        /// True if the service manager has an ip location service (<see cref="IIpLocation"/>), else <see cref="IApiAuditReportService.GetIpLocation(string)"/> always returns null
+        /// </summary>
+        public bool HaveIpLocation;
     }
 
     /// <summary>

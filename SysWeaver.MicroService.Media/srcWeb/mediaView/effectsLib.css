@@ -205,3 +205,9 @@ canvas.MediaHidden {
     bottom: 10000px;
     opacity: 0.001;
 }
+
+/* The state texts of the effects (UX guide INP-30: text that changes from run to run can be selected and copied) */
+:where(.fx-state, .fx-info) {
+    user-select: text;
+    -webkit-user-select: text;
+}

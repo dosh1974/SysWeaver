@@ -34,13 +34,10 @@
  * Passkey.css) is linked statically by Login.html (and the UserManager ChoosePassword / ResetPassword), as the original pages
  * (a 404 when the service does not run); other pages load it on demand by LoadPassKeys.
  *
- * Globals: `Sw.AuthUi`, loginMain, logoutMain and the legacy names of the old AuthUi.js (AuthPage, CreateAuthWrapper,
- * AuthPageValidation, AuthUserHtml, AuthText, AuthLabel, AuthError, AuthTab, AuthInput, AuthPassword, AuthNewPassword,
- * AuthInputPhone, AuthAddIcon, AuthButtonRow, AuthButton, AuthHr, AuthBr, AuthSetText, AuthSetError, IsAutoFilled)
- * mapped onto Sw.AuthUi for code in other projects. New code uses `Sw.AuthUi`.
+ * Globals: `Sw.AuthUi`, loginMain, logoutMain.
  *
  * Server: Api/auth/* through Sw.Auth (Auth.js); ../iso_data/country/<ISO>.svg flags.
- * Styles: Auth.css (classes auth-*; the box also keeps the old class SysWeaver-AuthBox).
+ * Styles: Auth.css (classes auth-*).
  */
 (function () {
     "use strict";
@@ -62,7 +59,7 @@
 
     /**
      * An auth page: the centered card with the page icon and a form.
-     * Properties: E (main element), Box (the form, class auth-box SysWeaver-AuthBox), IconE, Fields (registered fields),
+     * Properties: E (main element), Box (the form, class auth-box), IconE, Fields (registered fields),
      * OnSubmit (async function run when the form is submitted), CanSubmit (optional async check before OnSubmit), Running.
      */
     class AuthPage {
@@ -76,9 +73,7 @@
             t.OnSubmit = null;
             t.CanSubmit = null;
             t.Running = false;
-            t.Box = el("form.auth-box.SysWeaver-AuthBox", { attrs: { novalidate: "", autocomplete: "on" } });
-            //  Lets legacy code (AuthPageValidation) find the page of a box
-            t.Box.AuthPage = t;
+            t.Box = el("form.auth-box", { attrs: { novalidate: "", autocomplete: "on" } });
             t.IconWrap = el("div.auth-icon-wrap");
             t.Box.append(t.IconWrap);
             t.E = el("main.auth-page", null, t.Box);
@@ -610,7 +605,7 @@
 
     /**
      * A live status line (role status): validation errors, progress and results. Hints are plain text; a click copies
-     * an error (to paste into a support request), or every text with o.Copy "always" (the legacy AuthError).
+     * an error (to paste into a support request), or every text with o.Copy "always".
      * With o.LiveDelay the line itself is not live: a screen reader hears the text once it has been stable for that many
      * ms (and only when it changed), so typing doesn't announce a hint per key; errors are announced at once.
      * Properties: E, Live (the announcing element: E, or a hidden sibling with LiveDelay). Methods: Set(text, kind, o),
@@ -762,7 +757,7 @@
         /**
          * Show the password leak check result: "Checking password ..", then "Not found in known data leaks", "This password is part
          * of N data leaks" or "Password leak check failed!" (the old CheckPassword). The request (Sw.Auth.CheckLeak) starts at once
-         * (no delay), and only the newest check is shown. As the old CheckPassword memo (el.LastCheck): the same password as the
+         * (no delay), and only the newest check is shown. The same password as the
          * running or shown check makes no new request; any other text in the line (Set) forgets it.
          * @param {string} password The password.
          * @param {boolean} [onlyLeaked] Quiet mode: nothing is shown while checking, for a safe password or when the check failed;
@@ -1704,7 +1699,7 @@
     /**
      * Replace the page content with the sign in form: user id + password (validated live against the user's policy, fetched as
      * before on every change of the user id, shown as a checklist of rules ticked as they are met; the password leak check as before:
-     * "Checking password ..", then safe / leaked / failed, never blocking), Sign in (hashed protocol, Basic fallback) with the failure reason shown
+     * "Checking password ..", then safe / leaked / failed, never blocking), Sign in (hashed protocol) with the failure reason shown
      * inline for 5 s ("Wrong user ID or password", the leak check runs again meanwhile, as before; or "already signed in" when the
      * server refused because of a signed in user), passkey sign in (button or small key icon, conditional mediation autofill in the
      * user id field) only when Passkey.js is loaded (the service runs: Api/HaveService) and the browser supports passkeys,
@@ -2294,119 +2289,4 @@
 
     window.loginMain = LoginMain;
     window.logoutMain = LogoutMain;
-
-    // ------------------------------------------------------------------ legacy globals (old AuthUi.js api, for other projects)
-
-    /** Define a legacy global unless already defined (shared with Auth.js). */
-    const legacy = A.Legacy;
-
-    /**
-     * Legacy wrapper of a Sw.Button with the old member names.
-     * @param {Sw.Button} b The button.
-     * @returns {Sw.Button} The same button with Element, SetEnabled, StartWorking, StopWorking.
-     */
-    function legacyButton(b) {
-        b.Element = b.E;
-        b.SetEnabled = (on, reason) => b.SetDisabled(!on, reason || _TF("Not available yet: fill in the field first", "Reason of a disabled button of a legacy auth form field (old api)"));
-        b.StartWorking = () => b.SetWorking(true);
-        b.StopWorking = () => b.SetWorking(false);
-        return b;
-    }
-
-    /**
-     * Legacy input factory: a Field returning its input with the old expandos (OnChange, Field).
-     * @param {HTMLElement} target Parent.
-     * @param {object} o Field options.
-     * @param {function(HTMLInputElement):*} [onChange] Old change callback.
-     * @param {function(HTMLElement):*} [onNext] Old Enter callback (gets the next focusable element).
-     * @param {function} [cls] Field class.
-     * @returns {HTMLInputElement} The input.
-     */
-    function legacyInput(target, o, onChange, onNext, cls) {
-        const C = cls || Field;
-        const f = new C(target, Object.assign(o, { OnInput: () => onChange && onChange(f.Input) }));
-        const i = f.Input;
-        i.Field = f;
-        i.OnChange = async () => onChange && await onChange(i);
-        if (onNext)
-            i.addEventListener("keydown", e => {
-                if (e.key === "Enter" && Sw.IsPureEvent(e)) {
-                    e.preventDefault();
-                    onNext(Sw.Focus.Next(i) || i);
-                }
-            });
-        return i;
-    }
-
-    legacy("CreateAuthWrapper", () => el("form.auth-box.auth-inline.SysWeaver-AuthBox", { attrs: { novalidate: "" }, on: { submit: e => e.preventDefault() } }));
-    legacy("AuthPage", (icon, build, iconIsFile) => Page(icon, async page => {
-        const b = page.Box;
-        b.OnLoaded = () => page.Loaded();
-        const img = { Element: page.IconE, ChangeImage: i => page.SetIcon(i) };
-        if (build)
-            await build(b, img);
-    }, { IconIsFile: iconIsFile }));
-    legacy("AuthText", (t, text, title, isHtml) => Text(t, text, { Title: title, Html: isHtml }));
-    legacy("AuthLabel", (t, text, title, isHtml) => Heading(t, text, title, isHtml));
-    legacy("AuthError", (t, text, title) => {
-        const s = new Status(t, { Title: title, Copy: "always" });
-        s.Set(text);
-        return s.E;
-    });
-    legacy("AuthSetText", (e, text, isHtml) => {
-        e.className = e.className.split(" ").filter(c => c.startsWith("auth-status") || c === "sw-copyable").join(" ");
-        e.LastCheck = null;
-        if (!text)
-            e.innerHTML = "&nbsp;";
-        else
-            SetContent(e, text, isHtml);
-    });
-    legacy("AuthSetError", (e, on) => {
-        if (e.Field)
-            e.Field.SetInvalid(on);
-        else
-            e.classList.toggle("Error", !!on);
-    });
-    legacy("AuthUserHtml", UserHtml);
-    legacy("AuthButtonRow", t => Buttons(t));
-    legacy("AuthButton", (t, name, title, icon, onClick, disabled) => {
-        const b = legacyButton(new Sw.Button({ Text: name, Title: title, Icon: icon, Disabled: !!disabled, OnClick: () => onClick(b) }));
-        t.append(b.E);
-        return b;
-    });
-    legacy("AuthHr", t => box(t).appendChild(el("hr.auth-hr")));
-    legacy("AuthBr", t => box(t).appendChild(el("br")));
-    legacy("AuthInput", (t, ph, title, ac, onChange, onNext, iconClass) =>
-        legacyInput(t, { Placeholder: ph, Hint: title, AutoComplete: ac, Copy: iconClass !== "-" }, onChange, onNext));
-    legacy("AuthPassword", (t, ph, title, ac, onChange, onNext, iconClass) =>
-        legacyInput(t, { Placeholder: ph, Hint: title, AutoComplete: ac || "current-password", Type: "password", Reveal: iconClass !== "-" }, onChange, onNext));
-    legacy("AuthNewPassword", (t, ph, title, ac, onChange, onNext, policy) =>
-        legacyInput(t, { Placeholder: ph, Hint: title, AutoComplete: ac || "new-password", Type: "password", Generate: policy || true }, onChange, onNext));
-    legacy("AuthInputPhone", (t, ph, title, ac, onChange, onNext) =>
-        legacyInput(t, { Placeholder: ph, Hint: title }, onChange, onNext, PhoneField));
-    legacy("AuthAddIcon", (e, iconClass, iconFn, iconEnabledFn, iconTitle) => {
-        const b = legacyButton(new Sw.Button({ Icon: iconClass, Kind: "ghost", Small: true, Title: iconTitle, OnClick: () => iconFn(e) }));
-        const host = e.closest && e.closest(".sw-text-field");
-        (host || e.parentElement).append(b.E);
-        const upd = () => b.SetDisabled(iconEnabledFn ? !iconEnabledFn(e) : false, _TF("Not available yet: fill in the field first", "Reason of a disabled button of a legacy auth form field (old api)"));
-        e.addEventListener("input", upd);
-        upd();
-        e.Icon = e.Icon || b;
-        return b;
-    });
-    legacy("AuthTab", (t, title, onChange) => {
-        const s = new Segments(t, { Label: title, OnChange: onChange });
-        const e = s.E;
-        e.Add = (text, tt, isHtml, icon) => s.Add(text, icon, tt);
-        e.SetIndex = (i, noFn) => s.Select(i, noFn);
-        Object.defineProperty(e, "Selected", { get: () => s.Selected });
-        return e;
-    });
-    legacy("AuthPageValidation", (boxEl, html, link, timeout, label, ph, buttonText) => {
-        const page = boxEl.AuthPage;
-        if (!page)
-            throw new Error("AuthPageValidation: not an AuthPage box");
-        return ShortCode(page, { Html: html, Link: link, Label: label, Placeholder: ph, ButtonText: buttonText });
-    });
-    legacy("IsAutoFilled", IsAutoFilled);
 })();

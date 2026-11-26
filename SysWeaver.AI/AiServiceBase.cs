@@ -4,7 +4,6 @@ using System.Threading.Tasks;
 using SysWeaver.Chat;
 using SysWeaver.MicroService;
 using SysWeaver.Net;
-using SysWeaver.Serialization;
 
 namespace SysWeaver.AI
 {
@@ -207,12 +206,10 @@ namespace SysWeaver.AI
             }
         }
 
-        static readonly ISerializerType JsonSer = SerManager.Get("json");
-
         /// <summary>
         /// The API serialization parameters used by tools (json in and out)
         /// </summary>
-        public static readonly ApiIoParams IoParams =new ApiIoParams([JsonSer], [JsonSer], JsonSer, JsonSer);
+        public static readonly ApiIoParams IoParams = AiTool.IoParams;
 
         /// <summary>
         /// Unregister tools from an instance

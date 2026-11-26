@@ -48,7 +48,8 @@ namespace SysWeaver.Net
         public static String[] JobOwners(HttpServerRequest request)
         {
             var s = request?.Session;
-            return BackgroundJobs.OwnersOf(s?.Auth?.Guid, s?.Token);
+            //  The token hash (never the session token itself, see HttpSession.TokenHash)
+            return BackgroundJobs.OwnersOf(s?.Auth?.Guid, s?.TokenHash);
         }
 
         /// <summary>
@@ -104,8 +105,7 @@ namespace SysWeaver.Net
                 PushMessageUser(id, m, false);
                 return;
             }
-            if (Sessions.TryGetValue(id.AsMemory(), out var s))
-                s.PushMessage(m, false, false);
+            FindSessionByTokenHash(id)?.PushMessage(m, false, false);
         }
 
         /// <summary>

@@ -118,7 +118,7 @@ namespace SysWeaver.MicroService
 
         async Task<UserAccess> GetUserAccess(OrmConnection c, long userId)
         {
-            var user = userId <= 0 ? null : await c.FirstOrDefaultAsync<DbUser>(x => x.Id == userId).ConfigureAwait(false);
+            var user = userId <= 0 ? null : await GetDbUser(c, userId).ConfigureAwait(false);
             if (user == null)
                 return null;
             var pwd = await c.FirstOrDefaultAsync<DbAuthPassword>(x => x.UserId == userId).ConfigureAwait(false);
@@ -236,7 +236,8 @@ namespace SysWeaver.MicroService
         public async Task<AdminUserResult> UnlockUser(AdminUserRequest r, HttpServerRequest context)
         {
             String name;
-            using (var c = await Db.GetAsync().ConfigureAwait(false))
+            long uid;
+            using (var c = await DbGetAsync().ConfigureAwait(false))
             {
                 using var tr = await c.BeginTransactionAsync().ConfigureAwait(false);
                 var a = await AdminFind(c, r?.User).ConfigureAwait(false);
@@ -246,13 +247,14 @@ namespace SysWeaver.MicroService
                 if (!a.MustResetPassword)
                     throw HttpResponseException.AlreadyDone(String.Concat(name, " is not required to choose a new password, there is nothing to undo"));
                 var id = a.User.Id;
+                uid = id;
                 var pwd = await c.FirstOrDefaultAsync<DbAuthPassword>(x => x.UserId == id).ConfigureAwait(false);
                 pwd.MustResetPassword = false;
                 await c.UpdateAsync(pwd, x => new { x.MustResetPassword }).ConfigureAwait(false);
                 await tr.CommitAsync().ConfigureAwait(false);
             }
-            var by = context?.Session?.Auth?.Username ?? "?";
-            Manager.AddMessage(MessageLevels.Info, $"The forced password reset of \"{name}\" was undone by \"{by}\": the current password works again");
+            var by = LogActor(context);
+            Manager.AddMessage(MessageLevels.Info, $"The forced password reset of user #{uid} was undone by \"{by}\": the current password works again");
             return new AdminUserResult
             {
                 UserName = name,
@@ -274,7 +276,7 @@ namespace SysWeaver.MicroService
         public async Task<AdminUserResult> DisableUser(AdminUserRequest r, HttpServerRequest context)
         {
             DbUser user;
-            using (var c = await Db.GetAsync().ConfigureAwait(false))
+            using (var c = await DbGetAsync().ConfigureAwait(false))
             {
                 using var tr = await c.BeginTransactionAsync().ConfigureAwait(false);
                 var a = await AdminFind(c, r?.User).ConfigureAwait(false);
@@ -286,8 +288,8 @@ namespace SysWeaver.MicroService
                 await tr.CommitAsync().ConfigureAwait(false);
             }
             var n = SignOutUser(context, user.Id, "Your account was disabled by an administrator");
-            var by = context?.Session?.Auth?.Username ?? "?";
-            Manager.AddMessage(MessageLevels.Warning, $"The account \"{user.UserName}\" (#{user.Id}) was disabled by \"{by}\", {n} session(s) signed out");
+            var by = LogActor(context);
+            Manager.AddMessage(MessageLevels.Warning, $"The account #{user.Id} was disabled by \"{by}\", {n} session(s) signed out");
             return new AdminUserResult
             {
                 UserName = user.UserName,
@@ -309,7 +311,7 @@ namespace SysWeaver.MicroService
         public async Task<AdminUserResult> EnableUser(AdminUserRequest r, HttpServerRequest context)
         {
             DbUser user;
-            using (var c = await Db.GetAsync().ConfigureAwait(false))
+            using (var c = await DbGetAsync().ConfigureAwait(false))
             {
                 using var tr = await c.BeginTransactionAsync().ConfigureAwait(false);
                 var a = await AdminFind(c, r?.User).ConfigureAwait(false);
@@ -320,8 +322,8 @@ namespace SysWeaver.MicroService
                 await c.DeleteAllAsync<DbToken>(x => x.Token == dt).ConfigureAwait(false);
                 await tr.CommitAsync().ConfigureAwait(false);
             }
-            var by = context?.Session?.Auth?.Username ?? "?";
-            Manager.AddMessage(MessageLevels.Info, $"The account \"{user.UserName}\" (#{user.Id}) was enabled by \"{by}\"");
+            var by = LogActor(context);
+            Manager.AddMessage(MessageLevels.Info, $"The account #{user.Id} was enabled by \"{by}\"");
             return new AdminUserResult
             {
                 UserName = user.UserName,
@@ -344,7 +346,7 @@ namespace SysWeaver.MicroService
         public async Task<AdminUserResult> AdminDeleteUser(AdminUserRequest r, HttpServerRequest context)
         {
             DbUser user;
-            using (var c = await Db.GetAsync().ConfigureAwait(false))
+            using (var c = await DbGetAsync().ConfigureAwait(false))
             {
                 using var tr = await c.BeginTransactionAsync().ConfigureAwait(false);
                 var a = await AdminFind(c, r?.User).ConfigureAwait(false);
@@ -356,8 +358,8 @@ namespace SysWeaver.MicroService
                 await tr.CommitAsync().ConfigureAwait(false);
             }
             var n = SignOutUser(context, user.Id, "Your account was deleted by an administrator");
-            var by = context?.Session?.Auth?.Username ?? "?";
-            Manager.AddMessage(MessageLevels.Warning, $"User \"{user.UserName}\" (#{user.Id}) was deleted by the administrator \"{by}\", {n} session(s) signed out");
+            var by = LogActor(context);
+            Manager.AddMessage(MessageLevels.Warning, $"User #{user.Id} was deleted by the administrator \"{by}\", {n} session(s) signed out");
             await RaiseOnUserDeleted(user.Id, user.UserName).ConfigureAwait(false);
             return new AdminUserResult
             {
@@ -374,6 +376,7 @@ namespace SysWeaver.MicroService
         {
             var userGuid = MakeGuid(id);
             await c.DeleteAllAsync<DbUser>(x => x.Id == id).ConfigureAwait(false);
+            InvalidateUserList();
             await c.DeleteAllAsync<DbEmailAddress>(x => x.UserId == id).ConfigureAwait(false);
             await c.DeleteAllAsync<DbPhoneNumber>(x => x.UserId == id).ConfigureAwait(false);
             await c.DeleteAllAsync<DbAuthPassKey>(x => x.UserId == id).ConfigureAwait(false);
@@ -398,7 +401,7 @@ namespace SysWeaver.MicroService
         {
             var user = context.Session.Auth.AuthContext as DbUser ?? throw new NoUserLoggedInException();
             List<String> res = new List<string>();
-            using var c = await Db.GetAsync().ConfigureAwait(false);
+            using var c = await DbGetAsync().ConfigureAwait(false);
             foreach (var t in await GetUserComTargets(c, user.Id).ConfigureAwait(false))
             {
                 foreach (var com in Coms)
@@ -455,8 +458,8 @@ namespace SysWeaver.MicroService
             var id = UserRowTokenId(token);
             if (id <= 0)
                 throw new HttpResponseException(403, "This row is no longer valid: refresh the list and try again");
-            using var c = await Db.GetAsync().ConfigureAwait(false);
-            var u = await c.FirstOrDefaultAsync<DbUser>(x => x.Id == id).ConfigureAwait(false);
+            using var c = await DbGetAsync().ConfigureAwait(false);
+            var u = await GetDbUser(c, id).ConfigureAwait(false);
             return u?.UserName ?? throw HttpResponseException.Gone("The user no longer exists: refresh the list", 404);
         }
 

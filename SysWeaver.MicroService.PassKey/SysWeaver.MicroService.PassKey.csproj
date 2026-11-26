@@ -13,7 +13,6 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\SysWeaver.MicroService.Auth\SysWeaver.MicroService.Auth.csproj" />
-		<ProjectReference Include="..\SysWeaver.MicroService.UserManager\SysWeaver.MicroService.UserManager.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>

@@ -8550,6 +8550,16 @@
             can only be changed internally, typically by <see cref="T:SysWeaver.AppInfo"/> at startup.
             </remarks>
         </member>
+        <member name="M:SysWeaver.EnvInfo.GetCommandAndArgs(System.String@)">
+            <summary>
+            Split the process command line into the command to run this application again and the arguments.
+            The first token of <see cref="P:System.Environment.CommandLine"/> is what the user typed (ex: ".\MyService.exe" or "MyService" when found using the PATH),
+            so it's compared with the host executable by file name (without extension, an app host has the same name as the entry assembly).
+            If it's the host itself, the command is the full host path, else (ex: "dotnet MyService.dll") it's the host followed by the full path of the first token.
+            </summary>
+            <param name="args">The arguments (empty if none)</param>
+            <returns>The command, paths containing spaces are quoted</returns>
+        </member>
         <member name="F:SysWeaver.EnvInfo.ProcessorArchitecture">
             <summary>
             The processor architecture of the current process (lower cased <see cref="P:System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture"/>), ex:
@@ -17661,6 +17671,119 @@
             (<see cref="M:SysWeaver.Net.HttpOutcomes.Default(System.Int32,System.String)"/>). Return <see cref="F:SysWeaver.Net.HttpOutcomes.AlreadyDone"/> only when the goal of the request is already met.
             </summary>
         </member>
+        <member name="T:SysWeaver.Net.IIpLocation">
+            <summary>
+            A service that finds the estimated location of ip addresses (ex: SysWeaver.IpLocation.IpLocationService).
+            Other services can find it with ServiceManager.TryGet&lt;IIpLocation&gt;() without a reference to the implementation.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Net.IIpLocation.GetLocation(System.String)">
+            <summary>
+            Get the estimated location of an ip address
+            </summary>
+            <param name="ip">The ip address</param>
+            <returns>The location, null if it isn't known</returns>
+        </member>
+        <member name="T:SysWeaver.Net.IMcpService">
+            <summary>
+            Interface for the McpService.
+            Can be used to register all [WebApi] methods of an object (make it available to the Mcp).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Net.IMcpService.AddWebApiTools(System.Object,System.Boolean)">
+            <summary>
+            Register all [WebApi] methods of an instance as tools, each tool keeps the auth of the method (WebApiAuthAttribute or IRunTimeWebApiAuth, else McpParams.Auth).
+            Methods with an AiHideMcpAttribute, disabled methods (WebApiOptionalAttribute) and methods returning pre-compressed data (WebApiRawAttribute) are ignored.
+            </summary>
+            <param name="instance">The instance</param>
+            <param name="proxyData">True if the data returned by all WebApiRaw methods is kept in memory and the url is returned (McpWebApiInstance.ProxyData)</param>
+            <returns>The number of tools added</returns>
+        </member>
+        <member name="M:SysWeaver.Net.IMcpService.RemoveWebApiTools(System.Object)">
+            <summary>
+            Unregister all tools that was added for the [WebApi] methods of an instance
+            </summary>
+            <param name="instance">The instance</param>
+            <returns>The number of tools removed</returns>
+        </member>
+        <member name="T:SysWeaver.Net.Location">
+            <summary>
+            The estimated location of an ip address
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Net.Location.ToString">
+            <inheritdoc />
+        </member>
+        <member name="F:SysWeaver.Net.Location.IsoCountry">
+            <summary>
+            The two letter ISO 3166 country code
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.Location.Latitude">
+            <summary>
+            The latitude in degrees
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.Location.Longitude">
+            <summary>
+            The longitude in degrees
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.Location.Address">
+            <summary>
+            A multi line address (zip code, city, region, country...), as far as it is known
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.Location.RegionCode">
+            <summary>
+            The region (state) code, null if unknown
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.Location.AutonomousSystem">
+            <summary>
+            The autonomous system (or organization) of the ip address, null if unknown
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.Location.Source">
+            <summary>
+            The name of the source that provided this information
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.Location.Sourced">
+            <summary>
+            When the information was collected from the source (UTC)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.Location.City">
+            <summary>
+            The city, null if unknown
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Net.Location.#ctor">
+            <summary>
+            Create an empty instance (for deserialization)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Net.Location.#ctor(System.String,System.Double,System.Double,System.String,System.String,System.String,System.String,System.DateTime,System.String)">
+            <summary>
+            Create an instance with all values
+            </summary>
+            <param name="isoCountry">The two letter ISO 3166 country code</param>
+            <param name="latitude">The latitude in degrees</param>
+            <param name="longitude">The longitude in degrees</param>
+            <param name="address">A multi line address</param>
+            <param name="regionCode">The region (state) code</param>
+            <param name="autonomousSystem">The autonomous system (or organization)</param>
+            <param name="source">The name of the source of the information</param>
+            <param name="sourced">When the information was collected (UTC)</param>
+            <param name="city">The city</param>
+        </member>
+        <member name="M:SysWeaver.Net.Location.#ctor(SysWeaver.Net.Location)">
+            <summary>
+            Create a copy of another instance
+            </summary>
+            <param name="c">The instance to copy</param>
+        </member>
         <member name="T:SysWeaver.NiceRound">
             <summary>
             Round values to "nice" (human friendly) numbers, such as 1, 2, 5, 10, 25, 100, 250 etc
@@ -21970,8 +22093,8 @@
             An in-memory store of one time tokens with ONE live token per subject and purpose (see <see cref="T:SysWeaver.Security.SubjectTokens"/>):
             <see cref="M:SysWeaver.Security.OneTimeTokens`1.Issue(System.String,System.String,`0,System.DateTime@)"/> revokes the older token of the same subject and purpose, <see cref="M:SysWeaver.Security.OneTimeTokens`1.TryUse(System.String,System.String,System.String,`0@)"/> consumes a token (once),
             <see cref="M:SysWeaver.Security.OneTimeTokens`1.Revoke(System.String,System.String)"/> / <see cref="M:SysWeaver.Security.OneTimeTokens`1.RevokeSubject(System.String)"/> revoke tokens when something changed (ex: the password), and tokens expire.
-            <para>Ex: a confirmation token for a dangerous action, bound to the session: <c>var t = Tokens.Issue("delete-log", session.Token, info, out var expires);</c>
-            then <c>if (!Tokens.TryUse(r.Token, "delete-log", session.Token, out var info)) throw new HttpResponseException(409, "...");</c></para>
+            <para>Ex: a confirmation token for a dangerous action, bound to the session: <c>var t = Tokens.Issue("delete-log", session.TokenHash, info, out var expires);</c>
+            then <c>if (!Tokens.TryUse(r.Token, "delete-log", session.TokenHash, out var info)) throw new HttpResponseException(409, "...");</c></para>
             </summary>
             <typeparam name="T">The data kept with a token</typeparam>
             <remarks>Thread safe. Tokens never survive a restart of the process.</remarks>

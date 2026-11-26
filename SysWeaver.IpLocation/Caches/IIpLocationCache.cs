@@ -14,6 +14,6 @@ namespace SysWeaver.IpLocation.Caches
         /// <param name="ip">The ip address</param>
         /// <param name="getFromSource">Gets the location from the sources (if the cache doesn't have it)</param>
         /// <returns>The location, null if it is unknown</returns>
-        ValueTask<IpLocation> Get(String ip, Func<String, Task<IpLocation>> getFromSource);
+        ValueTask<Net.Location> Get(String ip, Func<String, Task<Net.Location>> getFromSource);
     }
 }

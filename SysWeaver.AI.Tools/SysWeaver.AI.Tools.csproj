@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net11.0</TargetFramework>
+    <RootNamespace>SysWeaver.AI</RootNamespace>
+    <GenerateDocumentationFile>True</GenerateDocumentationFile>
+    <NoWarn>1701;1702;1591</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <Features>runtime-async=on</Features>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Memory.Data" Version="11.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SysWeaver.HttpServer\SysWeaver.HttpServer.csproj" />
+  </ItemGroup>
+
+</Project>

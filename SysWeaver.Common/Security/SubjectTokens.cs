@@ -88,8 +88,8 @@ namespace SysWeaver.Security
     /// An in-memory store of one time tokens with ONE live token per subject and purpose (see <see cref="SubjectTokens"/>):
     /// <see cref="Issue"/> revokes the older token of the same subject and purpose, <see cref="TryUse"/> consumes a token (once),
     /// <see cref="Revoke"/> / <see cref="RevokeSubject"/> revoke tokens when something changed (ex: the password), and tokens expire.
-    /// <para>Ex: a confirmation token for a dangerous action, bound to the session: <c>var t = Tokens.Issue("delete-log", session.Token, info, out var expires);</c>
-    /// then <c>if (!Tokens.TryUse(r.Token, "delete-log", session.Token, out var info)) throw new HttpResponseException(409, "...");</c></para>
+    /// <para>Ex: a confirmation token for a dangerous action, bound to the session: <c>var t = Tokens.Issue("delete-log", session.TokenHash, info, out var expires);</c>
+    /// then <c>if (!Tokens.TryUse(r.Token, "delete-log", session.TokenHash, out var info)) throw new HttpResponseException(409, "...");</c></para>
     /// </summary>
     /// <typeparam name="T">The data kept with a token</typeparam>
     /// <remarks>Thread safe. Tokens never survive a restart of the process.</remarks>

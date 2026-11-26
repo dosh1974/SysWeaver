@@ -125,15 +125,44 @@
             If all authorizers are <see cref="T:SysWeaver.Auth.SimpleAuthorizer"/>'s the salt is computed the same way as for a known user (same format), 
             else a 24 char salt is returned (the format used by random salts, <see cref="M:SysWeaver.Auth.AuthTools.GetRandomSalt"/>), keyed with
             <see cref="F:SysWeaver.Auth.AuthManager.FakeSaltKey"/> so that nobody can compute it (an unkeyed hash of the user name told who has an account: a salt that
-            differs from the computed one is a real one). It is the same for the life time of the process.
+            differs from the computed one is a real one). The key is persisted (see <see cref="F:SysWeaver.Auth.AuthManager.FakeSaltKey"/>), so the fake salt is stable across restarts.
             </summary>
             <param name="username">The user name</param>
             <returns>A fake salt</returns>
         </member>
+        <member name="M:SysWeaver.Auth.AuthManager.GetFakeScram(System.String)">
+            <summary>
+            Get fake SCRAM parameters for an unknown user (same shape as a real answer), null if no authorizer supports SCRAM.
+            The salt is keyed with <see cref="F:SysWeaver.Auth.AuthManager.FakeSaltKey"/> (stable, nobody can compute it), the iteration count and binding are the defaults of the first SCRAM authorizer.
+            </summary>
+            <param name="username">The user name</param>
+            <returns>Fake SCRAM parameters or null</returns>
+        </member>
         <member name="F:SysWeaver.Auth.AuthManager.FakeSaltKey">
             <summary>
-            The secret key of the fake salts (random per process: a fake salt changes when the process restarts, a real one doesn't)
+            The secret key of the fake salts, stored in <see cref="F:SysWeaver.KeyValueStore.AllApp"/> so that fake salts are stable across restarts
+            (real ones are, a salt that changes after a restart would reveal an unknown user).
+            Falls back to a random key per process if it can't be stored.
             </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthManager.GetLoginParams(System.String,SysWeaver.Auth.AuthorizerBase)">
+            <summary>
+            Get the salt and the SCRAM parameters for a user (from the first authorizer that knows the user).
+            For unknown users a deterministic fake salt (and fake SCRAM parameters if any authorizer supports SCRAM) is returned, and a random delay is always added, to make user enumeration harder.
+            </summary>
+            <param name="username">The user name to auth</param>
+            <param name="only">If non-null, only this authorizer is asked (and no fake answer is made if the user is unknown)</param>
+            <returns>The salt (null only if <paramref name="only"/> doesn't know the user) and the SCRAM parameters (null if the user must use the legacy login)</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthManager.ScramAuth(System.String,System.String,System.String,System.String)">
+            <summary>
+            Get authorization from a SCRAM proof (the secure login method), asking all authorizers in order.
+            </summary>
+            <param name="username">The user name (as used when the one time pad was created)</param>
+            <param name="oneTimePad">The one time pad (must already be validated and consumed by the caller)</param>
+            <param name="clientNonce">The client nonce</param>
+            <param name="clientProof">The base64 encoded client proof</param>
+            <returns>The authorization or null</returns>
         </member>
         <member name="M:SysWeaver.Auth.AuthManager.GetSalt(System.String)">
             <summary>
@@ -387,11 +416,53 @@
             <exception cref="T:System.ArgumentNullException"><paramref name="auth"/>, <paramref name="username"/> or <paramref name="guid"/> is null (DEBUG builds only).</exception>
             <exception cref="T:System.ArgumentException">A value is too long or the guid contains non ASCII chars.</exception>
         </member>
+        <member name="F:SysWeaver.Auth.Authorization.ServiceToken">
+            <summary>
+            The lower case "service" token: a requirement that is fulfilled by "service" and by any "service_&lt;scope&gt;" token
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.Authorization.ServiceScopePrefix">
+            <summary>
+            The start of a scoped service token ("service_&lt;scope&gt;", ex: an API key that may only call some services)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.Authorization.HasServiceScope">
+            <summary>
+            True if the tokens have a scoped service token ("service_&lt;scope&gt;"): it also fulfills a "service" requirement.
+            </summary>
+        </member>
         <member name="F:SysWeaver.Auth.Authorization.WeakMethod">
             <summary>
             If true, a weak auth method was used (Basic auth, Bearer token etc).
             If false, a proper login request was used
             </summary>
+        </member>
+        <member name="P:SysWeaver.Auth.Authorization.AllowedNetworks">
+            <summary>
+            Optional: the client addresses (networks) this authorization may be used from, null (the default) means any address.
+            Checked by the http server on every request that requires auth (ex: an API key restricted to some servers).
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Auth.Authorization.IsApiKey">
+            <summary>
+            True for an API key: it only fulfills requirements that name one of its tokens (ex: "Service"),
+            never the "any logged in user" requirement (an empty token list), see <see cref="M:SysWeaver.Auth.AuthExt.IsValid(SysWeaver.Auth.Authorization,System.String)"/>.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.Authorization.IsAddressAllowed(System.String)">
+            <summary>
+            True if this authorization may be used from a client address (see <see cref="P:SysWeaver.Auth.Authorization.AllowedNetworks"/>)
+            </summary>
+            <param name="address">The client address as text, ex: "10.0.0.5"</param>
+            <returns>True if allowed (always true if <see cref="P:SysWeaver.Auth.Authorization.AllowedNetworks"/> is null)</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.Authorization.ParseNetworks(System.String)">
+            <summary>
+            Parse a comma (or space / semicolon) separated list of addresses and networks, ex: "10.0.0.5, 192.168.1.0/24, 2001:db8::/32".
+            </summary>
+            <param name="list">The list, null or empty returns null (any address)</param>
+            <returns>The networks, or null for any address</returns>
+            <exception cref="T:System.ArgumentException">An entry isn't a valid address or network</exception>
         </member>
         <member name="F:SysWeaver.Auth.Authorization.UserLock">
             <summary>
@@ -490,8 +561,8 @@
             </summary>
             <param name="auth">The authorization, null means not logged in</param>
             <param name="requiredTokens">A list of comma separated tokens (case insensitive).
-            Null means no auth required (always true), empty means that any logged in user is valid and "-" means that no one is valid</param>
-            <returns>True if the requirement is fulfilled, i.e. at least one of the tokens is present</returns>
+            Null means no auth required (always true), empty means that any logged in user except an API key (<see cref="P:SysWeaver.Auth.Authorization.IsApiKey"/>) is valid and "-" means that no one is valid</param>
+            <returns>True if the requirement is fulfilled, i.e. at least one of the tokens is present ("service" is also fulfilled by a "service_&lt;scope&gt;" token, see <see cref="F:SysWeaver.Auth.Authorization.HasServiceScope"/>)</returns>
         </member>
         <member name="M:SysWeaver.Auth.AuthExt.IsValid(SysWeaver.Auth.Authorization,System.Collections.Generic.IReadOnlyList{System.String})">
             <summary>
@@ -499,8 +570,8 @@
             </summary>
             <param name="auth">The authorization, null means not logged in</param>
             <param name="requiredTokens">Tokens as returned by <see cref="M:SysWeaver.Auth.Authorization.GetRequiredTokens(System.String)"/> (must be all lower case).
-            Null means no auth required (always true), empty means that any logged in user is valid and <see cref="F:SysWeaver.Auth.AuthTools.NoAuth"/> (reference equality) means that no one is valid</param>
-            <returns>True if the requirement is fulfilled, i.e. at least one of the tokens is present</returns>
+            Null means no auth required (always true), empty means that any logged in user except an API key (<see cref="P:SysWeaver.Auth.Authorization.IsApiKey"/>) is valid and <see cref="F:SysWeaver.Auth.AuthTools.NoAuth"/> (reference equality) means that no one is valid</param>
+            <returns>True if the requirement is fulfilled, i.e. at least one of the tokens is present ("service" is also fulfilled by a "service_&lt;scope&gt;" token, see <see cref="F:SysWeaver.Auth.Authorization.HasServiceScope"/>)</returns>
         </member>
         <member name="T:SysWeaver.Auth.AuthorizationInfo">
             <summary>
@@ -588,6 +659,9 @@
             <remarks>
             Password hashes used by the framework are: hash = SHA256(UTF8(password + "|" + salt)) where the salt is provided by <see cref="M:SysWeaver.Auth.AuthorizerBase.GetSaltAsync(System.String)"/>,
             see <see cref="M:SysWeaver.Auth.AuthTools.ComputeHash(System.String,System.String)"/>.
+            Authorizers that support SCRAM logins (<see cref="P:SysWeaver.Auth.AuthorizerBase.ScramDefaults"/>, <see cref="M:SysWeaver.Auth.AuthorizerBase.GetScramInfoAsync(System.String)"/>, <see cref="M:SysWeaver.Auth.AuthorizerBase.ScramAuth(SysWeaver.Auth.ScramProof)"/>) only store a verifier
+            derived from that hash, the legacy <see cref="M:SysWeaver.Auth.AuthorizerBase.SecureAuth(System.String,System.Byte[],System.String)"/> login needs the hash itself.
+            Passkey support is part of this class too (<see cref="P:SysWeaver.Auth.AuthorizerBase.SupportPasskeys"/>, AuthorizerBase_PassKey.cs).
             Implementations must be thread safe.
             </remarks>
         </member>
@@ -666,6 +740,34 @@
             <param name="userName">The plain text username</param>
             <returns>The salt, or null if the user is unknown to this authorizer</returns>
         </member>
+        <member name="F:SysWeaver.Auth.AuthorizerBase.NoScram">
+            <summary>
+            A completed task with a null <see cref="T:SysWeaver.Auth.ScramInfo"/>.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Auth.AuthorizerBase.ScramDefaults">
+            <summary>
+            Override to support SCRAM logins (see <see cref="T:SysWeaver.Auth.ScramInfo"/>), return the default parameters of this authorizer:
+            the <see cref="F:SysWeaver.Auth.ScramInfo.Iterations"/> and <see cref="F:SysWeaver.Auth.ScramInfo.Binding"/> used for new verifiers (the salt is ignored).
+            Used to build fake (but same shaped) answers for unknown users.
+            Return null (the default) if SCRAM isn't supported, then only <see cref="M:SysWeaver.Auth.AuthorizerBase.SecureAuth(System.String,System.Byte[],System.String)"/> is used for logins.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthorizerBase.GetScramInfoAsync(System.String)">
+            <summary>
+            Get the SCRAM parameters of a user (only called after <see cref="M:SysWeaver.Auth.AuthorizerBase.GetSaltAsync(System.String)"/> returned a salt for the user).
+            </summary>
+            <param name="userName">The plain text username</param>
+            <returns>The SCRAM parameters, or null if the user must use the legacy <see cref="M:SysWeaver.Auth.AuthorizerBase.SecureAuth(System.String,System.Byte[],System.String)"/> login (the default)</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthorizerBase.ScramAuth(SysWeaver.Auth.ScramProof)">
+            <summary>
+            Authorize a user using a SCRAM proof (see <see cref="T:SysWeaver.Auth.ScramInfo"/>), no replay attacks possible and the stored verifier can't be used to sign in.
+            The one time pad have already been validated and consumed by the caller.
+            </summary>
+            <param name="proof">The proof</param>
+            <returns>null if the proof is wrong or the user is unknown</returns>
+        </member>
         <member name="P:SysWeaver.Auth.AuthorizerBase.ChangeCounter">
             <summary>
             If any authorization information changes (db updates, files reloaded etc), increase this counter (invalidates cached auth's)
@@ -697,6 +799,135 @@
             <param name="languageCode">The new language code, ex: "en-US"</param>
             <returns>True if successful (the default implementation does nothing and returns true)</returns>
         </member>
+        <member name="P:SysWeaver.Auth.AuthorizerBase.SupportPasskeys">
+            <summary>
+            True if this authorizer can store passkeys for it's users (the passkey methods below are implemented).
+            The passkey service uses every authorizer that supports passkeys, the default is false.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Auth.AuthorizerBase.SupportPasskeyTokens">
+            <summary>
+            True if this authorizer supports the token based passkey methods (adding a passkey on another device using a QR code,
+            using a reset / add password link or creating a new user with a passkey), see <see cref="M:SysWeaver.Auth.AuthorizerBase.GetPassKeyShareToken(SysWeaver.Auth.Authorization)"/>.
+            The default is false.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthorizerBase.GetPassKey(System.String)">
+            <summary>
+            Get a passkey of any user of this authorizer
+            </summary>
+            <param name="credentialId">The credential id (standard base64 of the raw id)</param>
+            <returns>The passkey (with <see cref="P:SysWeaver.Auth.PassKeyData.UserGuid"/> set), or null if it doesn't exist</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthorizerBase.GetPassKeys(SysWeaver.Auth.Authorization)">
+            <summary>
+            Get all passkeys of a user of this authorizer
+            </summary>
+            <param name="user">The user (an authorization from this authorizer)</param>
+            <returns>The passkeys of the user (can be empty), null if the user isn't a user of this authorizer (or passkeys aren't supported)</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthorizerBase.FindPassKeys(System.String)">
+            <summary>
+            Get all passkeys of a user (before sign in)
+            </summary>
+            <param name="identifier">The user name (or any other identifier that can be used to sign in, ex: email or phone number)</param>
+            <returns>The passkeys of the user (can be empty), null if the user is unknown to this authorizer (or passkeys aren't supported)</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthorizerBase.HaveAnyPassKeys(SysWeaver.Auth.Authorization)">
+            <summary>
+            Check if a user have any passkeys
+            </summary>
+            <param name="user">The user (an authorization from this authorizer)</param>
+            <returns>True if the user have at least one passkey</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthorizerBase.HaveAssignedPassKey(SysWeaver.Auth.Authorization,System.String)">
+            <summary>
+            Check if a passkey of a user was created on a device
+            </summary>
+            <param name="user">The user (an authorization from this authorizer)</param>
+            <param name="deviceId">The device id (cookie)</param>
+            <returns>True if the user have a passkey that was created on the device</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthorizerBase.UsePassKey(System.String,System.Int64,System.Boolean)">
+            <summary>
+            Sign in a user using a verified passkey, updates the signature counter, backup state and last use time
+            </summary>
+            <param name="credentialId">The credential id (standard base64 of the raw id)</param>
+            <param name="signCount">The new signature counter</param>
+            <param name="backedUp">The current backup state</param>
+            <returns>The user or null if the passkey or user doesn't exist (or the user can't sign in)</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthorizerBase.AddPassKey(SysWeaver.Auth.Authorization,SysWeaver.Auth.PassKeyData)">
+            <summary>
+            Attach a new (verified) passkey to a signed in user
+            </summary>
+            <param name="user">The user (an authorization from this authorizer)</param>
+            <param name="credential">The verified passkey</param>
+            <returns>True if the passkey was added</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthorizerBase.RenamePassKey(SysWeaver.Auth.Authorization,System.String,System.String)">
+            <summary>
+            Rename a passkey of a user
+            </summary>
+            <param name="user">The user (an authorization from this authorizer)</param>
+            <param name="credentialId">The credential id (standard base64 of the raw id)</param>
+            <param name="name">The new name</param>
+            <returns>True if the passkey was renamed, false if it doesn't exist (or belongs to some other user)</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthorizerBase.DeletePassKey(SysWeaver.Auth.Authorization,System.String)">
+            <summary>
+            Remove a passkey of a user, the last sign in method (passkey or password) of a user must not be removed
+            </summary>
+            <param name="user">The user (an authorization from this authorizer)</param>
+            <param name="credentialId">The credential id (standard base64 of the raw id)</param>
+            <returns>The result</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthorizerBase.GetPassKeyShareToken(SysWeaver.Auth.Authorization)">
+            <summary>
+            Create a token that allows adding a passkey to a signed in user on some other device (requires <see cref="P:SysWeaver.Auth.AuthorizerBase.SupportPasskeyTokens"/>)
+            </summary>
+            <param name="user">The user (an authorization from this authorizer)</param>
+            <returns>The token, or null if not supported</returns>
+        </member>
+        <member name="P:SysWeaver.Auth.AuthorizerBase.PassKeyShareTokenLifeTime">
+            <summary>
+            The time a token from <see cref="M:SysWeaver.Auth.AuthorizerBase.GetPassKeyShareToken(SysWeaver.Auth.Authorization)"/> is valid
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthorizerBase.GetPassKeyTokenUser(System.String,SysWeaver.Auth.IAuthorizedRequest)">
+            <summary>
+            Get the user that a passkey token (from <see cref="M:SysWeaver.Auth.AuthorizerBase.GetPassKeyShareToken(SysWeaver.Auth.Authorization)"/>, a reset password or an add password token) belongs to, the token is not consumed (requires <see cref="P:SysWeaver.Auth.AuthorizerBase.SupportPasskeyTokens"/>).
+            </summary>
+            <param name="token">The token</param>
+            <param name="context">The request (the http server request)</param>
+            <returns>The result</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthorizerBase.AddPassKeyUsingToken(System.String,SysWeaver.Auth.PassKeyData,SysWeaver.Auth.IAuthorizedRequest)">
+            <summary>
+            Attach a verified passkey to the user that a passkey token belongs to and consume the token (requires <see cref="P:SysWeaver.Auth.AuthorizerBase.SupportPasskeyTokens"/>).
+            </summary>
+            <param name="token">The token</param>
+            <param name="credential">The verified passkey</param>
+            <param name="context">The request (the http server request)</param>
+            <returns>The result, with the user (not signed in) on success</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthorizerBase.GetPassKeyNewUserInfo(System.String,SysWeaver.Auth.IAuthorizedRequest)">
+            <summary>
+            Get information about the user that a sign up token will create (requires <see cref="P:SysWeaver.Auth.AuthorizerBase.SupportPasskeyTokens"/>)
+            </summary>
+            <param name="token">The sign up token</param>
+            <param name="context">The request (the http server request)</param>
+            <returns>The information, null if the token is invalid (or not supported)</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthorizerBase.CreateUserWithPassKey(System.String,SysWeaver.Auth.PassKeyData,SysWeaver.Auth.IAuthorizedRequest)">
+            <summary>
+            Create a new user using a sign up token, with a verified passkey as the sign in method, the token is consumed (requires <see cref="P:SysWeaver.Auth.AuthorizerBase.SupportPasskeyTokens"/>).
+            </summary>
+            <param name="token">The sign up token</param>
+            <param name="credential">The verified passkey, the user handle should be set</param>
+            <param name="context">The request (the http server request)</param>
+            <returns>The result, with the new user (not signed in) on success</returns>
+        </member>
         <member name="T:SysWeaver.Auth.UserData">
             <summary>
             Reference counted per-user data shared by all <see cref="T:SysWeaver.Auth.Authorization"/> instances of the same user (within one authorizer).
@@ -716,6 +947,192 @@
         <member name="M:SysWeaver.Auth.UserData.Dispose">
             <summary>
             Release a reference, the data is removed from the authorizer when the last reference is released.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Auth.PassKeyData">
+            <summary>
+            A passkey (WebAuthn public key credential) attached to a user of an <see cref="T:SysWeaver.Auth.AuthorizerBase"/>.
+            A plain data class (no FIDO2 types), the passkey service verifies the credentials, the authorizer only stores them.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Auth.PassKeyData.CredentialId">
+            <summary>
+            The credential id (standard base64 of the raw id), unique
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Auth.PassKeyData.PublicKey">
+            <summary>
+            The COSE encoded public key
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Auth.PassKeyData.UserHandle">
+            <summary>
+            The user handle (user.id) the credential was created with, null if unknown (the handle is then the UTF8 of <see cref="P:SysWeaver.Auth.PassKeyData.UserGuid"/>)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Auth.PassKeyData.UserGuid">
+            <summary>
+            The guid of the user that owns this credential (see <see cref="F:SysWeaver.Auth.AuthorizationInfo.Guid"/>), set by the authorizer when read
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Auth.PassKeyData.RpId">
+            <summary>
+            The relying party id the credential was created for, null if unknown
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Auth.PassKeyData.SignCount">
+            <summary>
+            The last seen signature counter
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Auth.PassKeyData.Transports">
+            <summary>
+            Comma separated transports (ex: "internal,hybrid"), null if unknown
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Auth.PassKeyData.BackupEligible">
+            <summary>
+            True if the credential may be backed up (synced)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Auth.PassKeyData.BackedUp">
+            <summary>
+            True if the credential is backed up (synced)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Auth.PassKeyData.AaGuid">
+            <summary>
+            The authenticator attestation guid, null if unknown
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Auth.PassKeyData.DeviceId">
+            <summary>
+            The device id (cookie) of the device that created the credential
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Auth.PassKeyData.DeviceName">
+            <summary>
+            A user friendly name of the credential
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Auth.PassKeyData.Created">
+            <summary>
+            When the credential was created (UTC)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Auth.PassKeyData.LastUsed">
+            <summary>
+            When the credential was last used to sign in (UTC)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.PassKeyData.Clone">
+            <summary>
+            Create a copy
+            </summary>
+            <returns>A shallow copy (the byte arrays are shared, they are never modified)</returns>
+        </member>
+        <member name="T:SysWeaver.Auth.PassKeyDeleteResults">
+            <summary>
+            The result of <see cref="M:SysWeaver.Auth.AuthorizerBase.DeletePassKey(SysWeaver.Auth.Authorization,System.String)"/>
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.PassKeyDeleteResults.Deleted">
+            <summary>
+            The passkey was removed
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.PassKeyDeleteResults.NotFound">
+            <summary>
+            The passkey doesn't exist (or belongs to some other user)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.PassKeyDeleteResults.LastSignInMethod">
+            <summary>
+            The passkey is the last way the user can sign in, it can't be removed
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Auth.PassKeyTokenErrors">
+            <summary>
+            Errors of the token based passkey methods (<see cref="M:SysWeaver.Auth.AuthorizerBase.GetPassKeyTokenUser(System.String,SysWeaver.Auth.IAuthorizedRequest)"/> etc)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.PassKeyTokenErrors.None">
+            <summary>
+            No error
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.PassKeyTokenErrors.TokenExpired">
+            <summary>
+            The token is unknown, invalid or has expired (or the authorizer doesn't support tokens)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.PassKeyTokenErrors.UserNoLongerExist">
+            <summary>
+            The user of the token no longer exist (or is disabled)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.PassKeyTokenErrors.UserAlreadyExist">
+            <summary>
+            A user with the same identity already exist (new users only)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Auth.PassKeyTokenResult">
+            <summary>
+            The result of the token based passkey methods
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.PassKeyTokenResult.Auth">
+            <summary>
+            The user (not signed in), null on errors
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.PassKeyTokenResult.Error">
+            <summary>
+            The error, <see cref="F:SysWeaver.Auth.PassKeyTokenErrors.None"/> on success
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.PassKeyTokenResult.Ok(SysWeaver.Auth.Authorization)">
+            <summary>
+            A successful result
+            </summary>
+            <param name="auth">The user</param>
+            <returns>The result</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.PassKeyTokenResult.Fail(SysWeaver.Auth.PassKeyTokenErrors)">
+            <summary>
+            A failed result
+            </summary>
+            <param name="error">The error</param>
+            <returns>The result</returns>
+        </member>
+        <member name="F:SysWeaver.Auth.PassKeyTokenResult.Expired">
+            <summary>
+            The token is unknown, invalid or has expired
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Auth.PassKeyNewUserInfo">
+            <summary>
+            Information about a user that will be created from a sign up token (see <see cref="M:SysWeaver.Auth.AuthorizerBase.GetPassKeyNewUserInfo(System.String,SysWeaver.Auth.IAuthorizedRequest)"/>)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.PassKeyNewUserInfo.UserName">
+            <summary>
+            The user name, may be null
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.PassKeyNewUserInfo.Email">
+            <summary>
+            The email, may be null
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.PassKeyNewUserInfo.Phone">
+            <summary>
+            The phone number, may be null
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.PassKeyNewUserInfo.NickName">
+            <summary>
+            The nick name, may be null
             </summary>
         </member>
         <member name="T:SysWeaver.Auth.AuthTools">
@@ -816,6 +1233,15 @@
             <param name="user">A valid user name</param>
             <returns>Plain text salt (44 chars)</returns>
         </member>
+        <member name="M:SysWeaver.Auth.AuthTools.ComputeSimpleSalt(System.String,System.String)">
+            <summary>
+            Compute a simple deterministic salt for given user (unique per user per application), used by <see cref="T:SysWeaver.Auth.SimpleAuthorizer"/>.
+            Salt = ToBase64(SHA256(UTF8(lowercase(username + appHashString) + magic))).
+            </summary>
+            <param name="user">A valid user name</param>
+            <param name="appHashString">The application binding string, null or empty for the entry assembly name (<see cref="F:SysWeaver.Auth.SimpleAuthorizerParams.AppHashString"/>)</param>
+            <returns>Plain text salt (44 chars)</returns>
+        </member>
         <member name="M:SysWeaver.Auth.AuthTools.ComputeSimplePasswordHash(System.String,System.String)">
             <summary>
             Compute a simple password hash using the salt from <see cref="M:SysWeaver.Auth.AuthTools.ComputeSimpleSalt(System.String)"/>: ToBase64(SHA256(UTF8(password|salt))).
@@ -824,6 +1250,25 @@
             <param name="user">A valid user name</param>
             <param name="password">A valid password</param>
             <returns>Hash as a base64 string (44 chars)</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthTools.ComputeSimplePasswordHash(System.String,System.String,System.String)">
+            <summary>
+            Compute a simple password hash using the salt from <see cref="M:SysWeaver.Auth.AuthTools.ComputeSimpleSalt(System.String,System.String)"/>: ToBase64(SHA256(UTF8(password|salt))).
+            </summary>
+            <param name="user">A valid user name</param>
+            <param name="password">A valid password</param>
+            <param name="appHashString">The application binding string, null or empty for the entry assembly name</param>
+            <returns>Hash as a base64 string (44 chars)</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthTools.ComputeSimpleVerifier(System.String,System.String,System.String,System.Int32)">
+            <summary>
+            Compute a SCRAM verifier for a <see cref="T:SysWeaver.Auth.SimpleAuthorizer"/> user line ("$s1$..." format).
+            </summary>
+            <param name="user">A valid user name</param>
+            <param name="password">A valid password</param>
+            <param name="appHashString">The application binding string, null or empty for the entry assembly name</param>
+            <param name="iterations">The PBKDF2 iteration count, 0 or less for the default</param>
+            <returns>The verifier text</returns>
         </member>
         <member name="F:SysWeaver.Auth.AuthTools.NoAuthToken">
             <summary>
@@ -915,6 +1360,135 @@
             <summary>
             Maximum number of chars in a generated nick name.
             </summary>
+        </member>
+        <member name="T:SysWeaver.Auth.DataProtection">
+            <summary>
+            Protects stored personal / secret values (e-mail addresses, phone numbers, user names, API keys ...) using a random program secret
+            that is stored outside of the data (in <see cref="F:SysWeaver.KeyValueStore.AllApp"/>, unique per application and computer).
+            A leaked database (or data file) doesn't reveal the values without the secret, which needs access to the machine.
+            </summary>
+            <remarks>
+            For every protected value:
+            <list type="bullet">
+            <item>A lookup hash (<see cref="M:SysWeaver.Auth.DataProtection.Lookup(System.String,System.String)"/>): HMAC-SHA256(secret, kind + "\0" + normalized value), indexable, used to find a row from a value (ex: e-mail => user id).</item>
+            <item>A per row random value (<see cref="M:SysWeaver.Auth.DataProtection.NewRandom"/>), replaced on every change.</item>
+            <item>The encrypted value (<see cref="M:SysWeaver.Auth.DataProtection.Encrypt(System.String,System.ReadOnlySpan{System.Byte},System.String)"/>): AES-256-GCM with the key HMAC-SHA256(secret, "enc\0" + kind + "\0" + random) and a random nonce,
+            stored as nonce (12 bytes) + cipher text + tag (16 bytes). Used to get the value back (ex: the e-mail address of a user).</item>
+            </list>
+            IMPORTANT: if the secret is lost (ex: the key value store folder is deleted, or the data is moved to another computer) the protected values can't be read or found.
+            Applications (or computers) that share the same data must use the same secret (see <see cref="M:SysWeaver.Auth.DataProtection.FromBase64(System.String)"/>).
+            Thread safe.
+            </remarks>
+        </member>
+        <member name="F:SysWeaver.Auth.DataProtection.SecretKey">
+            <summary>
+            The key value store key of the default secret
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.DataProtection.SecretSize">
+            <summary>
+            The size of the secret in bytes
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.DataProtection.LookupSize">
+            <summary>
+            The size of a lookup hash in bytes
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.DataProtection.RandomSize">
+            <summary>
+            The size of the per row random value in bytes
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.DataProtection.Overhead">
+            <summary>
+            The extra bytes of an encrypted value (nonce + tag)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.DataProtection.#ctor(System.ReadOnlySpan{System.Byte})">
+            <summary>
+            Create using a secret
+            </summary>
+            <param name="secret">The secret (at least 16 bytes)</param>
+            <exception cref="T:System.ArgumentException">The secret is too short</exception>
+        </member>
+        <member name="M:SysWeaver.Auth.DataProtection.FromBase64(System.String)">
+            <summary>
+            Create using a base64 encoded secret (ex: from a configuration, so that several applications or computers can share data)
+            </summary>
+            <param name="secret">The base64 encoded secret (at least 16 bytes)</param>
+            <returns>The instance</returns>
+        </member>
+        <member name="P:SysWeaver.Auth.DataProtection.Default">
+            <summary>
+            The default instance, the secret is stored in <see cref="F:SysWeaver.KeyValueStore.AllApp"/> (created on first use).
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Auth.DataProtection.Fingerprint">
+            <summary>
+            A short, non secret fingerprint of the secret (to detect that data was protected with another secret), 8 hex chars
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.DataProtection.NewRandom">
+            <summary>
+            Create a new random value (one per row, replace it on every change)
+            </summary>
+            <returns>16 random bytes</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.DataProtection.Lookup(System.String,System.String)">
+            <summary>
+            Compute the lookup hash of a value, the value must be normalized by the caller (ex: lower case e-mail).
+            </summary>
+            <param name="kind">The kind of value (ex: "email"), so that equal values of different kinds have different hashes</param>
+            <param name="normalizedValue">The normalized value</param>
+            <returns>The lookup hash (32 bytes)</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.DataProtection.Encrypt(System.String,System.ReadOnlySpan{System.Byte},System.String)">
+            <summary>
+            Encrypt a value
+            </summary>
+            <param name="kind">The kind of value (ex: "email")</param>
+            <param name="random">The random value of the row (see <see cref="M:SysWeaver.Auth.DataProtection.NewRandom"/>)</param>
+            <param name="value">The value, null returns null</param>
+            <returns>The encrypted value (nonce + cipher text + tag), null if the value is null</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.DataProtection.Decrypt(System.String,System.ReadOnlySpan{System.Byte},System.Byte[])">
+            <summary>
+            Decrypt a value
+            </summary>
+            <param name="kind">The kind of value (ex: "email"), must be the same as when it was encrypted</param>
+            <param name="random">The random value of the row, must be the same as when it was encrypted</param>
+            <param name="data">The encrypted value, null returns null</param>
+            <returns>The value, null if the data is null</returns>
+            <exception cref="T:System.Security.Cryptography.CryptographicException">The data was changed, or encrypted with another secret, kind or random value</exception>
+        </member>
+        <member name="M:SysWeaver.Auth.DataProtection.EncryptBytes(System.String,System.ReadOnlySpan{System.Byte},System.ReadOnlySpan{System.Byte})">
+            <summary>
+            Encrypt binary data (same scheme as <see cref="M:SysWeaver.Auth.DataProtection.Encrypt(System.String,System.ReadOnlySpan{System.Byte},System.String)"/>)
+            </summary>
+            <param name="kind">The kind of value</param>
+            <param name="random">The random value of the row</param>
+            <param name="plain">The data</param>
+            <returns>The encrypted data (nonce + cipher text + tag)</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.DataProtection.DecryptBytes(System.String,System.ReadOnlySpan{System.Byte},System.ReadOnlySpan{System.Byte})">
+            <summary>
+            Decrypt binary data
+            </summary>
+            <param name="kind">The kind of value, must be the same as when it was encrypted</param>
+            <param name="random">The random value of the row, must be the same as when it was encrypted</param>
+            <param name="data">The encrypted data</param>
+            <returns>The data</returns>
+            <exception cref="T:System.Security.Cryptography.CryptographicException">The data was changed, or encrypted with another secret, kind or random value</exception>
+        </member>
+        <member name="M:SysWeaver.Auth.DataProtection.TryDecrypt(System.String,System.ReadOnlySpan{System.Byte},System.Byte[])">
+            <summary>
+            Try to decrypt a value
+            </summary>
+            <param name="kind">The kind of value</param>
+            <param name="random">The random value of the row</param>
+            <param name="data">The encrypted value</param>
+            <returns>The value, or null if the data is null or can't be decrypted</returns>
         </member>
         <member name="T:SysWeaver.Auth.IAuthorizedRequest">
             <summary>
@@ -1131,18 +1705,264 @@
             Null means no auth required, empty means that any logged in user is valid and "-" means that no one is valid</param>
             <returns>The same as <see cref="M:SysWeaver.Auth.Authorization.GetRequiredTokens(System.String)"/>: null if <paramref name="requiredTokens"/> is null (the cache isn't changed)</returns>
         </member>
+        <member name="T:SysWeaver.Auth.ScramInfo">
+            <summary>
+            The SCRAM parameters of a user, sent to the client (by GetUserSalt) so it can build a <see cref="T:SysWeaver.Auth.ScramProof"/>.
+            </summary>
+            <remarks>
+            The client computes:
+            <code>
+                H              = the password hash computed by the client (ToBase64(SHA256(UTF8(password|salt))), using the salt of the authorizer)
+                SaltedPassword = PBKDF2-SHA256(UTF8(H + "|" + Binding), FromBase64(Salt), Iterations, 32 bytes)
+                ClientKey      = HMAC-SHA256(SaltedPassword, UTF8("Client Key"))
+                StoredKey      = SHA256(ClientKey)
+                AuthMessage    = UTF8(user + "," + oneTimePad + "," + clientNonce)
+                ClientProof    = ClientKey XOR HMAC-SHA256(StoredKey, AuthMessage)
+            </code>
+            See <see cref="T:SysWeaver.Auth.ScramTools"/>.
+            </remarks>
+        </member>
+        <member name="F:SysWeaver.Auth.ScramInfo.Salt">
+            <summary>
+            The random (or derived) per user salt, base64
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.ScramInfo.Iterations">
+            <summary>
+            The PBKDF2-SHA256 iteration count
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.ScramInfo.Binding">
+            <summary>
+            The application binding string, appended to the password hash before PBKDF2 (so a stored value is bound to an application)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Auth.ScramProof">
+            <summary>
+            A SCRAM login proof (see <see cref="T:SysWeaver.Auth.ScramInfo"/>).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.ScramProof.UserName">
+            <summary>
+            The user name, as sent when the one time pad was requested
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.ScramProof.OneTimePad">
+            <summary>
+            The (already consumed) server one time pad
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.ScramProof.ClientNonce">
+            <summary>
+            A random client nonce (may be empty)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.ScramProof.ClientProof">
+            <summary>
+            The 32 byte client proof
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.ScramProof.TryCreate(System.String,System.String,System.String,System.String)">
+            <summary>
+            Create a proof object, returns null if the proof isn't valid base64 of 32 bytes
+            </summary>
+            <param name="userName">The user name</param>
+            <param name="oneTimePad">The one time pad</param>
+            <param name="clientNonce">The client nonce</param>
+            <param name="clientProofB64">The base64 encoded proof</param>
+            <returns>The proof or null</returns>
+        </member>
+        <member name="T:SysWeaver.Auth.ScramVerifier">
+            <summary>
+            A stored SCRAM verifier: what an authorizer stores per user instead of a password equivalent hash.
+            A stolen verifier can't be used to sign in (the client key is needed), finding the password costs PBKDF2 per guess.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.ScramVerifier.Salt">
+            <summary>
+            The salt (16 bytes)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.ScramVerifier.Iterations">
+            <summary>
+            The PBKDF2 iteration count
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.ScramVerifier.StoredKey">
+            <summary>
+            SHA256(ClientKey)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.ScramVerifier.Prefix">
+            <summary>
+            The text format prefix of <see cref="M:SysWeaver.Auth.ScramVerifier.ToString"/>
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.ScramVerifier.ToString">
+            <summary>
+            Text format: "$s1$iterations$salt_b64$storedKey_b64" (no ':' or '|' chars, so it can be used in a user line)
+            </summary>
+            <returns>The verifier as text</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.ScramVerifier.TryParse(System.String)">
+            <summary>
+            Parse a verifier from it's text format (see <see cref="M:SysWeaver.Auth.ScramVerifier.ToString"/>)
+            </summary>
+            <param name="text">The text</param>
+            <returns>The verifier or null if the text isn't a valid verifier</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.ScramVerifier.GetInfo(System.String)">
+            <summary>
+            Get the info to send to a client
+            </summary>
+            <param name="binding">The application binding string</param>
+            <returns>The info</returns>
+        </member>
+        <member name="T:SysWeaver.Auth.ScramTools">
+            <summary>
+            SCRAM style (RFC 5802 / RFC 7677) helpers, see <see cref="T:SysWeaver.Auth.ScramInfo"/> for the protocol.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.ScramTools.KeySize">
+            <summary>
+            The size of all keys (SHA256 output)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.ScramTools.SaltSize">
+            <summary>
+            The size of new salts
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.ScramTools.DefaultIterations">
+            <summary>
+            The default PBKDF2 iteration count
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.ScramTools.MinIterations">
+            <summary>
+            The minimum accepted PBKDF2 iteration count
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.ScramTools.MaxIterations">
+            <summary>
+            The maximum accepted PBKDF2 iteration count
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.ScramTools.ClampIterations(System.Int32)">
+            <summary>
+            Clamp an iteration count to the valid range, 0 or less gives the default.
+            </summary>
+            <param name="iterations">The iteration count</param>
+            <returns>A valid iteration count</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.ScramTools.ComputeClientKey(System.String,System.String,System.ReadOnlySpan{System.Byte},System.Int32)">
+            <summary>
+            Compute the client key from a password hash.
+            </summary>
+            <param name="passwordHash">The password hash string (H)</param>
+            <param name="binding">The application binding</param>
+            <param name="salt">The salt</param>
+            <param name="iterations">The iteration count</param>
+            <returns>The client key</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.ScramTools.CreateVerifier(System.String,System.String,System.Int32,System.Byte[])">
+            <summary>
+            Create a verifier from a password hash (H).
+            </summary>
+            <param name="passwordHash">The password hash string (H)</param>
+            <param name="binding">The application binding</param>
+            <param name="iterations">The iteration count, 0 or less for the default</param>
+            <param name="salt">The salt to use, null for a random salt</param>
+            <returns>The verifier</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.ScramTools.GetAuthMessage(System.String,System.String,System.String)">
+            <summary>
+            Build the auth message
+            </summary>
+            <param name="userName">The user name</param>
+            <param name="oneTimePad">The one time pad</param>
+            <param name="clientNonce">The client nonce</param>
+            <returns>UTF8(user,pad,nonce)</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.ScramTools.Verify(System.ReadOnlySpan{System.Byte},SysWeaver.Auth.ScramProof)">
+            <summary>
+            Validate a proof against a stored key (constant time).
+            </summary>
+            <param name="storedKey">The stored key of the user</param>
+            <param name="proof">The proof</param>
+            <returns>True if the proof is valid</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.ScramTools.Verify(SysWeaver.Auth.ScramVerifier,SysWeaver.Auth.ScramProof)">
+            <summary>
+            Validate a proof against a verifier (constant time).
+            </summary>
+            <param name="v">The stored verifier, null always fails</param>
+            <param name="proof">The proof</param>
+            <returns>True if the proof is valid</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.ScramTools.VerifyLegacyHash(SysWeaver.Auth.ScramVerifier,System.String,System.String)">
+            <summary>
+            Validate a password hash (H, ex: from basic auth) against a verifier (costs one PBKDF2).
+            </summary>
+            <param name="v">The verifier, null always fails</param>
+            <param name="passwordHash">The password hash</param>
+            <param name="binding">The application binding</param>
+            <returns>True if the hash matches</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.ScramTools.CreateClientProof(SysWeaver.Auth.ScramInfo,System.String,System.String,System.String,System.String)">
+            <summary>
+            Build a client proof (what a client does), used by C# clients and tests.
+            </summary>
+            <param name="info">The SCRAM info from the server</param>
+            <param name="passwordHash">The password hash (H)</param>
+            <param name="userName">The user name (as sent to GetUserSalt)</param>
+            <param name="oneTimePad">The one time pad</param>
+            <param name="clientNonce">The client nonce</param>
+            <returns>The base64 encoded client proof</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.ScramTools.CreateNonce">
+            <summary>
+            Create a random client nonce
+            </summary>
+            <returns>A random base64 string (16 bytes)</returns>
+        </member>
+        <member name="F:SysWeaver.Auth.ScramTools.SchemeName">
+            <summary>
+            The scheme name sent to clients in the GetUserSalt response
+            </summary>
+        </member>
         <member name="T:SysWeaver.Auth.SimpleAuthorizer">
             <summary>
             A simple authorizer with a static set of users defined in the parameters and/or a (monitored) file, and optional API keys.
             </summary>
             <remarks>
             Users are defined as "user:password:tokens:domain" strings, see <see cref="F:SysWeaver.Auth.SimpleAuthorizerParams.Users"/>.
-            The password can be clear text (validated against the password policy) or a hash computed using <see cref="M:SysWeaver.Auth.AuthTools.ComputeSimplePasswordHash(System.String,System.String)"/>
-            (the "Generate password hash" debug page can compute it).
-            API keys are stored in <see cref="F:SysWeaver.KeyValueStore.AllApp"/> as "name:key" strings and are accepted as bearer tokens (and basic auth).
+            The password is a SCRAM verifier ("$s1$...", see <see cref="T:SysWeaver.Auth.ScramVerifier"/>, the "Generate password hash" debug page can compute it)
+            or clear text (validated against the password policy). Password hashes (44 char base64) are refused.
+            API keys are only accepted as header auth (bearer / basic), never as a one time token (<see cref="M:SysWeaver.Auth.AuthorizerBase.TokenAuth(System.String)"/>).
+            API keys are stored encrypted in <see cref="F:SysWeaver.KeyValueStore.AllApp"/> (see <see cref="T:SysWeaver.Auth.DataProtection"/>), optionally restricted to some client addresses, and are accepted as bearer tokens (and basic auth).
+            Header auth (basic / bearer) is only allowed for API keys, unless <see cref="F:SysWeaver.Auth.SimpleAuthorizerParams.AllowBasicAuth"/> is true.
             The user guids are "SI:" followed by a hash of the user name.
             Thread safe, user changes are applied atomically and users whose password or tokens changed are asked to log out.
             </remarks>
+            <summary>
+            API keys: stored encrypted in <see cref="F:SysWeaver.KeyValueStore.AllApp"/> (see <see cref="T:SysWeaver.Auth.DataProtection"/>, the secret is stored outside of the key list).
+            Every key has its own tokens (at least one, each "service" or "service_&lt;scope&gt;", see <see cref="M:SysWeaver.Auth.SimpleAuthorizer.NormalizeApiKeyTokens(System.String)"/>)
+            and an optional list of allowed client addresses / networks.
+            An API key only gets access to what requires one of its tokens (<see cref="P:SysWeaver.Auth.Authorization.IsApiKey"/>).
+            </summary>
+            <summary>
+            Passkey storage of the simple authorizer (the <see cref="T:SysWeaver.Auth.AuthorizerBase"/> passkey methods).
+            The passkeys of all users are stored as one array in <see cref="F:SysWeaver.KeyValueStore.AllApp"/> (few users, so a simple storage is fine).
+            Enabled by <see cref="F:SysWeaver.Auth.SimpleAuthorizerParams.AllowPasskeys"/>, the token based methods (QR code, links, sign up) aren't supported.
+            </summary>
+            <summary>
+            Stored users: users added at run time (web API / the "Users" page), stored encrypted in <see cref="F:SysWeaver.KeyValueStore.AllApp"/> like the API keys.
+            A stored user has a SCRAM verifier ("$s1$...", made by the "Generate password hash" page or the "hash" verb of the service host) and tokens.
+            Managed by users with the <see cref="F:SysWeaver.Roles.Admin"/> tokens ("admin" or "debug"); an "admin" without "debug" can't give the "debug" token,
+            and can't change or remove a user that has it.
+            The users of the configuration and the user file can't be changed here, and a stored user can't replace them.
+            </summary>
         </member>
         <member name="P:SysWeaver.Auth.SimpleAuthorizer.Name">
             <inheritdoc/>
@@ -1174,6 +1994,63 @@
         <member name="M:SysWeaver.Auth.SimpleAuthorizer.Dispose">
             <summary>
             Stop monitoring the user file.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.IsPasswordHash(System.String)">
+            <summary>
+            True if a password value is a password hash (44 chars of base64 for 32 bytes, ex: <see cref="M:SysWeaver.Auth.AuthTools.ComputeSimplePasswordHash(System.String,System.String,System.String)"/>), not a password
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Auth.SimpleAuthorizer.UserEntry">
+            <summary>
+            A user (or API key)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.SimpleAuthorizer.UserEntry.Auth">
+            <summary>
+            The (strong) authorization of the user
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.SimpleAuthorizer.UserEntry.BasicAuth">
+            <summary>
+            The weak authorization (basic auth, API keys), null if basic auth isn't allowed for the user
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.SimpleAuthorizer.UserEntry.Verifier">
+            <summary>
+            The SCRAM verifier (never null)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.SimpleAuthorizer.UserEntry.PasswordHash">
+            <summary>
+            The password hash H (password equivalent, see <see cref="M:SysWeaver.Auth.AuthTools.ComputeSimplePasswordHash(System.String,System.String,System.String)"/>) for basic auth, null if basic auth isn't allowed for the user
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.SimpleAuthorizer.UserEntry.PwdKey">
+            <summary>
+            The stored password value (used to detect password changes)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.SimpleAuthorizer.UserEntry.IsApiKey">
+            <summary>
+            True for an API key user: every sign in method gives the weak authorization (<see cref="F:SysWeaver.Auth.SimpleAuthorizer.UserEntry.BasicAuth"/>), so a key never gets a strong session (ex: can't add passkeys)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Auth.SimpleAuthorizer.UserEntry.SignInAuth">
+            <summary>
+            The authorization to give after a successful sign in (password / proof): the weak one for API keys
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.SimpleAuthorizer.DerivedVerifiers">
+            <summary>
+            Verifiers of clear text passwords and API keys, PBKDF2 is only computed once per hash, binding and iteration count.
+            The salt is random (per process): it is public (sign in parameters), a salt derived from the hash would let anyone test password guesses without the PBKDF2 cost.
+            The one time pad of a sign in is per process too, so a new salt after a restart doesn't matter.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.SimpleAuthorizer.AppHashString">
+            <summary>
+            The application binding string (<see cref="F:SysWeaver.Auth.SimpleAuthorizerParams.AppHashString"/>, defaults to the entry assembly name)
             </summary>
         </member>
         <member name="M:SysWeaver.Auth.SimpleAuthorizer.ToString">
@@ -1215,6 +2092,17 @@
             <param name="user">The name of the user</param>
             <returns>The salt</returns>
         </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.GetVerifierParams">
+            <summary>
+            Get the parameters used to create a password verifier ("$s1$..." format) on the "Generate password hash" page.
+            The verifier is: "$s1$" + Iterations + "$" + ToBase64(salt) + "$" + ToBase64(SHA256(HMAC-SHA256(PBKDF2-SHA256(UTF8(hash + "|" + Binding), salt, Iterations), "Client Key")))
+            where hash is the simple hash (password + "|" + GetAuthSalt(user)) and salt is 16 random bytes.
+            </summary>
+            <returns>The parameters (the salt is null, use a random one)</returns>
+        </member>
+        <member name="P:SysWeaver.Auth.SimpleAuthorizer.ScramDefaults">
+            <inheritdoc/>
+        </member>
         <member name="P:SysWeaver.Auth.SimpleAuthorizer.ChangeCounter">
             <summary>
             Incremented every time the users (including API keys) are updated, so cached authorizations are re-validated.
@@ -1229,8 +2117,9 @@
         </member>
         <member name="M:SysWeaver.Auth.SimpleAuthorizer.BasicAuth(System.String,System.Byte[])">
             <summary>
-            Authorize a user using basic auth, only allowed if <see cref="F:SysWeaver.Auth.SimpleAuthorizerParams.AllowBasicAuth"/> is true or the user has the "service" token.
-            The hash is compared in constant time.
+            Authorize a user using basic auth, only allowed for API keys, or for all users if <see cref="F:SysWeaver.Auth.SimpleAuthorizerParams.AllowBasicAuth"/> is true.
+            The hash is compared in constant time against the password hash (no PBKDF2, so failed attempts are as cheap as successful ones).
+            Users defined with a verifier have no password hash and can't use basic auth.
             </summary>
             <param name="userName">The user name (case insensitive)</param>
             <param name="hash">The password hash: SHA256(UTF8(password|salt))</param>
@@ -1243,19 +2132,15 @@
             <param name="token">The API key (null is not found, i.e. a "Bearer" header without a token)</param>
             <returns>A weak authorization for the API key user, or null</returns>
         </member>
-        <member name="M:SysWeaver.Auth.SimpleAuthorizer.SecureAuth(System.String,System.Byte[],System.String)">
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.GetScramInfoAsync(System.String)">
             <inheritdoc/>
         </member>
-        <member name="M:SysWeaver.Auth.SimpleAuthorizer.TokenAuth(System.String)">
-            <summary>
-            Authorize using an API key as a token (same as <see cref="M:SysWeaver.Auth.SimpleAuthorizer.BearerAuth(System.String)"/>, the key is not consumed).
-            </summary>
-            <param name="oneTimeToken">The API key (null is not found)</param>
-            <returns>A weak authorization for the API key user, or null</returns>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.ScramAuth(SysWeaver.Auth.ScramProof)">
+            <inheritdoc/>
         </member>
         <member name="M:SysWeaver.Auth.SimpleAuthorizer.GetSaltAsync(System.String)">
             <summary>
-            Get the salt of a known user, see <see cref="M:SysWeaver.Auth.AuthTools.ComputeSimpleSalt(System.String)"/>.
+            Get the salt of a known user, see <see cref="M:SysWeaver.Auth.AuthTools.ComputeSimpleSalt(System.String,System.String)"/> (using <see cref="F:SysWeaver.Auth.SimpleAuthorizer.AppHashString"/>).
             </summary>
             <param name="userName">The user name (case insensitive), null is treated as empty</param>
             <returns>The salt, or null if the user is unknown</returns>
@@ -1273,6 +2158,105 @@
             </summary>
             <returns>The password policy</returns>
         </member>
+        <member name="F:SysWeaver.Auth.SimpleAuthorizer.ApiKeyStoreKey">
+            <summary>
+            The key value store key of the encrypted API keys, one line per key: "name:random:encryptedKey:tokens:addresses"
+            (random and encryptedKey are base64, tokens is a comma separated list, addresses is an optional comma separated list of addresses / networks)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.SimpleAuthorizer.ApiKeyKind">
+            <summary>
+            The kind of protected value (see <see cref="T:SysWeaver.Auth.DataProtection"/>)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.SimpleAuthorizer.ManagementAuthDisabled">
+            <summary>
+            The auth of the management methods in the code (disabled), the effective auth is set at run time (<see cref="P:SysWeaver.Auth.SimpleAuthorizer.MethodAuths"/>)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.SimpleAuthorizer.ApiKeyToken">
+            <summary>
+            The token every API key token is, or starts with (followed by "_" and a scope)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.SimpleAuthorizer.MaxApiKeyTokenLength">
+            <summary>
+            The maximum length of an API key token
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.SimpleAuthorizer.ApiKeyDefaultTokens">
+            <summary>
+            The tokens of a new API key when none are given (<see cref="F:SysWeaver.Auth.SimpleAuthorizerParams.ApiKeyAuth"/>, normalized), null if API keys are disabled
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.SimpleAuthorizer.ApiKeyLock">
+            <summary>
+            Serializes the changes of the stored API keys and users (and <see cref="M:SysWeaver.Auth.SimpleAuthorizer.UpdateUsers"/>)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Auth.SimpleAuthorizer.ApiKeyRecord">
+            <summary>
+            A stored API key
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Auth.SimpleAuthorizer.MethodAuths">
+            <summary>
+            Runtime auth overrides for the API key and user management methods (<see cref="F:SysWeaver.Auth.SimpleAuthorizerParams.ApiKeyManagementAuth"/>,
+            <see cref="F:SysWeaver.Roles.Admin"/> for the users), the methods of a disabled feature stay disabled.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.GetApiKeyDefaultTokens(System.String)">
+            <summary>
+            The tokens of new API keys from <see cref="F:SysWeaver.Auth.SimpleAuthorizerParams.ApiKeyAuth"/>: null disables API keys, so does an invalid value (with an error message)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.IsApiKeyToken(System.String)">
+            <summary>
+            True if a (lower case) token is a valid API key token: "service" or "service_" followed by letters, digits, '_', '-' or '.'
+            </summary>
+            <param name="token">The lower case token</param>
+            <returns>True if valid</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.NormalizeApiKeyTokens(System.String)">
+            <summary>
+            Validate and normalize the tokens of an API key: comma separated, white spaces trimmed, lower cased, duplicates removed, sorted.
+            </summary>
+            <param name="tokens">The tokens, ex: "Service, service_translate"</param>
+            <returns>The normalized list, ex: "service,service_translate"</returns>
+            <exception cref="T:System.ArgumentException">No token, or a token that isn't "service" or "service_&lt;scope&gt;" (scope: letters, digits, '_', '-', '.')</exception>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.ReadApiKeyRecords">
+            <summary>
+            Read the API keys (decrypted), records with an invalid key or tokens are skipped (with an error message).
+            Must be called with <see cref="F:SysWeaver.Auth.SimpleAuthorizer.ApiKeyLock"/> held, or from <see cref="M:SysWeaver.Auth.SimpleAuthorizer.UpdateUsers"/> (which holds it).
+            </summary>
+            <returns>The keys (never null)</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.WriteApiKeyRecords(System.Collections.Generic.IEnumerable{SysWeaver.Auth.SimpleAuthorizer.ApiKeyRecord})">
+            <summary>
+            Write the API keys (encrypted, a new random value per key and write)
+            </summary>
+            <param name="keys">The keys</param>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.GenKey">
+            <summary>
+            A random 40 char alpha numerical key (from a secure RNG)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.ValidateName(System.String,System.String)">
+            <summary>
+            Validate the name of a new API key or stored user (it's the user name)
+            </summary>
+            <param name="name">The name</param>
+            <param name="paramName">The parameter name for the exception</param>
+            <returns>The trimmed name</returns>
+            <exception cref="T:System.ArgumentException">The name is empty, contains a ':' or '|', starts with a '#' or "//" or is too long</exception>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.CallerName(SysWeaver.Auth.IAuthorizedRequest)">
+            <summary>
+            The quoted user name of a web api caller for log lines, "an unknown caller" when unknown (ex: a call from code).
+            </summary>
+        </member>
         <member name="M:SysWeaver.Auth.SimpleAuthorizer.AppInfo">
             <summary>
             Get app information (for the API key management page).
@@ -1285,47 +2269,220 @@
             Check if API key management is enabled.
             Requires <see cref="F:SysWeaver.Auth.SimpleAuthorizerParams.ApiKeyManagementAuth"/> (disabled if API keys are disabled).
             </summary>
-            <returns>True if GetApiKeys, RemoveApiKey, AddApiKey is available</returns>
+            <returns>The tokens of a new key when none are given (<see cref="F:SysWeaver.Auth.SimpleAuthorizerParams.ApiKeyAuth"/>, normalized), null if API keys are disabled</returns>
         </member>
         <member name="M:SysWeaver.Auth.SimpleAuthorizer.GetApiKeys">
             <summary>
-            Get a list of ALL api keys (in clear text).
+            Get ALL API keys (decrypted, in clear text: they are stored encrypted, see <see cref="T:SysWeaver.Auth.DataProtection"/>), with their tokens and allowed addresses.
             Requires <see cref="F:SysWeaver.Auth.SimpleAuthorizerParams.ApiKeyManagementAuth"/> (disabled if API keys are disabled).
             </summary>
-            <returns>An array of strings with the user/password pairs encoded as "user:key", or null if there are no keys</returns>
+            <returns>The keys (empty if there are none)</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.AddApiKey(SysWeaver.Auth.AddApiKeyRequest,SysWeaver.Auth.IAuthorizedRequest)">
+            <summary>
+            Add/create a new API key with a random 40 char alpha numerical key (from a secure RNG).
+            Requires <see cref="F:SysWeaver.Auth.SimpleAuthorizerParams.ApiKeyManagementAuth"/> (disabled if API keys are disabled).
+            </summary>
+            <param name="request">The name of the new key (used as user name, please use only letters, digits, '_' and '-') and its tokens
+            (comma separated, each "service" or "service_&lt;scope&gt;", empty or null for <see cref="F:SysWeaver.Auth.SimpleAuthorizerParams.ApiKeyAuth"/>)</param>
+            <param name="context">The caller (handled internally by the web api), named in the log line, may be null</param>
+            <returns>The new key as "name:key"</returns>
+            <exception cref="T:System.ArgumentNullException">The request is null.</exception>
+            <exception cref="T:System.ArgumentException">The name or the tokens are invalid</exception>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">409 with the reason: a key or a user with that name already exists (names are case insensitive)</exception>
         </member>
         <member name="M:SysWeaver.Auth.SimpleAuthorizer.RemoveApiKey(System.String,SysWeaver.Auth.IAuthorizedRequest)">
             <summary>
-            Remove an api key.
+            Remove an API key.
             Requires <see cref="F:SysWeaver.Auth.SimpleAuthorizerParams.ApiKeyManagementAuth"/> (disabled if API keys are disabled).
             </summary>
-            <param name="keyName">The name of the key (user name), or the full "name:key" string</param>
-            <returns>True when the key was removed (never false: a key that doesn't exist is a 409 with the reason)</returns>
+            <param name="keyName">The name of the key</param>
             <param name="context">The caller (handled internally by the web api), named in the log line, may be null</param>
-            <exception cref="T:System.ArgumentNullException"><paramref name="keyName"/> is null (DEBUG builds only).</exception>
+            <returns>True when the key was removed (never false: a key that doesn't exist is a 409 with the reason)</returns>
             <exception cref="T:SysWeaver.Net.HttpResponseException">409 with the reason: there is no API key with that name (it may already be removed)</exception>
         </member>
-        <member name="M:SysWeaver.Auth.SimpleAuthorizer.CallerName(SysWeaver.Auth.IAuthorizedRequest)">
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.SetApiKeyAddresses(SysWeaver.Auth.ApiKeyAddressesRequest,SysWeaver.Auth.IAuthorizedRequest)">
             <summary>
-            The quoted user name of a web api caller for log lines, "an unknown caller" when unknown (ex: a call from code).
-            </summary>
-        </member>
-        <member name="M:SysWeaver.Auth.SimpleAuthorizer.AddApiKey(System.String,SysWeaver.Auth.IAuthorizedRequest)">
-            <summary>
-            Add/create a new API key with a random 40 char alpha numerical key (from a secure RNG).
-            Users authenticated with the key get the <see cref="F:SysWeaver.Auth.SimpleAuthorizerParams.ApiKeyAuth"/> tokens.
+            Restrict an API key to some client addresses / networks.
             Requires <see cref="F:SysWeaver.Auth.SimpleAuthorizerParams.ApiKeyManagementAuth"/> (disabled if API keys are disabled).
             </summary>
-            <param name="keyName">The name of the new key (used as user name), please use only alpha numericals</param>
-            <returns>Return a string with new user/password pair as "user:password", or null if a key or user with that name already exists (user names are case insensitive)</returns>
-            <exception cref="T:System.ArgumentNullException">The key name is null.</exception>
+            <param name="request">The key name and the addresses (comma separated, ex: "10.0.0.5, 192.168.1.0/24"), empty or null allows any address</param>
             <param name="context">The caller (handled internally by the web api), named in the log line, may be null</param>
-            <exception cref="T:System.ArgumentException">The key name is empty (or only white spaces), contains a ':', starts with a '#' or "//" or is too long.</exception>
+            <returns>True when changed</returns>
+            <exception cref="T:System.ArgumentException">An address is invalid</exception>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">409 with the reason: the key doesn't exist (it may be removed)</exception>
         </member>
-        <member name="P:SysWeaver.Auth.SimpleAuthorizer.MethodAuths">
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.SetApiKeyTokens(SysWeaver.Auth.ApiKeyTokensRequest,SysWeaver.Auth.IAuthorizedRequest)">
             <summary>
-            Runtime auth overrides for the API key management methods (uses <see cref="F:SysWeaver.Auth.SimpleAuthorizerParams.ApiKeyManagementAuth"/>), empty if API keys are disabled.
+            Change the tokens of an API key (sessions signed in with the key are asked to sign out).
+            Requires <see cref="F:SysWeaver.Auth.SimpleAuthorizerParams.ApiKeyManagementAuth"/> (disabled if API keys are disabled).
             </summary>
+            <param name="request">The key name and the tokens (comma separated, at least one, each "service" or "service_&lt;scope&gt;")</param>
+            <param name="context">The caller (handled internally by the web api), named in the log line, may be null</param>
+            <returns>True when changed</returns>
+            <exception cref="T:System.ArgumentException">The tokens are invalid</exception>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">409 with the reason: the key doesn't exist (it may be removed)</exception>
+        </member>
+        <member name="F:SysWeaver.Auth.SimpleAuthorizer.MaxPassKeyCredentialIdLength">
+            <summary>
+            The maximum length of a credential id (standard base64 of the raw id, max 1023 bytes)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.SimpleAuthorizer.MaxPassKeysPerUser">
+            <summary>
+            The maximum number of passkeys per user
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.SimpleAuthorizer.InternalPassKeys">
+            <summary>
+            The stored passkeys (loaded on first use), only changed while holding <see cref="F:SysWeaver.Auth.SimpleAuthorizer.PassKeyLock"/>, the array is never modified (copy on write)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Auth.SimpleAuthorizer.SupportPasskeys">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.SavePassKeys(SysWeaver.Auth.PassKeyData[])">
+            <summary>
+            Store a new set of passkeys (call while holding <see cref="F:SysWeaver.Auth.SimpleAuthorizer.PassKeyLock"/>)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.GetUserAuthFromGuid(System.String)">
+            <summary>
+            Get the current (strong) authorization of a user from it's guid
+            </summary>
+            <param name="guid">The user guid</param>
+            <returns>The authorization or null if the user doesn't exist (anymore)</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.GetPassKeyUser(SysWeaver.Auth.Authorization)">
+            <summary>
+            Get the guid of a user that may use passkeys
+            </summary>
+            <param name="user">The user</param>
+            <returns>The guid or null if the user can't use passkeys (not a user of this authorizer, a weak authorization or passkeys are disabled)</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.GetPassKey(System.String)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.GetPassKeys(SysWeaver.Auth.Authorization)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.FindPassKeys(System.String)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.HaveAnyPassKeys(SysWeaver.Auth.Authorization)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.HaveAssignedPassKey(SysWeaver.Auth.Authorization,System.String)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.UsePassKey(System.String,System.Int64,System.Boolean)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.AddPassKey(SysWeaver.Auth.Authorization,SysWeaver.Auth.PassKeyData)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.RenamePassKey(SysWeaver.Auth.Authorization,System.String,System.String)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.DeletePassKey(SysWeaver.Auth.Authorization,System.String)">
+            <inheritdoc/>
+            <remarks>The users of the simple authorizer always have a password, so any passkey can be removed.</remarks>
+        </member>
+        <member name="F:SysWeaver.Auth.SimpleAuthorizer.StoredUsersStoreKey">
+            <summary>
+            The key value store key of the stored users, one line per user: "name:random:encryptedVerifier:tokens" (random and encryptedVerifier are base64)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.SimpleAuthorizer.StoredUserKind">
+            <summary>
+            The kind of protected value (see <see cref="T:SysWeaver.Auth.DataProtection"/>)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.SimpleAuthorizer.UserManagementAuth">
+            <summary>
+            The auth required to manage the stored users: "admin" or "debug"
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.SimpleAuthorizer.DebugToken">
+            <summary>
+            The token that only a "debug" user may give, change or remove
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Auth.SimpleAuthorizer.StoredUserRecord">
+            <summary>
+            A stored user
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.NormalizeUserTokens(System.String)">
+            <summary>
+            Validate and normalize the tokens of a stored user: comma separated, white spaces trimmed, lower cased, duplicates removed, sorted (may be empty).
+            </summary>
+            <param name="tokens">The tokens</param>
+            <returns>The normalized list ("" for none)</returns>
+            <exception cref="T:System.ArgumentException">A token has a ':', '|' or white space, or is too long</exception>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.ReadStoredUserRecords">
+            <summary>
+            Read the stored users (decrypted), records that can't be read are skipped (with an error message).
+            Must be called with <see cref="F:SysWeaver.Auth.SimpleAuthorizer.ApiKeyLock"/> held, or from <see cref="M:SysWeaver.Auth.SimpleAuthorizer.UpdateUsers"/> (which holds it).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.WriteStoredUserRecords(System.Collections.Generic.IEnumerable{SysWeaver.Auth.SimpleAuthorizer.StoredUserRecord})">
+            <summary>
+            Write the stored users (the verifiers encrypted, a new random value per user and write)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.CallerIsDebug(SysWeaver.Auth.IAuthorizedRequest)">
+            <summary>
+            True if the caller has the "debug" token (may give, change and remove it)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.StoredUsersSupported">
+            <summary>
+            Check if the stored users can be managed (<see cref="F:SysWeaver.Auth.SimpleAuthorizerParams.AllowStoredUsers"/>).
+            Requires the "admin" or "debug" token.
+            </summary>
+            <returns>True if supported</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.GetStoredUsers(SysWeaver.Auth.IAuthorizedRequest)">
+            <summary>
+            Get the stored users (not the users of the configuration and the user file).
+            Requires the "admin" or "debug" token.
+            </summary>
+            <param name="context">The caller (handled internally by the web api)</param>
+            <returns>The users (empty if there are none)</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.AddStoredUser(SysWeaver.Auth.AddStoredUserRequest,SysWeaver.Auth.IAuthorizedRequest)">
+            <summary>
+            Add a stored user.
+            Requires the "admin" or "debug" token, only a "debug" user may give the "debug" token.
+            </summary>
+            <param name="request">The user line ("username : $s1$...", as made by the "Generate password hash" page or the "hash" verb of the service host) and the tokens (comma separated)</param>
+            <param name="context">The caller (handled internally by the web api), named in the log line, may be null</param>
+            <returns>True when added</returns>
+            <exception cref="T:System.ArgumentException">The line, the name, the verifier or the tokens are invalid</exception>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">409 with the reason: a user or API key with that name exists; 403: the "debug" token given by a user without it</exception>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.RemoveStoredUser(System.String,SysWeaver.Auth.IAuthorizedRequest)">
+            <summary>
+            Remove a stored user (the sessions of the user are asked to sign out).
+            Requires the "admin" or "debug" token, only a "debug" user may remove a user with the "debug" token.
+            </summary>
+            <param name="userName">The name of the user</param>
+            <param name="context">The caller (handled internally by the web api), named in the log line, may be null</param>
+            <returns>True when removed</returns>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">409 with the reason: there is no stored user with that name; 403: the user has the "debug" token and the caller doesn't</exception>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.SetStoredUserTokens(SysWeaver.Auth.StoredUserTokensRequest,SysWeaver.Auth.IAuthorizedRequest)">
+            <summary>
+            Change the tokens of a stored user (the sessions of the user are asked to sign out).
+            Requires the "admin" or "debug" token, only a "debug" user may change a user with the "debug" token or give it.
+            </summary>
+            <param name="request">The user name and the tokens (comma separated)</param>
+            <param name="context">The caller (handled internally by the web api), named in the log line, may be null</param>
+            <returns>True when changed</returns>
+            <exception cref="T:System.ArgumentException">The tokens are invalid</exception>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">409 with the reason: there is no stored user with that name; 403: the "debug" token is involved and the caller doesn't have it</exception>
         </member>
         <member name="T:SysWeaver.Auth.SimpleAuthorizerParams">
             <summary>
@@ -1348,9 +2505,11 @@
             "username:password:token1, token2, token3"
             An application specific domain can be appended after another colon or bar, ex: "username:password:tokens:domain".
             The password may therefore not contain ':' or '|'.
-            Password could be a simple hash (a base64 encoded SHA256, see <see cref="M:SysWeaver.Auth.AuthTools.ComputeSimplePasswordHash(System.String,System.String)"/>, can be generated using the "Generate password hash" debug page).
-            Simple hashes are unique per user per application (entry assembly name).
-            Any 44 char password that is valid base64 of 32 bytes is used as a hash (so such a clear text password can't be used).
+            Password should be a SCRAM verifier: "$s1$iterations$salt$storedKey" (see <see cref="T:SysWeaver.Auth.ScramVerifier"/>, generated using the "Generate password hash" page).
+            A verifier can't be used to sign in, it must be brute forced (PBKDF2 per guess) to find the password.
+            Password can also be clear text (hashed and turned into a verifier when loaded).
+            Verifiers are unique per user per application (<see cref="F:SysWeaver.Auth.SimpleAuthorizerParams.AppHashString"/>, default is the entry assembly name).
+            A 44 char password that is valid base64 of 32 bytes is a password hash, not a password: such users are skipped with a warning.
             Clear text passwords must fulfill the <see cref="F:SysWeaver.Auth.SimpleAuthorizerParams.PasswordPolicy"/>, users with invalid passwords are skipped.
             Users with a too long name (over <see cref="F:SysWeaver.Auth.AuhorizationLimits.MaxUserNameLength"/> chars) or domain (over <see cref="F:SysWeaver.Auth.AuhorizationLimits.MaxDomainName"/> chars) are skipped with a warning message, the other users are still loaded.
             User names are case insensitive (the last definition of a name wins), white spaces around the parts are trimmed, empty lines and lines starting with "#" or "//" are ignored.
@@ -1364,20 +2523,172 @@
         </member>
         <member name="F:SysWeaver.Auth.SimpleAuthorizerParams.AllowBasicAuth">
             <summary>
-            If true (and the server accepts basic auth), then users are allowed to login using basic auth.
-            Users with the "service" token are always allowed to use basic auth.
+            If true (and the server accepts the Authorization header), then the users of the file / configuration are also allowed to login using basic auth.
+            By default (false) only API keys can use header auth (basic / bearer), they are meant for services (the users of the file / configuration sign in with the login page).
+            Basic auth compares the password hash (no PBKDF2 per request), so it only works for users defined with a clear text password.
             </summary>
         </member>
         <member name="F:SysWeaver.Auth.SimpleAuthorizerParams.ApiKeyAuth">
             <summary>
-            If non-null, API keys can be created and deleted, users logged in using these keys will have the tokens specified here (comma separated).
+            If non-null, API keys can be created and deleted, and this is the tokens of a new key when none are given (comma separated).
+            Every key has its own tokens: at least one, each "service" or "service_&lt;scope&gt;" (see <see cref="M:SysWeaver.Auth.SimpleAuthorizer.NormalizeApiKeyTokens(System.String)"/>),
+            an invalid value here disables API keys (with an error message).
             API keys can be used as bearer tokens, and they are allowed to use basic auth (http server still need to allow for it).
+            An API key only gets access to what requires one of its tokens, never to what any logged in user may use (an empty requirement, see <see cref="P:SysWeaver.Auth.Authorization.IsApiKey"/>).
+            A "service_&lt;scope&gt;" token also fulfills a "service" requirement, only the "service_&lt;scope&gt;" token fulfills a "service_&lt;scope&gt;" requirement.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.SimpleAuthorizerParams.AllowStoredUsers">
+            <summary>
+            If true (the default) users can be added and removed at run time and their tokens changed (the "Stored users" page, by users with the "admin" or "debug" token),
+            they are stored encrypted in <see cref="F:SysWeaver.KeyValueStore.AllApp"/> (see <see cref="M:SysWeaver.Auth.SimpleAuthorizer.AddStoredUser(SysWeaver.Auth.AddStoredUserRequest,SysWeaver.Auth.IAuthorizedRequest)"/>).
             </summary>
         </member>
         <member name="F:SysWeaver.Auth.SimpleAuthorizerParams.ApiKeyManagementAuth">
             <summary>
             The auth (comma separated tokens) required to manage API keys.
             null is treated as the default (<see cref="F:SysWeaver.Roles.AdminOps"/>), use <see cref="F:SysWeaver.Roles.Disabled"/> ("-") to disable API key management.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.SimpleAuthorizerParams.AppHashString">
+            <summary>
+            The string that binds stored password values to this application.
+            It's part of the simple salt (<see cref="M:SysWeaver.Auth.AuthTools.ComputeSimpleSalt(System.String,System.String)"/>) and of the SCRAM verifier input.
+            null (the default) uses the entry assembly name, set it to the same value in all applications that should share a users file.
+            Changing it invalidates all stored verifiers.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.SimpleAuthorizerParams.ScramIterations">
+            <summary>
+            The PBKDF2 iteration count of verifiers created by the server (clear text passwords), 0 or less uses <see cref="F:SysWeaver.Auth.ScramTools.DefaultIterations"/>.
+            Verifiers in the "$s1$..." format carry their own iteration count.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.SimpleAuthorizerParams.AllowPasskeys">
+            <summary>
+            If true the users can add passkeys and sign in with them (requires the passkey service).
+            The passkeys are stored in <see cref="F:SysWeaver.KeyValueStore.AllApp"/>, the users of the file / configuration can't be changed.
+            API key users (weak authorizations) can never add passkeys.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Auth.ApiKeyInfo">
+            <summary>
+            An API key (see <see cref="M:SysWeaver.Auth.SimpleAuthorizer.GetApiKeys"/>)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Auth.ApiKeyInfo.Name">
+            <summary>
+            The name of the key (the user name)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Auth.ApiKeyInfo.Key">
+            <summary>
+            The key as "name:key" (the credentials, as used for basic auth)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Auth.ApiKeyInfo.Tokens">
+            <summary>
+            The tokens of the key (comma separated, each "service" or "service_&lt;scope&gt;")
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Auth.ApiKeyInfo.Addresses">
+            <summary>
+            The allowed client addresses / networks (comma separated), empty = any address
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Auth.AddApiKeyRequest">
+            <summary>
+            The parameters of <see cref="M:SysWeaver.Auth.SimpleAuthorizer.AddApiKey(SysWeaver.Auth.AddApiKeyRequest,SysWeaver.Auth.IAuthorizedRequest)"/>
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Auth.AddApiKeyRequest.Name">
+            <summary>
+            The name of the new key (the user name: letters, digits, '_' and '-')
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Auth.AddApiKeyRequest.Tokens">
+            <summary>
+            The tokens (comma separated, each "service" or "service_&lt;scope&gt;"), empty or null for <see cref="F:SysWeaver.Auth.SimpleAuthorizerParams.ApiKeyAuth"/>
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Auth.ApiKeyAddressesRequest">
+            <summary>
+            The parameters of <see cref="M:SysWeaver.Auth.SimpleAuthorizer.SetApiKeyAddresses(SysWeaver.Auth.ApiKeyAddressesRequest,SysWeaver.Auth.IAuthorizedRequest)"/>
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Auth.ApiKeyAddressesRequest.Name">
+            <summary>
+            The name of the API key
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Auth.ApiKeyAddressesRequest.Addresses">
+            <summary>
+            The allowed addresses / networks (comma separated, ex: "10.0.0.5, 192.168.1.0/24"), empty or null allows any address
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Auth.ApiKeyTokensRequest">
+            <summary>
+            The parameters of <see cref="M:SysWeaver.Auth.SimpleAuthorizer.SetApiKeyTokens(SysWeaver.Auth.ApiKeyTokensRequest,SysWeaver.Auth.IAuthorizedRequest)"/>
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Auth.ApiKeyTokensRequest.Name">
+            <summary>
+            The name of the API key
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Auth.ApiKeyTokensRequest.Tokens">
+            <summary>
+            The tokens (comma separated, at least one, each "service" or "service_&lt;scope&gt;")
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Auth.StoredUserInfo">
+            <summary>
+            A stored user (see <see cref="M:SysWeaver.Auth.SimpleAuthorizer.GetStoredUsers(SysWeaver.Auth.IAuthorizedRequest)"/>)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Auth.StoredUserInfo.Name">
+            <summary>
+            The user name
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Auth.StoredUserInfo.Tokens">
+            <summary>
+            The tokens (comma separated, lower case)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Auth.StoredUserInfo.CanChange">
+            <summary>
+            True if the caller may change or remove the user (false: the user has the "debug" token and the caller doesn't)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Auth.AddStoredUserRequest">
+            <summary>
+            The parameters of <see cref="M:SysWeaver.Auth.SimpleAuthorizer.AddStoredUser(SysWeaver.Auth.AddStoredUserRequest,SysWeaver.Auth.IAuthorizedRequest)"/>
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Auth.AddStoredUserRequest.Auth">
+            <summary>
+            The user line: "username : $s1$..." (as made by the "Generate password hash" page or the "hash" verb of the service host)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Auth.AddStoredUserRequest.Tokens">
+            <summary>
+            The tokens (comma separated, may be empty)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Auth.StoredUserTokensRequest">
+            <summary>
+            The parameters of <see cref="M:SysWeaver.Auth.SimpleAuthorizer.SetStoredUserTokens(SysWeaver.Auth.StoredUserTokensRequest,SysWeaver.Auth.IAuthorizedRequest)"/>
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Auth.StoredUserTokensRequest.Name">
+            <summary>
+            The user name
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Auth.StoredUserTokensRequest.Tokens">
+            <summary>
+            The tokens (comma separated, may be empty)
             </summary>
         </member>
         <member name="T:SysWeaver.ManagedLanguageMessages">

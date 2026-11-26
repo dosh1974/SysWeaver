@@ -74,7 +74,7 @@ namespace SysWeaver.Net
         public String Input;
 
         /// <summary>
-        /// The (capped) output data as json, null if the API doesn't have any output, the plain text exception message if the call failed
+        /// The (capped) output data as json, null if the API doesn't have any output, the exception message (typically plain text) if the call failed
         /// </summary>
         [TableDataJson(48)]
         public String Output;

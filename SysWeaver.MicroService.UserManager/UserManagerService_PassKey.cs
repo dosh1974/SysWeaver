@@ -9,106 +9,18 @@ using SysWeaver.MicroService.Db;
 
 namespace SysWeaver.MicroService
 {
-    /// <summary>
-    /// A passkey (public key credential) attached to a user
-    /// </summary>
-    public sealed class PassKeyCredential
-    {
-        /// <summary>
-        /// The credential id (standard base64 of the raw id)
-        /// </summary>
-        public String CredentialId;
 
-        /// <summary>
-        /// The COSE encoded public key
-        /// </summary>
-        public Byte[] PublicKey;
-
-        /// <summary>
-        /// The user handle (user.id) the credential was created with, null if unknown (created before this was stored, the handle is then the user guid)
-        /// </summary>
-        public Byte[] UserHandle;
-
-        /// <summary>
-        /// The id of the user that owns this credential
-        /// </summary>
-        public long UserId;
-
-        /// <summary>
-        /// The relying party id the credential was created for, null if unknown
-        /// </summary>
-        public String RpId;
-
-        /// <summary>
-        /// The last seen signature counter
-        /// </summary>
-        public long SignCount;
-
-        /// <summary>
-        /// Comma separated transports (ex: "internal,hybrid"), null if unknown
-        /// </summary>
-        public String Transports;
-
-        /// <summary>
-        /// True if the credential may be backed up (synced)
-        /// </summary>
-        public bool BackupEligible;
-
-        /// <summary>
-        /// True if the credential is backed up (synced)
-        /// </summary>
-        public bool BackedUp;
-
-        /// <summary>
-        /// The authenticator attestation guid, null if unknown
-        /// </summary>
-        public String AaGuid;
-
-        /// <summary>
-        /// The device id (cookie) of the device that created the credential
-        /// </summary>
-        public String DeviceId;
-
-        /// <summary>
-        /// A user friendly name of the credential
-        /// </summary>
-        public String DeviceName;
-
-        /// <summary>
-        /// When the credential was created (UTC)
-        /// </summary>
-        public DateTime Created;
-
-        /// <summary>
-        /// When the credential was last used to sign in (UTC)
-        /// </summary>
-        public DateTime LastUsed;
-    }
 
     /// <summary>
-    /// Thrown when trying to remove the last way a user can sign in (answered 409 with the message as the reason)
+    /// Passkey storage (the <see cref="AuthorizerBase"/> passkey methods), the passkeys are stored in the database (<see cref="DbAuthPassKey"/>).
     /// </summary>
-    public sealed class LastSignInMethodException : Exception, IHttpRefusal
-    {
-        /// <summary>
-        /// Create the exception
-        /// </summary>
-        public LastSignInMethodException() : base("The last way to sign in can't be removed: add a password or another passkey first")
-        {
-        }
-
-        /// <inheritdoc/>
-        public int ResponseCode => 409;
-    }
-
-
     public sealed partial class UserManagerService
     {
         #region Passkey
 
 
         /// <summary>
-        /// The action type of tokens that allow adding a passkey to a user (see <see cref="GetShareDeviceToken(HttpServerRequest)"/>)
+        /// The action type of tokens that allow adding a passkey to a user (see <see cref="GetPassKeyShareToken(Authorization)"/>)
         /// </summary>
         public const String ActionTokenGetResetChallenge = "AddKey";
 
@@ -122,35 +34,50 @@ namespace SysWeaver.MicroService
         /// </summary>
         public const int MaxPassKeyCredentialIdLength = 1368;
 
+        /// <inheritdoc/>
+        public override bool SupportPasskeys => true;
+
+        /// <inheritdoc/>
+        public override bool SupportPasskeyTokens => true;
+
         /// <summary>
-        /// Create a token that allows adding a passkey to the signed in user (on some other device)
+        /// Get the internal user id of a user
         /// </summary>
-        /// <param name="context">The request context</param>
-        /// <returns>The token or null if no user is signed in</returns>
-        public async Task<String> GetShareDeviceToken(HttpServerRequest context)
+        /// <param name="auth">The user</param>
+        /// <returns>The user id or 0 if it isn't a user of this user manager</returns>
+        public long GetUid(Authorization auth)
+            => (auth?.AuthContext as DbUser)?.Id ?? 0;
+
+        /// <summary>
+        /// Get the internal user id of a user of this instance
+        /// </summary>
+        /// <param name="auth">The user</param>
+        /// <returns>The user id or 0 if it isn't a user of this user manager instance</returns>
+        long GetOwnUid(Authorization auth)
+            => (auth?.Auth == this) ? GetUid(auth) : 0;
+
+        /// <inheritdoc/>
+        public override async Task<String> GetPassKeyShareToken(Authorization user)
         {
-            var auth = context.Session.Auth?.AuthContext as DbUser;
-            if (auth == null)
+            var id = GetOwnUid(user);
+            if (id == 0)
                 return null;
-            var id = auth.Id;
             return (await AddAction(new InternalNewPasswordData
             {
                 UserId = id,
             }, ActionTokenGetResetChallenge, UserSubject(id), DateTime.UtcNow + SharePasswordTimeout).ConfigureAwait(false)).Item1;
         }
 
-        /// <summary>
-        /// The time a share device token (see <see cref="GetShareDeviceToken(HttpServerRequest)"/>) is valid
-        /// </summary>
-        public TimeSpan ShareDeviceTokenLifeTime => SharePasswordTimeout;
+        /// <inheritdoc/>
+        public override TimeSpan PassKeyShareTokenLifeTime => SharePasswordTimeout;
 
-        static PassKeyCredential ToCredential(DbAuthPassKey p)
-            => p == null ? null : new PassKeyCredential
+        PassKeyData ToData(DbAuthPassKey p)
+            => p == null ? null : new PassKeyData
             {
                 CredentialId = p.CredentialId,
                 PublicKey = p.PublicKey,
                 UserHandle = p.UserHandle,
-                UserId = p.UserId,
+                UserGuid = MakeGuid(p.UserId),
                 RpId = p.RpId,
                 SignCount = p.SignCount,
                 Transports = p.Transports,
@@ -163,7 +90,7 @@ namespace SysWeaver.MicroService
                 LastUsed = p.LastUsed,
             };
 
-        static DbAuthPassKey ToDb(PassKeyCredential p, long userId, DateTime now)
+        static DbAuthPassKey ToDb(PassKeyData p, long userId, DateTime now)
         {
             var credentialId = p.CredentialId;
             if (!credentialId.IsAsciiOnly())
@@ -198,98 +125,73 @@ namespace SysWeaver.MicroService
             };
         }
 
-        /// <summary>
-        /// Get a passkey
-        /// </summary>
-        /// <param name="credentialId">The credential id (standard base64 of the raw id)</param>
-        /// <returns>The passkey or null if it doesn't exist</returns>
-        public async Task<PassKeyCredential> GetPassKey(String credentialId)
+        /// <inheritdoc/>
+        public override async Task<PassKeyData> GetPassKey(String credentialId)
         {
-            using var c = await Db.GetAsync().ConfigureAwait(false);
-            return ToCredential(await c.FirstOrDefaultAsync<DbAuthPassKey>(x => x.CredentialId == credentialId).ConfigureAwait(false));
+            if (credentialId == null)
+                return null;
+            using var c = await DbGetAsync().ConfigureAwait(false);
+            return ToData(await c.FirstOrDefaultAsync<DbAuthPassKey>(x => x.CredentialId == credentialId).ConfigureAwait(false));
         }
 
-        /// <summary>
-        /// Get all passkeys of a user
-        /// </summary>
-        /// <param name="userId">The user id</param>
-        /// <returns>The passkeys of the user (can be empty)</returns>
-        public async Task<List<PassKeyCredential>> GetPassKeys(long userId)
+        async Task<IReadOnlyList<PassKeyData>> GetPassKeys(long userId)
         {
-            if (userId == 0)
-                return [];
-            using var c = await Db.GetAsync().ConfigureAwait(false);
-            return (await c.SelectAsync<DbAuthPassKey>(x => x.UserId == userId).ConfigureAwait(false)).Select(ToCredential).ToList();
+            using var c = await DbGetAsync().ConfigureAwait(false);
+            return (await c.SelectAsync<DbAuthPassKey>(x => x.UserId == userId).ConfigureAwait(false)).Select(ToData).ToList();
         }
 
-        /// <summary>
-        /// Check if a user have any passkeys
-        /// </summary>
-        /// <param name="userId">The user id</param>
-        /// <returns>True if the user have at least one passkey</returns>
-        public async Task<bool> HaveAnyPassKeys(long userId)
+        /// <inheritdoc/>
+        public override Task<IReadOnlyList<PassKeyData>> GetPassKeys(Authorization user)
         {
+            var uid = GetOwnUid(user);
+            if (uid == 0)
+                return Task.FromResult<IReadOnlyList<PassKeyData>>(null);
+            return GetPassKeys(uid);
+        }
+
+        /// <inheritdoc/>
+        public override async Task<bool> HaveAnyPassKeys(Authorization user)
+        {
+            var userId = GetOwnUid(user);
             if (userId == 0)
                 return false;
-            using var c = await Db.GetAsync().ConfigureAwait(false);
+            using var c = await DbGetAsync().ConfigureAwait(false);
             return (await c.FirstOrDefaultAsync<DbAuthPassKey>(x => x.UserId == userId).ConfigureAwait(false)) != null;
         }
 
         /// <summary>
         /// Get all passkeys of a user
         /// </summary>
-        /// <param name="auth">The user</param>
-        /// <returns>The passkeys of the user (can be empty)</returns>
-        public Task<List<PassKeyCredential>> GetPassKeys(Authorization auth)
-            => GetPassKeys(GetUid(auth));
-
-        /// <summary>
-        /// Get all passkeys of a user
-        /// </summary>
         /// <param name="identifier">User name, email or phone number</param>
         /// <returns>The passkeys of the user, null if the user wasn't found</returns>
-        public async Task<List<PassKeyCredential>> GetPassKeys(String identifier)
+        public override async Task<IReadOnlyList<PassKeyData>> FindPassKeys(String identifier)
         {
-            using var c = await Db.GetAsync().ConfigureAwait(false);
+            if (LoginUnavailable)
+                return null;
+            using var c = await DbGetAsync().ConfigureAwait(false);
             var uid = await FindUser(c, identifier).ConfigureAwait(false);
             if (uid == 0)
                 return null;
-            return (await c.SelectAsync<DbAuthPassKey>(x => x.UserId == uid).ConfigureAwait(false)).Select(ToCredential).ToList();
+            return (await c.SelectAsync<DbAuthPassKey>(x => x.UserId == uid).ConfigureAwait(false)).Select(ToData).ToList();
         }
 
-        /// <summary>
-        /// Get the internal user id of a user
-        /// </summary>
-        /// <param name="auth">The user</param>
-        /// <returns>The user id or 0 if it isn't a user of this user manager</returns>
-        public long GetUid(Authorization auth)
-            => (auth?.AuthContext as DbUser)?.Id ?? 0;
-
-        /// <summary>
-        /// Check if a passkey of a user was created on a device
-        /// </summary>
-        /// <param name="deviceId">The device id (cookie)</param>
-        /// <param name="uid">The user id</param>
-        /// <returns>True if the user have a passkey that was created on the device</returns>
-        public async Task<Boolean> HaveAssignedPassKey(String deviceId, long uid)
+        /// <inheritdoc/>
+        public override async Task<bool> HaveAssignedPassKey(Authorization user, String deviceId)
         {
+            var uid = GetOwnUid(user);
             if (uid == 0)
                 return false;
             deviceId = deviceId.LimitLength(64, "");
-            using var c = await Db.GetAsync().ConfigureAwait(false);
+            using var c = await DbGetAsync().ConfigureAwait(false);
             return (await c.FirstOrDefaultAsync<DbAuthPassKey>(x => (x.DeviceId == deviceId) && (x.UserId == uid)).ConfigureAwait(false)) != null;
         }
 
-        /// <summary>
-        /// Sign in a user using a verified passkey, updates the signature counter, backup state and last use time
-        /// </summary>
-        /// <param name="credentialId">The credential id (standard base64 of the raw id)</param>
-        /// <param name="signCount">The new signature counter</param>
-        /// <param name="backedUp">The current backup state</param>
-        /// <returns>The user or null if the passkey or user doesn't exist</returns>
-        public async Task<Authorization> UsePassKey(String credentialId, long signCount, bool backedUp)
+        /// <inheritdoc/>
+        public override async Task<Authorization> UsePassKey(String credentialId, long signCount, bool backedUp)
         {
-            using var c = await Db.GetAsync().ConfigureAwait(false);
+            if (LoginUnavailable)
+                return null;
+            using var c = await DbGetAsync().ConfigureAwait(false);
             using var tr = await c.BeginTransactionAsync().ConfigureAwait(false);
             var p = await c.FirstOrDefaultAsync<DbAuthPassKey>(x => x.CredentialId == credentialId).ConfigureAwait(false);
             if (p == null)
@@ -305,63 +207,74 @@ namespace SysWeaver.MicroService
             return a;
         }
 
-        /// <summary>
-        /// Attach a new passkey to the signed in user
-        /// </summary>
-        /// <param name="credential">The verified passkey</param>
-        /// <param name="context">The request context</param>
-        /// <returns>True if the passkey was added</returns>
-        /// <exception cref="NoUserLoggedInException"></exception>
-        public async Task<bool> AttachPassKey(PassKeyCredential credential, HttpServerRequest context)
+        /// <inheritdoc/>
+        public override async Task<bool> AddPassKey(Authorization user, PassKeyData credential)
         {
-            var user = context.Session.Auth?.AuthContext as DbUser;
-            if (user == null)
+            var uid = GetOwnUid(user);
+            if (uid == 0)
                 throw new NoUserLoggedInException();
-            using var c = await Db.GetAsync().ConfigureAwait(false);
+            using var c = await DbGetAsync().ConfigureAwait(false);
             using var tr = await c.BeginTransactionAsync().ConfigureAwait(false);
-            await c.InsertAsync(ToDb(credential, user.Id, DateTime.UtcNow)).ConfigureAwait(false);
+            await c.InsertAsync(ToDb(credential, uid, DateTime.UtcNow)).ConfigureAwait(false);
             //  A credential was added: the links whose meaning depends on the old state stop working (see ActionTokenGroups)
-            await RevokeOnEvent(c, user.Id, AccountEvents.PassKeyAdded).ConfigureAwait(false);
+            await RevokeOnEvent(c, uid, AccountEvents.PassKeyAdded).ConfigureAwait(false);
             await tr.CommitAsync().ConfigureAwait(false);
             return true;
         }
 
         /// <summary>
-        /// Get the user that a passkey token (from <see cref="GetShareDeviceToken(HttpServerRequest)"/>, a reset password or an add password token) belongs to, the token is not consumed.
+        /// Map the exceptions of the token methods to a result
         /// </summary>
-        /// <param name="token">The token</param>
-        /// <param name="context">The request context</param>
-        /// <returns>The user</returns>
-        /// <exception cref="TokenExpiredException">Thrown if the token is invalid or has expired</exception>
-        public async Task<Authorization> GetPassKeyTokenUser(String token, HttpServerRequest context)
+        static async Task<PassKeyTokenResult> TokenResult(Func<Task<Authorization>> f)
         {
-            var id = (await GetPassKeyTokenAction(token, context).ConfigureAwait(false)).Item2.UserId;
-            using var c = await Db.GetAsync().ConfigureAwait(false);
-            return (await InternalAuthUser(c, id).ConfigureAwait(false)) ?? throw await NoAuthException(c, id).ConfigureAwait(false);
+            try
+            {
+                return PassKeyTokenResult.Ok(await f().ConfigureAwait(false));
+            }
+            catch (TokenExpiredException)
+            {
+                return PassKeyTokenResult.Expired;
+            }
+            catch (UserNoLongerExistException)
+            {
+                return PassKeyTokenResult.Fail(PassKeyTokenErrors.UserNoLongerExist);
+            }
+            catch (UserDisabledException)
+            {
+                return PassKeyTokenResult.Fail(PassKeyTokenErrors.UserNoLongerExist);
+            }
+            catch (UserAlreadyExistException)
+            {
+                return PassKeyTokenResult.Fail(PassKeyTokenErrors.UserAlreadyExist);
+            }
         }
 
-        /// <summary>
-        /// Attach a verified passkey to the user that a passkey token (from <see cref="GetShareDeviceToken(HttpServerRequest)"/>, a reset password or an add password token) belongs to and consume the token.
-        /// </summary>
-        /// <param name="token">The token</param>
-        /// <param name="credential">The verified passkey</param>
-        /// <param name="context">The request context</param>
-        /// <returns>The user (not signed in)</returns>
-        /// <exception cref="TokenExpiredException">Thrown if the token is invalid or has expired</exception>
-        public async Task<Authorization> AttachPassKeyUsingToken(String token, PassKeyCredential credential, HttpServerRequest context)
-        {
-            var action = await GetPassKeyTokenAction(token, context).ConfigureAwait(false);
-            var id = action.Item2.UserId;
-            using var c = await Db.GetAsync().ConfigureAwait(false);
-            using var tr = await c.BeginTransactionAsync().ConfigureAwait(false);
-            var auth = (await InternalAuthUser(c, id).ConfigureAwait(false)) ?? throw await NoAuthException(c, id).ConfigureAwait(false);
-            await c.InsertAsync(ToDb(credential, id, DateTime.UtcNow)).ConfigureAwait(false);
-            await DeleteAction(c, action.Item1, action.Item3, context).ConfigureAwait(false);
-            //  A credential was added with a link: the other links of the user stop working (see ActionTokenGroups)
-            await RevokeOnEvent(c, id, AccountEvents.PassKeyAdded).ConfigureAwait(false);
-            await tr.CommitAsync().ConfigureAwait(false);
-            return auth;
-        }
+        /// <inheritdoc/>
+        public override Task<PassKeyTokenResult> GetPassKeyTokenUser(String token, IAuthorizedRequest context)
+            => TokenResult(async () =>
+            {
+                var id = (await GetPassKeyTokenAction(token, (HttpServerRequest)context).ConfigureAwait(false)).Item2.UserId;
+                using var c = await DbGetAsync().ConfigureAwait(false);
+                return (await InternalAuthUser(c, id).ConfigureAwait(false)) ?? throw await NoAuthException(c, id).ConfigureAwait(false);
+            });
+
+        /// <inheritdoc/>
+        public override Task<PassKeyTokenResult> AddPassKeyUsingToken(String token, PassKeyData credential, IAuthorizedRequest context)
+            => TokenResult(async () =>
+            {
+                var hc = (HttpServerRequest)context;
+                var action = await GetPassKeyTokenAction(token, hc).ConfigureAwait(false);
+                var id = action.Item2.UserId;
+                using var c = await DbGetAsync().ConfigureAwait(false);
+                using var tr = await c.BeginTransactionAsync().ConfigureAwait(false);
+                var auth = (await InternalAuthUser(c, id).ConfigureAwait(false)) ?? throw await NoAuthException(c, id).ConfigureAwait(false);
+                await c.InsertAsync(ToDb(credential, id, DateTime.UtcNow)).ConfigureAwait(false);
+                await DeleteAction(c, action.Item1, action.Item3, hc).ConfigureAwait(false);
+                //  A credential was added with a link: the other links of the user stop working (see ActionTokenGroups)
+                await RevokeOnEvent(c, id, AccountEvents.PassKeyAdded).ConfigureAwait(false);
+                await tr.CommitAsync().ConfigureAwait(false);
+                return auth;
+            });
 
         async Task<Tuple<String, InternalNewPasswordData, String>> GetPassKeyTokenAction(String token, HttpServerRequest context)
         {
@@ -374,32 +287,35 @@ namespace SysWeaver.MicroService
             throw Refused(token);
         }
 
-        /// <summary>
-        /// Create a new user using a create user token, with a verified passkey as the sign in method (the token is consumed)
-        /// </summary>
-        /// <param name="token">The create user token</param>
-        /// <param name="credential">The verified passkey, the user handle should be set</param>
-        /// <param name="context">The request context</param>
-        /// <returns>The new user (not signed in)</returns>
-        public Task<Authorization> CreateUserWithPassKey(String token, PassKeyCredential credential, HttpServerRequest context)
-            => CreateUser(new AddUserRequest
+        /// <inheritdoc/>
+        public override async Task<PassKeyNewUserInfo> GetPassKeyNewUserInfo(String token, IAuthorizedRequest context)
+        {
+            var data = await GetNewUserData(token, (HttpServerRequest)context).ConfigureAwait(false);
+            if (data == null)
+                return null;
+            return new PassKeyNewUserInfo
+            {
+                UserName = data.UserName,
+                Email = data.Email,
+                Phone = data.Phone,
+                NickName = data.NickName,
+            };
+        }
+
+        /// <inheritdoc/>
+        public override Task<PassKeyTokenResult> CreateUserWithPassKey(String token, PassKeyData credential, IAuthorizedRequest context)
+            => TokenResult(() => CreateUser(new AddUserRequest
             {
                 Token = token,
-            }, context, false, async (c, id) => await c.InsertAsync(ToDb(credential, id, DateTime.UtcNow)).ConfigureAwait(false));
+            }, (HttpServerRequest)context, false, async (c, id) => await c.InsertAsync(ToDb(credential, id, DateTime.UtcNow)).ConfigureAwait(false)));
 
-        /// <summary>
-        /// Rename a passkey of the signed in user
-        /// </summary>
-        /// <param name="credentialId">The credential id (standard base64 of the raw id)</param>
-        /// <param name="name">The new name</param>
-        /// <param name="context">The request context</param>
-        /// <returns>True if the passkey was renamed, false if it doesn't exist (or belongs to some other user)</returns>
-        public async Task<bool> RenamePassKey(String credentialId, String name, HttpServerRequest context)
+        /// <inheritdoc/>
+        public override async Task<bool> RenamePassKey(Authorization user, String credentialId, String name)
         {
-            var uid = GetUid(context.Session.Auth);
+            var uid = GetOwnUid(user);
             if (uid == 0)
                 throw new NoUserLoggedInException();
-            using var c = await Db.GetAsync().ConfigureAwait(false);
+            using var c = await DbGetAsync().ConfigureAwait(false);
             var p = await c.FirstOrDefaultAsync<DbAuthPassKey>(x => (x.CredentialId == credentialId) && (x.UserId == uid)).ConfigureAwait(false);
             if (p == null)
                 return false;
@@ -408,35 +324,30 @@ namespace SysWeaver.MicroService
             return true;
         }
 
-        /// <summary>
-        /// Remove a passkey from the signed in user, the last sign in method (passkey or password) of a user can't be removed
-        /// </summary>
-        /// <param name="credentialId">The credential id (standard base64 of the raw id)</param>
-        /// <param name="context">The request context</param>
-        /// <returns>True if the passkey was removed, false if it doesn't exist (or belongs to some other user)</returns>
-        /// <exception cref="LastSignInMethodException">Thrown if this is the last way the user can sign in</exception>
-        public async Task<bool> DeletePassKey(String credentialId, HttpServerRequest context)
+        /// <inheritdoc/>
+        public override async Task<PassKeyDeleteResults> DeletePassKey(Authorization user, String credentialId)
         {
-            var uid = GetUid(context.Session.Auth);
+            var uid = GetOwnUid(user);
             if (uid == 0)
                 throw new NoUserLoggedInException();
-            using var c = await Db.GetAsync().ConfigureAwait(false);
+            using var c = await DbGetAsync().ConfigureAwait(false);
             using var tr = await c.BeginTransactionAsync().ConfigureAwait(false);
             var p = await c.FirstOrDefaultAsync<DbAuthPassKey>(x => (x.CredentialId == credentialId) && (x.UserId == uid)).ConfigureAwait(false);
             if (p == null)
-                return false;
+                return PassKeyDeleteResults.NotFound;
             var keyCount = await c.CountAsync<DbAuthPassKey>(x => x.UserId == uid).ConfigureAwait(false);
             if (keyCount <= 1)
             {
-                var pwdCount = await c.CountAsync<DbAuthPassword>(x => x.UserId == uid).ConfigureAwait(false);
-                if (pwdCount <= 0)
-                    throw new LastSignInMethodException();
+                //  The placeholder row of GetSaltAsync (no hash) is no password
+                var hasPwd = IsUsablePassword(await c.FirstOrDefaultAsync<DbAuthPassword>(x => x.UserId == uid).ConfigureAwait(false));
+                if (!hasPwd)
+                    return PassKeyDeleteResults.LastSignInMethod;
             }
             await c.DeleteAllAsync<DbAuthPassKey>(x => (x.CredentialId == credentialId) && (x.UserId == uid)).ConfigureAwait(false);
             //  A credential was removed: the links whose meaning depends on the old state stop working (see ActionTokenGroups)
             await RevokeOnEvent(c, uid, AccountEvents.PassKeyRemoved).ConfigureAwait(false);
             await tr.CommitAsync().ConfigureAwait(false);
-            return true;
+            return PassKeyDeleteResults.Deleted;
         }
 
 

@@ -301,6 +301,9 @@ namespace SysWeaver.MicroService
             CheckCmdSafe(newExeName, "Executable");
             CheckCmdSafe(logFile, "Log file");
             CheckCmdSafe(o.HealthUrl ?? "", "Health url");
+
+            String stopVerb = "stop";
+
             var probe = WinParent(targetFolder) + "\\" + WinName(targetFolder) + "_SwapProbe_" + ticks.ToString(CultureInfo.InvariantCulture);
             var s = $$"""
 @echo off
@@ -365,14 +368,14 @@ if exist "%PROBE%" goto abort
 call :log "Pre-flight ok"
 
 rem ---- Swap ----
-call :log "Step 1: uninstall (stop) the running service"
+call :log "Step 1: {{stopVerb}} the running service"
 set /a STATE=1
-set "ERR=failed to uninstall the running service"
-call :verb "%TARGET%\%OLD_EXE_NAME%" uninstall %UNINSTALL_TIMEOUT_MS%
+set "ERR=failed to {{stopVerb}} the running service"
+call :verb "%TARGET%\%OLD_EXE_NAME%" {{stopVerb}} %UNINSTALL_TIMEOUT_MS%
 set /a U_RC=%ERRORLEVEL%
 if %U_RC%==0 goto step2
 if not %U_RC%==124 goto recover
-call :log "The uninstall didn't finish in time, killing the service"
+call :log "The {{stopVerb}} didn't finish in time, killing the service"
 call :kill_in "%TARGET%"
 
 :step2
@@ -411,7 +414,7 @@ set /a RC=2
 call :log "FAILED: %ERR%"
 call :log "Rolling back from state %STATE%"
 if %STATE% LSS 4 goto recover_3
-call :verb "%TARGET%\%NEW_EXE_NAME%" uninstall %UNINSTALL_TIMEOUT_MS%
+call :verb "%TARGET%\%NEW_EXE_NAME%" {{stopVerb}} %UNINSTALL_TIMEOUT_MS%
 call :kill_in "%TARGET%"
 :recover_3
 if %STATE% LSS 3 goto recover_2
@@ -430,7 +433,7 @@ goto done
 :emergency
 set /a RC=3
 call :log "EMERGENCY: can't restore the folder names, starting the original version from the backup folder"
-call :verb "%BAK%\%OLD_EXE_NAME%" uninstall %UNINSTALL_TIMEOUT_MS%
+call :verb "%BAK%\%OLD_EXE_NAME%" {{stopVerb}} %UNINSTALL_TIMEOUT_MS%
 call :start_verified "%BAK%\%OLD_EXE_NAME%"
 if errorlevel 1 goto fatal
 call :log "EMERGENCY: the original version is running from the backup folder, MANUAL CLEAN UP REQUIRED"

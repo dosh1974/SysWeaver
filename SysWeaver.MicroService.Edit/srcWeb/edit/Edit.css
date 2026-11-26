@@ -1086,3 +1086,9 @@ textarea.sw-edit-multiline {
 .sw-edit .sw-edit-value > .sw-edit-unit {
     align-self: center;
 }
+
+/* The descriptions, hints, errors and value summaries of the editor (UX guide INP-30: text that changes from run to run can be selected and copied) */
+:where(.sw-edit-desc, .sw-edit-summary, .sw-edit-hintpart, .sw-edit-fielderror, .sw-edit-typeerror) {
+    user-select: text;
+    -webkit-user-select: text;
+}

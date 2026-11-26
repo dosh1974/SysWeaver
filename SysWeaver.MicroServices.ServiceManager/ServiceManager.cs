@@ -2661,4 +2661,58 @@ namespace SysWeaver.MicroService
 
     }
 
+
+    
+
+    public static class ServiceManagerExt
+    {
+
+        /// <summary>
+        /// Get a registered instance now or later
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="sm"></param>
+        /// <param name="whenReady">Called either directly (if it's available) or whenever it becomes available</param>
+        /// <returns>null or an IDisposable, call Dispose on exit</returns>
+        public static IDisposable GetWhenReady<T>(this ServiceManager sm, Action<T> whenReady) where T : class
+        {
+            var t = sm.TryGet<T>();
+            if (t != null)
+            {
+                whenReady(t);
+                return null;
+            }
+            var state = new State();
+            void OnReg(Object o, ServiceInfo info)
+            {
+                var ot = o as T;
+                if (ot == null)
+                    return;
+                state.Dispose();
+                whenReady(ot);
+            }
+            state.Remove = () => sm.OnServiceAdded -= OnReg;
+            sm.OnServiceAdded += OnReg;
+            return state;
+        }
+
+        sealed class State : IDisposable
+        {
+            public void Dispose()
+            {
+                Interlocked.Exchange(ref Remove, null)?.Invoke();
+            }
+            public Action Remove;
+        }
+
+
+        private static void Sm_OnServiceAdded(object arg1, ServiceInfo arg2)
+        {
+            throw new NotImplementedException();
+        }
+    }
+
+
+
+
 }

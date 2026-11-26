@@ -60,9 +60,12 @@ namespace SysWeaver.MicroService
             var s = SerManager.Get("json");
             if (s == null)
                 throw new Exception("No json serializer registered!");
-            var data = s.Serialize(sdata, C ? SerializerOptions.Compact : SerializerOptions.Verbose);
+            //  The formatting is done here, since some serializers can't write formatted json (and some add type information when they do)
+            var data = s.Serialize(sdata, SerializerOptions.Compact);
+            //  Some serializers write NaN and infinities as is, that's not json so keep the data unformatted
+            var content = (C ? null : JsonPretty.FormatUtf8(data.Span)) ?? data.ToArray();
             var name = String.IsNullOrEmpty(options.Filename) ? "Table" : options.Filename;
-            return Task.FromResult(new MemoryFile(name + ".json", HttpServerTools.JsonMime, data.Span));
+            return Task.FromResult(new MemoryFile(name + ".json", HttpServerTools.JsonMime, content));
         }
     }
 

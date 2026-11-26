@@ -18,12 +18,12 @@
         overflow: hidden;
     }
 
-/* The key list: rows divided by hairlines (name and key left, the actions right), no boxes in a box */
-.auth-tool .auth-list.auth-keys {
+/* The key and user lists: rows divided by hairlines (name and lines left, the actions right), no boxes in a box */
+.auth-tool .auth-list:is(.auth-keys, .auth-users) {
     gap: 0;
 }
 
-    .auth-tool .auth-list.auth-keys > .auth-item {
+    .auth-tool .auth-list:is(.auth-keys, .auth-users) > .auth-item {
         display: grid;
         grid-template-columns: minmax(0, 1fr) auto;
         align-items: center;
@@ -35,23 +35,28 @@
         background: transparent;
     }
 
-        .auth-tool .auth-list.auth-keys > .auth-item:first-child {
+        .auth-tool .auth-list:is(.auth-keys, .auth-users) > .auth-item:first-child {
             border-top: 0;
         }
 
-        .auth-tool .auth-list.auth-keys > .auth-item > .auth-buttons {
+        .auth-tool .auth-list:is(.auth-keys, .auth-users) > .auth-item > .auth-buttons {
             grid-column: 2;
             grid-row: 1 / span 2;
             margin: 0;
             flex-wrap: nowrap;
         }
 
-/* Phones: the actions go below the name and key */
-html.SwNarrow .auth-tool .auth-list.auth-keys > .auth-item {
+        /* (a key has four lines: name, key, tokens and addresses) */
+        .auth-tool .auth-list.auth-keys > .auth-item > .auth-buttons {
+            grid-row: 1 / span 4;
+        }
+
+/* Phones: the actions go below the name and the lines */
+html.SwNarrow .auth-tool .auth-list:is(.auth-keys, .auth-users) > .auth-item {
     grid-template-columns: minmax(0, 1fr);
 }
 
-    html.SwNarrow .auth-tool .auth-list.auth-keys > .auth-item > .auth-buttons {
+    html.SwNarrow .auth-tool .auth-list:is(.auth-keys, .auth-users) > .auth-item > .auth-buttons {
         grid-column: 1;
         grid-row: auto;
         /* (the four actions wrap at a large text size instead of leaving the window) */
@@ -59,7 +64,7 @@ html.SwNarrow .auth-tool .auth-list.auth-keys > .auth-item {
     }
 
         /* (44 px touch targets: UX guide 15 Phones and touch) */
-        html.SwNarrow .auth-tool .auth-list.auth-keys > .auth-item > .auth-buttons .sw-button {
+        html.SwNarrow .auth-tool .auth-list:is(.auth-keys, .auth-users) > .auth-item > .auth-buttons .sw-button {
             min-width: 2.75rem;
             min-height: 2.75rem;
         }
@@ -161,4 +166,10 @@ html.SwNarrow .auth-tool .auth-list.auth-keys > .auth-item {
     margin: var(--sw-space-2, 8px) 0 0;
     color: var(--sw-text-2);
     font-size: var(--sw-text-sm, 0.875rem);
+}
+
+/* The policy rules and the notes of the password hash generator (UX guide INP-30: text that changes from run to run can be selected and copied) */
+:where(.auth-hashgen-rules, .auth-hashgen-leak, .auth-hashgen-note) {
+    user-select: text;
+    -webkit-user-select: text;
 }

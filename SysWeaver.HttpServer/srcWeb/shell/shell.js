@@ -40,7 +40,7 @@
  * before the first page opens. Branding (_docs/WebBranding.md): app/app.css (index.html links it; core/theme.js applies it to every other
  * page too) and themes registered with a Title (Sw.Theme.Register, ex: in app/app.js), which are added to the settings menu's Theme section.
  * Globals: appMain (index.html: <body onload="appMain()">), and in the shell window SysWeaverApp, SysWeaverAppTitle, ReloadAll (used by
- * pages to reload the shell: the nested shell guard, AuthStartPage).
+ * pages to reload the shell: the nested shell guard, Sw.Auth.StartPage).
  *
  * Classic script (IIFE, "use strict"), needs sw/core.js, sw/ui.js, shell/menu.js and shell/content.js (bundle sw/shell.js).
  * Documentation: shell/README.md.

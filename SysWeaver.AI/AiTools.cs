@@ -2,8 +2,6 @@
 using System.Buffers;
 using System.Collections.Generic;
 using System.Text;
-using Newtonsoft.Json;
-using System.IO;
 using System.Linq;
 using SysWeaver.Docs;
 
@@ -140,23 +138,17 @@ namespace SysWeaver.AI
 
 
         /// <summary>
-        /// Format JSON with indentation
+        /// Format JSON with indentation, see <see cref="JsonPretty"/>.
         /// </summary>
-        /// <param name="json">The JSON text</param>
-        /// <param name="indent">The indent (prefix) for the result, also returned if the JSON is null or empty</param>
-        /// <returns>The formatted JSON</returns>
+        /// <param name="json">The JSON text (the arguments from a model may be invalid)</param>
+        /// <param name="indent">The indent (prefix) for all lines of the result except the first, also returned if the JSON is null or empty</param>
+        /// <returns>The formatted JSON, text that isn't JSON is only indented</returns>
         public static String BeautifyJson(String json, String indent = "")
         {
             if (String.IsNullOrEmpty(json))
                 return indent;
-            using var stringReader = new StringReader(json);
-            using var stringWriter = new StringWriter();
-            using var jsonReader = new JsonTextReader(stringReader);
-            using var jsonWriter = new JsonTextWriter(stringWriter) { Formatting = Formatting.Indented };
-            jsonWriter.WriteToken(jsonReader);
-            var t = stringWriter.ToString();
-            t = t.Replace("\n", "\n" + indent);
-            return t;
+            var t = JsonPretty.Format(json) ?? json;
+            return t.Replace("\n", "\n" + indent);
         }
 
 

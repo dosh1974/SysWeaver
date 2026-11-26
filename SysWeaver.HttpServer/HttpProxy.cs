@@ -394,7 +394,12 @@ namespace SysWeaver.Net
             var ep = FindEndPoint(context, out var rest);
             if (ep == null)
                 return null;
-            if (!(context.Session?.IsValid(ep.Auth) ?? true))
+            //  Fail closed: a protected end point (Auth != null) is never served without a session that has the required tokens
+            if ((ep.Auth != null) && !(context.Session?.IsValid(ep.Auth) ?? false))
+                throw new UserNotAllowedException();
+            //  An address restricted user (ex: an API key) is only served from the allowed addresses (as in HttpServerBase.HandleAuth)
+            var pa = context.Session?.Auth;
+            if ((pa?.AllowedNetworks != null) && !pa.IsAddressAllowed(context.GetIpAddress()))
                 throw new UserNotAllowedException();
             var url = ep.Source + EncodePath(rest);
             if (context.QueryStringStart > 0)

@@ -420,3 +420,9 @@ td.ExploreCompPreference .ExplorePill {
         padding-right: 8px;
     }
 }
+
+/* The cells of the file list (the icon column is chrome) (UX guide INP-30: text that changes from run to run can be selected and copied) */
+:where(.Explore td:not(.ExploreIcon)) {
+    user-select: text;
+    -webkit-user-select: text;
+}

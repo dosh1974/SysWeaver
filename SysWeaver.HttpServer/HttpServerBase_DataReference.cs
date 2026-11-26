@@ -72,7 +72,9 @@ namespace SysWeaver.Net
                     {
                         if (session.IsValid(DebugAuth))
                         {
-                            if (Sessions.TryGetValue(ss[1].AsMemory(), out var os))
+                            //  "id@[session id]" (the token hash, raw tokens are never exposed)
+                            var os = FindSessionByTokenHash(ss[1]);
+                            if (os != null)
                                 return os.DataRefs;
                         }
                     }
@@ -155,7 +157,7 @@ namespace SysWeaver.Net
 
         /// <summary>
         /// Enumerate over all data references (global, any user and all active sessions).
-        /// The key value pair is the session token and session for session data, else both are null.
+        /// The key value pair is the session id (<see cref="HttpSession.TokenHash"/>, never the token) and session for session data, else both are null.
         /// </summary>
         /// <remarks>Enumerating creates an (empty) data storage for every session that doesn't have one.</remarks>
         public IEnumerable<Tuple<DataReference, KeyValuePair<String, HttpSession>>> AllDataReferences
@@ -169,7 +171,7 @@ namespace SysWeaver.Net
                     yield return Tuple.Create(x, none);
                 foreach (var y in Sessions)
                     foreach (var x in y.Value.DataRefs.AllReferences)
-                        yield return Tuple.Create(x, new KeyValuePair<String, HttpSession>(new String(y.Key.Span), y.Value));
+                        yield return Tuple.Create(x, new KeyValuePair<String, HttpSession>(y.Value.TokenHash, y.Value));
             }
         }
 

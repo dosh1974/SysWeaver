@@ -4,8 +4,11 @@
  * Purpose: `Sw.Auth`, everything the auth pages (and any other page or project) need without a user interface:
  *  - Login with the LoginService hashed protocol (GetUserSalt -> [salt, oneTimePad], hash = b64(sha256(pw|salt)) or,
  *    for a "|" prefixed binary salt, b64(sha256(saltBytes ++ utf8(pw))), proof = b64(sha256(hash|pad)),
- *    Login {OneTimePad, Hash}), with the HTTP Basic fallback (basic_auth must answer truthy, then GET login with
+ *    Login {OneTimePad, Hash}). No automatic Basic fallback; BasicLogin (explicit only: basic_auth must answer truthy, then GET login with
  *    Authorization: Basic).
+ *    When GetUserSalt answers [salt, pad, "s1", scramSalt, iterations, binding] the SCRAM login is used instead:
+ *    PBKDF2-SHA256(utf8(hash|binding), scramSalt, iterations) -> ClientKey -> StoredKey, Login {OneTimePad, ClientNonce, ClientProof}
+ *    (see ScramInfo in SysWeaver.Auth.Core/Scram.cs). PBKDF2 uses crypto.subtle, with a pure JS fallback on plain HTTP.
  *  - Logout (GET logout with "Authorization: Basic logout", overwriting cached Basic credentials).
  *  - Password proof objects for sensitive UserManager calls ({Hash, OneTimePad}), new password hashes.
  *  - Password policy text, validation and a crypto random password generator (look-alike free alphabets).
@@ -23,10 +26,7 @@
  * renders its own UI, after the lean pair ../sw/session.js + ../sw/net.js: messaging and requests without theme or UI),
  * before AuthUi.js, UserManager.js, Passkey.js, SimpleAuth.js.
  *
- * Globals: `Sw.Auth` and the legacy names of the old Auth.js / AuthUi.js / UserManager.js that are not UI:
- * logoutRequest, loginRequest, AuthTrim, AuthPolicyText, ValidatePassword, CheckPassword (writes a result into an
- * element, legacy), AuthGetEmailError, AuthGetPhoneError, GenPassword, AuthStartPage, cleanUpShortCode,
- * validateShortCode. New code uses `Sw.Auth`.
+ * Globals: `Sw.Auth`.
  *
  * Server: Api/auth/GetUserSalt, Login, GetUser, GetPasswordPolicy, ValidateEmailAddress, GetPhoneNumberInfo,
  * GetPhonePrefixInfo, ValidateShortCode; logout, login, basic_auth (site root); https://api.pwnedpasswords.com.
@@ -138,22 +138,182 @@
         return await Sw.Net.Send(api() + "GetUserSalt", Trim(user), post);
     }
 
+    // ---- SCRAM (RFC 5802 / 7677 style), see ScramInfo in SysWeaver.Auth.Core/Scram.cs ----
+    //  SaltedPassword = PBKDF2-SHA256(utf8(H + "|" + binding), salt, iterations), ClientKey = HMAC(SaltedPassword, "Client Key"),
+    //  StoredKey = SHA256(ClientKey), ClientProof = ClientKey XOR HMAC(StoredKey, utf8(user + "," + pad + "," + clientNonce)).
+    //  PBKDF2 uses crypto.subtle when available, else the pure JS implementation below (plain HTTP on a LAN).
+
+    const K256 = Int32Array.of(
+        0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+        0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+        0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+        0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+        0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+        0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+        0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+        0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2);
+    const IV256 = Int32Array.of(0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19);
+
+    /** One SHA-256 block: out = compress(h, w[0..15]) (w is used as the 64 word schedule). */
+    function compress256(h, w, out) {
+        for (let i = 16; i < 64; ++i) {
+            const x = w[i - 15], y = w[i - 2];
+            const s0 = ((x >>> 7) | (x << 25)) ^ ((x >>> 18) | (x << 14)) ^ (x >>> 3);
+            const s1 = ((y >>> 17) | (y << 15)) ^ ((y >>> 19) | (y << 13)) ^ (y >>> 10);
+            w[i] = (w[i - 16] + s0 + w[i - 7] + s1) | 0;
+        }
+        let a = h[0], b = h[1], c = h[2], d = h[3], e = h[4], f = h[5], g = h[6], k = h[7];
+        for (let i = 0; i < 64; ++i) {
+            const S1 = ((e >>> 6) | (e << 26)) ^ ((e >>> 11) | (e << 21)) ^ ((e >>> 25) | (e << 7));
+            const t1 = (k + S1 + ((e & f) ^ (~e & g)) + K256[i] + w[i]) | 0;
+            const S0 = ((a >>> 2) | (a << 30)) ^ ((a >>> 13) | (a << 19)) ^ ((a >>> 22) | (a << 10));
+            const t2 = (S0 + ((a & b) ^ (a & c) ^ (b & c))) | 0;
+            k = g; g = f; f = e; e = (d + t1) | 0; d = c; c = b; b = a; a = (t1 + t2) | 0;
+        }
+        out[0] = (h[0] + a) | 0; out[1] = (h[1] + b) | 0; out[2] = (h[2] + c) | 0; out[3] = (h[3] + d) | 0;
+        out[4] = (h[4] + e) | 0; out[5] = (h[5] + f) | 0; out[6] = (h[6] + g) | 0; out[7] = (h[7] + k) | 0;
+    }
+
+    /** Big endian bytes to words (count words). */
+    function toWords(bytes, w, count) {
+        for (let i = 0; i < count; ++i)
+            w[i] = (bytes[i * 4] << 24) | (bytes[i * 4 + 1] << 16) | (bytes[i * 4 + 2] << 8) | bytes[i * 4 + 3];
+    }
+
+    /** Words to big endian bytes. */
+    function toBytes(w) {
+        const r = new Uint8Array(w.length * 4);
+        for (let i = 0; i < w.length; ++i) {
+            const v = w[i];
+            r[i * 4] = v >>> 24; r[i * 4 + 1] = (v >>> 16) & 255; r[i * 4 + 2] = (v >>> 8) & 255; r[i * 4 + 3] = v & 255;
+        }
+        return r;
+    }
+
+    /** SHA-256 of bytes (synchronous). */
+    const sha256 = data => Sw.Util.Sha256Sync(data);
+
+    /** HMAC-SHA256 (synchronous). */
+    function hmac256(key, msg) {
+        if (key.length > 64)
+            key = sha256(key);
+        const i = new Uint8Array(64 + msg.length);
+        const o = new Uint8Array(64 + 32);
+        for (let n = 0; n < 64; ++n) {
+            const k = n < key.length ? key[n] : 0;
+            i[n] = k ^ 0x36;
+            o[n] = k ^ 0x5c;
+        }
+        i.set(msg, 64);
+        o.set(sha256(i), 64);
+        return sha256(o);
+    }
+
+    /** PBKDF2-HMAC-SHA256 with a 32 byte output (pure JS, the iteration loop uses precomputed HMAC states, 2 blocks per iteration). */
+    function pbkdf2Js(pwd, salt, iterations) {
+        const key = pwd.length > 64 ? sha256(pwd) : pwd;
+        const w = new Int32Array(64);
+        const istate = new Int32Array(8), ostate = new Int32Array(8);
+        const pad = new Uint8Array(64);
+        for (let n = 0; n < 64; ++n)
+            pad[n] = (n < key.length ? key[n] : 0) ^ 0x36;
+        toWords(pad, w, 16);
+        compress256(IV256, w, istate);
+        for (let n = 0; n < 64; ++n)
+            pad[n] ^= 0x36 ^ 0x5c;
+        toWords(pad, w, 16);
+        compress256(IV256, w, ostate);
+        const first = new Uint8Array(salt.length + 4);
+        first.set(salt);
+        first[salt.length + 3] = 1;
+        const u = new Int32Array(8), tmp = new Int32Array(8), t = new Int32Array(8);
+        toWords(hmac256(key, first), u, 8);
+        t.set(u);
+        //  The 32 byte message after the 64 byte key block: 0x80 padding and a bit length of 768
+        w.fill(0, 8, 16);
+        w[8] = 0x80000000 | 0;
+        w[15] = 768;
+        for (let i = 1; i < iterations; ++i) {
+            w.set(u, 0);
+            compress256(istate, w, tmp);
+            w.set(tmp, 0);
+            compress256(ostate, w, u);
+            for (let j = 0; j < 8; ++j)
+                t[j] ^= u[j];
+        }
+        return toBytes(t);
+    }
+
+    /** PBKDF2-HMAC-SHA256 (32 bytes), crypto.subtle when available. */
+    async function pbkdf2(pwd, salt, iterations) {
+        try {
+            const s = crypto.subtle;
+            const k = await s.importKey("raw", pwd, "PBKDF2", false, ["deriveBits"]);
+            return new Uint8Array(await s.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: salt, iterations: iterations }, k, 256));
+        }
+        catch {
+            return pbkdf2Js(pwd, salt, iterations);
+        }
+    }
+
+    /** A random base64 nonce (16 bytes). */
+    function Nonce() {
+        const b = new Uint8Array(16);
+        crypto.getRandomValues(b);
+        return Sw.Util.Base64Encode(b);
+    }
+
     /**
-     * Build the password proof of Login and of the sensitive UserManager calls.
+     * True if a GetUserSalt answer asks for the SCRAM login: [salt, pad, "s1", scramSalt, iterations, binding].
+     * @param {string[]} sp The answer.
+     * @returns {boolean} SCRAM is used.
+     */
+    const IsScram = sp => !!sp && sp.length >= 6 && sp[2] === "s1";
+
+    /**
+     * Build the SCRAM proof.
+     * @param {string} user The user id (exactly as sent to GetUserSalt).
+     * @param {string} hash The legacy password hash (PasswordHash(password, sp[0])).
+     * @param {string[]} sp The GetUserSalt answer (SCRAM shaped, see IsScram).
+     * @returns {Promise<{ClientProof:string, ClientNonce:string, OneTimePad:string}>} The proof.
+     */
+    async function ScramProof(user, hash, sp) {
+        const u = Sw.Util.Utf8Encode;
+        const iterations = parseInt(sp[4], 10) || 0;
+        //  Never fewer iterations than the server minimum (a fake server could ask for a cheap proof, to brute force it offline)
+        if (iterations < 4096)
+            throw new Error("Invalid sign in parameters");
+        const salted = await pbkdf2(u(hash + "|" + (sp[5] || "")), Sw.Util.Base64Decode(sp[3]), iterations);
+        const clientKey = hmac256(salted, u("Client Key"));
+        const storedKey = sha256(clientKey);
+        const nonce = Nonce();
+        const sig = hmac256(storedKey, u(Trim(user) + "," + sp[1] + "," + nonce));
+        for (let i = 0; i < 32; ++i)
+            sig[i] ^= clientKey[i];
+        return { ClientProof: Sw.Util.Base64Encode(sig), ClientNonce: nonce, OneTimePad: sp[1] };
+    }
+
+    /**
+     * Build the password proof of Login and of the sensitive UserManager calls (SCRAM when the server asks for it, else the one time hash of authorizers without SCRAM, ex: SolidAdmin).
      * @param {string} user User id.
      * @param {string} password The current password.
-     * @returns {Promise<{Hash:string, OneTimePad:string, Salt:string}>} The proof (Salt for new password hashes).
+     * @returns {Promise<{Hash:string, OneTimePad:string, Salt:string, ClientProof:string, ClientNonce:string}>} The proof (Salt for new password hashes).
      */
     async function Proof(user, password) {
         const sp = await SaltPad(user);
         if (!sp)
             throw new Error(_TF("Failed to get the user salt", "An error message when the server didn't return a password salt"));
         const hash = await PasswordHash(Trim(password), sp[0]);
+        if (IsScram(sp)) {
+            const p = await ScramProof(user, hash, sp);
+            p.Salt = sp[0];
+            return p;
+        }
         return { Hash: await Sw.Util.Sha256B64(hash + "|" + sp[1]), OneTimePad: sp[1], Salt: sp[0] };
     }
 
     /**
-     * Sign in with the Basic fallback: GET basic_auth must be truthy, then GET login with Authorization: Basic.
+     * Sign in with HTTP Basic (explicit use only, Login never falls back to it): GET basic_auth must be truthy, then GET login with Authorization: Basic.
      * @param {string} user User id.
      * @param {string} password Password.
      * @returns {Promise<{Succeeded:boolean, Username:string}>} The result.
@@ -183,7 +343,8 @@
     }
 
     /**
-     * Sign in with a user id and password (hashed protocol; Basic fallback when GetUserSalt isn't available).
+     * Sign in with a user id and password (hashed protocol). There is no automatic Basic fallback: the password is never sent in plain
+     * text by this function (BasicLogin can still be called explicitly, it needs basic auth to be enabled for the user).
      * @param {string} user User id (name, e-mail, phone).
      * @param {string} password Password.
      * @returns {Promise<object>} The AuthInfo ({Succeeded, Username, Guid, Tokens ...}) or a falsy value.
@@ -196,12 +357,12 @@
             sp = await SaltPad(user);
         }
         catch {
-            return await BasicLogin(user, password);
+            sp = null;
         }
         if (!sp)
-            return await BasicLogin(user, password);
+            throw new Error(_TF("The sign in service isn't available, try again later.", "An error message explaining that the password sign in can't be used right now (the server didn't answer the sign in request)"));
         const hash = await PasswordHash(password, sp[0]);
-        const result = await Sw.Net.Send(api() + "Login", {
+        const result = await Sw.Net.Send(api() + "Login", IsScram(sp) ? await ScramProof(user, hash, sp) : {
             OneTimePad: sp[1],
             Hash: await Sw.Util.Sha256B64(hash + "|" + sp[1]),
         }, post);
@@ -376,7 +537,7 @@
 
     /**
      * Get the password policy of a user (POST GetPasswordPolicy(user)): the policy of the authorizer that knows the user, else the
-     * common policy of all authorizers. One request per call, no memo and no time limit, exactly as the old ValidatePassword: the
+     * common policy of all authorizers. One request per call, no memo and no time limit: the
      * policy depends on the user id, so every new user id asks the server again (the server may add or remove authorizers at any
      * time and doesn't tell the client how many there are, so the client never skips the request).
      * Failures give null, or throw with o.Throw (to tell a failure from a server without a policy).
@@ -405,7 +566,7 @@
     }
 
     /**
-     * Legacy ValidatePassword (the request pattern of the old Auth.js, unchanged): validate a password with a given policy, or with
+     * Validate a password with a given policy, or with
      * the per user policy cached on `cache`. Without `policy` a request (POST GetPasswordPolicy(user)) is made whenever the user id
      * differs from the user of the cached policy (`cache.PasswordPolicyUser`, set when the answer arrives, so every typed user id is
      * one request, at once: no delay, no memo of earlier users). A check of the same user id while its request is on its way shares
@@ -416,11 +577,10 @@
      * @param {string} p Password.
      * @param {object} [cache] Object caching the policy (expandos PasswordPolicy, PasswordPolicyUser, PasswordPolicyStr, PasswordPolicyPending).
      * @param {function(object):*} [onNewPolicy] Called when the fetched policy changed.
-     * @param {string} [apiPrefix] Ignored (kept for the signature).
      * @param {object} [policy] A fixed policy (no request).
      * @returns {Promise<string|null>} Error text or null.
      */
-    async function ValidatePasswordLegacy(u, p, cache, onNewPolicy, apiPrefix, policy) {
+    async function ValidatePassword(u, p, cache, onNewPolicy, policy) {
         if (!policy && cache) {
             const user = Trim(u);
             policy = cache.PasswordPolicy;
@@ -515,8 +675,8 @@
     /**
      * Check if a password is part of known data leaks: GET https://api.pwnedpasswords.com/range/<the first 5 hex chars of the
      * upper case SHA-1> (cors; k-anonymity, the password never leaves the browser), then the rest of the hash is looked up in the
-     * answer. Exactly the request of the old CheckPassword: one request per call, at once, no time limit, no retry pause and no memo
-     * (the caller remembers the last checked password, see Sw.AuthUi.Status.Leak / CheckPassword). Turned off for the deployment
+     * answer. One request per call, at once, no time limit, no retry pause and no memo
+     * (the caller remembers the last checked password, see Sw.AuthUi.Status.Leak). Turned off for the deployment
      * (LeakCheckEnabled): no request, State 0.
      * @param {string} p The password.
      * @returns {Promise<{State:number, Count:number, Error:*}>} State 0 = turned off (no check, nothing to show), 1 = safe,
@@ -548,9 +708,9 @@
     }
 
     /**
-     * Translated texts of a leak check result (the texts, tool tips and kinds of the old CheckPassword).
+     * Translated texts of a leak check result (texts, tool tips and kinds).
      * @param {{State:number, Count:number, Error:*}|null} r The result (null = "checking").
-     * @returns {{Text:string, Title:string, Kind:string}} Kind: "ok" (old class Good), "error" (Error), "warning" (Warning) or
+     * @returns {{Text:string, Title:string, Kind:string}} Kind: "ok", "error", "warning" or
      * "info" (checking); "" and an empty text when the check is turned off (State 0).
      */
     function LeakText(r) {
@@ -589,44 +749,6 @@
         if (r.State === 4 && r.Error)
             title += "\n\n" + _TF("Error:", "Tool tip description header, the next line will show the java script exception message") + "\n" + r.Error;
         return { Text: _TF("Password leak check failed!", "Text explaining that the entered password couldn't be checked for any leaks"), Title: title, Kind: "warning" };
-    }
-
-    /**
-     * Legacy CheckPassword(el, p): run the leak check and write the result into an element (text, title, class
-     * Good / Error / Warning; memo expandos LastCheck, PwdState, PwdCount, PwdError), as the old Auth.js: the same password as the
-     * last check of the element (el.LastCheck, cleared when other text is written there) makes no new request and shows that
-     * result again.
-     * @param {HTMLElement} el The element.
-     * @param {string} p The password.
-     * @returns {Promise<void>}
-     */
-    async function CheckPasswordLegacy(el, p) {
-        /**
-         * Write a result.
-         * @param {object|null} r The leak result.
-         */
-        const show = r => {
-            const t = LeakText(r);
-            el.className = { ok: "Good", error: "Error", warning: "Warning" }[t.Kind] || "";
-            el.innerText = t.Text;
-            el.title = t.Title;
-        };
-        if (p === el.LastCheck) {
-            if (el.PwdState)
-                show({ State: el.PwdState, Count: el.PwdCount, Error: el.PwdError });
-            return;
-        }
-        el.LastCheck = p;
-        el.PwdState = 0;
-        el.PwdError = null;
-        show(null);
-        const r = await CheckLeak(p);
-        if (el.LastCheck !== p)
-            return;
-        el.PwdState = r.State;
-        el.PwdCount = r.Count;
-        el.PwdError = r.Error;
-        show(r);
     }
 
     /**
@@ -943,12 +1065,16 @@
         Trim,
         SetUser,
         NoteSignedIn,
-        /** Define a legacy global unless defined (shared by AuthUi.js and UserManager.js for their old global names). */
-        Legacy: legacy,
         MaybeSignedIn,
         PasswordHash,
         SaltPad,
         Proof,
+        IsScram,
+        ScramProof,
+        /** PBKDF2-HMAC-SHA256, 32 bytes (crypto.subtle, pure JS fallback): (pwdBytes, saltBytes, iterations) => Promise<Uint8Array>. */
+        Pbkdf2: pbkdf2,
+        /** HMAC-SHA256 (synchronous): (keyBytes, msgBytes) => Uint8Array. */
+        Hmac256: hmac256,
         Login,
         BasicLogin,
         Logout,
@@ -958,8 +1084,7 @@
         CheckPolicy,
         PolicyRules,
         UserPolicy,
-        /** The old ValidatePassword(user, password, cache, onNewPolicy, apiPrefix, policy): the per user policy, fetched when the user id changed (see ValidatePasswordLegacy). */
-        ValidatePassword: ValidatePasswordLegacy,
+        ValidatePassword,
         CreatePolicy,
         CheckLeak,
         LeakText,
@@ -990,29 +1115,4 @@
          */
         Get: name => Sw.Net.Get(api() + name, { Reload: true, NoNavigate: true }),
     };
-
-    // ------------------------------------------------------------------ legacy globals (old Auth.js / AuthUi.js / UserManager.js names)
-
-    /**
-     * Define a legacy global unless something already defined it (also Sw.Auth.Legacy).
-     * @param {string} name Global name.
-     * @param {*} value Value.
-     */
-    function legacy(name, value) {
-        if (!(name in window))
-            window[name] = value;
-    }
-
-    legacy("logoutRequest", () => Logout());
-    legacy("loginRequest", (user, password) => Login(user, password));
-    legacy("AuthTrim", Trim);
-    legacy("AuthPolicyText", PolicyText);
-    legacy("ValidatePassword", ValidatePasswordLegacy);
-    legacy("CheckPassword", CheckPasswordLegacy);
-    legacy("AuthGetEmailError", EmailError);
-    legacy("AuthGetPhoneError", PhoneError);
-    legacy("GenPassword", GenPassword);
-    legacy("AuthStartPage", () => StartPage());
-    legacy("cleanUpShortCode", CleanShortCode);
-    legacy("validateShortCode", ValidateShortCode);
 })();

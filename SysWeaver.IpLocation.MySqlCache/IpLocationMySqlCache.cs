@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using SysWeaver.Data;
 using SysWeaver.Db;
 using SysWeaver.MicroService;
+using SysWeaver.Net;
 using SysWeaver.Serialization;
 
 namespace SysWeaver.IpLocation.Caches
@@ -26,12 +27,12 @@ namespace SysWeaver.IpLocation.Caches
             var db = new MySqlDbSimpleStack(p, msg);
             Db = db;
             Init(db).RunAsync();
-            Cache = new FastMemCache<string, IpLocation>(TimeSpan.FromMinutes(Math.Max(1, p.MaxMemCachedMinutes)), StringComparer.Ordinal);
+            Cache = new FastMemCache<string, Location>(TimeSpan.FromMinutes(Math.Max(1, p.MaxMemCachedMinutes)), StringComparer.Ordinal);
             Ser = SerManager.GetText("json");
         }
 
         readonly ITextSerializerType Ser;
-        readonly FastMemCache<String, IpLocation> Cache;
+        readonly FastMemCache<String, Location> Cache;
         readonly int MaxDays;
 
         MySqlDbSimpleStack Db;
@@ -46,12 +47,12 @@ namespace SysWeaver.IpLocation.Caches
         }
 
         /// <inheritdoc />
-        public ValueTask<IpLocation> Get(string ip, Func<string, Task<IpLocation>> getFromSource)
+        public ValueTask<Location> Get(string ip, Func<string, Task<Location>> getFromSource)
             => Cache.GetOrUpdateAsync(ip, DbGet, getFromSource);
 
         static readonly DateTime CityAdded = new DateTime(2026, 09, 07, 09, 45, 00);
 
-        async Task<IpLocation> DbGet(string ip, Func<string, Task<IpLocation>> getFromSource)
+        async Task<Location> DbGet(string ip, Func<string, Task<Location>> getFromSource)
         {
             using (var c = await Db.GetAsync().ConfigureAwait(false))
             {
@@ -65,7 +66,7 @@ namespace SysWeaver.IpLocation.Caches
                         var d = res.Data;
                         if (d == null)
                             return null;
-                        var ipl = Ser.FromString<IpLocation>(d);
+                        var ipl = Ser.FromString<Location>(d);
                         if (ipl.City != null) 
                             return ipl;
                         if (res.Added > CityAdded)

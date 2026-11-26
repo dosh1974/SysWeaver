@@ -45,47 +45,56 @@ namespace SysWeaver
             return GetHostExecutable();
         }
 
-        static String GetExecCommand()
+        /// <summary>
+        /// Get the file name of a program without the ".exe" or ".dll" extension (any other text after a dot is a part of the name, ex: "My.Service").
+        /// </summary>
+        /// <param name="path">The path, ex: ".\My.Service.exe"</param>
+        /// <returns>The name, ex: "My.Service"</returns>
+        static String GetProgramName(String path)
         {
-            var ec = Environment.CommandLine;
-            var t = SystemHelper.GetCommandAndArgs(out var args, ec);
+            var n = Path.GetFileName(path);
+            if (n.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) || n.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+                n = n.Substring(0, n.Length - 4);
+            return n;
+        }
+
+        /// <summary>
+        /// Split the process command line into the command to run this application again and the arguments.
+        /// The first token of <see cref="Environment.CommandLine"/> depends on the runtime and how the process was started: the full path of the entry assembly (.NET 10, or "dotnet MyService.dll"),
+        /// or what the user typed (.NET 11 app host, ex: ".\MyService.exe" or "MyService"),
+        /// so it's compared with the host executable by program name (an app host has the same name as the entry assembly).
+        /// If it's the host itself, the command is the full host path, else (ex: "dotnet MyService.dll") it's the host followed by the full path of the first token.
+        /// </summary>
+        /// <param name="args">The arguments (empty if none)</param>
+        /// <returns>The command, paths containing spaces are quoted</returns>
+        static String GetCommandAndArgs(out String args)
+        {
+            var t = SystemHelper.GetCommandAndArgs(out args, Environment.CommandLine);
             var e = HostExecutable;
-            if (!String.Equals(t, e, StringComparison.OrdinalIgnoreCase))
-            {
-                var tt = Path.Combine(Path.GetDirectoryName(t), Path.GetFileNameWithoutExtension(t) + Path.GetExtension(e));
-                if (!String.Equals(tt, e, StringComparison.OrdinalIgnoreCase))
-                {
-                    if (e.Contains(' '))
-                        e = e.ToQuoted();
-                    if (t.Contains(' '))
-                        t = t.ToQuoted();
-                    return String.Join(' ', e, t);
-                }
-            }
+            var isHost = String.Equals(t, e, StringComparison.OrdinalIgnoreCase) ||
+                String.Equals(GetProgramName(t), GetProgramName(e), StringComparison.OrdinalIgnoreCase);
             if (e.Contains(' '))
                 e = e.ToQuoted();
-            return e;
+            if (isHost)
+                return e;
+            try
+            {
+                t = Path.GetFullPath(t);
+            }
+            catch
+            {
+            }
+            if (t.Contains(' '))
+                t = t.ToQuoted();
+            return String.Join(' ', e, t);
         }
+
+        static String GetExecCommand() => GetCommandAndArgs(out _);
 
         static String GetCommandLine()
         {
-            var ec = Environment.CommandLine;
-            var t = SystemHelper.GetCommandAndArgs(out var args, ec);
-            var e = HostExecutable;
-            if (String.Equals(t, e, StringComparison.OrdinalIgnoreCase))
-                return ec;
-            t = Path.Combine(Path.GetDirectoryName(t), Path.GetFileNameWithoutExtension(t) + Path.GetExtension(e));
-            if (String.Equals(t, e, StringComparison.OrdinalIgnoreCase))
-            {
-                if (e.Contains(' '))
-                    e = e.ToQuoted();
-                if (String.IsNullOrEmpty(args))
-                    return e;
-                return String.Join(' ', e, args);
-            }
-            if (e.Contains(' '))
-                e = e.ToQuoted();
-            return String.Join(' ', e, ec);
+            var c = GetCommandAndArgs(out var args);
+            return String.IsNullOrEmpty(args) ? c : String.Join(' ', c, args);
         }
 
 

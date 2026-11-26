@@ -27,10 +27,10 @@ namespace SysWeaver.Net
     {
 #if DEBUG
         /// <summary>
-        /// Debug builds only: the session token, expiration time and auth.
+        /// Debug builds only: the session id (<see cref="TokenHash"/>, never the token), expiration time and auth.
         /// </summary>
         /// <returns>A short text for debugging.</returns>
-        public override string ToString() => String.Concat("Token: ", Token, ", expires: ", new DateTime(ExpirationTime, DateTimeKind.Utc), ", auth: ", Auth);
+        public override string ToString() => String.Concat("Session: ", TokenHash, ", expires: ", new DateTime(ExpirationTime, DateTimeKind.Utc), ", auth: ", Auth);
 #endif//DEBUG
 
         /// <summary>
@@ -51,6 +51,7 @@ namespace SysWeaver.Net
             DeviceId = deviceId;
             Start = utcNowTicks;
             Token = token;
+            TokenHash = HashToken(token);
             InternalKeepAliveDurationTicks = keepAliveDurationTicks;
             Exp = utcNowTicks + keepAliveDurationTicks;
             UserAgent = userAgent;
@@ -138,9 +139,49 @@ namespace SysWeaver.Net
 
         /// <summary>
         /// The session token (the value of the session cookie). This is a secret, anyone knowing it can use the session.
+        /// It is only used as the key of the server's session map (and in the session cookie), never expose it: use <see cref="TokenHash"/> to identify a session
+        /// (logs, audits, debug views, errors).
         /// Do NOT assign, the server replaces the token when a user logs in (see <see cref="HttpServerBase.RunOnLogin(HttpSession, HttpServerRequest)"/>).
         /// </summary>
-        public String Token;
+        internal String Token;
+
+        /// <summary>
+        /// A safe id of the session: the hash of the session token, see <see cref="HashToken(ReadOnlySpan{char})"/>.
+        /// It can't be used to access the session, so it can be shown in logs, audits, debug views and errors to correlate them with a session.
+        /// It changes when the token is rotated (a user logs in), use <see cref="HttpServerBase.FindSessionByTokenHash(string)"/> to find an active session from it.
+        /// </summary>
+        public String TokenHash { get; private set; }
+
+        /// <summary>
+        /// The number of chars of a <see cref="TokenHash"/>.
+        /// </summary>
+        public const int TokenHashLength = 32;
+
+        /// <summary>
+        /// Compute the safe id of a session token: base64url (no padding) of the first 192 bits of SHA256(UTF8(token)), <see cref="TokenHashLength"/> (32) chars.
+        /// A token has at least 144 random bits, so the hash can't be reversed (no key is needed, and the id is the same after a restart).
+        /// </summary>
+        /// <param name="token">The session token</param>
+        /// <returns>The hash, 32 ASCII chars [A-Za-z0-9-_]</returns>
+        public static String HashToken(ReadOnlySpan<Char> token)
+        {
+            var max = System.Text.Encoding.UTF8.GetMaxByteCount(token.Length);
+            Span<Byte> utf8 = max <= 1024 ? stackalloc Byte[max] : new Byte[max];
+            var l = System.Text.Encoding.UTF8.GetBytes(token, utf8);
+            Span<Byte> hash = stackalloc Byte[System.Security.Cryptography.SHA256.HashSizeInBytes];
+            System.Security.Cryptography.SHA256.HashData(utf8.Slice(0, l), hash);
+            return System.Buffers.Text.Base64Url.EncodeToString(hash.Slice(0, 24));
+        }
+
+        /// <summary>
+        /// Replace the token (and the <see cref="TokenHash"/>), only called by the server while holding <see cref="TokenLock"/>.
+        /// </summary>
+        /// <param name="token">The new token</param>
+        internal void SetToken(String token)
+        {
+            TokenHash = HashToken(token);
+            Volatile.Write(ref Token, token);
+        }
 
         /// <summary>
         /// Lock used by the server when changing the <see cref="Token"/> (and removing the session) so that the session map stays consistent.

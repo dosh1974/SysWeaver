@@ -92,7 +92,7 @@ namespace SysWeaver.MicroService
         public String Tokens { get; set; }
 
         /// <summary>
-        /// Who sent the invitation, "Self sign-up" for a sign up, empty for an invitation made before this was recorded
+        /// Who sent the invitation, "Self sign-up" for a sign up, empty for an invitation without a known inviter
         /// </summary>
         [TableDataOrder(3)]
         public String InvitedBy { get; set; }

@@ -215,7 +215,7 @@
         close.style.cssText = "flex:none;width:2em;height:2em;border:0;border-radius:6px;background:transparent;color:inherit;font:1.4em/1 system-ui,sans-serif;cursor:pointer;";
         head.append(title, close);
         const body = document.createElement("div");
-        body.style.cssText = "padding:0.25em 1.25em 1.25em;text-align:center;";
+        body.style.cssText = "padding:0.25em 1.25em 1.25em;text-align:center;user-select:text;-webkit-user-select:text;";
         const text = document.createElement("div");
         text.textContent = info.Text || "";
         text.id = "sw-serverblock-text";

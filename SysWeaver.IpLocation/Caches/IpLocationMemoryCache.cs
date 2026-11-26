@@ -15,13 +15,13 @@ namespace SysWeaver.IpLocation.Caches
         public IpLocationMemoryCache(IpLocationMemoryCacheParams p = null)
         {
             p = p ?? new IpLocationMemoryCacheParams();
-            Cache = new FastMemCache<string, IpLocation>(TimeSpan.FromMinutes(Math.Max(1, p.MaxCachedMinutes)), StringComparer.Ordinal);
+            Cache = new FastMemCache<string, Net.Location>(TimeSpan.FromMinutes(Math.Max(1, p.MaxCachedMinutes)), StringComparer.Ordinal);
         }
             
         /// <inheritdoc />
-        public ValueTask<IpLocation> Get(string ip, Func<string, Task<IpLocation>> getFromSource)
+        public ValueTask<Net.Location> Get(string ip, Func<string, Task<Net.Location>> getFromSource)
             => Cache.GetOrUpdateAsync(ip, getFromSource);
 
-        readonly FastMemCache<String, IpLocation> Cache;
+        readonly FastMemCache<String, Net.Location> Cache;
     }
 }

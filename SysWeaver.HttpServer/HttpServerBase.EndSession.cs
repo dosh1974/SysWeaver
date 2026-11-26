@@ -18,11 +18,11 @@ namespace SysWeaver.Net
         /// It is sent with the (authenticated, same origin) <see cref="ActiveSessions"/> table only, it can't be guessed and it doesn't reveal
         /// the session token, so a crafted link, a deep link scan or an image (a plain GET, CSRF style) can't end a session.
         /// </summary>
-        /// <param name="sessionToken">The (full) session token</param>
-        /// <returns>The end token, the first 128 bits (base64url) of a HMAC-SHA256 of the session token</returns>
-        static String SessionEndToken(String sessionToken)
+        /// <param name="session">The session</param>
+        /// <returns>The end token, the first 128 bits (base64url) of a HMAC-SHA256 of the session id (<see cref="HttpSession.TokenHash"/>)</returns>
+        static String SessionEndToken(HttpSession session)
         {
-            var h = HMACSHA256.HashData(SessionEndKey, Encoding.UTF8.GetBytes(sessionToken ?? ""));
+            var h = HMACSHA256.HashData(SessionEndKey, Encoding.UTF8.GetBytes(session.TokenHash ?? ""));
             return Convert.ToBase64String(h, 0, 16).TrimEnd('=').Replace('+', '-').Replace('/', '_');
         }
 
@@ -45,7 +45,7 @@ namespace SysWeaver.Net
             HttpSession found = null;
             foreach (var s in Sessions.Values)
             {
-                var b = Encoding.ASCII.GetBytes(SessionEndToken(s.Token));
+                var b = Encoding.ASCII.GetBytes(SessionEndToken(s));
                 if (CryptographicOperations.FixedTimeEquals(a, b))
                 {
                     found = s;

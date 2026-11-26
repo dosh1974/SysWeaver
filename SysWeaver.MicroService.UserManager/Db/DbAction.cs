@@ -11,7 +11,8 @@ namespace SysWeaver.MicroService.Db
     public sealed class DbAction
     {
         /// <summary>
-        /// The action token (the key)
+        /// The stored key of the action token (the key): a keyed hash of the token, never the token itself (see UserManagerService.ActionKey),
+        /// so a copy of the database has no working links
         /// </summary>
         [PrimaryKey]
         [StringLength(48)]
@@ -35,7 +36,7 @@ namespace SysWeaver.MicroService.Db
         public DateTime Expiration { get; set; }
 
         /// <summary>
-        /// The data of the action (depends on <see cref="Type"/>)
+        /// The data of the action (depends on <see cref="Type"/>), encrypted and bound to <see cref="Token"/> and <see cref="Type"/> (see UserManagerService.ProtectActionData)
         /// </summary>
         [Required]
         public byte[] Data { get; set; }

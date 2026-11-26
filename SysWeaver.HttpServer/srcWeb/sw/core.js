@@ -3050,7 +3050,7 @@ window.Sw.Sources["core/format.js"] = "sw/core.js";
  *    zones (the time rule in core/README "Times"): OffsetText, ZoneText, ZoneHint, ServerZone / SetServerZone / ServerZoneFrom /
  *    ServerZoneText, ServerToDate, ServerText, ServerToLocalText;
  *  - text: StringFormat / StringFormatArgs (same as Sw.I18n.Format), CountSuffix, RemoveCamelCase,
- *    KeyValueSplit, JoinNonEmpty, AddNonNullLine, HtmlSafe, HtmlAttributeSafe, JsonToHtml, RankScoreMatch;
+ *    KeyValueSplit, JoinNonEmpty, AddNonNullLine, HtmlSafe, HtmlAttributeSafe, JsonPretty, JsonToHtml, RankScoreMatch;
  *  - validation: IsValidEmail, IsValidPhone, IsLetter;
  *  - files: FileExtension, Ext (extension tables), IsImageExt/IsVideoExt/IsAudioExt/IsProgrammingExt/
  *    IsCompressibleExt, IsImageFile, IsVideoFile;
@@ -3832,6 +3832,115 @@ window.Sw.Sources["core/format.js"] = "sw/core.js";
     }
 
     /**
+     * Pretty print json (4 spaces). Json that was cut off (ex: a capped value) is indented as far as it goes, followed by "…".
+     * @param {string} text - The json.
+     * @returns {?string} The pretty printed json, null if the text isn't json (or the start of an object, array or string).
+     */
+    function jsonPretty(text) {
+        text = "" + text;
+        try {
+            return JSON.stringify(JSON.parse(text), null, 4);
+        }
+        catch {
+            //  (cut off or not json)
+        }
+        const l = text.length;
+        const stack = [];
+        const out = [];
+        let cut = false;
+        //  What must follow: v = value, w = value or ], k = key, m = key or }, c = colon, n = comma or end, e = nothing
+        let next = "v";
+        const newLine = () => out.push("\n", "    ".repeat(stack.length));
+        const ended = () => {
+            next = stack.length ? "n" : "e";
+        };
+        let i = 0;
+        while (i < l) {
+            const c = text[i];
+            if (c === " " || c === "\t" || c === "\r" || c === "\n") {
+                ++i;
+                continue;
+            }
+            if (c === "]" || c === "}") {
+                const empty = next === (c === "]" ? "w" : "m");
+                if ((!empty && next !== "n") || stack.pop() !== c)
+                    return null;
+                if (!empty)
+                    newLine();
+                out.push(c);
+                ended();
+                ++i;
+                continue;
+            }
+            if (c === ",") {
+                if (next !== "n")
+                    return null;
+                out.push(c);
+                newLine();
+                next = stack[stack.length - 1] === "}" ? "k" : "v";
+                ++i;
+                continue;
+            }
+            if (c === ":") {
+                if (next !== "c")
+                    return null;
+                out.push(": ");
+                next = "v";
+                ++i;
+                continue;
+            }
+            const isKey = next === "k" || next === "m";
+            if (!isKey && next !== "v" && next !== "w")
+                return null;
+            //  The first member or item of a container
+            if (next === "m" || next === "w")
+                newLine();
+            if (c === '"') {
+                let e = i + 1;
+                while (e < l && text[e] !== '"')
+                    e += text[e] === "\\" ? 2 : 1;
+                //  (a cut off string ends at the end of the text)
+                cut = e >= l;
+                out.push(text.substring(i, Math.min(e + 1, l)));
+                i = e + 1;
+                if (isKey)
+                    next = "c";
+                else
+                    ended();
+                continue;
+            }
+            if (isKey)
+                return null;
+            if (c === "{" || c === "[") {
+                stack.push(c === "{" ? "}" : "]");
+                out.push(c);
+                next = c === "{" ? "m" : "w";
+                ++i;
+                continue;
+            }
+            let e = i;
+            while (e < l && /[-+.\w]/.test(text[e]))
+                ++e;
+            const word = text.substring(i, e);
+            if (!/^(true|false|null|-?\d+(\.\d+)?([eE][-+]?\d+)?)$/.test(word)) {
+                //  Only the last one can be cut off
+                if (!word || e < l || !(["true", "false", "null"].some(x => x.startsWith(word)) || /^-?(\d+(\.\d*)?([eE][-+]?\d*)?)?$/.test(word)))
+                    return null;
+                cut = true;
+            }
+            out.push(word);
+            ended();
+            i = e;
+        }
+        //  (only a text that starts as an object, array or string is recognized, ex: an empty text or "-" isn't json)
+        if (!/^\s*["[{]/.test(text))
+            return null;
+        if (cut || stack.length)
+            out.push("…");
+        return out.join("");
+    }
+
+    /**
      * Syntax highlight json text: HTML-escape it and wrap tokens in span class key|string|number|boolean|null.
      * @param {string} jsonText - (Pretty printed) json.
      * @returns {string} HTML.
@@ -4315,6 +4424,9 @@ window.Sw.Sources["core/format.js"] = "sw/core.js";
 
         /** Escape a value for an HTML attribute (see htmlAttributeSafe). */
         HtmlAttributeSafe: htmlAttributeSafe,
+
+        /** Pretty print (also cut off) json, null if it is not json (see jsonPretty). */
+        JsonPretty: jsonPretty,
 
         /** Highlight json as HTML (see jsonToHtml). */
         JsonToHtml: jsonToHtml,
@@ -9210,7 +9322,7 @@ window.Sw.Sources["core/session_start.js"] = "sw/core.js";
         close.style.cssText = "flex:none;width:2em;height:2em;border:0;border-radius:6px;background:transparent;color:inherit;font:1.4em/1 system-ui,sans-serif;cursor:pointer;";
         head.append(title, close);
         const body = document.createElement("div");
-        body.style.cssText = "padding:0.25em 1.25em 1.25em;text-align:center;";
+        body.style.cssText = "padding:0.25em 1.25em 1.25em;text-align:center;user-select:text;-webkit-user-select:text;";
         const text = document.createElement("div");
         text.textContent = info.Text || "";
         text.id = "sw-serverblock-text";
@@ -13292,7 +13404,7 @@ window.Sw.Sources["core/activity.js"] = "sw/core.js";
         + ".sw-actline:empty{display:none}"
         + ".sw-actline-item{display:flex;align-items:center;gap:8px;min-height:44px;padding:4px 8px 4px 12px;border-radius:var(--sw-radius-md,8px);"
         + "background:var(--sw-bg-1,Canvas);border:1px solid var(--sw-border,GrayText);box-shadow:var(--sw-elev-2,0 4px 16px rgba(0,0,0,.2))}"
-        + ".sw-actline-text{flex:1 1 auto;min-width:0;overflow-wrap:anywhere}"
+        + ".sw-actline-text{flex:1 1 auto;min-width:0;overflow-wrap:anywhere;user-select:text;-webkit-user-select:text}"
         + ".sw-actline-item[data-state=failed]{border-color:var(--sw-danger,#c00)}"
         + ".sw-actline-item>button.sw-actline-btn{min-height:44px;min-width:44px;font:inherit;background:none;border:1px solid var(--sw-border,GrayText);"
         + "border-radius:var(--sw-radius-sm,4px);color:inherit;padding:0 10px;cursor:pointer}"

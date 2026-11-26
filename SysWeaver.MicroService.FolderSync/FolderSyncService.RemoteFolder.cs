@@ -40,7 +40,7 @@ namespace SysWeaver.MicroService
                 Name = name;
                 Folder = folder;
                 DestPath = destPath;
-                Auth = AuthTools.GetList(folder.WebFolder?.Auth);
+                Auth = Authorization.GetRequiredTokens(folder.WebFolder?.Auth);
                 RemoteAddress = EnvInfo.ResolveText(folder.RemoteAddress);
                 RemoteName = String.IsNullOrEmpty(folder.RemoteName) ? folder.Name : EnvInfo.ResolveText(folder.RemoteName);
                 S = s;

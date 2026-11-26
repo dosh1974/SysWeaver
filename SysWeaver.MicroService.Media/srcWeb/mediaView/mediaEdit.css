@@ -488,3 +488,9 @@ body.media-edit-page.me-page {
         flex: 1 1 auto;
         min-width: 3.5em;
     }
+
+/* The media name and the notes of the media editor (UX guide INP-30: text that changes from run to run can be selected and copied) */
+:where(.me-side-title, .me-side-sub, .me-props-note, .me-share-what, .me-share-note) {
+    user-select: text;
+    -webkit-user-select: text;
+}

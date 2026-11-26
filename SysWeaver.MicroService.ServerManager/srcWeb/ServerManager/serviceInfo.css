@@ -157,3 +157,9 @@ body.ViewOnly {
         order: 3;
     }
 }
+
+/* The file and version values (UX guide INP-30: text that changes from run to run can be selected and copied) */
+:where(.si-page .sw-ph-title, .si-file-size, .si-file-time, .si-version-uploaded, .si-version-last, .si-version-text, .si-version-comment) {
+    user-select: text;
+    -webkit-user-select: text;
+}

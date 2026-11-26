@@ -53,7 +53,7 @@ namespace SysWeaver.MicroService
         /// <param name="context">Automatically populated by the request handler, don't use</param>
         /// <returns>True if a new version is available (false if it's the same version, or the folder is being updated right now)</returns>
         [WebApi]
-        [WebApiAuth("")]
+        [WebApiAuth(FolderSyncParams.DefaultApiAuth)]
         public bool SharedFolderHasChanged(SharedFolderSyncRequest r, HttpServerRequest context)
         {
             var folderName = r.Folder.FastToLower();
@@ -78,7 +78,7 @@ namespace SysWeaver.MicroService
         /// <param name="context">Automatically populated by the request handler, don't use</param>
         /// <returns>True if a new version is available, false if the wait timed out or failed</returns>
         [WebApi]
-        [WebApiAuth("")]
+        [WebApiAuth(FolderSyncParams.DefaultApiAuth)]
         public async Task<bool> WaitUntilSharedFolderHasChanged(SharedFolderSyncRequest r, HttpServerRequest context)
         {
             var folderName = r.Folder.FastToLower();
@@ -107,7 +107,7 @@ namespace SysWeaver.MicroService
         /// <returns>Changes required to sync the local folder</returns>
         /// <exception cref="Exception"></exception>
         [WebApi]
-        [WebApiAuth("")]
+        [WebApiAuth(FolderSyncParams.DefaultApiAuth)]
         public SharedFolderDiff CheckSharedFolder(LocalFolderInfo r, HttpServerRequest context)
         {
             DateTime start = DateTime.UtcNow;
@@ -162,7 +162,7 @@ namespace SysWeaver.MicroService
         /// <returns>Hashes for the chunks that make up the file</returns>
         /// <exception cref="Exception"></exception>
         [WebApi]
-        [WebApiAuth("")]
+        [WebApiAuth(FolderSyncParams.DefaultApiAuth)]
         [WebApiRaw(MimeTypeMap.Data)]
         public ReadOnlyMemory<Byte> GetSharedFileChunks(SharedFileChunksRequest r, HttpServerRequest context)
         {

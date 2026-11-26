@@ -13,9 +13,12 @@ namespace SysWeaver.Auth
     /// <remarks>
     /// Password hashes used by the framework are: hash = SHA256(UTF8(password + "|" + salt)) where the salt is provided by <see cref="GetSaltAsync(string)"/>,
     /// see <see cref="AuthTools.ComputeHash(string, string)"/>.
+    /// Authorizers that support SCRAM logins (<see cref="ScramDefaults"/>, <see cref="GetScramInfoAsync(string)"/>, <see cref="ScramAuth(ScramProof)"/>) only store a verifier
+    /// derived from that hash, the legacy <see cref="SecureAuth"/> login needs the hash itself.
+    /// Passkey support is part of this class too (<see cref="SupportPasskeys"/>, AuthorizerBase_PassKey.cs).
     /// Implementations must be thread safe.
     /// </remarks>
-    public abstract class AuthorizerBase
+    public abstract partial class AuthorizerBase
     {
         /// <summary>
         /// A unique name of this authorizer
@@ -96,6 +99,39 @@ namespace SysWeaver.Auth
         /// <returns>The salt, or null if the user is unknown to this authorizer</returns>
         public virtual Task<String> GetSaltAsync(String userName)
              => TaskExt.NullStringTask;
+
+
+        #region SCRAM
+
+        /// <summary>
+        /// A completed task with a null <see cref="ScramInfo"/>.
+        /// </summary>
+        protected static readonly Task<ScramInfo> NoScram = Task.FromResult<ScramInfo>(null);
+
+        /// <summary>
+        /// Override to support SCRAM logins (see <see cref="ScramInfo"/>), return the default parameters of this authorizer:
+        /// the <see cref="ScramInfo.Iterations"/> and <see cref="ScramInfo.Binding"/> used for new verifiers (the salt is ignored).
+        /// Used to build fake (but same shaped) answers for unknown users.
+        /// Return null (the default) if SCRAM isn't supported, then only <see cref="SecureAuth"/> is used for logins.
+        /// </summary>
+        public virtual ScramInfo ScramDefaults => null;
+
+        /// <summary>
+        /// Get the SCRAM parameters of a user (only called after <see cref="GetSaltAsync(string)"/> returned a salt for the user).
+        /// </summary>
+        /// <param name="userName">The plain text username</param>
+        /// <returns>The SCRAM parameters, or null if the user must use the legacy <see cref="SecureAuth"/> login (the default)</returns>
+        public virtual Task<ScramInfo> GetScramInfoAsync(String userName) => NoScram;
+
+        /// <summary>
+        /// Authorize a user using a SCRAM proof (see <see cref="ScramInfo"/>), no replay attacks possible and the stored verifier can't be used to sign in.
+        /// The one time pad have already been validated and consumed by the caller.
+        /// </summary>
+        /// <param name="proof">The proof</param>
+        /// <returns>null if the proof is wrong or the user is unknown</returns>
+        public virtual Task<Authorization> ScramAuth(ScramProof proof) => NoAuth;
+
+        #endregion//SCRAM
 
         /// <summary>
         /// If any authorization information changes (db updates, files reloaded etc), increase this counter (invalidates cached auth's)

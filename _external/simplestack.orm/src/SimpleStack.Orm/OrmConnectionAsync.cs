@@ -268,7 +268,8 @@ namespace SimpleStack.Orm
             var s = new TypedUpdateStatement<T>(DialectProvider);
             s.ValuesOnly(model);
             var cmd = DialectProvider.ToUpdateStatement(s.Statement, CommandFlags.None, cancellationToken);
-            return this.ExecuteScalarAsync<int>(cmd);
+            //  The number of updated rows (an UPDATE has no result set: ExecuteScalar would always give 0)
+            return this.ExecuteAsync(cmd);
         }
 
         /// <summary>
@@ -284,7 +285,8 @@ namespace SimpleStack.Orm
             var s = new TypedUpdateStatement<T>(DialectProvider);
             s.ValuesOnly(model, onlyFields);
             var cmd = DialectProvider.ToUpdateStatement(s.Statement, CommandFlags.None, cancellationToken);
-            return this.ExecuteScalarAsync<int>(cmd);
+            //  The number of updated rows (an UPDATE has no result set: ExecuteScalar would always give 0)
+            return this.ExecuteAsync(cmd);
         }
 
         /// <summary>
@@ -302,7 +304,8 @@ namespace SimpleStack.Orm
             s.Table(tableName);
             s.ValuesOnly(model, onlyFields);
             var cmd = DialectProvider.ToUpdateStatement(s.Statement, CommandFlags.None, cancellationToken);
-            return this.ExecuteScalarAsync<int>(cmd);
+            //  The number of updated rows (an UPDATE has no result set: ExecuteScalar would always give 0)
+            return this.ExecuteAsync(cmd);
         }
 
 
@@ -327,7 +330,8 @@ namespace SimpleStack.Orm
             s.Values(obj, onlyField);
 
             var cmd = DialectProvider.ToUpdateStatement(s.Statement, CommandFlags.None, cancellationToken);
-            return await this.ExecuteScalarAsync<int>(cmd);
+            //  The number of updated rows (an UPDATE has no result set: ExecuteScalar would always give 0)
+            return await this.ExecuteAsync(cmd);
         }
 
         /// <summary>
@@ -430,7 +434,8 @@ namespace SimpleStack.Orm
         {
             var s = new TypedDeleteStatement<T>(DialectProvider);
             where(s);
-            return this.ExecuteScalarAsync<int>(DialectProvider.ToDeleteStatement(s.Statement, cancellationToken));
+            //  The number of deleted rows (a DELETE has no result set: ExecuteScalar would always give 0)
+            return this.ExecuteAsync(DialectProvider.ToDeleteStatement(s.Statement, cancellationToken));
         }
 
 
@@ -445,7 +450,8 @@ namespace SimpleStack.Orm
             var s = new TypedDeleteStatement<T>(DialectProvider);
             s.AddPrimaryKeyWhereCondition(obj);
             
-            return this.ExecuteScalarAsync<int>(DialectProvider.ToDeleteStatement(s.Statement, cancellationToken: cancellationToken));
+            //  The number of deleted rows (a DELETE has no result set: ExecuteScalar would always give 0)
+            return this.ExecuteAsync(DialectProvider.ToDeleteStatement(s.Statement, cancellationToken: cancellationToken));
         }
 
         /// <summary>

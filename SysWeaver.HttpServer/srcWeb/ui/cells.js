@@ -395,18 +395,13 @@
 
     /**
      * Show json text in a dialog (pretty printed and highlighted).
-     * @param {string} text The json (shown as is when it can't be parsed).
+     * @param {string} text The json (cut off json is indented as far as it goes, anything else is shown as is).
      * @param {string} [copy] A text the copy button copies (no button when empty).
      * @param {string} [title] The dialog title.
      * @returns {Promise<void>} Resolves when closed.
      */
     async function ShowJson(text, copy, title) {
-        let fmt = text;
-        try {
-            fmt = JSON.stringify(JSON.parse(text), null, 4);
-        }
-        catch {
-        }
+        const fmt = F().JsonPretty(text) ?? text;
         const pre = el("pre.sw-code-json.sw-selectable", { html: F().JsonToHtml(fmt) });
         await Sw.Dialog.Show({
             Title: title || "", Wide: true, Class: "sw-text-dialog",
@@ -1391,12 +1386,7 @@
         }
         value = String(value);
         const c = cap(value, formats[1]);
-        let pretty = value;
-        try {
-            pretty = JSON.stringify(JSON.parse(value), null, 4);
-        }
-        catch {
-        }
+        const pretty = F().JsonPretty(value) ?? value;
         const title = sf(formats[2] ?? "{1}", value, pretty, c.Text);
         const copy = formats[3] ? sf(formats[3], value, pretty, c.Text) : null;
         cappedPopup(e, c.Text, c.Capped, title, flash, () => ShowJson(value, copy, popupTitle(e)));

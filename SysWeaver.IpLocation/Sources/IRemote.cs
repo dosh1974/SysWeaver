@@ -15,7 +15,7 @@ namespace SysWeaver.IpLocation.Sources
         /// <param name="ip">The ip address</param>
         /// <returns>The location, null if it isn't known</returns>
         [RemoteEndPoint("Api/IpLocation/" + nameof(GetLocation), HttpEndPointTypes.Post)]
-        Task<IpLocation> GetLocation(string ip);
+        Task<Net.Location> GetLocation(string ip);
 
     }
 

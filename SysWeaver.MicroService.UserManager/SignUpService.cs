@@ -36,6 +36,9 @@ namespace SysWeaver.MicroService
         /// <param name="context">The request context</param>
         /// <returns>True if the sign up request was accepted (a message is sent to the address)</returns>
         [WebApi]
+        //  Sends messages: limited per client address
+        [WebApiServiceRateLimit(100, 1, 200, 5)]
+        [WebApiIpRateLimit(10, 60, 5, 10)]
         public Task<bool> SignUp(String emailOrPhone, HttpServerRequest context) => Am.SignUp(emailOrPhone, context);
 
     }

@@ -47,3 +47,9 @@
 .um-users-tabs > .sw-tabs-body {
     margin-top: var(--sw-space-3, .75rem);
 }
+
+/* The hints of the token lists (UX guide INP-30: text that changes from run to run can be selected and copied) */
+:where(.um-token-hint) {
+    user-select: text;
+    -webkit-user-select: text;
+}

@@ -52,7 +52,7 @@ string text = typeof(MyServiceParams).GetField("Greeting").XmlSummary();
 
 - Only as good as the comments: undocumented members produce `null`
 - Requires the `.xml` documentation files next to the assemblies; publishing pipelines that drop them (or single-file publishing, where assemblies have no location) silently remove the documentation
-- Texts are the plain inner text: `<see cref="..."/>` and similar self-closing tags vanish from the sentence, and `<inheritdoc/>` is not resolved
+- Texts are plain text: `<see cref="..."/>` gives the name of the referenced type (`MyType`) or member (`MyType.Method`, without namespace, generic arity or parameters), `<see langword="..."/>` the keyword, `<see href="..."/>` the url (a `<see>` with its own text gives that text), `<paramref>` / `<typeparamref>` the name and `<para>` a line break; other elements (ex: `<c>`) give their text. `<inheritdoc/>` is not resolved
 - Some unusual signatures (e.g. types nested more than one level deep, conversion operators, multi-dimensional array parameters) are not matched and return `null`
 
 ## Relationships

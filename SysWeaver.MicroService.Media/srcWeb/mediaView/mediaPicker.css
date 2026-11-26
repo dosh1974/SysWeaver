@@ -251,3 +251,9 @@
     padding-bottom: var(--sw-space-2);
     background: var(--sw-surface, var(--sw-bg));
 }
+
+/* The name, the info and the state texts of the selected media (UX guide INP-30: text that changes from run to run can be selected and copied) */
+:where(.sw-mpick-name, .sw-mpick-info, .sw-mpick-desc, .sw-mpick-state) {
+    user-select: text;
+    -webkit-user-select: text;
+}

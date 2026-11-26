@@ -4,19 +4,26 @@
  * Entry points (globals, body onload; also on `Sw.SimpleAuth`):
  *  - pwdGenMain (auth/index.html, menu Admin/GenPwd; a Sw.PageLayout form page with Sw.Card + Sw.TextBox + Sw.Form):
  *    enter a user name and a password (generator, the
- *    server's fixed policy, leak check) and get the configuration line "user : b64(sha256(password|salt))" with the
+ *    server's fixed policy, leak check) and get the configuration line "user : $s1$iterations$salt$storedKey" (a SCRAM verifier of
+ *    b64(sha256(password|salt)), see ScramVerifier in Scram.cs, PBKDF2 parameters from Api/debug/simpleAuth/GetVerifierParams) with the
  *    per user salt of Api/debug/simpleAuth/GetAuthSalt; copy button.
- *  - keyManMain (auth/KeyMan.html, menu Admin/KeyMan): the API keys ("name:key"), masked by default with a
- *    per key "Show the key" toggle: copy, download a credentials file "<name>_<AppName>.txt", remove (confirmed), create
- *    (dialog: name of letters, digits, '_', '-'; the new key is copied to the clipboard). The copy announcement and tool tips never
- *    show the secret ('The API key "name"'; only a create shows a toast), and that toast is closed when the key is removed.
- *    The list refreshes every 30 s (unchanged items are kept). This page
- *    reloads on user changes (it doesn't call IgnoreUserChanges).
+ *  - keyManMain (auth/KeyMan.html, menu Admin/KeyMan): the API keys ("name:key") with their tokens and allowed addresses, masked by
+ *    default with a per key "Show the key" toggle: copy, download a credentials file "<name>_<AppName>.txt", edit the tokens
+ *    (SetApiKeyTokens: at least one, each "service" or "service_<scope>"), edit the allowed client addresses (SetApiKeyAddresses,
+ *    empty = any address), remove (confirmed), create (dialog: name of letters, digits, '_', '-' and the tokens, prefilled with the
+ *    default of ApiKeysSupported; the new key is copied to the clipboard). The copy announcement and tool tips never show the
+ *    secret ('The API key "name"'; only a create shows a toast), and that toast is closed when the key is removed.
+ *    The list refreshes every 30 s (unchanged items are kept). This page reloads on user changes (it doesn't call IgnoreUserChanges).
+ *  - userManMain (auth/UserMan.html, menu Admin/UserMan): the stored users (GetStoredUsers: name and tokens), add (dialog: the user
+ *    line "username : $s1$..." of the Generate password hash page and the tokens), edit the tokens (SetStoredUserTokens) and remove
+ *    (confirmed). A row the caller may not change (CanChange false: the user has the "debug" token) has its buttons disabled with the
+ *    reason. The list refreshes every 30 s (unchanged items are kept).
  *
  * Loading: classic `defer` scripts ../sw/core.js, ../sw/ui.js, Auth.js, AuthUi.js (MicroService.Auth, same auth/
  * folder at runtime), SimpleAuth.js. Styles: Auth.css, SimpleAuth.css.
- * Server: Api/debug/simpleAuth/{GetAuthSalt, GetPasswordPolicy}, Api/simpleAuth/{ApiKeysSupported, AppInfo, GetApiKeys,
- * AddApiKey, RemoveApiKey}.
+ * Server: Api/debug/simpleAuth/{GetAuthSalt, GetVerifierParams, GetPasswordPolicy}, Api/simpleAuth/{ApiKeysSupported, AppInfo, GetApiKeys,
+ * AddApiKey, RemoveApiKey, SetApiKeyAddresses, SetApiKeyTokens, StoredUsersSupported, GetStoredUsers, AddStoredUser, RemoveStoredUser,
+ * SetStoredUserTokens}.
  */
 (function () {
     "use strict";
@@ -50,7 +57,7 @@
      * @returns {object} The header (Sw.PageHeader).
      */
     function toolPage(page, title, desc, actions) {
-        //  The shared form page layout of AuthUi (MicroService.Auth, AuthPage.SetHeader); the local version below for an older AuthUi.js
+        //  The shared form page layout of AuthUi (MicroService.Auth, AuthPage.SetHeader); the local version below when AuthUi.js has no SetHeader
         if (typeof page.SetHeader === "function")
             return page.SetHeader({ Title: title, Description: desc, Actions: actions || [] });
         page.E.classList.add("sw-page-form", "auth-tool");
@@ -151,13 +158,15 @@
             };
             let salt = null;
             let saltUser = null;
+            //  GetVerifierParams: {Iterations, Binding}
+            let vparams = null;
             let seq = 0;
             let leakSeq = 0;
-            /** @type {string|null} The password whose leak check is running or shown (the old CheckPassword memo: no new request for it). */
+            /** @type {string|null} The password whose leak check is running or shown (no new request for it). */
             let leakLast = null;
             /**
              * The leak check of a valid password as a badge next to the generate button, at once on every change of the password (the
-             * request of the old CheckPassword; the same password as the shown or running check makes no new request; newest wins).
+             * the same password as the shown or running check makes no new request; newest wins).
              * @param {string} p The password.
              * @returns {Promise<void>}
              */
@@ -186,7 +195,7 @@
                 const pErr = p ? A.CheckPolicy(p, policy) : _TF("Enter a password.", "Message under the password field of the password hash generator when it is empty");
                 form.SetError("user", touched.user ? uErr : null);
                 form.SetError("pwd", touched.pwd && p ? pErr : null);
-                //  As the old page: the leak check runs for a valid password once a user name is entered
+                //  The leak check runs for a valid password once a user name is entered
                 if (u && p && !pErr && !(A.LeakCheckIsOff && A.LeakCheckIsOff()))
                     leak(p);
                 else {
@@ -212,9 +221,38 @@
                         return;
                     }
                 }
+                if (!vparams) {
+                    try {
+                        vparams = await Sw.Net.Send(dbgApi("GetVerifierParams"), null, post);
+                    }
+                    catch (e) {
+                        if (my === seq) {
+                            show("");
+                            Sw.Fail(_TF("Failed to get the password hashing parameters.", "An error message that is displayed when the backend failed to provide the password hashing parameters") + "\n" + Sw.ErrorMessage(e));
+                        }
+                        return;
+                    }
+                }
                 const hash = await A.PasswordHash(p, salt);
+                const line = await verifier(hash, vparams);
                 if (my === seq)
-                    show(u + " : " + hash);
+                    show(u + " : " + line);
+            }
+
+            /**
+             * The SCRAM verifier of a legacy hash: "$s1$" + iterations + "$" + b64(salt) + "$" + b64(SHA256(HMAC(PBKDF2(hash|binding), "Client Key"))),
+             * with a random 16 byte salt (see ScramVerifier in Scram.cs). The verifier can't be used to sign in.
+             * @param {string} hash The legacy hash (b64(sha256(password|salt))).
+             * @param {{Iterations:number, Binding:string}} vp The parameters of GetVerifierParams.
+             * @returns {Promise<string>} The verifier.
+             */
+            async function verifier(hash, vp) {
+                const s = new Uint8Array(16);
+                crypto.getRandomValues(s);
+                const it = vp.Iterations | 0;
+                const salted = await A.Pbkdf2(Sw.Util.Utf8Encode(hash + "|" + (vp.Binding || "")), s, it);
+                const storedKey = Sw.Util.Sha256Sync(A.Hmac256(salted, Sw.Util.Utf8Encode("Client Key")));
+                return "$s1$" + it + "$" + Sw.Util.Base64Encode(s) + "$" + Sw.Util.Base64Encode(storedKey);
             }
             await update();
             user.Focus();
@@ -234,12 +272,13 @@
      * True if API keys can be managed here (else a fail toast: not supported / not authorized).
      * @param {function(*):void} [onDenied] Called instead of the fail toast when the user's role doesn't allow it (a refused
      * request, Sw.Access.IsDenied), ex: to show the shared "not allowed" state.
-     * @returns {Promise<boolean>}
+     * @returns {Promise<string|false>} The tokens of a new key when none are given (ex: "service", truthy), false if API keys can't be managed.
      */
     async function isApiKeysSupported(onDenied) {
         try {
-            if (await Sw.Net.Get(keyApi("ApiKeysSupported")))
-                return true;
+            const def = await Sw.Net.Get(keyApi("ApiKeysSupported"));
+            if (def)
+                return String(def);
             Sw.Fail(_TF("Can't manage API keys for this service!", "An error message that is displayed if the back end service doesn't allow API key management"), 20000);
         }
         catch (e) {
@@ -258,11 +297,10 @@
      * @returns {Promise<boolean>} True if removed.
      */
     async function removeApiKey(name) {
-        //  The texts, icons and tool tips of the old confirmation (owner: no gap to the old behaviour). Kept from the rewrite (a
-        //  protection, listed for the owner): Cancel ("No, keep it!") has the focus, so Enter or Escape never removes the key.
-        //  The old text is three translatable sentences joined by line breaks (one literal with both quote kinds and \n is not
+        //  Cancel ("No, keep it!") has the focus, so Enter or Escape never removes the key.
+        //  The text is three translatable sentences joined by line breaks (one literal with both quote kinds and \n is not
         //  translated after minification)
-        //  SwWeb:allow-design (the old wording of this confirmation, owner rule: no gap to the old behaviour)
+        //  SwWeb:allow-design (the wording of this confirmation is the owner's choice)
         if (!await Sw.Dialog.Confirm(
             _TF("Remove key", "The title of a confirmation dialog that is shown when a user wants to remove an API key"),
             _T("The key \"{0}\" will be removed!", name, "First line of the text of a confirmation dialog that is shown when a user wants to remove an API key. {0} is replaced with the name (identifier) of the API key") + "\n" +
@@ -337,12 +375,206 @@
         copyToasts.delete(name);
     }
 
+    /** The maximum length of a token (SimpleAuthorizer.MaxApiKeyTokenLength). */
+    const maxTokenLength = 64;
+
     /**
-     * The "create API key" dialog: on success the new "name:key" is copied to the clipboard.
+     * Normalize a comma separated token list as the server does: trimmed, lower case, no empty entries or duplicates, sorted.
+     * @param {string} v The typed list.
+     * @returns {string[]} The tokens.
+     */
+    function normTokens(v) {
+        const t = [...new Set(String(v || "").split(",").map(x => x.trim().toLowerCase()).filter(x => x))];
+        t.sort();
+        return t;
+    }
+
+    /**
+     * A token list for display: "a, b", or "none" for an empty list.
+     * @param {string} v The stored list ("a,b").
+     * @returns {string} The text.
+     */
+    const tokensText = v => normTokens(v).join(", ") || _TF("none", "Shown instead of the tokens of a stored user that has no tokens (any signed in user pages only)");
+
+    /**
+     * The problem with the tokens of an API key (SimpleAuthorizer.NormalizeApiKeyTokens): at least one, each "service" or "service_<scope>"
+     * (scope: letters, digits, '_', '-', '.'), at most 64 chars.
+     * @param {string} v The typed list.
+     * @returns {string|null} The reason, null if valid.
+     */
+    function apiKeyTokensError(v) {
+        const t = normTokens(v);
+        if (!t.length)
+            return _TF("An API key needs at least one token: \"service\" or \"service_\" followed by a scope.", "Message at the tokens field of an API key when it is empty (service and service_ are literal token names, not translated)");
+        for (const x of t)
+            if ((x.length > maxTokenLength) || !/^service(_[a-z0-9_.-]+)?$/.test(x))
+                return _T("\"{0}\" isn't allowed: a token is \"service\", or \"service_\" followed by letters, digits, \"_\", \"-\" or \".\".", x, "Message at the tokens field of an API key when a token is invalid, {0} is the invalid token (service and service_ are literal token names, not translated)");
+        return null;
+    }
+
+    /**
+     * The problem with the tokens of a stored user (SimpleAuthorizer.NormalizeUserTokens): no ':', '|' or spaces in a token, at most 64 chars.
+     * @param {string} v The typed list.
+     * @returns {string|null} The reason, null if valid.
+     */
+    function userTokensError(v) {
+        for (const x of normTokens(v))
+            if ((x.length > maxTokenLength) || /[:|\s]/.test(x))
+                return _T("\"{0}\" isn't allowed: a token can't have spaces, \":\" or \"|\".", x, "Message at the tokens field of a stored user when a token is invalid, {0} is the invalid token");
+        return null;
+    }
+
+    /**
+     * A tokens field (comma separated) that shows the problem of the typed list at the field.
+     * @param {object} o { Label, Placeholder, Hint, Value, Check (list => reason or null), OnState (reason or null) }.
+     * @returns {object} The field (U.Field).
+     */
+    function tokensField(o) {
+        const f = new U.Field(null, {
+            Label: o.Label || _TF("Tokens", "The label of a text field with the comma separated tokens (roles) of an API key or a user"),
+            Placeholder: o.Placeholder,
+            Hint: o.Hint,
+            AutoComplete: "off", MaxLength: 2000,
+            OnInput: x => {
+                const err = o.Check(x.Get());
+                x.Box.SetError(err);
+                o.OnState && o.OnState(err);
+            },
+        });
+        f.Set(o.Value || "", true);
+        return f;
+    }
+
+    /**
+     * A dialog that edits a token list and saves it (the server's refusal is shown at the field).
+     * @param {object} o { Title, Text, Label, Hint, Value (current "a,b"), Check (list => reason or null), Save (async tokens => void) }.
+     * @returns {Promise<boolean>} True if saved.
+     */
+    async function editTokens(o) {
+        let changed = false;
+        /** @type {Sw.Button|null} */
+        let ok = null;
+        const field = tokensField({
+            Label: o.Label, Hint: o.Hint, Value: normTokens(o.Value).join(", "), Check: o.Check,
+            OnState: err => ok && ok.SetDisabled(!!err, err),
+        });
+        const save = async () => {
+            if (o.Check(field.Get()))
+                return false;
+            field.SetReadOnly(true);
+            try {
+                await o.Save(normTokens(field.Get()).join(","));
+                changed = true;
+                d.Close(true);
+                return;
+            }
+            catch (e) {
+                field.Box.SetError(e.message || String(e));
+            }
+            field.SetReadOnly(false);
+            return false;
+        };
+        field.Input.addEventListener("keydown", e => {
+            if (e.key === "Enter" && Sw.IsPureEvent(e)) {
+                e.preventDefault();
+                ok.Click();
+            }
+        });
+        const buttons = [
+            { Text: _TF("Cancel", "The text of a button on a dialog that when pressed will close the dialog without performing the action"), Value: false },
+            {
+                Text: _TF("Save", "The text of a button that saves the tokens of an API key or a user"),
+                Icon: "IconOk", Kind: "primary", Close: false,
+                OnClick: () => save(),
+            },
+        ];
+        const d = Sw.Dialog.Open({
+            Title: o.Title,
+            Content: el("div.auth-dialog", null, el("p.sw-dialog-text", { text: o.Text }), field.E),
+            Buttons: buttons,
+            Focus: field.Input,
+        });
+        ok = buttons[1].Button;
+        const err = o.Check(field.Get());
+        if (err)
+            ok.SetDisabled(true, err);
+        await d.Result;
+        return changed;
+    }
+
+    /**
+     * The tokens dialog of an API key (SetApiKeyTokens).
+     * @param {string} keyName The name of the key.
+     * @param {string} current The current tokens ("service,service_x").
+     * @returns {Promise<boolean>} True if changed.
+     */
+    const editApiKeyTokens = (keyName, current) => editTokens({
+        Title: _T("Tokens of \"{0}\"", keyName, "Title of the dialog where the tokens of an API key are edited, {0} is the name of the key"),
+        Text: _TF("The key only reaches what requires one of its tokens. \"service\" reaches the service APIs, \"service_<scope>\" only the APIs of that scope.", "Text of the tokens dialog of an API key (service and service_<scope> are literal token names, not translated)"),
+        Hint: _TF("Comma separated, ex: service, service_translate", "The tool tip description of the tokens field of an API key (the example tokens are literal, not translated)"),
+        Value: current,
+        Check: apiKeyTokensError,
+        Save: t => Sw.Net.Send(keyApi("SetApiKeyTokens"), { Name: keyName, Tokens: t }, post),
+    });
+
+    /**
+     * The "allowed addresses" dialog of an API key (SetApiKeyAddresses): a comma separated list of addresses / networks, empty = any address.
+     * @param {string} keyName The name of the key.
+     * @param {string} current The current list ("" = any address).
+     * @returns {Promise<boolean>} True if changed.
+     */
+    async function editApiKeyAddresses(keyName, current) {
+        let changed = false;
+        const addr = new U.Field(null, {
+            Label: _TF("Allowed addresses", "The label of a text field with the client addresses (IP addresses or networks) that may use an API key"),
+            Placeholder: _TF("Any address", "The place holder text of the allowed addresses field of an API key (empty means any address)"),
+            Hint: _TF("Comma separated IP addresses or networks, ex: 10.0.0.5, 192.168.1.0/24. Empty allows any address.", "The tool tip description of the allowed addresses field of an API key"),
+            AutoComplete: "off", MaxLength: 2000,
+        });
+        addr.Set(current || "", true);
+        const save = async () => {
+            addr.SetReadOnly(true);
+            try {
+                await Sw.Net.Send(keyApi("SetApiKeyAddresses"), { Name: keyName, Addresses: addr.Get() || "" }, post);
+                changed = true;
+                d.Close(true);
+                return;
+            }
+            catch (e) {
+                addr.Box.SetError(e.message || String(e));
+            }
+            addr.SetReadOnly(false);
+            return false;
+        };
+        const buttons = [
+            { Text: _TF("Cancel", "The text of a button on a dialog that when pressed will close the dialog without performing the action"), Value: false },
+            {
+                Text: _TF("Save", "The text of a button that saves the allowed addresses of an API key"),
+                Icon: "IconOk", Kind: "primary", Close: false,
+                OnClick: () => save(),
+            },
+        ];
+        const d = Sw.Dialog.Open({
+            Title: _T("Allowed addresses of \"{0}\"", keyName, "Title of the dialog where the allowed client addresses of an API key are edited, {0} is the name of the key"),
+            Content: el("div.auth-dialog", null,
+                el("p.sw-dialog-text", { text: _TF("The key only works from these addresses (also when the session it signed in is used).", "Text of the allowed addresses dialog of an API key") }),
+                addr.E),
+            Buttons: buttons,
+            Focus: addr.Input,
+        });
+        await d.Result;
+        return changed;
+    }
+
+    /**
+     * The "create API key" dialog (a name and the tokens): on success the new "name:key" is copied to the clipboard.
+     * @param {string} [defaultTokens] The tokens the field starts with (the server's default for a new key, from ApiKeysSupported).
      * @returns {Promise<boolean>} True if a key was created.
      */
-    async function createApiKey() {
+    async function createApiKey(defaultTokens) {
         let created = false;
+        /** @type {string|null} The problem with the typed tokens. */
+        let tokensErr = null;
         /** @type {Sw.Button|null} The dialog's Create button (set when the dialog is open). */
         let ok = null;
         /** @type {Set<string>} The characters removed from the typed name (shown at the field, never removed silently). */
@@ -371,16 +603,31 @@
                     f.Box.SetError(_T("Left out {0}: a name may only have letters, digits, \"_\" and \"-\".",
                         [...removed].map(ch => ch === " " ? _TF("spaces", "Name of the space character in the message about characters left out of an API key name") : "\"" + ch + "\"").join(", "),
                         "Message at the name field of the create API key dialog when typed characters were left out, {0} is the list of left out characters"));
-                ok && ok.SetDisabled(!c, noKeyName());
+                updateOk();
             },
         });
+        const tokens = tokensField({
+            Value: normTokens(defaultTokens || "service").join(", "),
+            Hint: _TF("Comma separated, ex: service, service_translate", "The tool tip description of the tokens field of an API key (the example tokens are literal, not translated)"),
+            Check: apiKeyTokensError,
+            OnState: err => {
+                tokensErr = err;
+                updateOk();
+            },
+        });
+        /** Enable the Create button when the name and the tokens are valid (else disabled with the reason). */
+        function updateOk() {
+            const c = cleanKeyName(name.Get());
+            ok && ok.SetDisabled(!c || !!tokensErr, !c ? noKeyName() : tokensErr);
+        }
         /** Create the key (the dialog's primary button and Enter in the field). @returns {Promise<false|undefined>} false keeps the dialog open. */
         const create = async () => {
-            if (!cleanKeyName(name.Get()))
+            if (!cleanKeyName(name.Get()) || apiKeyTokensError(tokens.Get()))
                 return false;
             name.SetReadOnly(true);
+            tokens.SetReadOnly(true);
             try {
-                const res = await Sw.Net.Send(keyApi("AddApiKey"), name.Get(), post);
+                const res = await Sw.Net.Send(keyApi("AddApiKey"), { Name: name.Get(), Tokens: normTokens(tokens.Get()).join(",") }, post);
                 if (res != null) {
                     created = true;
                     d.Close(true);
@@ -393,14 +640,16 @@
                 Sw.Fail(e.message || String(e));
             }
             name.SetReadOnly(false);
+            tokens.SetReadOnly(false);
             return false;
         };
-        name.Input.addEventListener("keydown", e => {
-            if (e.key === "Enter" && Sw.IsPureEvent(e)) {
-                e.preventDefault();
-                ok.Click();
-            }
-        });
+        for (const f of [name, tokens])
+            f.Input.addEventListener("keydown", e => {
+                if (e.key === "Enter" && Sw.IsPureEvent(e)) {
+                    e.preventDefault();
+                    ok.Click();
+                }
+            });
         //  the one dialog anatomy (title, left aligned text, the field, a footer with Cancel and the verb on the right)
         const buttons = [
             { Text: _TF("Cancel", "The text of a button on a dialog that when pressed will close the dialog without performing the action"), Value: false },
@@ -415,11 +664,14 @@
             Title: _TF("Create API key", "Title of the dialog where the user enters the name of a new API key"),
             Content: el("div.auth-dialog", null,
                 el("p.sw-dialog-text", { text: _TF("Enter the name of the service that will use the key. Letters, digits, \"_\" and \"-\" only.", "Text of the create API key dialog, above the name field") }),
-                name.E),
+                name.E,
+                el("p.sw-dialog-text", { text: _TF("The key only reaches what requires one of its tokens: \"service\" for the service APIs, \"service_<scope>\" only for the APIs of that scope.", "Text of the create API key dialog, above the tokens field (service and service_<scope> are literal token names, not translated)") }),
+                tokens.E),
             Buttons: buttons,
             Focus: name.Input,
         });
         ok = buttons[1].Button;
+        tokensErr = apiKeyTokensError(tokens.Get());
         await d.Result;
         return created;
     }
@@ -438,7 +690,8 @@
                 denied = true;
                 Sw.Page.ShowNotAllowed({ Error: e });
             };
-            if (!await isApiKeysSupported(notAllowed)) {
+            const defaultTokens = await isApiKeysSupported(notAllowed);
+            if (!defaultTokens) {
                 if (!denied)
                     page.SetIcon("IconWarning");
                 return;
@@ -453,30 +706,38 @@
                 Title: _TF("Enter a service name and create a new API key", "The tool tip description of a button that when pressed will show a dialog where the user can enter information about a new API key"),
                 Icon: "IconAdd", Kind: "primary",
                 OnClick: async () => {
-                    if (await createApiKey())
+                    if (await createApiKey(defaultTokens))
                         await rebuild();
                 },
             });
             toolPage(page, _TF("API keys", "The title of a table containing all API keys available on a server"),
                 _TF("Keys that let services and scripts call this service. Anyone who has a key can call it, so keep keys as safe as passwords.", "One line description below the title of the API key management page"), [create.E]);
-            //  Opened alone, the tab keeps the page's own title ("API key management", as before; the heading says "API keys" as the
-            //  old table header did). In the app shell the heading and the title are the menu item's name.
+            //  Opened alone, the tab keeps the page's own title ("API key management"; the heading says "API keys"). In the app shell the heading and the title are the menu item's name.
             if (!Sw.Page.IsEmbedded && docTitle)
                 document.title = docTitle;
-            /** @type {Map<string, HTMLElement>} "name:key" -> list item. */
+            /** @type {Map<string, HTMLElement>} "name:key\ntokens\naddresses" -> list item. */
             const items = new Map();
             let timer = 0;
 
             /**
              * A list item of a key.
-             * @param {string} kv "name:key".
+             * @param {{Name:string, Key:string, Tokens:string, Addresses:string}} k The key (GetApiKeys): Key is "name:key", Addresses "" = any address.
              * @returns {HTMLLIElement}
              */
-            function item(kv) {
+            function item(k) {
+                const kv = String(k.Key || "");
                 const i = kv.indexOf(":");
                 const name = kv.substring(0, i);
+                const addresses = k.Addresses || "";
                 const row = U.Buttons(null);
                 const secret = kv.substring(i + 1);
+                const tokenLine = el("div.auth-item-line.auth-key-tokens", {
+                    text: _TF("Tokens", "Label before the tokens of an API key or a user in a list") + ": " + tokensText(k.Tokens),
+                });
+                const addrLine = el("div.auth-item-line.auth-key-addresses", {
+                    text: _TF("Allowed from", "Label before the allowed client addresses of an API key") + ": " +
+                        (addresses || _TF("any address", "Shown when an API key may be used from any client address")),
+                });
                 //  The key is masked until revealed (people looking at the screen, screen sharing)
                 //  (the dots are hidden from screen readers, which hear "Key hidden" instead of two dozen bullets)
                 const masked = () => [
@@ -486,6 +747,8 @@
                 const li = el("li.auth-item", null,
                     el("div.auth-item-name", { text: name, title: _TF("This is typically the name of the service that will use this API key", "The tool tip description of a column that contains the names (identifiers) of API keys available on a server") }),
                     keyLine,
+                    tokenLine,
+                    addrLine,
                     row);
                 const reveal = U.Button(row, {
                     Icon: "eye", Small: true, Pressable: true, Pressed: false,
@@ -513,6 +776,22 @@
                 //  (the name says which key, as Show / Copy / Remove; the plain text warning stays in the tool tip)
                 download.E.setAttribute("aria-label", _T("Download the credentials file of \"{0}\"", name, "Accessible name of the button that downloads the credentials file of an API key. {0} is the name of the key"));
                 U.Button(row, {
+                    Icon: "IconLock", Small: true,
+                    Title: _T("Change the tokens of \"{0}\"", name, "The tool tip description of a button that edits the tokens (what the key may reach) of an API key. {0} is the name of the key"),
+                    OnClick: async () => {
+                        if (await editApiKeyTokens(name, k.Tokens))
+                            await rebuild();
+                    },
+                });
+                U.Button(row, {
+                    Icon: "IconEdit", Small: true,
+                    Title: _T("Change the allowed addresses of \"{0}\"", name, "The tool tip description of a button that edits the client addresses an API key may be used from. {0} is the name of the key"),
+                    OnClick: async () => {
+                        if (await editApiKeyAddresses(name, addresses))
+                            await rebuild();
+                    },
+                });
+                U.Button(row, {
                     Icon: "IconRemove", Small: true, Kind: "danger", Class: "auth-remove-key",
                     Title: _T("Remove the key for \"{0}\"", name, "The tool tip description of a button that when pressed will remove an API-key from a service. {0} is replaced with the name (identifier) of the API-key that will be removed"),
                     OnClick: async () => {
@@ -537,13 +816,16 @@
             async function rebuild() {
                 clearTimeout(timer);
                 try {
+                    /** @type {Array<{Name:string, Key:string, Tokens:string, Addresses:string}>} */
                     const keys = (await Sw.Net.Get(keyApi("GetApiKeys"))) ?? [];
                     //  Allowed again after a refusal (the role came back): the page starts over (the not allowed state goes)
                     if (denied) {
                         window.location.reload();
                         return;
                     }
-                    const want = new Set(keys);
+                    //  An item is rebuilt when its key, its tokens or its addresses changed (the map key holds all of them)
+                    const idOf = k => [k.Key, k.Tokens || "", k.Addresses || ""].join("\n");
+                    const want = new Set(keys.map(idOf));
                     for (const [k, li] of items)
                         if (!want.has(k)) {
                             li.remove();
@@ -551,10 +833,11 @@
                         }
                     let prev = null;
                     for (const k of keys) {
-                        let li = items.get(k);
+                        const id = idOf(k);
+                        let li = items.get(id);
                         if (!li) {
                             li = item(k);
-                            items.set(k, li);
+                            items.set(id, li);
                         }
                         if (prev ? prev.nextSibling !== li : list.firstChild !== li)
                             prev ? prev.after(li) : list.prepend(li);
@@ -570,7 +853,303 @@
                 }
                 catch (e) {
                     //  The role was taken away meanwhile (or only listing is refused): the shared state (once, not a toast every 30 s);
-                    //  the refresh goes on every 30 s as before (the old page kept polling)
+                    //  the refresh goes on every 30 s
+                    if (Sw.Access && Sw.Access.IsDenied(e)) {
+                        if (!denied)
+                            notAllowed(e);
+                    }
+                    else
+                        Sw.Fail(e.message || String(e));
+                }
+                timer = setTimeout(rebuild, 30000);
+            }
+            await rebuild();
+        }, { KeepUserChanges: true, Class: "auth-wide" });
+    }
+
+    // ------------------------------------------------------------------ stored users
+
+    /**
+     * True if the stored users can be managed here (else a fail toast: not supported / not authorized).
+     * @param {function(*):void} [onDenied] Called instead of the fail toast when the user's role doesn't allow it (a refused request, Sw.Access.IsDenied).
+     * @returns {Promise<boolean>}
+     */
+    async function isStoredUsersSupported(onDenied) {
+        try {
+            if (await Sw.Net.Get(keyApi("StoredUsersSupported")))
+                return true;
+            Sw.Fail(_TF("Can't manage users for this service!", "An error message that is displayed if the back end service doesn't allow adding and removing users"), 20000);
+        }
+        catch (e) {
+            if ((typeof onDenied === "function") && Sw.Access && Sw.Access.IsDenied(e)) {
+                onDenied(e);
+                return false;
+            }
+            Sw.Fail(_TF("Not authorized to manage users!", "An error message that is displayed if the current session isn't authorized to add and remove users") + "\n" + Sw.ErrorMessage(e), 20000);
+        }
+        return false;
+    }
+
+    /**
+     * Ask and remove a stored user.
+     * @param {string} name User name.
+     * @returns {Promise<boolean>} True if removed.
+     */
+    async function removeStoredUser(name) {
+        //  Cancel has the focus, so Enter or Escape never removes the user
+        if (!await Sw.Dialog.Confirm(
+            _TF("Remove user", "The title of a confirmation dialog that is shown when an administrator wants to remove a stored user"),
+            _T("The user \"{0}\" will be removed!", name, "First line of the text of a confirmation dialog that is shown when an administrator wants to remove a stored user. {0} is the user name") + "\n" +
+            _TF("The user is signed out at once, and a removed user can't be restored (add the user again with a new password line).", "Second line of the text of a confirmation dialog that is shown when an administrator wants to remove a stored user: the consequence") + "\n\n" +
+            _TF("Are you sure?", "Last line of the text of a confirmation dialog that is shown when an administrator wants to remove a stored user"),
+            _TF("Yes, remove the user", "The text of a button on a confirmation dialog that when pressed will remove a stored user"),
+            {
+                CancelText: _TF("No, keep the user", "The text of a button on a confirmation dialog that when pressed will close the dialog without removing the user"),
+                Danger: true, OkIcon: "IconCancel", CancelIcon: "IconOk",
+            }))
+            return false;
+        try {
+            return !!(await Sw.Net.Send(keyApi("RemoveStoredUser"), name, post));
+        }
+        catch (e) {
+            Sw.Fail(e.message || String(e));
+            return false;
+        }
+    }
+
+    /**
+     * The problem with a user line ("username : $s1$iterations$salt$storedKey", from the Generate password hash page).
+     * @param {string} v The typed line.
+     * @returns {string|null} The reason, null if it looks valid (the server checks it).
+     */
+    function userLineError(v) {
+        v = String(v || "").trim();
+        const i = v.indexOf(":");
+        const name = i > 0 ? v.substring(0, i).trim() : "";
+        const verifier = i > 0 ? v.substring(i + 1).trim() : "";
+        if (!name || name.includes("|") || name.startsWith("#") || name.startsWith("//") || !/^\$s1\$\d+\$[A-Za-z0-9+/=]+\$[A-Za-z0-9+/=]+$/.test(verifier))
+            return _TF("Paste the line of the Generate password hash page: \"username : $s1$...\".", "Message at the user line field of the add user dialog when the text isn't a user name followed by a password verifier ($s1$... is literal, not translated)");
+        return null;
+    }
+
+    /**
+     * The "add user" dialog: the user line of the Generate password hash page and the tokens (AddStoredUser).
+     * @returns {Promise<boolean>} True if a user was added.
+     */
+    async function addStoredUser() {
+        let added = false;
+        /** @type {Sw.Button|null} */
+        let ok = null;
+        let tokensErr = null;
+        const update = () => {
+            const le = userLineError(line.Get());
+            ok && ok.SetDisabled(!!le || !!tokensErr, le || tokensErr);
+        };
+        const line = new U.Field(null, {
+            Label: _TF("User line", "The label of a text field where an administrator pastes the line \"username : password verifier\" of the Generate password hash page"),
+            Placeholder: _TF("username : $s1$...", "The place holder text of the user line field of the add user dialog ($s1$ is literal, not translated)"),
+            Hint: _TF("Make the line on the Generate password hash page: it holds the user name and a verifier of the password, never the password.", "The tool tip description of the user line field of the add user dialog"),
+            AutoComplete: "off", MaxLength: 1000, Copy: false,
+            OnInput: f => {
+                const v = f.Get();
+                f.Box.SetError(v ? userLineError(v) : null);
+                update();
+            },
+        });
+        const tokens = tokensField({
+            Hint: _TF("Comma separated, ex: admin, ops. Empty: pages for any signed in user only.", "The tool tip description of the tokens field of a stored user (the example tokens are literal, not translated)"),
+            Check: userTokensError,
+            OnState: err => {
+                tokensErr = err;
+                update();
+            },
+        });
+        const add = async () => {
+            if (userLineError(line.Get()) || userTokensError(tokens.Get()))
+                return false;
+            line.SetReadOnly(true);
+            tokens.SetReadOnly(true);
+            try {
+                await Sw.Net.Send(keyApi("AddStoredUser"), { Auth: String(line.Get()).trim(), Tokens: normTokens(tokens.Get()).join(",") }, post);
+                added = true;
+                d.Close(true);
+                return;
+            }
+            catch (e) {
+                Sw.Fail(e.message || String(e));
+            }
+            line.SetReadOnly(false);
+            tokens.SetReadOnly(false);
+            return false;
+        };
+        for (const f of [line, tokens])
+            f.Input.addEventListener("keydown", e => {
+                if (e.key === "Enter" && Sw.IsPureEvent(e)) {
+                    e.preventDefault();
+                    ok.Click();
+                }
+            });
+        const genLink = el("a.sw-link", { text: _TF("Generate password hash", "Link from the add user dialog to the page that makes the user line (the page title)"), attrs: { href: "index.html", target: "_blank", rel: "noopener" } });
+        const buttons = [
+            { Text: _TF("Cancel", "The text of a button on a dialog that when pressed will close the dialog without performing the action"), Value: false },
+            {
+                Text: _TF("Add user", "The text of a button that adds a stored user"),
+                Icon: "IconAdd", Kind: "primary", Close: false,
+                Disabled: userLineError(""),
+                OnClick: () => add(),
+            },
+        ];
+        const d = Sw.Dialog.Open({
+            Title: _TF("Add user", "Title of the dialog where an administrator adds a stored user"),
+            Content: el("div.auth-dialog", null,
+                el("p.sw-dialog-text", null, _TF("Paste the line made on the page", "Start of the text of the add user dialog, followed by a link to the Generate password hash page") + " ", genLink,
+                    ". " + _TF("The password itself is never sent here.", "End of the text of the add user dialog (after the link)")),
+                line.E,
+                el("p.sw-dialog-text", { text: _TF("The tokens decide what the user may do. Only a user with the \"debug\" token may give it.", "Text of the add user dialog, above the tokens field (debug is a literal token name, not translated)") }),
+                tokens.E),
+            Buttons: buttons,
+            Focus: line.Input,
+        });
+        ok = buttons[1].Button;
+        await d.Result;
+        return added;
+    }
+
+    /**
+     * The tokens dialog of a stored user (SetStoredUserTokens).
+     * @param {string} name The user name.
+     * @param {string} current The current tokens.
+     * @returns {Promise<boolean>} True if changed.
+     */
+    const editStoredUserTokens = (name, current) => editTokens({
+        Title: _T("Tokens of \"{0}\"", name, "Title of the dialog where the tokens of a stored user are edited, {0} is the user name"),
+        Text: _TF("The tokens decide what the user may do, the user is signed out when they change. Only a user with the \"debug\" token may give it.", "Text of the tokens dialog of a stored user (debug is a literal token name, not translated)"),
+        Hint: _TF("Comma separated, ex: admin, ops. Empty: pages for any signed in user only.", "The tool tip description of the tokens field of a stored user (the example tokens are literal, not translated)"),
+        Value: current,
+        Check: userTokensError,
+        Save: t => Sw.Net.Send(keyApi("SetStoredUserTokens"), { Name: name, Tokens: t }, post),
+    });
+
+    /**
+     * auth/UserMan.html: manage the stored users.
+     * @returns {Promise<void>}
+     */
+    async function userManMain() {
+        /** The title of UserMan.html (translated by the server). */
+        const docTitle = document.title;
+        await U.Page("IconUsers", async page => {
+            let denied = false;
+            const notAllowed = e => {
+                denied = true;
+                Sw.Page.ShowNotAllowed({ Error: e });
+            };
+            if (!await isStoredUsersSupported(notAllowed)) {
+                if (!denied)
+                    page.SetIcon("IconWarning");
+                return;
+            }
+            const list = el("ul.auth-list.auth-users", { attrs: { "aria-live": "polite" } });
+            page.Box.append(list);
+            const add = U.Button(el("div"), {
+                Text: _TF("Add user", "The text of a button that when pressed will show a dialog where an administrator adds a stored user"),
+                Title: _TF("Add a user with a line from the Generate password hash page", "The tool tip description of the button that opens the add user dialog"),
+                Icon: "IconAdd", Kind: "primary",
+                OnClick: async () => {
+                    if (await addStoredUser())
+                        await rebuild();
+                },
+            });
+            toolPage(page, _TF("Stored users", "The title of the page where administrators add and remove the stored users of a server"),
+                _TF("Users added here. The users of the configuration and the user file are not listed and can't be changed here.", "One line description below the title of the stored users page"), [add.E]);
+            if (!Sw.Page.IsEmbedded && docTitle)
+                document.title = docTitle;
+            /** @type {Map<string, HTMLElement>} "name\ntokens\ncanChange" -> list item. */
+            const items = new Map();
+            let timer = 0;
+            const debugOnly = () => _TF("Only a user with the \"debug\" token may change this user", "Reason of the disabled edit and remove buttons of a stored user that has the debug token (debug is a literal token name, not translated)");
+
+            /**
+             * A list item of a user.
+             * @param {{Name:string, Tokens:string, CanChange:boolean}} u The user (GetStoredUsers).
+             * @returns {HTMLLIElement}
+             */
+            function item(u) {
+                const name = String(u.Name || "");
+                const row = U.Buttons(null);
+                const li = el("li.auth-item", null,
+                    el("div.auth-item-name", { text: name }),
+                    el("div.auth-item-line.auth-user-tokens", { text: _TF("Tokens", "Label before the tokens of an API key or a user in a list") + ": " + tokensText(u.Tokens) }),
+                    row);
+                const edit = U.Button(row, {
+                    Icon: "IconLock", Small: true,
+                    Title: _T("Change the tokens of \"{0}\"", name, "The tool tip description of a button that edits the tokens of a stored user. {0} is the user name"),
+                    OnClick: async () => {
+                        if (await editStoredUserTokens(name, u.Tokens))
+                            await rebuild();
+                    },
+                });
+                const remove = U.Button(row, {
+                    Icon: "IconRemove", Small: true, Kind: "danger", Class: "auth-remove-user",
+                    Title: _T("Remove the user \"{0}\"", name, "The tool tip description of a button that removes a stored user. {0} is the user name"),
+                    OnClick: async () => {
+                        if (await removeStoredUser(name)) {
+                            //  The focus goes to the same button of the next user, else the previous one, else Add user
+                            const next = li.nextElementSibling || li.previousElementSibling;
+                            const nextId = next ? [...items].find(([, x]) => x === next)?.[0] : null;
+                            await rebuild();
+                            const target = (nextId && items.get(nextId)?.querySelector(".auth-remove-user")) || add.E;
+                            target.focus();
+                        }
+                    },
+                });
+                if (!u.CanChange) {
+                    edit.SetDisabled(true, debugOnly());
+                    remove.SetDisabled(true, debugOnly());
+                }
+                return li;
+            }
+
+            /**
+             * Refresh the list (unchanged items are kept), then again in 30 s.
+             * @returns {Promise<void>}
+             */
+            async function rebuild() {
+                clearTimeout(timer);
+                try {
+                    /** @type {Array<{Name:string, Tokens:string, CanChange:boolean}>} */
+                    const users = (await Sw.Net.Get(keyApi("GetStoredUsers"))) ?? [];
+                    if (denied) {
+                        window.location.reload();
+                        return;
+                    }
+                    const idOf = u => [u.Name, u.Tokens || "", u.CanChange ? "1" : "0"].join("\n");
+                    const want = new Set(users.map(idOf));
+                    for (const [k, li] of items)
+                        if (!want.has(k)) {
+                            li.remove();
+                            items.delete(k);
+                        }
+                    let prev = null;
+                    for (const u of users) {
+                        const id = idOf(u);
+                        let li = items.get(id);
+                        if (!li) {
+                            li = item(u);
+                            items.set(id, li);
+                        }
+                        if (prev ? prev.nextSibling !== li : list.firstChild !== li)
+                            prev ? prev.after(li) : list.prepend(li);
+                        prev = li;
+                    }
+                    list.querySelector(".auth-empty")?.remove();
+                    if (users.length === 0)
+                        list.append(el("li.auth-empty", null, Sw.StateView({
+                            Icon: "user",
+                            Title: _TF("No stored users", "Text shown when there are no stored users"),
+                            Text: _TF("Add a user with a line from the Generate password hash page.", "Text below \"No stored users\" on the stored users page"),
+                        }).E));
+                }
+                catch (e) {
                     if (Sw.Access && Sw.Access.IsDenied(e)) {
                         if (!denied)
                             notAllowed(e);
@@ -585,7 +1164,8 @@
     }
 
     /** @namespace Sw.SimpleAuth - the SimpleAuthorizer pages. */
-    Sw.SimpleAuth = { pwdGenMain, keyManMain, isApiKeysSupported, removeApiKey, createApiKey };
+    Sw.SimpleAuth = { pwdGenMain, keyManMain, userManMain, isApiKeysSupported, isStoredUsersSupported, removeApiKey, createApiKey, removeStoredUser, addStoredUser };
     window.pwdGenMain = pwdGenMain;
     window.keyManMain = keyManMain;
+    window.userManMain = userManMain;
 })();

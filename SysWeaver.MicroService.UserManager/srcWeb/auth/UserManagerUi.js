@@ -11,8 +11,8 @@
  * Page kinds:
  *  - Request mode (no query): the page sends a message (e-mail / text) and shows the short code step
  *    (Sw.AuthUi.ShortCode), which navigates to "<Page>.html?<code>".
- *  - Token mode ("<Page>.html?<token|code>", the whole query is the token; for keyed links like "DeleteAccount.html?token=.."
- *    and "ChoosePassword.html?user=..&salt=..&token=.." the token parameter, Sw.Auth.QueryToken): a confirm button or a new password form.
+ *  - Token mode ("<Page>.html?<token|code>", the whole query is the token; for keyed links like
+ *    "ChoosePassword.html?user=..&salt=..&token=.." the token parameter, Sw.Auth.QueryToken): a confirm button or a new password form.
  *    The link is checked on load without using it (Sw.AuthUi.CheckLinkToken): a dead link shows "This link no longer works" with
  *    the real cause (Sw.AuthUi.LinkGone) before anything is offered; a live one shows its facts; a 410 of the action shows the same.
  *  - Proof forms: the current password proves the user (Sw.Auth.Proof), plus a new password / e-mail / phone.
@@ -205,8 +205,8 @@
     }
 
     /**
-     * The ways to reach a person (sign up / invitation): the server's coms, with the text message coms (Sms, WhatsApp; older servers:
-     * Phone) all being one "Phone" way (a phone number), in server order, and only "Email" / "Phone" (others are not offered).
+     * The ways to reach a person (sign up / invitation): the server's coms, with the text message coms (Sms, WhatsApp)
+     * all being one "Phone" way (a phone number), in server order, and only "Email" / "Phone" (others are not offered).
      * @param {string[]} coms The coms the server names.
      * @returns {string[]} "Email" and / or "Phone".
      */
@@ -446,7 +446,7 @@
 
     /**
      * The page of a link (or code) that no longer works (the shared Sw.AuthUi.LinkGone: the cause, what to do, Request a new link /
-     * Sign in), when the link was not checked on load (a short code, an older server) and its data could not be read.
+     * Sign in), when the link was not checked on load (a short code) and its data could not be read.
      * @param {object} page The AuthPage.
      * @param {string} kind The link kind (see Sw.AuthUi.CheckLinkToken).
      * @param {object} [state] The CheckLinkToken result (its reason), if any.
@@ -972,7 +972,7 @@
     }
 
     /**
-     * DeleteAccount.html[?<code>|?<token>|?token=<t> (older links)]: request mode sends instructions; token mode deletes the account.
+     * DeleteAccount.html[?<code>|?<token>]: request mode sends instructions; token mode deletes the account.
      * @returns {Promise<void>}
      */
     async function deleteAccountMain() {
@@ -1067,7 +1067,7 @@
      */
     async function signUpMain() {
         await U.Page("IconAuthSignUp", async page => {
-            // The server names the phone coms "Sms" and "WhatsApp" (older servers: "Phone"); all of them sign up with a phone number: one tab.
+            // The server names the phone coms "Sms" and "WhatsApp"; all of them sign up with a phone number: one tab.
             const methods = contactWays((await UM.SignUpMethods()) || []);
             if (methods.length === 0) {
                 const m = _TF("Signing up is not available on this site.", "Message on the sign up page when the server has no sign up methods (no email or text message service that allows signing up)");

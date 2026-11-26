@@ -837,7 +837,8 @@
     /**
      * Create the `<Media-Stats>` block of a player: the technical details of the media in groups (the file, the picture, the video, the
      * sound, the effect), each a `<Media-Stat>` row with a name and a value. A click (or Enter / Space) on the name copies the name, on the
-     * value the value; the description shows as tooltip, on long press and focus.
+     * value the value; the description shows as tooltip, on long press and focus. The value can be selected too (a selected value isn't
+     * refreshed, a click that ends a selection doesn't copy).
      * Only what the browser already has is shown (no extra download, no decoding): the resource timing of the file (size, transfer, MIME
      * type, protocol), the element (natural size, frame counters, buffered time), the decoded sound when the player has one (an effect with
      * the audio texture, the offline analysis), the effect's counters. The values are refreshed 4 times a second while the block is shown.
@@ -867,6 +868,9 @@
                 if (Sw.BadClick(ev))
                     return;
                 ev.stopPropagation();
+                //  (a click that ends a selection of the text doesn't copy; Enter / Space always does)
+                if (ev.detail > 0 && Sw.HasSelectionIn(e))
+                    return;
                 Sw.Clipboard.Copy(e.textContent);
             });
             Sw.KeyClick(e);
@@ -981,6 +985,9 @@
             /** @type {boolean} The row had a value once: without one now it stays, dimmed with "-" (Idle), so the rows below don't jump. */
             let had = false;
             ups.push(() => {
+                //  (a selected value stands still until it isn't selected anymore: a new text would remove the selection)
+                if (Sw.HasSelectionIn(val))
+                    return;
                 let r = null;
                 try {
                     r = get();
@@ -3651,10 +3658,19 @@
             if (ev.pointerType === "mouse")
                 pointerOut();
         });
+        /** @type {boolean} The last press was on selectable text (the statistics panel, the title). */
+        let pressedText = false;
+        /* SwWeb:allow ux-inp-1 (a press elsewhere ends a text selection, as the browser does; nothing else acts on the press) */
         view.addEventListener("pointerdown", ev => {
             view.classList.remove("MediaPointerOut");
             if (ev.pointerType !== "mouse")
                 lastTouch = Date.now();
+            //  A press on the title or in the statistics panel may start a text selection: released over the media it is no click on it. A press
+            //  elsewhere ends the selection of statistics (the media isn't selectable: the browser would keep it, the values would stand still)
+            const inStats = !!panel && panel.contains(ev.target);
+            pressedText = inStats || !!ev.target.closest(".media-title");
+            if (panel && !inStats && Sw.HasSelectionIn(panel))
+                window.getSelection().removeAllRanges();
         });
         view.addEventListener("keydown", () => view.classList.remove("MediaPointerOut"));
         view.addEventListener("focusin", () => show());
@@ -3673,7 +3689,7 @@
         let lastSide = 0;
         let skipping = 0;
         view.addEventListener("click", ev => {
-            if (!onMedia(ev) || Sw.BadClick(ev) || (o.MediaClicks && !o.MediaClicks()))
+            if (pressedText || !onMedia(ev) || Sw.BadClick(ev) || (o.MediaClicks && !o.MediaClicks()))
                 return;
             const now = Date.now();
             const side = sideOf(ev);

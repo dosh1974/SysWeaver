@@ -442,3 +442,9 @@ body.text-page {
             flex: 1 1 20rem;
         }
 }
+
+/* The file name and the status texts of the text editor (UX guide INP-30: text that changes from run to run can be selected and copied) */
+:where(.text-name, .text-info, .text-find-count, .text-message) {
+    user-select: text;
+    -webkit-user-select: text;
+}

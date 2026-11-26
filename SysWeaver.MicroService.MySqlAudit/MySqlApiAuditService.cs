@@ -31,10 +31,16 @@ namespace SysWeaver.MicroService
         public MySqlApiAuditService(ServiceManager manager, MySqlApiAuditParams p = null)
         {
             p = p ?? new MySqlApiAuditParams();
+            Manager = manager;
             Db = new MySqlDbSimpleStack(p, manager);
             InitDb(Db).RunAsync();
             WriteTask = new PeriodicTask(WriteData, 100);
         }
+
+        /// <summary>
+        /// The service manager, used to find an ip location service (<see cref="IIpLocation"/>)
+        /// </summary>
+        readonly ServiceManager Manager;
 
         volatile bool IsDisposing;
 
@@ -137,7 +143,7 @@ namespace SysWeaver.MicroService
                                 Id = id,
                                 Input = val == null ? null : ser.ToStringWithoutType(val).LimitLength(MaxDataLength, ""),
                                 UserGuid = auth?.Guid,
-                                Session = temp.SessionToken,
+                                Session = temp.SessionId,
                                 UserName = auth?.Username,
                             };
                             orderedCalls.Add(data);
@@ -201,13 +207,13 @@ namespace SysWeaver.MicroService
             public readonly String UserAgent;
             public readonly String Language;
             public readonly String DeviceId;
-            public readonly String SessionToken;
+            public readonly String SessionId;
             public readonly String Ip;
             public readonly IHttpApiAudit Api;
             public readonly object Value;
             public readonly DateTime Time;
 
-            public Temp(byte type, long id, object value, Auth.Authorization auth, string sessionToken, string deviceId, string timeZone, string userAgent, string language, string ip, IHttpApiAudit api)
+            public Temp(byte type, long id, object value, Auth.Authorization auth, string sessionId, string deviceId, string timeZone, string userAgent, string language, string ip, IHttpApiAudit api)
             {
                 Type = type;
                 Id = id;
@@ -219,7 +225,7 @@ namespace SysWeaver.MicroService
                 Language = language;
                 Ip = ip;
                 Api = api;
-                SessionToken = sessionToken;
+                SessionId = sessionId;
                 Time = DateTime.UtcNow;
             }
 
@@ -243,7 +249,7 @@ namespace SysWeaver.MicroService
             if (IsDisposing)
                 return;
             var s = r.Session;
-            Calls.Enqueue(new Temp(0, id, value, s.Auth, s.Token, s.DeviceId, s.ClientTimeZone, s.UserAgent, s.ClientLanguage, r.GetIpAddress(), api));
+            Calls.Enqueue(new Temp(0, id, value, s.Auth, s.TokenHash, s.DeviceId, s.ClientTimeZone, s.UserAgent, s.ClientLanguage, r.GetIpAddress(), api));
         }
 
         /// <inheritdoc />

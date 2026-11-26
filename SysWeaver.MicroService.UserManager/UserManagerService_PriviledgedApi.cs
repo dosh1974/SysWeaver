@@ -133,9 +133,9 @@ namespace SysWeaver.MicroService
             var lang = await GetLang(r.Language ?? user?.Language ?? context?.Session?.Language).ConfigureAwait(false);
             await com.Send(UserManagerComOps.Invite, lang, target, d, TextSystemString).ConfigureAwait(false);
             //  Audit: who invited whom, with which tokens (never the link or the code)
-            var by = context?.Session?.Auth?.Username ?? "?";
+            var by = LogActor(context);
             var tokenText = (authTokens == null) || (authTokens.Length == 0) ? "no tokens" : String.Concat("the tokens ", String.Join(", ", authTokens));
-            Manager.AddMessage(MessageLevels.Info, $"User \"{by}\" invited \"{target}\" with {tokenText}, the invitation expires {expires:yyyy-MM-dd HH:mm} UTC");
+            Manager.AddMessage(MessageLevels.Info, $"User \"{by}\" invited a new user (by {com.Name}) with {tokenText}, the invitation expires {expires:yyyy-MM-dd HH:mm} UTC");
             return true;
         }
 
@@ -190,7 +190,7 @@ namespace SysWeaver.MicroService
             userIdentifier = userIdentifier?.Trim();
             if (String.IsNullOrEmpty(userIdentifier))
                 return res;
-            using var c = await Db.GetAsync().ConfigureAwait(false);
+            using var c = await DbGetAsync().ConfigureAwait(false);
             var userId = await FindUser(c, userIdentifier).ConfigureAwait(false);
             var a = await GetUserAccess(c, userId).ConfigureAwait(false);
             if (a == null)
@@ -224,12 +224,12 @@ namespace SysWeaver.MicroService
         {
             var res = new ForcePasswordResetResult();
             DbUser user;
-            using (var c = await Db.GetAsync().ConfigureAwait(false))
+            using (var c = await DbGetAsync().ConfigureAwait(false))
             {
                 using var tr = await c.BeginTransactionAsync().ConfigureAwait(false);
                 if (userId <= 0)
                     userId = String.IsNullOrEmpty(userIdentifier) ? 0 : await FindUser(c, userIdentifier).ConfigureAwait(false);
-                user = userId <= 0 ? null : await c.FirstOrDefaultAsync<DbUser>(x => x.Id == userId).ConfigureAwait(false);
+                user = userId <= 0 ? null : await GetDbUser(c, userId).ConfigureAwait(false);
                 if (user == null)
                     return res;
                 res.Found = true;
@@ -264,8 +264,8 @@ namespace SysWeaver.MicroService
                         ++res.SignedOut;
                 }
             }
-            var by = context?.Session?.Auth?.Username ?? "?";
-            Manager.AddMessage(MessageLevels.Info, $"User \"{user.UserName}\" must choose a new password (forced by \"{by}\"), {res.SignedOut} session(s) signed out");
+            var by = LogActor(context);
+            Manager.AddMessage(MessageLevels.Info, $"User #{user.Id} must choose a new password (forced by \"{by}\"), {res.SignedOut} session(s) signed out");
             return res;
         }
 
@@ -326,8 +326,9 @@ namespace SysWeaver.MicroService
         [WebApiRequestCache(ServerCache)]
         public async Task<TableData> UserDataTable(TableDataRequest r)
         {
-            var ret = await Db.GetAsTableData<DbUser>(r, TableRefresh).ConfigureAwait(false);
-            return ret;
+            //  The user names and nick names are encrypted in the database: sorted, filtered and searched in memory (decrypted, cached a few seconds)
+            var users = await GetAllUsers().ConfigureAwait(false);
+            return TableDataTools.Get(r, TableRefresh, users);
         }
 
         /// <summary>
@@ -339,13 +340,26 @@ namespace SysWeaver.MicroService
         /// <returns>The users</returns>
         /// <remarks>Shown on the Users page (auth/Users.html, user menu Management > Users). Not cached on the server: the
         /// re-read right after a row action, or after a delete, shows the new state at once (with a request cache it showed the old row and its
-        /// old actions until the next refresh). The search box searches the user name, domain, language and nick name (DbData plain text search).</remarks>
+        /// old actions until the next refresh). The search box searches the user name, domain, language and nick name (in memory: the names are encrypted in the database).</remarks>
         [WebApi]
         [WebApiAuth(UserManagerRoles.ViewUser)]
         public async Task<TableData> UserAdminTable(TableDataRequest r, HttpServerRequest context)
         {
-            var ret = await Db.GetAsTableData<DbUserAdminRow>(r, TableRefresh).ConfigureAwait(false);
-            if (!DbDataType<DbUserAdminRow>.MemberNameToColumn.TryGetValue(nameof(DbUserAdminRow.Actions), out var ai))
+            //  The user names and nick names are encrypted in the database: sorted, filtered and searched in memory (decrypted, cached a few seconds;
+            //  the row actions below are made for the shown rows on every call)
+            var users = await GetAllUsers().ConfigureAwait(false);
+            var ret = TableDataTools.Get(r, TableRefresh, users.Select(x => new DbUserAdminRow
+            {
+                Id = x.Id,
+                Created = x.Created,
+                UserName = x.UserName,
+                Domain = x.Domain,
+                Language = x.Language,
+                NickName = x.NickName,
+            }));
+            var cols = ret.Cols ?? [];
+            var ai = Array.FindIndex(cols, x => x?.Name == nameof(DbUserAdminRow.Actions));
+            if (ai < 0)
                 return ret;
             //  the row actions (and their tokens) only for users that may manage users
             if (!(context?.Session?.Auth?.IsValid(UserManagerRoles.ManageUser) ?? false))
@@ -359,9 +373,10 @@ namespace SysWeaver.MicroService
                 return ret;
             }
             //  and only on users that have a password (a reset does nothing to a passkey only user), one look up per shown row
-            if (DbDataType<DbUserAdminRow>.MemberNameToColumn.TryGetValue(nameof(DbUserAdminRow.Id), out var ii))
+            var ii = Array.FindIndex(cols, x => x?.Name == nameof(DbUserAdminRow.Id));
+            if (ii >= 0)
             {
-                using var c = await Db.GetAsync().ConfigureAwait(false);
+                using var c = await DbGetAsync().ConfigureAwait(false);
                 foreach (var row in ret.Rows ?? [])
                 {
                     var v = row?.Values;
@@ -421,10 +436,10 @@ namespace SysWeaver.MicroService
                 var b = System.Text.Encoding.ASCII.GetBytes(x.Item2.CancelToken);
                 if (!System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(a, b))
                     continue;
-                using (var c = await Db.GetAsync().ConfigureAwait(false))
-                    await DeleteAction(c, x.Item1, DbAction.CreateUser, null).ConfigureAwait(false);
-                var by = context?.Session?.Auth?.Username ?? "?";
-                Manager.AddMessage(MessageLevels.Info, $"The invitation of \"{x.Item2.Target}\" was cancelled by \"{by}\"");
+                using (var c = await DbGetAsync().ConfigureAwait(false))
+                    await DeleteAction(c, x.Item1, DbAction.CreateUser, null, false).ConfigureAwait(false);
+                var by = LogActor(context);
+                Manager.AddMessage(MessageLevels.Info, $"An invitation was cancelled by \"{by}\"");
                 return true;
             }
             throw HttpResponseException.Refused("The invitation could not be withdrawn: it was already used, has expired or was withdrawn");
@@ -442,7 +457,7 @@ namespace SysWeaver.MicroService
         {
             var now = DateTime.UtcNow;
             List<DbAction> actions;
-            using (var c = await Db.GetAsync().ConfigureAwait(false))
+            using (var c = await DbGetAsync().ConfigureAwait(false))
                 actions = (await c.SelectAsync<DbAction>(x => x.Type == DbAction.CreateUser && x.Expiration > now).ConfigureAwait(false)).ToList();
             var res = new List<Tuple<String, PendingInvitation>>(actions.Count);
             foreach (var x in actions.OrderByDescending(x => x.Expiration))
@@ -450,7 +465,7 @@ namespace SysWeaver.MicroService
                 NewUserData d;
                 try
                 {
-                    d = Data.FromData<NewUserData>(x.Data);
+                    d = Data.FromData<NewUserData>(ActionData(x));
                 }
                 catch
                 {
@@ -462,7 +477,7 @@ namespace SysWeaver.MicroService
                 //  A self sign up (an account creation link the visitor asked for) is listed and can be withdrawn like an invitation, but labelled
                 //  "Self sign-up" in "Invited by" (S7a N57: it showed an empty inviter). Known by its token: created for the subject "signup:<target>"
                 //  (an invitation's is "invite:<target>", see GetNewUserToken), so an old invitation without a recorded inviter stays empty
-                var isSignUp = (target != null) && SysWeaver.Security.SubjectTokens.HasTag(x.Token, DbAction.CreateUser, TargetSubject("signup", target));
+                var isSignUp = (target != null) && x.Token.StartsWith(StoredTagPrefix(SysWeaver.Security.SubjectTokens.Tag(DbAction.CreateUser, TargetSubject("signup", target))), StringComparison.Ordinal);
                 var un = d.UserName;
                 res.Add(Tuple.Create(x.Token, new PendingInvitation
                 {

@@ -4,19 +4,15 @@
  *
  * Purpose: `Sw.UserManager`, one function per UserManagerService / SignUpService call (all under Api/auth/):
  *  - Password proof: sensitive calls prove the current password with Sw.Auth.Proof (GetUserSalt -> [salt, pad],
- *    Hash = b64(sha256(b64(sha256(pw|salt))|pad)), OneTimePad); the plain password never leaves the browser.
+ *    Hash = b64(sha256(b64(sha256(pw|salt))|pad)), OneTimePad, or the SCRAM ClientProof + ClientNonce when the server asks for it);
+ *    the plain password never leaves the browser.
  *    New passwords are sent as NewHash = Sw.Auth.PasswordHash(newPassword, salt).
  *  - Token arguments: the long token of an e-mail / text message link or the short code stored in the HTTP session.
  *  - "Message senders" post 0 and return the targets (e-mails / phone numbers) a message was sent to, or null.
  *  - Successful sign ins (AddUser, ResetPassword) are remembered in sessionStorage["SysWeaver.User"].
  *
  * Loading: classic `defer` script after ../sw/core.js (or common/common.js) and Auth.js (MicroService.Auth).
- * Globals: `Sw.UserManager` and the old global function names (legacy aliases, kept for application code):
- * setPasswordRequest, getCreatePasswordPolicy, addUserRequest, sendDeleteUserRequest, deleteUserRequest, signUpRequest,
- * forgotPasswordRequest, resetPasswordRequest, sendAddPasswordRequest, sendDeletePasswordRequest, deletePassword,
- * inviteUserRequest, changeEmailRequest, changeEmail, deleteEmail, addEmailRequest, addEmail, changePhoneRequest,
- * changePhone, deletePhone, addPhoneRequest, addPhone, setNickName, setLanguage, isManagedUser, userManagerProps
- * (validateShortCode / cleanUpShortCode now live in Auth.js).
+ * Globals: `Sw.UserManager`.
  */
 (function () {
     "use strict";
@@ -37,7 +33,7 @@
      */
     async function withProof(name, user, password, extra) {
         const p = await A.Proof(user, password);
-        return await A.Call(name, Object.assign({ Hash: p.Hash, OneTimePad: p.OneTimePad }, extra));
+        return await A.Call(name, Object.assign({ OneTimePad: p.OneTimePad, ClientProof: p.ClientProof, ClientNonce: p.ClientNonce }, extra));
     }
 
     /**
@@ -71,7 +67,7 @@
          */
         async SetPassword(user, password, newPassword) {
             const p = await A.Proof(user, password);
-            return await A.Call("SetPassword", { Hash: p.Hash, OneTimePad: p.OneTimePad, NewHash: await A.PasswordHash(T(newPassword), p.Salt) });
+            return await A.Call("SetPassword", { OneTimePad: p.OneTimePad, ClientProof: p.ClientProof, ClientNonce: p.ClientNonce, NewHash: await A.PasswordHash(T(newPassword), p.Salt) });
         },
         /** @returns {Promise<object>} The policy of new passwords (GetCreatePasswordPolicy). */
         CreatePolicy: () => A.CreatePolicy(),
@@ -93,7 +89,7 @@
         DeleteUser: token => A.Call("DeleteUser", token),
         /** @param {string} token Token (the link in the changed e-mail notice). @returns {Promise<string>} Undo an e-mail address change (no sign in): the old address, where the reset link was sent; 410 for a dead link, 409 if another account now uses the old address. */
         UndoEmailChange: token => A.Call("UndoEmailChange", token),
-        /** @returns {Promise<string[]>} The sign up methods (com names: "Email", "Sms", "WhatsApp"; older servers "Phone"). */
+        /** @returns {Promise<string[]>} The sign up methods (com names: "Email", "Sms", "WhatsApp"). */
         SignUpMethods: () => A.Get("SignUpMethods"),
         /** @param {string} target E-mail / phone. @returns {Promise<boolean>} Send sign up instructions. */
         SignUp: target => A.Call("SignUp", T(target)),
@@ -160,36 +156,4 @@
         /** @returns {Promise<object>} Misc user manager properties. */
         Props: () => A.Get("UserManagerProps"),
     };
-
-    // ------------------------------------------------------------------ legacy globals
-
-    /** Define a legacy global unless already defined (shared with Auth.js). */
-    const legacy = A.Legacy;
-
-    legacy("setPasswordRequest", UM.SetPassword);
-    legacy("getCreatePasswordPolicy", UM.CreatePolicy);
-    legacy("addUserRequest", UM.AddUser);
-    legacy("sendDeleteUserRequest", UM.SendDeleteUserRequest);
-    legacy("deleteUserRequest", UM.DeleteUser);
-    legacy("signUpRequest", UM.SignUp);
-    legacy("forgotPasswordRequest", UM.ForgotPassword);
-    legacy("resetPasswordRequest", UM.ResetPassword);
-    legacy("sendAddPasswordRequest", UM.SendAddPasswordRequest);
-    legacy("sendDeletePasswordRequest", UM.SendDeletePasswordRequest);
-    legacy("deletePassword", UM.DeletePassword);
-    legacy("inviteUserRequest", UM.Invite);
-    legacy("changeEmailRequest", UM.SendChangeEmailRequest);
-    legacy("changeEmail", UM.AddEmail);
-    legacy("deleteEmail", UM.DeleteEmail);
-    legacy("addEmailRequest", UM.SendAddEmailRequest);
-    legacy("addEmail", UM.AddEmail);
-    legacy("changePhoneRequest", UM.SendChangePhoneRequest);
-    legacy("changePhone", UM.AddPhone);
-    legacy("deletePhone", UM.DeletePhone);
-    legacy("addPhoneRequest", UM.SendAddPhoneRequest);
-    legacy("addPhone", UM.AddPhone);
-    legacy("setNickName", UM.SetNickName);
-    legacy("setLanguage", UM.SetLanguage);
-    legacy("isManagedUser", UM.IsManagedUser);
-    legacy("userManagerProps", UM.Props);
 })();

@@ -278,7 +278,7 @@ namespace SysWeaver.Auth
         /// If all authorizers are <see cref="SimpleAuthorizer"/>'s the salt is computed the same way as for a known user (same format), 
         /// else a 24 char salt is returned (the format used by random salts, <see cref="AuthTools.GetRandomSalt"/>), keyed with
         /// <see cref="FakeSaltKey"/> so that nobody can compute it (an unkeyed hash of the user name told who has an account: a salt that
-        /// differs from the computed one is a real one). It is the same for the life time of the process.
+        /// differs from the computed one is a real one). The key is persisted (see <see cref="FakeSaltKey"/>), so the fake salt is stable across restarts.
         /// </summary>
         /// <param name="username">The user name</param>
         /// <returns>A fake salt</returns>
@@ -287,14 +287,123 @@ namespace SysWeaver.Auth
             //  A different salt format would reveal what users exist
             var a = OrderdAuths;
             if ((a != null) && (a.Length > 0) && a.All(x => x is SimpleAuthorizer))
-                return AuthTools.ComputeSimpleSalt(username ?? "");
+                return AuthTools.ComputeSimpleSalt(username ?? "", ((SimpleAuthorizer)a[0]).AppHashString);
             return Convert.ToBase64String(HMACSHA256.HashData(FakeSaltKey, MemoryMarshal.Cast<Char, Byte>((username ?? "").AsSpan())), 0, 18);
         }
 
         /// <summary>
-        /// The secret key of the fake salts (random per process: a fake salt changes when the process restarts, a real one doesn't)
+        /// Get fake SCRAM parameters for an unknown user (same shape as a real answer), null if no authorizer supports SCRAM.
+        /// The salt is keyed with <see cref="FakeSaltKey"/> (stable, nobody can compute it), the iteration count and binding are the defaults of the first SCRAM authorizer.
         /// </summary>
-        static readonly byte[] FakeSaltKey = RandomNumberGenerator.GetBytes(32);
+        /// <param name="username">The user name</param>
+        /// <returns>Fake SCRAM parameters or null</returns>
+        ScramInfo GetFakeScram(String username)
+        {
+            var a = OrderdAuths;
+            if (a == null)
+                return null;
+            foreach (var x in a)
+            {
+                var d = x.ScramDefaults;
+                if (d == null)
+                    continue;
+                var h = HMACSHA256.HashData(FakeSaltKey, Encoding.UTF8.GetBytes("scram|" + (username ?? "").FastToLower()));
+                return new ScramInfo
+                {
+                    Salt = Convert.ToBase64String(h, 0, ScramTools.SaltSize),
+                    Iterations = d.Iterations,
+                    Binding = d.Binding,
+                };
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// The secret key of the fake salts, stored in <see cref="KeyValueStore.AllApp"/> so that fake salts are stable across restarts
+        /// (real ones are, a salt that changes after a restart would reveal an unknown user).
+        /// Falls back to a random key per process if it can't be stored.
+        /// </summary>
+        static readonly byte[] FakeSaltKey = GetFakeSaltKey();
+
+        static Byte[] GetFakeSaltKey()
+        {
+            const String key = "AuthManager.FakeSaltKey";
+            try
+            {
+                var s = KeyValueStore.AllApp.TryGet<String>(key);
+                if (!String.IsNullOrEmpty(s))
+                {
+                    var b = Convert.FromBase64String(s);
+                    if (b.Length == 32)
+                        return b;
+                }
+                var n = RandomNumberGenerator.GetBytes(32);
+                KeyValueStore.AllApp.Set(key, Convert.ToBase64String(n));
+                return n;
+            }
+            catch
+            {
+                return RandomNumberGenerator.GetBytes(32);
+            }
+        }
+
+
+        /// <summary>
+        /// Get the salt and the SCRAM parameters for a user (from the first authorizer that knows the user).
+        /// For unknown users a deterministic fake salt (and fake SCRAM parameters if any authorizer supports SCRAM) is returned, and a random delay is always added, to make user enumeration harder.
+        /// </summary>
+        /// <param name="username">The user name to auth</param>
+        /// <param name="only">If non-null, only this authorizer is asked (and no fake answer is made if the user is unknown)</param>
+        /// <returns>The salt (null only if <paramref name="only"/> doesn't know the user) and the SCRAM parameters (null if the user must use the legacy login)</returns>
+        public async Task<Tuple<String, ScramInfo>> GetLoginParams(String username, AuthorizerBase only = null)
+        {
+            String salt = null;
+            ScramInfo scram = null;
+            foreach (var author in (only == null ? OrderdAuths : [only]))
+            {
+                salt = await author.GetSaltAsync(username).ConfigureAwait(false);
+                if (salt != null)
+                {
+                    scram = await author.GetScramInfoAsync(username).ConfigureAwait(false);
+                    break;
+                }
+            }
+            if ((salt == null) && (only == null))
+            {
+                salt = GetFakeSalt(username);
+                scram = GetFakeScram(username);
+            }
+            await TaskExt.RandomDelay().ConfigureAwait(false);
+            return Tuple.Create(salt, scram);
+        }
+
+        /// <summary>
+        /// Get authorization from a SCRAM proof (the secure login method), asking all authorizers in order.
+        /// </summary>
+        /// <param name="username">The user name (as used when the one time pad was created)</param>
+        /// <param name="oneTimePad">The one time pad (must already be validated and consumed by the caller)</param>
+        /// <param name="clientNonce">The client nonce</param>
+        /// <param name="clientProof">The base64 encoded client proof</param>
+        /// <returns>The authorization or null</returns>
+        public async Task<Authorization> ScramAuth(String username, String oneTimePad, String clientNonce, String clientProof)
+        {
+            var proof = ScramProof.TryCreate(username, oneTimePad, clientNonce, clientProof);
+            if (proof == null)
+                return null;
+            foreach (var author in OrderdAuths)
+            {
+                var auth = await author.ScramAuth(proof).ConfigureAwait(false);
+                if (auth != null)
+                {
+#if DEBUG
+                    if (auth.Auth != author)
+                        throw new Exception("Invalid auth!");
+#endif//DEBUG
+                    return auth;
+                }
+            }
+            return null;
+        }
 
 
         /// <summary>

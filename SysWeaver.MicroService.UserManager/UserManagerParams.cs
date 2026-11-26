@@ -66,10 +66,32 @@ namespace SysWeaver.MicroService
         ];
 
         /// <summary>
-        /// If true (and the server accepts basic auth), then users are allowed to login using basic auth.
-        /// Defaults to false.
+        /// The string that binds the stored password verifiers to this application (part of the PBKDF2 input, see <see cref="SysWeaver.Auth.ScramInfo"/>).
+        /// null (the default) uses the entry assembly name. Applications that share a user database must use the same value.
+        /// Changing it makes all stored passwords invalid (users must reset their passwords).
         /// </summary>
-        public bool AllowBasicAuth;
+        public String PasswordHashString;
+
+        /// <summary>
+        /// The PBKDF2 iteration count of new password verifiers, 0 or less uses <see cref="SysWeaver.Auth.ScramTools.DefaultIterations"/>.
+        /// Existing verifiers keep their iteration count (until the password is changed).
+        /// </summary>
+        public int ScramIterations;
+
+        /// <summary>
+        /// The secret (base64, at least 16 bytes) that protects the user names, nick names, e-mail addresses and phone numbers in the database, see <see cref="SysWeaver.Auth.DataProtection"/>.
+        /// null (the default) uses <see cref="SysWeaver.Auth.DataProtection.Default"/>: a random secret stored in the key value store of the application on this computer.
+        /// Set it when several applications or computers share the database (all must use the same secret).
+        /// IMPORTANT: without the secret the protected values can't be read or found (keep a backup); a database protected with another secret is refused (nothing is read or written).
+        /// </summary>
+        public String DataProtectionSecret;
+
+        /// <summary>
+        /// Optional: a file with the data protection secret (base64), ex: "$(KeyFolder)\HypnosUsers_DataProtection.txt" (used when <see cref="DataProtectionSecret"/> is null).
+        /// The file is created with a new random secret if it doesn't exist. Every service that shares the user database must use the same secret (the same file, or a copy of it).
+        /// Back it up: without it the user names, e-mail addresses and phone numbers can't be read.
+        /// </summary>
+        public String DataProtectionSecretFile;
 
 
         /// <summary>

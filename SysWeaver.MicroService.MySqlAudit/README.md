@@ -25,7 +25,7 @@ flowchart LR
 
 ## Key features
 
-- Records each audited call with its (optionally filtered) input, result or exception, the signed in user and session
+- Records each audited call with its (optionally filtered) input, result or exception, the signed in user and session (the session id `HttpSession.TokenHash`, 32 chars, fits the existing `Session` column; rows written by older versions hold the session token and are shown redacted; the value links to the active sessions table filtered on that id)
 - Clients (IP address, device id, user agent, language and time zone) are de-duplicated into their own table
 - Buffered writes: calls are queued and written in batches every 100 ms, so auditing doesn't slow down the calls
 - *Admin / Audit / Audit browser*: advanced search of the calls joined with their clients (`IApiAuditReportService`, see [`audit/audit.html`](../SysWeaver.HttpServer/srcWeb/audit/README.md))

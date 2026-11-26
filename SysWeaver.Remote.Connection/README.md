@@ -38,7 +38,7 @@ flowchart TB
 - Per end point: serializers, time-out and an LRU response cache (GET/DELETE only) via `RemoteSerializer`, `RemoteTimeout` and `RemoteCache` attributes
 - Call monitoring through `IRemoteApi.OnCallBegin` / `OnCallEnd`, per-endpoint timing and per-method failure statistics
 - Error messages can be stripped of URLs (`CleanUrl`) to avoid leaking sensitive information
-- Helpers for calling SysWeaver servers directly with `HttpClient` (json / raw POST, login / logout, file upload)
+- Helpers for calling SysWeaver servers directly with `HttpClient` (json / raw POST, login / logout, file upload); the login sends the SCRAM proof when `GetUserSalt` asks for it, else the legacy one-time-pad hash (see [SysWeaver.MicroService.Auth](../SysWeaver.MicroService.Auth/README.md))
 - Proxies created by the service manager from a manifest are registered as remote, so consumers can prefer local or remote instances
 
 ## Key components

@@ -102,12 +102,12 @@ namespace SysWeaver.MicroService.Db
         public string UserGuid { get; set; }
 
         /// <summary>
-        /// The session that invoked this API
+        /// The session that invoked this API: the session id (<see cref="SysWeaver.Net.HttpSession.TokenHash"/>, 32 chars), rows written by older versions hold a session token (shown redacted)
         /// </summary>
         [Index]
         [Ascii]
         [StringLength(32)]
-        [TableDataUrl("{0}", "*table.html?q=../Api/debug/ActiveSessions&f={\"Invert\":false,\"CaseSensitive\":false,\"Op\":6,\"Value\":\"{0}\",\"ColName\":\"Token\",\"ColumnIndex\":0}", "Click to show session information if it's still active")]
+        [TableDataUrl("{0}", "*table.html?q=../Api/debug/ActiveSessions&f={\"Invert\":false,\"CaseSensitive\":false,\"Op\":6,\"Value\":\"{0}\",\"ColName\":\"TokenHash\",\"ColumnIndex\":0}", "Click to show the session if it is still active (or recently ended)")]
         public String Session { get; set; }
 
         /// <summary>

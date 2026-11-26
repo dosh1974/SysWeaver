@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Text;
 using System.Threading.Tasks;
 using SysWeaver.Data;
@@ -35,7 +36,7 @@ namespace SysWeaver.Net
         public const int MaxFacetValues = 1000;
 
         /// <summary>
-        /// The number of chars of a session token that are kept
+        /// The number of chars of a (legacy) session token that are kept when it is redacted
         /// </summary>
         public const int SessionChars = 6;
 
@@ -45,15 +46,19 @@ namespace SysWeaver.Net
         public const String SessionSuffix = "****";
 
         /// <summary>
-        /// Redact a session token, same as the active sessions table (the full token would allow anyone seeing it to hijack the session).
+        /// Audits store the session id (<see cref="HttpSession.TokenHash"/>), never the session token.
+        /// Entries written by older versions may hold a session token (or a redacted one): anything that isn't a session id
+        /// (<see cref="HttpSession.TokenHashLength"/> chars) is redacted, the full token would allow anyone seeing it to hijack the session.
         /// </summary>
-        /// <param name="token">The session token, can be null</param>
-        /// <returns>The redacted token</returns>
-        public static String RedactSession(String token)
+        /// <param name="session">The stored session value, can be null</param>
+        /// <returns>The session id, or the redacted value</returns>
+        public static String RedactSession(String session)
         {
-            if (String.IsNullOrEmpty(token))
+            if (String.IsNullOrEmpty(session))
                 return null;
-            return token.Length > SessionChars ? (token.Substring(0, SessionChars) + SessionSuffix) : SessionSuffix;
+            if (session.Length == HttpSession.TokenHashLength)
+                return session;
+            return session.Length > SessionChars ? (session.Substring(0, SessionChars) + SessionSuffix) : SessionSuffix;
         }
 
         /// <summary>
@@ -266,6 +271,31 @@ namespace SysWeaver.Net
         }
 
         static readonly int StateColumn = TableDataTools.GetColumnIndex<ApiAuditEntry>(nameof(ApiAuditEntry.State));
+
+        /// <summary>
+        /// Look up the location of an ip address (for the details of a call in the audit browser)
+        /// </summary>
+        /// <param name="source">The location source, null if there is none</param>
+        /// <param name="ip">The ip address</param>
+        /// <returns>The location, null if there is no source, the ip address is invalid, local, unknown or the look up failed</returns>
+        public static async Task<Location> GetIpLocation(IIpLocation source, String ip)
+        {
+            if ((source == null) || !IPAddress.TryParse(ip?.Trim() ?? "", out var a))
+                return null;
+            if (a.IsIPv4MappedToIPv6)
+                a = a.MapToIPv4();
+            //  (a local address has no location, don't ask a remote service)
+            if (IPAddress.IsLoopback(a) || a.Equals(IPAddress.Any) || a.Equals(IPAddress.IPv6Any))
+                return null;
+            try
+            {
+                return await source.GetLocation(a.ToString()).ConfigureAwait(false);
+            }
+            catch
+            {
+                return null;
+            }
+        }
 
     }
 

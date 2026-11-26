@@ -159,6 +159,13 @@ namespace SysWeaver.Net
         /// <returns>The rate limiter to use for this session, or null for no limit</returns>
         HttpRateLimiter SessionRateLimiter(HttpSession session) => null;
 
+        /// <summary>
+        /// An optional rate limiter per client IP address.
+        /// </summary>
+        /// <param name="request">The current request</param>
+        /// <returns>The rate limiter to use for the client address of the request, or null for no limit</returns>
+        HttpRateLimiter IpRateLimiter(HttpServerRequest request) => null;
+
 
     }
 }

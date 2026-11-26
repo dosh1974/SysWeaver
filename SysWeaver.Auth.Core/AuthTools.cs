@@ -191,9 +191,20 @@ namespace SysWeaver.Auth
         /// </summary>
         /// <param name="user">A valid user name</param>
         /// <returns>Plain text salt (44 chars)</returns>
-        public static String ComputeSimpleSalt(String user)
-        { 
-            var hash = ComputeHashString((user + EnvInfo.AppAssemblyName).FastToLower() + "XfETwfDcxBJGvHmgd");
+        public static String ComputeSimpleSalt(String user) => ComputeSimpleSalt(user, null);
+
+        /// <summary>
+        /// Compute a simple deterministic salt for given user (unique per user per application), used by <see cref="SimpleAuthorizer"/>.
+        /// Salt = ToBase64(SHA256(UTF8(lowercase(username + appHashString) + magic))).
+        /// </summary>
+        /// <param name="user">A valid user name</param>
+        /// <param name="appHashString">The application binding string, null or empty for the entry assembly name (<see cref="SimpleAuthorizerParams.AppHashString"/>)</param>
+        /// <returns>Plain text salt (44 chars)</returns>
+        public static String ComputeSimpleSalt(String user, String appHashString)
+        {
+            if (String.IsNullOrEmpty(appHashString))
+                appHashString = EnvInfo.AppAssemblyName;
+            var hash = ComputeHashString((user + appHashString).FastToLower() + "XfETwfDcxBJGvHmgd");
             return hash;
         }
 
@@ -204,11 +215,36 @@ namespace SysWeaver.Auth
         /// <param name="user">A valid user name</param>
         /// <param name="password">A valid password</param>
         /// <returns>Hash as a base64 string (44 chars)</returns>
-        public static String ComputeSimplePasswordHash(String user, String password)
+        public static String ComputeSimplePasswordHash(String user, String password) => ComputeSimplePasswordHash(user, password, null);
+
+        /// <summary>
+        /// Compute a simple password hash using the salt from <see cref="ComputeSimpleSalt(string, string)"/>: ToBase64(SHA256(UTF8(password|salt))).
+        /// </summary>
+        /// <param name="user">A valid user name</param>
+        /// <param name="password">A valid password</param>
+        /// <param name="appHashString">The application binding string, null or empty for the entry assembly name</param>
+        /// <returns>Hash as a base64 string (44 chars)</returns>
+        public static String ComputeSimplePasswordHash(String user, String password, String appHashString)
         {
-            var salt = ComputeSimpleSalt(user);
+            var salt = ComputeSimpleSalt(user, appHashString);
             var h = ComputeHashString(password, salt);
             return h;
+        }
+
+        /// <summary>
+        /// Compute a SCRAM verifier for a <see cref="SimpleAuthorizer"/> user line ("$s1$..." format).
+        /// </summary>
+        /// <param name="user">A valid user name</param>
+        /// <param name="password">A valid password</param>
+        /// <param name="appHashString">The application binding string, null or empty for the entry assembly name</param>
+        /// <param name="iterations">The PBKDF2 iteration count, 0 or less for the default</param>
+        /// <returns>The verifier text</returns>
+        public static String ComputeSimpleVerifier(String user, String password, String appHashString = null, int iterations = 0)
+        {
+            if (String.IsNullOrEmpty(appHashString))
+                appHashString = EnvInfo.AppAssemblyName;
+            var h = ComputeSimplePasswordHash(user.FastToLower(), password, appHashString);
+            return ScramTools.CreateVerifier(h, appHashString, iterations).ToString();
         }
 
         /// <summary>

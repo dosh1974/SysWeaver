@@ -72,7 +72,7 @@ var (fragment, vertex) = ShaderStages.SplitProgram(program);
 
 ## Limitations and considerations
 
-- The code was `EffectWeaver.Common/Shaders` in Effect Weaver; it keeps its namespace (`EffectWeaver.Shaders`) and style (nullable, implicit usings), so Effect Weaver uses it unchanged.
+- The code uses the namespace `EffectWeaver.Shaders` and Effect Weaver's style (nullable, implicit usings), so Effect Weaver uses it as is.
 - Rules the parser applies are mirrored by the Compress tool's shader minimizer (`SysWeaver.Tools/Compress/CompressProgram_Shaders.cs`): keep them in sync.
 - The build compresses every file of `srcData/` to `data/<path>.br` (brotli, `..\_tools\compress\Compress.exe -OptimizeShaders False`: stored as is, never stripped or minified) and embeds it as `snippets/<path>.br`. `data/` is generated and not in git: a removed snippet must also go from `data/` (clean it).
 - The unit tests of SysWeaver.Tests (`EffectSnippetTests`) check that every effect of the media viewer and every snippet only call snippets that exist.
@@ -83,7 +83,7 @@ var (fragment, vertex) = ShaderStages.SplitProgram(program);
 |---|---|
 | [`srcData/`](srcData/README.md) | **The source of the snippet library**: `<folder>/<Id>.glsl` + `<Id>.md` and `README.md` (the library docs, the summary table with the number of places) |
 
-`srcData/` used to be Effect Weaver's `_snippets`; the Effect Weaver editor's snippet folder is this folder in development (an admin's save is the source, embedded by the next build), and its scanner (`_snippets/tools/SnippetScan` there) writes the summary table and the "Found in effects" sections here.
+`srcData/` is Effect Weaver's snippet library: the Effect Weaver editor's snippet folder is this folder in development (an admin's save is the source, embedded by the next build), and its scanner (`_snippets/tools/SnippetScan` there) writes the summary table and the "Found in effects" sections here.
 
 ## Relationships
 

@@ -26,7 +26,7 @@ Version and licence are taken from the header comment of each file.
 
 ## Limitations and considerations
 
-- `chart.html` loads `chart.js` and `chartjs_plugin_datalabels.js` on every page load and `chart.js` (the viewer) loads `canvas2svg.js` on demand. `hammerjs.js` is still embedded but no page loads it (nothing used it).
+- `chart.html` loads `chart.js` and `chartjs_plugin_datalabels.js` on every page load and `chart.js` (the viewer) loads `canvas2svg.js` on demand. `hammerjs.js` is embedded but no page loads it.
 - Updating Chart.js may require matching changes in the server-side configuration model (`ChartJsConfig` and related classes).
 - Do not let the build minify these files: minify v2.24.19 (used by Compress) reorders `const s=t.length,{end:o=s-1}=i` into `const{end:a=o-1}=n,o=e.length`, so Chart.js threw "ReferenceError: Cannot access 'o' before initialization" (`LineElement.pathSegment`) on every filled line chart. The unit test `ChartJsEmbeddedLibraryTests` (SysWeaver.Tests) checks the embedded files.
 

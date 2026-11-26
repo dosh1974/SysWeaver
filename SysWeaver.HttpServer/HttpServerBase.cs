@@ -269,6 +269,13 @@ namespace SysWeaver.Net
                 l.Validate();
                 SessionLimits = l;
             }
+            var idp = p.IntrusionDetection ?? new IntrusionDetectionParams();
+            if (idp.Enabled)
+            {
+                Intrusions = new IntrusionDetection(idp);
+                Intrusions.Detected += OnIntrusionDetected;
+            }
+            AlwaysSecureCookies = p.SecureCookies;
             if (p.CorsCookies)
             {
                 CookieOptions = "/;HttpOnly;SameSite=None;Secure";
@@ -341,6 +348,96 @@ namespace SysWeaver.Net
 
         readonly HttpRateLimiterParams SessionLimits;
         readonly HttpRateLimiter ServerLimits;
+
+        #region Intrusion detection
+
+        /// <summary>
+        /// The intrusion detection, null if disabled (<see cref="HttpServerBaseParams.IntrusionDetection"/>)
+        /// </summary>
+        public readonly IntrusionDetection Intrusions;
+
+        /// <summary>
+        /// Intrusion attempts (shown as problems: count, last time, last report)
+        /// </summary>
+        readonly ExceptionTracker IntrusionReports = new ExceptionTracker();
+
+        /// <summary>
+        /// Called when an intrusion attempt is detected (after it was audited, logged and counted as a problem)
+        /// </summary>
+        public event Action<IntrusionInfo, HttpServerRequest> OnIntrusion;
+
+        /// <summary>
+        /// The pseudo API of intrusion audit entries
+        /// </summary>
+        static readonly HttpApiAudit IntrusionAudit = new HttpApiAudit("intrusion", "intrusion");
+
+        void OnIntrusionDetected(IntrusionInfo info, HttpServerRequest request)
+        {
+            var text = info.ToString();
+            IntrusionReports.OnException(new IntrusionDetectedException(text));
+            Msg?.AddMessage(text, MessageLevels.Warning);
+            var audit = Audit;
+            if (audit != null)
+            {
+                try
+                {
+                    //  The message of the exception is the output, json as the output of any other call
+                    var output = new IntrusionDetectedException(info.GetAuditJson());
+                    var id = ApiAudit.GetId();
+                    audit.OnApiBegin(id, request, IntrusionAudit, info);
+                    audit.OnApiException(id, request, IntrusionAudit, output);
+                }
+                catch
+                {
+                }
+            }
+            try
+            {
+                OnIntrusion?.Invoke(info, request);
+            }
+            catch
+            {
+            }
+        }
+
+        /// <summary>
+        /// Track a finished request in the intrusion detection: an error response that wasn't tracked when it was written
+        /// (ex: a status code without a body) is counted (and delayed, the response is completed when the request is disposed)
+        /// </summary>
+        async Task TrackIntrusion(HttpServerRequest data)
+        {
+            var d = Intrusions;
+            if ((d == null) || data.IntrusionTracked)
+                return;
+            int code;
+            try
+            {
+                code = data.GetResStatusCode();
+            }
+            catch
+            {
+                return;
+            }
+            await IntrusionError(data, code).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Track an error response in the intrusion detection and delay it, call this before the body is written
+        /// (the body is sent when it's written, a delay after that doesn't slow the client down)
+        /// </summary>
+        /// <param name="data">The request</param>
+        /// <param name="code">The status code of the response</param>
+        /// <returns>A task that completes after the delay</returns>
+        protected Task IntrusionError(HttpServerRequest data, int code)
+        {
+            var d = Intrusions;
+            if ((d == null) || data.IntrusionTracked || !d.IsError(code))
+                return Task.CompletedTask;
+            data.IntrusionTracked = true;
+            return d.OnError(data, data.LocalUrl);
+        }
+
+        #endregion//Intrusion detection
 
         readonly IApiAuditService Audit;
 
@@ -456,7 +553,11 @@ namespace SysWeaver.Net
                         newToken = rng.GetGuid24();
                     } while (!sessions.TryAdd(newToken.AsMemory(), session));
                 }
-                Volatile.Write(ref session.Token, newToken);
+                //  Keep the hash map in sync (the old hash no longer finds the session)
+                var byHash = SessionsByHash;
+                byHash.TryRemove(new KeyValuePair<String, HttpSession>(session.TokenHash, session));
+                session.SetToken(newToken);
+                byHash[session.TokenHash] = session;
             }
             var exp = new DateTime(DateTime.UtcNow.Ticks + SessionCookieLifetime, DateTimeKind.Utc);
             request.UpdateCookie(HttpServerTools.MakeCookie(sn, newToken, exp, GetCookieOptions(request)));
@@ -645,6 +746,7 @@ namespace SysWeaver.Net
                         continue;
                     if (data.CanExpire(now))
                     {
+                        SessionsByHash.TryRemove(new KeyValuePair<String, HttpSession>(data.TokenHash, data));
                         Interlocked.Decrement(ref CurrentSessionCount);
                         RunOnSessionRemove(data);
                         if (data.RequestCount > 3)
@@ -655,7 +757,10 @@ namespace SysWeaver.Net
                         continue;
                     }
                     if (!sessions.TryAdd(xx, data))
+                    {
+                        SessionsByHash.TryRemove(new KeyValuePair<String, HttpSession>(data.TokenHash, data));
                         Interlocked.Decrement(ref CurrentSessionCount);
+                    }
                 }
                 now -= (TimeSpan.TicksPerMinute * 1);
                 while (rs.TryPeek(out var data))
@@ -1247,6 +1352,7 @@ namespace SysWeaver.Net
                     {
                         //  We don't have an auth manager so we must fail, no point retrying with user/password
                         data.SetResStatusCode(401);
+                        await IntrusionError(data, 401).ConfigureAwait(false);
                         const String message = "Unauthorized - The token is invalid!";
                         if (!data.IsHead)
                             data.SetResText(await Translator.TranslateSafe(message, session.Language, "en", "An error message that is displayed when an authorization token is invalid").ConfigureAwait(false));
@@ -1344,6 +1450,8 @@ namespace SysWeaver.Net
                     if (am != null)
                         data.SetResHeader("WWW-Authenticate", "Basic realm=" + am.Realm);
                     data.SetResStatusCode(401);
+                    //  A normal sign out answer, not an error for the intrusion detection
+                    data.IntrusionTracked = true;
                     if (!data.IsHead)
                         data.SetResText(didClose ? "true" : "false", HttpServerTools.JsonMime);
                     return ValueTask.CompletedTask;
@@ -1427,6 +1535,7 @@ namespace SysWeaver.Net
         async Task Set404(HttpServerRequest data)
         {
             data.SetResStatusCode(404);
+            await IntrusionError(data, 404).ConfigureAwait(false);
             if (!data.IsHead)
                 data.SetResText(await Get404Text(data.Language).ConfigureAwait(false));
         }
@@ -1524,6 +1633,7 @@ namespace SysWeaver.Net
         protected async Task SetReason(HttpServerRequest data, int status, String reason, String denied)
         {
             data.SetResStatusCode(status);
+            await IntrusionError(data, status).ConfigureAwait(false);
             data.SetResHeader(ReasonHeader, "1");
             if (denied != null)
                 data.SetResHeader(DeniedHeader, denied);
@@ -1555,6 +1665,7 @@ namespace SysWeaver.Net
                 {
                     //  We don't have an auth manager so we must fail, no point retrying with user/password
                     data.SetResStatusCode(401);
+                    await IntrusionError(data, 401).ConfigureAwait(false);
                     if (!isHead)
                         data.SetResText(await Translator.TranslateSafe("Unauthorized - No auth manager found! Endpoints requiring auth is not accessible!", session.Language, "en", "This is the message to display when trying to access a protected end point in a web server that doesn't have any way to authenticate a user").ConfigureAwait(false));
                     return true;
@@ -1600,10 +1711,12 @@ namespace SysWeaver.Net
                         //  No auth in request, fail and request auth to be supplied
                         data.SetResHeader("WWW-Authenticate", "Basic realm=" + am.Realm);
                         data.SetResStatusCode(401);
+                        await IntrusionError(data, 401).ConfigureAwait(false);
                     }
                     else
                     {
                         data.SetResStatusCode(401);
+                        await IntrusionError(data, 401).ConfigureAwait(false);
                         if (!isHead)
                             data.SetResText(await Translator.TranslateSafe("Unauthorized - Authorization header is not allowed, can't authorize!", session.Language, "en", "This is the message to display when trying to access a protected end point using an Authorization request header in a web server that doesn't allow using the Authorization header").ConfigureAwait(false));
                     }
@@ -1621,9 +1734,11 @@ namespace SysWeaver.Net
                             //  No valid user.. try again
                             data.SetResHeader("WWW-Authenticate", "Basic realm=" + am.Realm);
                             data.SetResStatusCode(401);
+                            await IntrusionError(data, 401).ConfigureAwait(false);
                             return true;
                         }
                         data.SetResStatusCode(403);
+                        await IntrusionError(data, 403).ConfigureAwait(false);
                         return true;
                     }
                     if (session != null)
@@ -1636,10 +1751,19 @@ namespace SysWeaver.Net
                 else
                 {
                     data.SetResStatusCode(401);
+                    await IntrusionError(data, 401).ConfigureAwait(false);
                     if (!isHead)
                         data.SetResText(await Translator.TranslateSafe("Unauthorized - Authorization header is not allowed, can't authorize!", session.Language, "en", "This is the message to display when trying to access a protected end point using an Authorization request header in a web server that doesn't allow using the Authorization header").ConfigureAwait(false));
                     return true;
                 }
+            }
+            //  An authorization restricted to some client addresses (ex: an API key with an address white list), checked on every request
+            //  (also when the session cookie of a header sign in is used)
+            if ((user.AllowedNetworks != null) && !user.IsAddressAllowed(data.GetIpAddress()))
+            {
+                data.SetResStatusCode(403);
+                await IntrusionError(data, 403).ConfigureAwait(false);
+                return true;
             }
             if (!user.IsValid(auth))
             {
@@ -1925,6 +2049,14 @@ namespace SysWeaver.Net
         /// <remarks>Exceptions thrown while resolving the handler (by a module) propagate to the caller.</remarks>
         public async Task Handle(HttpServerRequest data)
         {
+            await HandleCore(data).ConfigureAwait(false);
+            //  Error responses (ex: scanning for API's) are tracked per client address, and delayed
+            if (Intrusions != null)
+                await TrackIntrusion(data).ConfigureAwait(false);
+        }
+
+        async Task HandleCore(HttpServerRequest data)
+        {
             RequestStats.Add(data.ReqContentLength);
             var rateLimiter = ServerLimits;
             if ((rateLimiter != null) && (await HandleLimit(data, rateLimiter).ConfigureAwait(false)))
@@ -2009,7 +2141,10 @@ namespace SysWeaver.Net
             var newData = t.Redirected;
             using var _ = newData as IDisposable;
             data = newData ?? data;
-            //  Rate limiting
+            //  Rate limiting (per address first: a single abusive client is rejected before it uses the shared service budget)
+            rateLimiter = t.IpRateLimiter(data);
+            if ((rateLimiter != null) && (await HandleLimit(data, rateLimiter).ConfigureAwait(false)))
+                return;
             rateLimiter = t.ServiceRateLimiter;
             if (rateLimiter != null)
                 if ((rateLimiter != null) && (await HandleLimit(data, rateLimiter).ConfigureAwait(false)))
@@ -2017,6 +2152,18 @@ namespace SysWeaver.Net
             rateLimiter = t.SessionRateLimiter(session);
             if ((rateLimiter != null) && (await HandleLimit(data, rateLimiter).ConfigureAwait(false)))
                 return;
+            //  Key API's (audited, or with WebApiIntrusionTrack) are tracked per client address
+            var intrusions = Intrusions;
+            if ((intrusions != null) && (t is ApiHttpEntry intrusionApi))
+            {
+                var track = intrusionApi.IntrusionTrack ?? intrusions.TrackAuditedApis;
+                if (track)
+                {
+                    var delay = intrusions.OnApi(data, localUrl);
+                    if (!delay.IsCompleted)
+                        await delay.ConfigureAwait(false);
+                }
+            }
 #if DEBUG
             //using var ___ = await DebugLock.Lock().ConfigureAwait(false); // Enabled this line to handle one request at a time
 #endif//DEBUG
@@ -2693,6 +2840,7 @@ namespace SysWeaver.Net
                 if (re != null)
                 {
                     data.SetResStatusCode(re.ResponseCode);
+                    await IntrusionError(data, re.ResponseCode).ConfigureAwait(false);
                     //  A text written for people: the client shows it as the reason (instead of a generic sentence for the status)
                     if (re.IsReason)
                         data.SetResHeader(ReasonHeader, "1");
@@ -3295,12 +3443,17 @@ namespace SysWeaver.Net
         readonly String CookieOptionsSecure;
 
         /// <summary>
-        /// Get the cookie path and attributes to use for a request ("Secure" is added for https requests)
+        /// Get the cookie path and attributes to use for a request ("Secure" is added for https requests, also when a trusted proxy ended the TLS, and always if <see cref="HttpServerBaseParams.SecureCookies"/> is true)
         /// </summary>
         /// <param name="req">The request</param>
         /// <returns>The cookie path and attributes</returns>
         String GetCookieOptions(HttpServerRequest req)
-            => (req.Prefix?.StartsWith("https:", StringComparison.OrdinalIgnoreCase) ?? false) ? CookieOptionsSecure : CookieOptions;
+            => (AlwaysSecureCookies || req.IsHttps) ? CookieOptionsSecure : CookieOptions;
+
+        /// <summary>
+        /// <see cref="HttpServerBaseParams.SecureCookies"/>
+        /// </summary>
+        readonly bool AlwaysSecureCookies;
 
         /// <summary>
         /// The Content-Security-Policy header value sent with every response ("frame-ancestors 'self'" by default), null to not send one (see <see cref="HttpServerBaseParams.FrameAncestors"/>)
@@ -3413,7 +3566,29 @@ namespace SysWeaver.Net
 
         //readonly ConcurrentDictionary<String, HttpSession> Sessions = new (StringComparer.Ordinal);
 
+        /// <summary>
+        /// The active sessions, keyed by the session token (the secret value of the session cookie).
+        /// This is the only place where the tokens are kept: never enumerate the keys to expose them, use <see cref="HttpSession.TokenHash"/> to identify a session.
+        /// </summary>
         readonly LowAllocConcurrentDictionary<ReadOnlyMemory<Char>, HttpSession> Sessions = new(128, ReadOnlyMemoryComparer.GetEqualityComparer<Char>());
+
+        /// <summary>
+        /// The active sessions, keyed by <see cref="HttpSession.TokenHash"/> (the safe session id), kept in sync with <see cref="Sessions"/>
+        /// (a session is added after it was added to <see cref="Sessions"/> and removed when it is removed from it, so it may briefly be missing or remain).
+        /// </summary>
+        readonly System.Collections.Concurrent.ConcurrentDictionary<String, HttpSession> SessionsByHash = new(StringComparer.Ordinal);
+
+        /// <summary>
+        /// Find an active session from its safe id (<see cref="HttpSession.TokenHash"/>, as shown in logs, audits and debug views).
+        /// </summary>
+        /// <param name="tokenHash">The hash of the session token, see <see cref="HttpSession.HashToken(ReadOnlySpan{char})"/></param>
+        /// <returns>The session, or null if there is no active session with that id (it ended, expired or its token was rotated by a sign in)</returns>
+        public HttpSession FindSessionByTokenHash(String tokenHash)
+        {
+            if (String.IsNullOrEmpty(tokenHash))
+                return null;
+            return SessionsByHash.TryGetValue(tokenHash, out var s) ? s : null;
+        }
 
         ValueTask<HttpSession> GetSession(HttpServerRequest req)
         {
@@ -3495,6 +3670,7 @@ namespace SysWeaver.Net
                     session.OnAuthLogout += onLogout;
                 } while (!sessions.TryAdd(sessionToken.AsMemory(), session));
             }
+            SessionsByHash[session.TokenHash] = session;
             if (setSessionCookie)
             {
                 var exp = new DateTime(nowTicks + SessionCookieLifetime, DateTimeKind.Utc);
@@ -3535,6 +3711,7 @@ namespace SysWeaver.Net
             {
                 if (!Sessions.TryRemove(session.Token.AsMemory(), out session))
                     return false;
+                SessionsByHash.TryRemove(new KeyValuePair<String, HttpSession>(session.TokenHash, session));
             }
             Interlocked.Decrement(ref CurrentSessionCount);
             //  Remember who was signed in (the sign out clears the auth), so the active sessions table can still name the user of an ended session
@@ -3732,6 +3909,8 @@ namespace SysWeaver.Net
             foreach (var e in LoginErrors.GetStats(sys, "OnLogin."))
                 yield return e;
             foreach (var e in LogoutErrors.GetStats(sys, "OnLogout."))
+                yield return e;
+            foreach (var e in IntrusionReports.GetStats(sys, "Intrusion."))
                 yield return e;
             foreach (var e in TransformExceptions.GetStats(sys, "Transform."))
                 yield return e;
@@ -4372,6 +4551,7 @@ namespace SysWeaver.Net
         /// <returns>The table data</returns>
         //  The summary (and remarks) of a menu table is its menu tool tip (WebMenuTable without a description: XmlDoc().ToTitle()), so it
         //  stays the original user sentence (S5-A-12, D26). Developer notes:
+        //  - Sessions are identified by the session id (TokenHash, the hash of the token), the tokens themselves are never shown.
         //  - An active session of a signed in user (other than your own) can be ended with its "End session" action (EndSession); the
         //    caller's own session has IsCurrent true (a hidden column, for a "you" mark); ended and expired sessions stay listed
         //    (Expired) for a while. The latest activity is first by default.
@@ -4386,32 +4566,55 @@ namespace SysWeaver.Net
         public TableData ActiveSessions(TableDataRequest r, HttpServerRequest context)
         {
             var n = DateTime.UtcNow;
-            HashSet<String> seen = new HashSet<string>(StringComparer.Ordinal);
+            HashSet<HttpSession> seen = new HashSet<HttpSession>(ReferenceEqualityComparer.Instance);
             var own = context?.Session;
             var flags = HaveIsoFlags;
-            //  Default order: the latest activity first (SessionDebugData has a TableDataDefaultOrder)
-            var data = TableDataTools.Get(r, 5000, Sessions.Values.Where(x => seen.Add(x.Token)).Select(x => new SessionDebugData(x, n, false, null, flags)
+            //  Default order: the latest activity first (SessionDebugData has a TableDataDefaultOrder).
+            //  Sessions are identified by the hash of the token (TokenHash), the token itself is never part of the table (so filtering and sorting can't reveal it)
+            return TableDataTools.Get(r, 5000, Sessions.Values.Where(seen.Add).Select(x => GetSessionDebugData(x, n, own, flags))
+                .Concat(ExpiredSessions.Where(seen.Add).Select(x => new SessionDebugData(x, n, true, ClosedSessionUsers.TryGetValue(x, out var u) ? u : null, flags))));
+        }
+
+        /// <summary>
+        /// The debug data of an active session (with the end token when it can be ended by the caller)
+        /// </summary>
+        SessionDebugData GetSessionDebugData(HttpSession x, DateTime n, HttpSession own, bool flags) => new SessionDebugData(x, n, false, null, flags)
+        {
+            //  End session: only active sessions with a signed in user, never the caller's own (sign out instead).
+            //  Ending an anonymous session is pointless: the browser just starts a new one with its next request (ex: the
+            //  signed out page of a user whose session was ended polls the user state, so it shows up as a new anonymous session)
+            EndToken = (x == own) || (x.Auth == null) ? null : SessionEndToken(x),
+            IsCurrent = x == own,
+        };
+
+        /// <summary>
+        /// Get the details of a session from its id (the hash of the session token, as shown in logs, audits and the active sessions table).
+        /// Active sessions are found directly, recently ended or expired sessions (still listed by the active sessions table) are searched.
+        /// </summary>
+        /// <param name="tokenHash">The session id (<see cref="HttpSession.TokenHash"/>, 32 chars)</param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
+        /// <returns>The session details</returns>
+        /// <exception cref="HttpResponseException">400: the id is missing or malformed; 404: no active or recently ended session has that id (it may have expired, or the user signed in, which gives the session a new id)</exception>
+        [WebApi("debug/{0}")]
+        [WebApiAuth(Roles.Ops)]
+        [WebApiClientCache(2)]
+        [WebApiRequestCache(2)]
+        public SessionDebugData SessionDetails(String tokenHash, HttpServerRequest context)
+        {
+            tokenHash = tokenHash?.Trim();
+            if (String.IsNullOrEmpty(tokenHash) || (tokenHash.Length != HttpSession.TokenHashLength))
+                throw new HttpResponseException(400, "A session id (" + HttpSession.TokenHashLength + " chars) is required");
+            var n = DateTime.UtcNow;
+            var flags = HaveIsoFlags;
+            var s = FindSessionByTokenHash(tokenHash);
+            if (s != null)
+                return GetSessionDebugData(s, n, context?.Session, flags);
+            foreach (var x in ExpiredSessions)
             {
-                //  End session: only active sessions with a signed in user, never the caller's own (sign out instead).
-                //  Ending an anonymous session is pointless: the browser just starts a new one with its next request (ex: the
-                //  signed out page of a user whose session was ended polls the user state, so it shows up as a new anonymous session)
-                EndToken = (x == own) || (x.Auth == null) ? null : SessionEndToken(x.Token),
-                IsCurrent = x == own,
-            }).Concat(ExpiredSessions.Where(x => seen.Add(x.Token)).Select(x => new SessionDebugData(x, n, true, ClosedSessionUsers.TryGetValue(x, out var u) ? u : null, flags))));
-            var rows = data.Rows;
-            if (rows != null)
-            {
-                foreach (var row in rows)
-                {
-                    var d = row.Values[0] as String;
-                    if ((d != null) && (d.Length > 6))
-                        d = d.Substring(0, 6) + "****";
-                    else
-                        d = "****";
-                    row.Values[0] = d;
-                }
+                if (String.Equals(x.TokenHash, tokenHash, StringComparison.Ordinal))
+                    return new SessionDebugData(x, n, true, ClosedSessionUsers.TryGetValue(x, out var u) ? u : null, flags);
             }
-            return data;
+            throw new HttpResponseException(404, "No active or recently ended session has that id (it may have expired, or a sign in gave it a new id)");
         }
 
 
@@ -4420,7 +4623,7 @@ namespace SysWeaver.Net
         /// </summary>
         /// <param name="r">Table parameters</param>
         /// <returns>The table data</returns>
-        /// <remarks>The session tokens are redacted (only the first 6 characters are shown).</remarks>
+        /// <remarks>Sessions are shown by their id (the hash of the session token, <see cref="HttpSession.TokenHash"/>), never by the token.</remarks>
         [WebApi("debug/{0}")]
         [WebApiAuth(Roles.Ops)]
         [WebApiClientCache(5)]

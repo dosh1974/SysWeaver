@@ -71,7 +71,7 @@ namespace SysWeaver.MicroService
         public String Salt { get; set; }
 
         /// <summary>
-        /// The user name of the inviter, null for a sign up (or an invitation made before this was recorded)
+        /// The user name of the inviter, null for a sign up (or an invitation without a known inviter)
         /// </summary>
         public String InvitedBy { get; set; }
 

@@ -6,7 +6,8 @@ namespace SysWeaver.Docs
     /// The XML documentation of a type or member, as read from the compiler generated documentation file.
     /// </summary>
     /// <remarks>
-    /// Texts are the element's inner text, trimmed; nested elements contribute only their text, so self closing tags such as &lt;see cref="..."/&gt; disappear.
+    /// Texts are the element's text, trimmed, with references rendered as text: &lt;see cref="..."/&gt; gives the name of the type ("MyType") or member ("MyType.Method"),
+    /// &lt;see langword="..."/&gt; the keyword, &lt;paramref&gt; / &lt;typeparamref&gt; the name, &lt;para&gt; a line break; other nested elements contribute their text.
     /// &lt;inheritdoc/&gt; is not resolved.
     /// </remarks>
     public interface IXmlDocInfo

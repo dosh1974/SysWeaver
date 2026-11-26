@@ -39,5 +39,5 @@ fragColor = vec4(EwLinearToSrgbFast(col), 1.0);
 
 The effects use `pow(col, vec3(0.4545))` in about 50 places; `0.4545` equals `1.0 / 2.2` to four
 digits, so the replacement is visually identical. The `max(c, 0.0)` clamp only changes results for
-negative inputs, which were undefined (NaN on some GPUs) in the local versions. `sqrt(col)` (gamma 2.0)
+negative inputs, which are undefined (NaN on some GPUs) in the local versions. `sqrt(col)` (gamma 2.0)
 and `pow(col, vec3(1.0 / 2.4))` are different curves; keep them or accept a slight brightness change.

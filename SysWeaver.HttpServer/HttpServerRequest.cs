@@ -406,6 +406,11 @@ namespace SysWeaver.Net
         /// <param name="length">The length in bytes</param>
         public abstract void SetResContentLength(long length);
         /// <summary>
+        /// True when the intrusion detection already tracked (and delayed) the error response of this request
+        /// </summary>
+        internal bool IntrusionTracked;
+
+        /// <summary>
         /// Set the status code of the response.
         /// </summary>
         /// <param name="statusCode">The http status code</param>
@@ -525,6 +530,40 @@ namespace SysWeaver.Net
 
         String LazyClientIp;
         String LazyProxyIp;
+
+        /// <summary>
+        /// True if the client used https: the connection is https, or the connection comes from a trusted proxy (<see cref="HttpServerBaseParams.TrustedProxies"/>)
+        /// that ended the TLS and says so ("proto=https" in the first element of the "Forwarded" header, else "https" as the first "X-Forwarded-Proto" value).
+        /// </summary>
+        public bool IsHttps
+        {
+            get
+            {
+                if (Prefix?.StartsWith("https:", StringComparison.OrdinalIgnoreCase) ?? false)
+                    return true;
+                var peer = GetIP();
+                var server = Server;
+                if ((peer == null) || (server == null) || !server.IsTrustedProxy(peer))
+                    return false;
+                var fw = GetReqHeader("Forwarded");
+                if (!String.IsNullOrWhiteSpace(fw))
+                {
+                    //  The first element is the client side of the first proxy
+                    var first = fw.Split(',')[0];
+                    foreach (var pair in first.Split(';'))
+                    {
+                        var kv = pair.Trim();
+                        if (kv.StartsWith("proto=", StringComparison.OrdinalIgnoreCase))
+                            return kv.AsSpan(6).Trim().Trim('"').Equals("https", StringComparison.OrdinalIgnoreCase);
+                    }
+                }
+                var xfp = GetReqHeader("X-Forwarded-Proto");
+                if (String.IsNullOrWhiteSpace(xfp))
+                    return false;
+                var c = xfp.IndexOf(',');
+                return (c < 0 ? xfp.AsSpan() : xfp.AsSpan(0, c)).Trim().Equals("https", StringComparison.OrdinalIgnoreCase);
+            }
+        }
 
         static String IpText(IPAddress ip) => ip.IsIPv4MappedToIPv6 ? ip.MapToIPv4().ToString() : ip.ToString();
 

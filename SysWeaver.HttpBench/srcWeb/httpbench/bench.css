@@ -151,3 +151,9 @@
 .hb-runs {
     height: 22rem;
 }
+
+/* The values, results and notes of the benchmark (UX guide INP-30: text that changes from run to run can be selected and copied) */
+:where(.hb-value, .hb-module-count, .hb-module-desc, .hb-note, .hb-table td) {
+    user-select: text;
+    -webkit-user-select: text;
+}

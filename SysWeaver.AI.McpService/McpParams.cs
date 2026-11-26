@@ -15,7 +15,8 @@ namespace SysWeaver.AI
 
         /// <summary>
         /// The auth token(s) required to access this service (comma separated).
-        /// "" = Any authenticated user (a Bearer token or API key can be used), null = public (no auth), "-" = no access.
+        /// "" = Any signed in user except API keys, null = public (no auth), "-" = no access.
+        /// An API key only gets access to what requires one of its tokens: use "service" to let API keys with the "service" token in (users with the "debug" or "dev" token too).
         /// </summary>
         public String Auth = "";
 
@@ -40,7 +41,7 @@ namespace SysWeaver.AI
         /// If true (and a service manager is supplied), the AI tools (methods with an AiToolAttribute or AiUseAttribute) of all service instances are exposed.
         /// Access to each tool is still restricted by its auth (WebApiAuthAttribute).
         /// </summary>
-        public bool ServiceTools = true;
+        public bool ServiceTools;
 
         /// <summary>
         /// Files attached by tools (images, maps etc) are stored in the user storage (IUserStorageService) if available, as private files of the user.
@@ -71,6 +72,21 @@ namespace SysWeaver.AI
         /// The maximum size of a request body in bytes
         /// </summary>
         public int MaxRequestSize = 4 << 20;
+
+        /// <summary>
+        /// The number of tool calls that are kept in memory (with input, output and caller) for the call log table (Admin > MCP call log), 0 disables the log
+        /// </summary>
+        public int CallLogSize = 256;
+
+        /// <summary>
+        /// The maximum number of characters of the input and the output of a logged tool call, longer data is truncated
+        /// </summary>
+        public int CallLogMaxLength = 64 << 10;
+
+        /// <summary>
+        /// A temporary MCP server (ex: the debug server started from Admin > MCP debug) is removed this many minutes after the last request to it
+        /// </summary>
+        public int TempServerLifetimeMinutes = 60;
 
         /// <summary>
         /// Optional services whose WebApi's are exposed as tools (requires a service manager).

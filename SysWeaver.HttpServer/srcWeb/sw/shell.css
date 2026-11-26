@@ -1953,3 +1953,9 @@ body.sw-shell-drawer .sw-shell-offline-line {
         border: 1px solid CanvasText;
     }
 }
+
+/* The state lines of the activity list and the values of the session details (UX guide INP-30: text that changes from run to run can be selected and copied) */
+:where(.sw-shell-actstate, .sw-shell-keyrow > dd, .sw-shell-offline-text) {
+    user-select: text;
+    -webkit-user-select: text;
+}

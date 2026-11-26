@@ -37,7 +37,7 @@ All pages use the new front end format (Sw core + ui, no `common/common.js` / `a
 
 ### Page protocol
 
-Each page loads `../sw/core.js`, `../sw/ui.js`, (libraries), `smShared.js`, the page script, and calls its global `*Main()` from `<body onload>`. The entry runs inside `Sw.Page.Main(fn, { Loading: true })`: the loader shows until the first data is rendered, then the app shell reveals the frame. All in-shell navigation uses `Sw.Page.Navigate(url, "_self")`. Server apis are page relative (`GetDetail` = `ServerManager/GetDetail`). The pages send the same requests as the original (pre Design v2) pages did.
+Each page loads `../sw/core.js`, `../sw/ui.js`, (libraries), `smShared.js`, the page script, and calls its global `*Main()` from `<body onload>`. The entry runs inside `Sw.Page.Main(fn, { Loading: true })`: the loader shows until the first data is rendered, then the app shell reveals the frame. All in-shell navigation uses `Sw.Page.Navigate(url, "_self")`. Server apis are page relative (`GetDetail` = `ServerManager/GetDetail`).
 
 ### Pages
 

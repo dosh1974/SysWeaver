@@ -669,7 +669,7 @@ namespace SysWeaver.MicroService
         /// <returns>True if the folder was activated (failures throw)</returns>
         /// <exception cref="Exception"></exception>
         [WebApi]
-        [WebApiAuth("")]
+        [WebApiAuth(FolderSyncParams.DefaultApiAuth)]
         [WebApiAudit("FolderSync")]
         public async Task<bool> Activate(FolderSyncOperation r, HttpServerRequest context)
         {
@@ -717,7 +717,7 @@ namespace SysWeaver.MicroService
         /// <returns>True if the folder was deleted (failures throw)</returns>
         /// <exception cref="Exception"></exception>
         [WebApi]
-        [WebApiAuth("")]
+        [WebApiAuth(FolderSyncParams.DefaultApiAuth)]
         [WebApiAudit("FolderSync")]
         public async Task<bool> Remove(FolderSyncOperation r, HttpServerRequest context)
         {
@@ -856,7 +856,7 @@ namespace SysWeaver.MicroService
         /// <returns>Changes required to sync the managed folder</returns>
         /// <exception cref="Exception"></exception>
         [WebApi]
-        [WebApiAuth("")]
+        [WebApiAuth(FolderSyncParams.DefaultApiAuth)]
         [WebApiAudit("FolderSync")]
         [WebApiAuditFilterParams(nameof(AuditInputFilter_SyncFolder))]
         [WebApiAuditFilterReturn(nameof(AuditOutputFilter_SyncFolder))]

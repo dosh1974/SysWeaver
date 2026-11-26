@@ -358,7 +358,7 @@ namespace SysWeaver.MicroService
                 "*Footer"
                 );
 
-            Init(db).RunAsync();
+            InitAndMigrate(db).RunAsync();
             PruneTask = new PeriodicTask(Prune, 15000);
         }
 
@@ -464,7 +464,10 @@ namespace SysWeaver.MicroService
             //  First: no database needed (a database error doesn't stop it)
             PruneResetPasswordSent();
             PruneCodes();
-            using (var c = await Db.GetAsync().ConfigureAwait(false))
+            //  The database can't be used (or isn't ready yet: the migration runs)
+            if (!PiiReady.Task.IsCompletedSuccessfully)
+                return true;
+            using (var c = await DbGetAsync().ConfigureAwait(false))
             {
                 var now = DateTime.UtcNow;
                 await c.DeleteAllAsync<DbAction>(x => now > x.Expiration).ConfigureAwait(false);
@@ -485,20 +488,21 @@ namespace SysWeaver.MicroService
         readonly String HtmlLogo;
         readonly String HtmlLogoGradient;
 
-        static async Task Init(MySqlDbSimpleStack db)
+        /// <summary>
+        /// Init the tables that don't hold protected values (the user, e-mail and phone tables are made by <see cref="InitProtectedTables"/>, after the migration)
+        /// </summary>
+        /// <remarks>db.Init must have been called (and the migration lock should be held, see <see cref="InitAndMigrate"/>)</remarks>
+        static async Task InitTables(MySqlDbSimpleStack db)
         {
-            await db.Init().ConfigureAwait(false);
             using (var c = await db.GetAsync().ConfigureAwait(false))
             {
-                await db.InitTable<DbUser>(c).ConfigureAwait(false);
-                await db.InitTable<DbEmailAddress>(c).ConfigureAwait(false);
-                await db.InitTable<DbPhoneNumber>(c).ConfigureAwait(false);
                 await db.InitTable<DbToken>(c).ConfigureAwait(false);
                 await db.InitTable<DbAction>(c).ConfigureAwait(false);
                 await db.InitTable<DbAuthPassKey>(c).ConfigureAwait(false);
                 await db.InitTable<DbAuthPassword>(c).ConfigureAwait(false);
                 await db.InitTable<DbUserData>(c).ConfigureAwait(false);
                 await db.InitTable<DbUserDataString>(c).ConfigureAwait(false);
+                await db.InitTable<DbUserManagerMeta>(c).ConfigureAwait(false);
             }
         }
         /// <summary>
@@ -585,7 +589,7 @@ namespace SysWeaver.MicroService
                 throw new UserDoNotExistException(userId.ToString());
             var userName = user.NickName ?? user.UserName;
             List<String> targets;
-            using (var c = await Db.GetAsync().ConfigureAwait(false))
+            using (var c = await DbGetAsync().ConfigureAwait(false))
                 targets = await GetUserComTargets(c, userId).ConfigureAwait(false);
             if (targets.Count <= 0)
                 throw new UserHaveNoComs();
@@ -685,7 +689,7 @@ namespace SysWeaver.MicroService
                 throw new UserDoNotExistException(userId.ToString());
             var userName = user.NickName ?? user.UserName;
             List<String> targets;
-            using (var c = await Db.GetAsync().ConfigureAwait(false))
+            using (var c = await DbGetAsync().ConfigureAwait(false))
                 targets = await GetUserComTargets(c, userId).ConfigureAwait(false);
             if (targets.Count <= 0)
                 throw new UserHaveNoComs();
@@ -808,8 +812,8 @@ namespace SysWeaver.MicroService
         async Task<List<String>> GetUserComTargets(OrmConnection c, long userId)
         {
             List<String> targets = new List<string>();
-            targets.AddRange((await c.SelectAsync<DbEmailAddress>(x => x.UserId == userId).ConfigureAwait(false)).Select(x => x.Email));
-            targets.AddRange((await c.SelectAsync<DbPhoneNumber>(x => x.UserId == userId).ConfigureAwait(false)).Select(x => x.Phone));
+            targets.AddRange((await GetDbEmails(c, userId).ConfigureAwait(false)).Select(x => x.Email));
+            targets.AddRange((await GetDbPhones(c, userId).ConfigureAwait(false)).Select(x => x.Phone));
             return targets;
         }
 
@@ -857,9 +861,9 @@ namespace SysWeaver.MicroService
             var id = getIdFromData(actionData.Item2);
             if (id == 0)
                 throw new TokenExpiredException();
-            using var c = await Db.GetAsync().ConfigureAwait(false);
+            using var c = await DbGetAsync().ConfigureAwait(false);
             using var tr = await c.BeginTransactionAsync().ConfigureAwait(false);
-            var authData = await c.FirstOrDefaultAsync<DbUser>(x => x.Id == id).ConfigureAwait(false);
+            var authData = await GetDbUser(c, id).ConfigureAwait(false);
             if (authData == null)
                 throw new UserNoLongerExistException(id);
             var auth = await InternalAuthUser(c, id).ConfigureAwait(false);
@@ -938,7 +942,7 @@ namespace SysWeaver.MicroService
             try
             {
 
-                using var c = await Db.GetAsync().ConfigureAwait(false);
+                using var c = await DbGetAsync().ConfigureAwait(false);
                 var dp = c.DialectProvider;
                 var colName = dp.GetQuotedColumnName(nameof(DbUser.Id));
                 var tableName = dp.GetQuotedTableName(ModelDefinition<DbUser>.Definition);
@@ -974,7 +978,7 @@ namespace SysWeaver.MicroService
         /// <returns>True if at least one user account exists</returns>
         public async Task<bool> HaveAnyUser()
         {
-            using var c = await Db.GetAsync().ConfigureAwait(false);
+            using var c = await DbGetAsync().ConfigureAwait(false);
             return (await c.CountAsync<DbUser>().ConfigureAwait(false)) > 0;
         }
 
@@ -987,7 +991,7 @@ namespace SysWeaver.MicroService
         {
             if (uid == 0)
                 return false;
-            using var c = await Db.GetAsync().ConfigureAwait(false);
+            using var c = await DbGetAsync().ConfigureAwait(false);
             //  A row without a hash is no password (GetSaltAsync adds one for a user without a password when anyone asks for the salt)
             return IsUsablePassword(await c.FirstOrDefaultAsync<DbAuthPassword>(x => x.UserId == uid).ConfigureAwait(false));
         }
@@ -1002,8 +1006,8 @@ namespace SysWeaver.MicroService
         {
             if (uid == 0)
                 return false;
-            using var c = await Db.GetAsync().ConfigureAwait(false);
-            return (await c.FirstOrDefaultAsync<DbEmailAddress>(x => x.UserId == uid).ConfigureAwait(false)) != null;
+            using var c = await DbGetAsync().ConfigureAwait(false);
+            return (await GetDbEmail(c, uid).ConfigureAwait(false)) != null;
         }
 
         /// <summary>
@@ -1015,8 +1019,8 @@ namespace SysWeaver.MicroService
         {
             if (uid == 0)
                 return false;
-            using var c = await Db.GetAsync().ConfigureAwait(false);
-            return (await c.FirstOrDefaultAsync<DbPhoneNumber>(x => x.UserId == uid).ConfigureAwait(false)) != null;
+            using var c = await DbGetAsync().ConfigureAwait(false);
+            return (await GetDbPhone(c, uid).ConfigureAwait(false)) != null;
         }
 
 
@@ -1068,18 +1072,18 @@ namespace SysWeaver.MicroService
             var tokenSet = tokens == null ? null : new HashSet<String>(tokens.Select(x => x.FastTrimToLower()), StringComparer.Ordinal);
             long id;
             Authorization auth;
-            using (var c = await Db.GetAsync().ConfigureAwait(false))
+            using (var c = await DbGetAsync().ConfigureAwait(false))
             {
                 using var tr = await c.BeginTransactionAsync().ConfigureAwait(false);
                 if (email != null)
                 {
-                    var f = await c.FirstOrDefaultAsync<DbEmailAddress>(x => x.Email == email).ConfigureAwait(false);
+                    var f = await FindDbEmail(c, email).ConfigureAwait(false);
                     if (f != null)
                         throw new UserAlreadyExistException(email);
                 }
                 if (phone != null)
                 {
-                    var f = await c.FirstOrDefaultAsync<DbPhoneNumber>(x => x.Phone == phone).ConfigureAwait(false);
+                    var f = await FindDbPhone(c, phone).ConfigureAwait(false);
                     if (f != null)
                         throw new UserAlreadyExistException(phone);
                 }
@@ -1091,11 +1095,11 @@ namespace SysWeaver.MicroService
                     NickName = nickName,
                     Domain = u.Domain,
                 };
-                id = await c.InsertAsync<long, DbUser>(user).ConfigureAwait(false);
+                id = await InsertUser(c, user).ConfigureAwait(false);
                 user.Id = id;
                 if (email != null)
                 {
-                    await c.InsertAsync(new DbEmailAddress
+                    await InsertEmail(c, new DbEmailAddress
                     {
                         Email = email,
                         UserId = id,
@@ -1103,7 +1107,7 @@ namespace SysWeaver.MicroService
                 }
                 if (phone != null)
                 {
-                    await c.InsertAsync(new DbPhoneNumber
+                    await InsertPhone(c, new DbPhoneNumber
                     {
                         Phone = phone,
                         UserId = id,
@@ -1116,16 +1120,16 @@ namespace SysWeaver.MicroService
                 }
                 if (!String.IsNullOrEmpty(r.NewHash))
                 {
-                    await c.InsertAsync(new DbAuthPassword
+                    var pwdRow = new DbAuthPassword
                     {
                         MustResetPassword = false,
                         Salt = salt,
-                        Pwd = r.NewHash,
                         Created = now,
                         LastUsed = now,
                         UserId = id,
-
-                    }).ConfigureAwait(false);
+                    };
+                    SetPasswordHash(pwdRow, r.NewHash);
+                    await c.InsertAsync(pwdRow).ConfigureAwait(false);
                 }
                 if (beforeCommit != null)
                     await beforeCommit(c, id).ConfigureAwait(false);
@@ -1140,7 +1144,7 @@ namespace SysWeaver.MicroService
                 var how = String.IsNullOrEmpty(u.InvitedBy) ? "signed up" : $"accepted the invitation by \"{u.InvitedBy}\"";
                 var method = !String.IsNullOrEmpty(r.NewHash) ? "a password" : (beforeCommit != null ? "a passkey" : "no sign in method yet");
                 var tokenText = (tokenSet == null) || (tokenSet.Count == 0) ? "no tokens" : String.Concat("the tokens ", String.Join(", ", tokenSet));
-                Manager.AddMessage(MessageLevels.Info, $"User \"{userName}\" (#{id}) was created: {how}, with {method} and {tokenText}");
+                Manager.AddMessage(MessageLevels.Info, $"User #{id} was created: {how}, with {method} and {tokenText}");
             }
             await RaiseOnUserCreated(id, userName).ConfigureAwait(false);
             if (login)
@@ -1177,19 +1181,19 @@ namespace SysWeaver.MicroService
                 default:
                     throw new Exception("Unsupported identification method");
             }
-            using (var c = await Db.GetAsync().ConfigureAwait(false))
+            using (var c = await DbGetAsync().ConfigureAwait(false))
             {
                 using var tr = await c.BeginTransactionAsync().ConfigureAwait(false);
 
                 if (email != null)
                 {
-                    var f = await c.FirstOrDefaultAsync<DbEmailAddress>(x => x.Email == email).ConfigureAwait(false);
+                    var f = await FindDbEmail(c, email).ConfigureAwait(false);
                     if (f != null)
                         return Tuple.Create(false, f.UserId);
                 }
                 if (phone != null)
                 {
-                    var f = await c.FirstOrDefaultAsync<DbPhoneNumber>(x => x.Phone == phone).ConfigureAwait(false);
+                    var f = await FindDbPhone(c, phone).ConfigureAwait(false);
                     if (f != null)
                         return Tuple.Create(false, f.UserId);
                 }
@@ -1206,11 +1210,11 @@ namespace SysWeaver.MicroService
                     Domain = domain,
                     Language = language,
                 };
-                id = await c.InsertAsync<long, DbUser>(user).ConfigureAwait(false);
+                id = await InsertUser(c, user).ConfigureAwait(false);
                 user.Id = id;
                 if (email != null)
                 {
-                    await c.InsertAsync(new DbEmailAddress
+                    await InsertEmail(c, new DbEmailAddress
                     {
                         Email = email,
                         UserId = id,
@@ -1218,7 +1222,7 @@ namespace SysWeaver.MicroService
                 }
                 if (phone != null)
                 {
-                    await c.InsertAsync(new DbPhoneNumber
+                    await InsertPhone(c, new DbPhoneNumber
                     {
                         Phone = phone,
                         UserId = id,
@@ -1262,7 +1266,7 @@ namespace SysWeaver.MicroService
             var user = request.Session?.Auth?.AuthContext as DbUser;
             if (user == null)
                 return null;
-            using var c = await Db.GetAsync().ConfigureAwait(false);
+            using var c = await DbGetAsync().ConfigureAwait(false);
             return await InternalTryGetUserInfo(c, user.Id, user).ConfigureAwait(false);
         }
 
@@ -1273,18 +1277,18 @@ namespace SysWeaver.MicroService
         /// <returns>The id of the user, 0 if no user was found</returns>
         public async Task<long> TryGetUser(String identifier)
         {
-            using (var c = await Db.GetAsync().ConfigureAwait(false))
+            using (var c = await DbGetAsync().ConfigureAwait(false))
                 return await FindUser(c, identifier).ConfigureAwait(false);
         }
 
 
         async Task<UserInfo> InternalTryGetUserInfo(OrmConnection c, long userId, DbUser user = null)
         {
-            user = user ?? (await c.FirstOrDefaultAsync<DbUser>(x => x.Id == userId).ConfigureAwait(false));
+            user = user ?? (await GetDbUser(c, userId).ConfigureAwait(false));
             if (user == null)
                 return null;
-            var email = await c.FirstOrDefaultAsync<DbEmailAddress>(x => x.UserId == userId).ConfigureAwait(false);
-            var phone = await c.FirstOrDefaultAsync<DbPhoneNumber>(x => x.UserId == userId).ConfigureAwait(false);
+            var email = await GetDbEmail(c, userId).ConfigureAwait(false);
+            var phone = await GetDbPhone(c, userId).ConfigureAwait(false);
             var guid = MakeGuid(userId);
             var nick = user.NickName;
             bool autoGen = String.IsNullOrEmpty(nick);
@@ -1311,7 +1315,7 @@ namespace SysWeaver.MicroService
         /// <returns>The user, null if no user was found</returns>
         public async Task<UserInfo> TryGetUserInfo(String identifier)
         {
-            using (var c = await Db.GetAsync().ConfigureAwait(false))
+            using (var c = await DbGetAsync().ConfigureAwait(false))
             {
                 var userId = await FindUser(c, identifier).ConfigureAwait(false);
                 if (userId == 0)
@@ -1327,7 +1331,7 @@ namespace SysWeaver.MicroService
         /// <returns>The user, null if it doesn't exist</returns>
         public async Task<UserInfo> TryGetUserInfo(long userId)
         {
-            using (var c = await Db.GetAsync().ConfigureAwait(false))
+            using (var c = await DbGetAsync().ConfigureAwait(false))
                 return await InternalTryGetUserInfo(c, userId).ConfigureAwait(false);
         }
 
@@ -1340,13 +1344,13 @@ namespace SysWeaver.MicroService
         /// <returns>The user data, null if the user doesn't exist</returns>
         public async Task<UserData> TryGetUser(long userId, bool getTokens = false, DbUser user = null)
         {
-            using (var c = await Db.GetAsync().ConfigureAwait(false))
+            using (var c = await DbGetAsync().ConfigureAwait(false))
             {
-                user = user ?? (await c.FirstOrDefaultAsync<DbUser>(x => x.Id == userId).ConfigureAwait(false));
+                user = user ?? (await GetDbUser(c, userId).ConfigureAwait(false));
                 if (user == null)
                     return null;
-                var mail = await c.FirstOrDefaultAsync<DbEmailAddress>(x => x.UserId == userId).ConfigureAwait(false);
-                var phone = await c.FirstOrDefaultAsync<DbPhoneNumber>(x => x.UserId == userId).ConfigureAwait(false);
+                var mail = await GetDbEmail(c, userId).ConfigureAwait(false);
+                var phone = await GetDbPhone(c, userId).ConfigureAwait(false);
                 String[] tokens = null;
                 if (getTokens)
                 {
@@ -1411,10 +1415,10 @@ namespace SysWeaver.MicroService
             }
             Tuple<bool, String, String> res;
             DbUser user;
-            using (var c = await Db.GetAsync().ConfigureAwait(false))
+            using (var c = await DbGetAsync().ConfigureAwait(false))
             {
                 using var tr = await c.BeginTransactionAsync().ConfigureAwait(false);
-                user = await c.FirstOrDefaultAsync<DbUser>(x => x.Id == userId).ConfigureAwait(false);
+                user = await GetDbUser(c, userId).ConfigureAwait(false);
                 if (user == null)
                     return Tuple.Create(false, (String)null, (String)null);
                 var current = user.NickName;
@@ -1422,7 +1426,7 @@ namespace SysWeaver.MicroService
                 if (current.FastEquals(newName))
                     return Tuple.Create(false, current, current);
                 user.NickName = newName;
-                await c.UpdateAsync(user, x => new { x.NickName }).ConfigureAwait(false);
+                await UpdateUserNames(c, user).ConfigureAwait(false);
                 await tr.CommitAsync().ConfigureAwait(false);
                 res = Tuple.Create(true, current, newName);
             }
@@ -1447,16 +1451,16 @@ namespace SysWeaver.MicroService
                 throw new Exception("Name length must be at most " + AuhorizationLimits.MaxUserNameLength + " chars");
             Tuple<bool, String> res;
             DbUser user;
-            using (var c = await Db.GetAsync().ConfigureAwait(false))
+            using (var c = await DbGetAsync().ConfigureAwait(false))
             {
                 using var tr = await c.BeginTransactionAsync().ConfigureAwait(false);
-                user = await c.FirstOrDefaultAsync<DbUser>(x => x.Id == userId).ConfigureAwait(false);
+                user = await GetDbUser(c, userId).ConfigureAwait(false);
                 if (user == null)
                     return Tuple.Create(false, (String)null);
                 if (user.UserName.FastToLower().FastEquals(newName.FastToLower()))
                     return Tuple.Create(false, user.UserName);
                 user.UserName = newName;
-                await c.UpdateAsync(user, x => new { x.UserName }).ConfigureAwait(false);
+                await UpdateUserNames(c, user).ConfigureAwait(false);
                 await tr.CommitAsync().ConfigureAwait(false);
                 res = Tuple.Create(true, user.UserName);
             }
@@ -1469,16 +1473,17 @@ namespace SysWeaver.MicroService
         {
             var userId = GetUserId(userGuid);
             DbUser user;
-            using (var c = await Db.GetAsync().ConfigureAwait(false))
+            using (var c = await DbGetAsync().ConfigureAwait(false))
             {
                 using var tr = await c.BeginTransactionAsync().ConfigureAwait(false);
-                user = await c.FirstOrDefaultAsync<DbUser>(x => x.Id == userId).ConfigureAwait(false);
+                user = await GetDbUser(c, userId).ConfigureAwait(false);
                 if (user == null)
                     return false;
                 if (user.Language.FastEquals(languageCode))
                     return false;
                 user.Language = languageCode;
                 await c.UpdateAsync(user, x => new { x.Language }).ConfigureAwait(false);
+                InvalidateUserList();
                 await tr.CommitAsync().ConfigureAwait(false);
             }
             ResetSessionAuth(user);
@@ -1499,14 +1504,14 @@ namespace SysWeaver.MicroService
         {
             Tuple<bool, String> res;
             DbUser user;
-            using (var c = await Db.GetAsync().ConfigureAwait(false))
+            using (var c = await DbGetAsync().ConfigureAwait(false))
             {
                 using var tr = await c.BeginTransactionAsync().ConfigureAwait(false);
-                user = await c.FirstOrDefaultAsync<DbUser>(x => x.Id == userId).ConfigureAwait(false);
+                user = await GetDbUser(c, userId).ConfigureAwait(false);
                 if (user == null)
                     return Tuple.Create(false, (String)null);
 
-                var email = await c.FirstOrDefaultAsync<DbEmailAddress>(x => x.UserId == userId).ConfigureAwait(false);
+                var email = await GetDbEmail(c, userId).ConfigureAwait(false);
                 if (email != null)
                 {
                     if (email.Email.FastToLower().FastEquals(newEmail.FastToLower()))
@@ -1514,7 +1519,7 @@ namespace SysWeaver.MicroService
                     await c.DeleteAllAsync<DbEmailAddress>(x => x.UserId == userId).ConfigureAwait(false);
                 }
                 res = Tuple.Create(true, email?.Email);
-                await c.InsertAsync(new DbEmailAddress
+                await InsertEmail(c, new DbEmailAddress
                 {
                     Email = newEmail,
                     UserId = userId,
@@ -1548,24 +1553,19 @@ namespace SysWeaver.MicroService
                 return null;
             if (!auth.Username.FastEquals(username))
                 return null;
+            autheticatedRequest.PadUserName = username;
             return user;
         }
 
         /// <summary>
-        /// Validate that the password supplied in an incoming request is correct
+        /// Validate that the password proof supplied in an incoming request is correct (the SCRAM proof).
+        /// <see cref="ValidatePasswordRequestData"/> must have been called first (it consumes the one time pad).
         /// </summary>
-        /// <param name="autheticatedRequest"></param>
-        /// <param name="authData"></param>
-        /// <returns></returns>
+        /// <param name="autheticatedRequest">The request</param>
+        /// <param name="authData">The stored password of the user</param>
+        /// <returns>True if the proof is valid</returns>
         bool ValidatePasswordRequestPassword(AutheticatedRequest autheticatedRequest, DbAuthPassword authData)
-        {
-            if (authData == null)
-                return false;
-            var hh = AuthTools.ComputeHashString(authData.Pwd, autheticatedRequest.OneTimePad);
-            if (hh != autheticatedRequest.Hash)
-                return false;
-            return true;
-        }
+            => IsValidPasswordProof(authData, autheticatedRequest.PadUserName, autheticatedRequest.OneTimePad, autheticatedRequest.ClientNonce, autheticatedRequest.ClientProof);
 
         readonly TimeSpan NewUserTimeout = TimeSpan.FromHours(24);
         readonly TimeSpan DeleteUserTimeout = TimeSpan.FromHours(24);
@@ -1625,20 +1625,20 @@ namespace SysWeaver.MicroService
             if (String.IsNullOrEmpty(username))
                 username = email ?? phone;
 
-            using (var c = await Db.GetAsync().ConfigureAwait(false))
+            using (var c = await DbGetAsync().ConfigureAwait(false))
             {
-                var fu = await c.FirstOrDefaultAsync<DbUser>(x => x.UserName == username).ConfigureAwait(false);
+                var fu = await FindDbUserByName(c, username).ConfigureAwait(false);
                 if (fu != null)
                     throw new UserAlreadyExistException(username);
                 if (email != null)
                 {
-                    var fm = await c.FirstOrDefaultAsync<DbEmailAddress>(x => x.Email == email).ConfigureAwait(false);
+                    var fm = await FindDbEmail(c, email).ConfigureAwait(false);
                     if (fm != null)
                         throw new UserAlreadyExistException(email);
                 }
                 if (phone != null)
                 {
-                    var fp = await c.FirstOrDefaultAsync<DbPhoneNumber>(x => x.Phone == phone).ConfigureAwait(false);
+                    var fp = await FindDbPhone(c, phone).ConfigureAwait(false);
                     if (fp != null)
                         throw new UserAlreadyExistException(phone);
                 }
@@ -1814,11 +1814,6 @@ namespace SysWeaver.MicroService
             .Purpose(TokenKind(DbAction.UndoEmail, UndoVariant), "Undo")
             .Purpose(DbAction.CreateUser);
 
-        /// <summary>
-        /// The action types of the "Account" links that older versions made without a subject tag (found by reading their data, see <see cref="RevokeOnEvent"/>).
-        /// </summary>
-        static readonly String[] UntaggedCredentialTypes = [DbAction.ResetPassword, DbAction.AddPassword, DbAction.DeletePassword, ActionTokenGetResetChallenge];
-
         #region Dead tokens (why a link no longer works)
 
         /// <summary>
@@ -1852,10 +1847,22 @@ namespace SysWeaver.MicroService
         /// </summary>
         public const String CauseNewerContact = "NewerContact";
 
+        /// <summary>
+        /// Remember why a token (as sent by the client) is no longer live
+        /// </summary>
         void MarkDead(String token, String cause)
         {
             if (String.IsNullOrEmpty(token))
                 return;
+            MarkDeadKey(ActionKey(token), cause);
+        }
+
+        /// <summary>
+        /// Remember why a token is no longer live, by its stored key (<see cref="ActionKey"/>)
+        /// </summary>
+        void MarkDeadKey(String key, String cause)
+        {
+            var token = key;
             var d = DeadTokens;
             lock (d)
             {
@@ -1874,6 +1881,7 @@ namespace SysWeaver.MicroService
         {
             if (String.IsNullOrEmpty(token))
                 return null;
+            token = ActionKey(token);
             var d = DeadTokens;
             lock (d)
                 return d.TryGetValue(token, out var c) ? c.Item1 : null;
@@ -1940,15 +1948,17 @@ namespace SysWeaver.MicroService
             int n = 0;
             foreach (var type in types)
             {
-                var tag = SubjectTokens.Tag(type, subject);
+                //  The stored keys keep a (keyed) tag prefix, so the tokens of a subject are still found with a "starts with" query
+                var tag = StoredTagPrefix(SubjectTokens.Tag(type, subject));
+                var keepKey = keep == null ? null : ActionKey(keep);
                 var rows = await c.SelectAsync<DbAction>(x => x.Type == type && x.Token.StartsWith(tag)).ConfigureAwait(false);
                 foreach (var row in rows)
                 {
                     var t = row.Token;
-                    if (String.Equals(t, keep, StringComparison.Ordinal))
+                    if (String.Equals(t, keepKey, StringComparison.Ordinal))
                         continue;
                     n += await c.DeleteAllAsync<DbAction>(x => x.Token == t).ConfigureAwait(false);
-                    MarkDead(t, cause);
+                    MarkDeadKey(t, cause);
                 }
             }
             return n;
@@ -1956,7 +1966,7 @@ namespace SysWeaver.MicroService
 
         /// <summary>
         /// Something changed on an account: revoke every outstanding link of the user whose kind is revoked by the event (see <see cref="ActionTokenGroups"/>).
-        /// Call it in the transaction that makes the change. Also finds the "Account" links made before tokens had a subject (by reading their data).
+        /// Call it in the transaction that makes the change.
         /// </summary>
         /// <param name="c">An open connection (may be in a transaction)</param>
         /// <param name="userId">The user</param>
@@ -1976,33 +1986,6 @@ namespace SysWeaver.MicroService
                 var type = bar < 0 ? kind : kind.Substring(0, bar);
                 var variant = bar < 0 ? null : kind.Substring(bar + 1);
                 n += await RevokeActions(c, UserSubject(userId, variant), evt, keep, type).ConfigureAwait(false);
-            }
-            //  Tokens without a subject tag (made by an older version, live for at most a day): read their data
-            var now = DateTime.UtcNow;
-            foreach (var type in UntaggedCredentialTypes)
-            {
-                if (!kinds.Contains(type))
-                    continue;
-                var rows = await c.SelectAsync<DbAction>(x => x.Type == type && x.Expiration > now).ConfigureAwait(false);
-                foreach (var row in rows)
-                {
-                    long id;
-                    try
-                    {
-                        id = type == DbAction.DeletePassword ? Data.FromData<long>(row.Data) : (Data.FromData<InternalNewPasswordData>(row.Data)?.UserId ?? 0);
-                    }
-                    catch
-                    {
-                        continue;
-                    }
-                    if (id != userId)
-                        continue;
-                    var t = row.Token;
-                    if (String.Equals(t, keep, StringComparison.Ordinal))
-                        continue;
-                    n += await c.DeleteAllAsync<DbAction>(x => x.Token == t).ConfigureAwait(false);
-                    MarkDead(t, evt);
-                }
             }
             if (n > 0)
                 Manager.AddMessage(MessageLevels.Debug, $"Revoked {n} outstanding links of user #{userId} ({evt})");
@@ -2049,17 +2032,17 @@ namespace SysWeaver.MicroService
                 shortCode = rng.GetNumericCode(shortCodeDigits);
             }
             var d = Data.ToData(data);
-            using var c = await Db.GetAsync().ConfigureAwait(false);
+            using var c = await DbGetAsync().ConfigureAwait(false);
             using (var tr = await c.BeginTransactionAsync().ConfigureAwait(false))
             {
                 if ((subject != null) && replace)
                     await RevokeActions(c, subject, CauseReplaced, null, type).ConfigureAwait(false);
                 await c.InsertAsync<DbAction>(new DbAction
                 {
-                    Token = token,
+                    Token = ActionKey(token),
                     Type = type,
                     Expiration = expiration,
-                    Data = d,
+                    Data = ProtectActionData(ActionKey(token), type, d),
                 }).ConfigureAwait(false);
                 await tr.CommitAsync().ConfigureAwait(false);
             }
@@ -2095,8 +2078,12 @@ namespace SysWeaver.MicroService
             }
             DbAction d;
             token = token.Replace(' ', '+');
-            using (var c = await Db.GetAsync().ConfigureAwait(false))
-                d = await c.FirstOrDefaultAsync<DbAction>(x => x.Token == token).ConfigureAwait(false);
+            using (var c = await DbGetAsync().ConfigureAwait(false))
+                {
+                    //  Only a keyed hash of the token is stored (a copy of the database has no working links)
+                    var key = ActionKey(token);
+                    d = await c.FirstOrDefaultAsync<DbAction>(x => x.Token == key).ConfigureAwait(false);
+                }
             if ((d == null) || (DateTime.UtcNow > d.Expiration) || (!type.FastEquals(d.Type)))
             {
                 if ((d != null) && type.FastEquals(d.Type))
@@ -2105,11 +2092,22 @@ namespace SysWeaver.MicroService
                     context.Session.TryRemove(ShortCodeName);
                 return default;
             }
-            return Tuple.Create(token, Data.FromData<T>(d.Data));
+            return Tuple.Create(token, Data.FromData<T>(ActionData(d)));
         }
 
 
-        async Task DeleteAction(OrmConnection c, String token, String type, HttpServerRequest context)
+        /// <summary>
+        /// Delete (use) an action token.
+        /// Call it inside the transaction that performs the action: the token is consumed by deleting its row, so of two concurrent uses only one deletes the row,
+        /// the other gets a <see cref="TokenExpiredException"/> and its transaction is rolled back (a link can't be used twice).
+        /// </summary>
+        /// <param name="c">The connection (with an open transaction)</param>
+        /// <param name="token">The token</param>
+        /// <param name="type">The action type</param>
+        /// <param name="context">The request (to remove a short code from the session), may be null</param>
+        /// <param name="mustExist">If true (the default) a <see cref="TokenExpiredException"/> is thrown if no row was deleted</param>
+        /// <exception cref="TokenExpiredException">The token row didn't exist (already used) and <paramref name="mustExist"/> is true</exception>
+        async Task DeleteAction(OrmConnection c, String token, String type, HttpServerRequest context, bool mustExist = true)
         {
 #if DEBUG
             if (!type.IsAsciiOnly())
@@ -2127,7 +2125,10 @@ namespace SysWeaver.MicroService
                         s.TryRemove(ShortCodeName);
                 }
             }
-            await c.DeleteAllAsync<DbAction>(x => x.Token == token && x.Type == type).ConfigureAwait(false);
+            var key = ActionKey(token);
+            var n = await c.DeleteAllAsync<DbAction>(x => x.Token == key && x.Type == type).ConfigureAwait(false);
+            if (mustExist && (n <= 0))
+                throw new TokenExpiredException();
             MarkDead(token, CauseUsed);
         }
 
@@ -2236,7 +2237,7 @@ namespace SysWeaver.MicroService
                 throw new Exception("Guid must be an \"identifier\", only 'a'-'z' and numbers is accepeted (no number at the first position)");
             key = key.FastToLower();
             DbUserData dbData;
-            using (var c = await Db.GetAsync().ConfigureAwait(false))
+            using (var c = await DbGetAsync().ConfigureAwait(false))
                 dbData = await c.FirstOrDefaultAsync<DbUserData>(s =>
                 {
                     s.Where(x => x.UserGuid == userGuid);
@@ -2269,7 +2270,7 @@ namespace SysWeaver.MicroService
                 UserGuid = userGuid,
                 Data = data == null ? null : Data.ToData(data),
             };
-            using (var c = await Db.GetAsync().ConfigureAwait(false))
+            using (var c = await DbGetAsync().ConfigureAwait(false))
                 await c.UpdateAsync(dbData).ConfigureAwait(false);
         }
 
@@ -2289,7 +2290,7 @@ namespace SysWeaver.MicroService
                 throw new Exception("Guid must be an \"identifier\", only 'a'-'z' and numbers is accepeted (no number at the first position)");
             key = key.FastToLower();
             DbUserDataString dbData;
-            using (var c = await Db.GetAsync().ConfigureAwait(false))
+            using (var c = await DbGetAsync().ConfigureAwait(false))
                 dbData = await c.FirstOrDefaultAsync<DbUserDataString>(s =>
                 {
                     s.Where(x => x.UserGuid == userGuid);
@@ -2321,7 +2322,7 @@ namespace SysWeaver.MicroService
                 UserGuid = userGuid,
                 Data = data,
             };
-            using (var c = await Db.GetAsync().ConfigureAwait(false))
+            using (var c = await DbGetAsync().ConfigureAwait(false))
                 await c.UpdateAsync(dbData).ConfigureAwait(false);
         }
 

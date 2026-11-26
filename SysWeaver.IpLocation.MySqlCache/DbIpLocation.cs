@@ -2,6 +2,7 @@
 using System;
 using System.Globalization;
 using SysWeaver.Data;
+using SysWeaver.Net;
 using SysWeaver.Serialization;
 
 namespace SysWeaver.IpLocation.Caches
@@ -90,7 +91,7 @@ namespace SysWeaver.IpLocation.Caches
         public String Source => Loc?.Source;
 
 
-        IpLocation Loc
+        Location Loc
         {
             get
             {
@@ -100,13 +101,13 @@ namespace SysWeaver.IpLocation.Caches
                 var d = Data;
                 if (d == null)
                     return null;
-                l = SerManager.GetText("json").FromString<IpLocation>(d);
+                l = SerManager.GetText("json").FromString<Location>(d);
                 _Loc = l;
                 return l;
             }
         }
 
-        IpLocation _Loc;
+        Location _Loc;
 
     }
 }

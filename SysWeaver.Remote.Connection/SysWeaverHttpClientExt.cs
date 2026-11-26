@@ -79,6 +79,43 @@ namespace SysWeaver
             /// The one time pad used (from GetUserSalt)
             /// </summary>
             public String OneTimePad { get; set; }
+
+            /// <summary>
+            /// The SCRAM client proof (base64), see ScramInfo in SysWeaver.Auth.Core
+            /// </summary>
+            public String ClientProof { get; set; }
+
+            /// <summary>
+            /// The SCRAM client nonce
+            /// </summary>
+            public String ClientNonce { get; set; }
+        }
+
+        /// <summary>
+        /// Compute the SCRAM client proof (see ScramInfo / ScramTools in SysWeaver.Auth.Core, kept here to avoid a dependency)
+        /// </summary>
+        /// <param name="hash">The legacy hash H</param>
+        /// <param name="binding">The application binding</param>
+        /// <param name="salt">The SCRAM salt (base64)</param>
+        /// <param name="iterations">The PBKDF2 iteration count, at least 4096 (the server minimum)</param>
+        /// <param name="username">The user name (as sent to GetUserSalt)</param>
+        /// <param name="oneTimePad">The one time pad</param>
+        /// <param name="clientNonce">The client nonce</param>
+        /// <returns>The base64 encoded client proof</returns>
+        static String ScramClientProof(String hash, String binding, String salt, int iterations, String username, String oneTimePad, String clientNonce)
+        {
+            //  Never fewer iterations than the server minimum (a fake server could ask for a cheap proof, to brute force it offline)
+            if (iterations < 4096)
+                throw new Exception("Invalid sign in parameters (iteration count " + iterations + ")");
+            var salted = Rfc2898DeriveBytes.Pbkdf2(Encoding.UTF8.GetBytes(String.Concat(hash, "|", binding ?? "")), Convert.FromBase64String(salt), iterations, HashAlgorithmName.SHA256, 32);
+            var clientKey = HMACSHA256.HashData(salted, Encoding.ASCII.GetBytes("Client Key"));
+            var storedKey = SHA256.HashData(clientKey);
+            var sig = HMACSHA256.HashData(storedKey, Encoding.UTF8.GetBytes(String.Join(',', username, oneTimePad, clientNonce)));
+            for (int i = 0; i < sig.Length; ++i)
+                sig[i] ^= clientKey[i];
+            CryptographicOperations.ZeroMemory(salted);
+            CryptographicOperations.ZeroMemory(clientKey);
+            return Convert.ToBase64String(sig);
         }
 
 
@@ -92,7 +129,8 @@ namespace SysWeaver
         /// A 44 character base64 string that decodes to 32 bytes is treated as the already salted password hash.</param>
         /// <returns>User information, check <see cref="AuthInfo.Succeeded"/></returns>
         /// <remarks>
-        /// Requests a salt and one time pad from "Api/auth/GetUserSalt" and then posts the double SHA256 hash to "Api/auth/Login".
+        /// Requests a salt and one time pad from "Api/auth/GetUserSalt" and then posts the SCRAM proof (when the server asks for it, see ScramInfo in SysWeaver.Auth.Core)
+        /// or the legacy double SHA256 hash to "Api/auth/Login".
         /// </remarks>
         /// <exception cref="SysWeaver.Net.HttpResponseException">A request failed (non 2xx response).</exception>
         /// <exception cref="InvalidDataException">The salt response doesn't contain a salt and a one time pad.</exception>
@@ -115,12 +153,26 @@ namespace SysWeaver
             var salt = data[0];
             var oneTimePad = data[1];
             hash = hash ?? Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(String.Join('|', password, salt))));
-            hash = Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(String.Join('|', hash, oneTimePad))));
-            var r = new LoginReq
+            LoginReq r;
+            //  SCRAM: [salt, pad, "s1", scramSalt, iterations, binding]
+            if ((data.Length >= 6) && (data[2] == "s1") && int.TryParse(data[4], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var iterations))
             {
-                Hash = hash,
-                OneTimePad = oneTimePad,
-            };
+                var nonce = Convert.ToBase64String(RandomNumberGenerator.GetBytes(16));
+                r = new LoginReq
+                {
+                    OneTimePad = oneTimePad,
+                    ClientNonce = nonce,
+                    ClientProof = ScramClientProof(hash, data[5], data[3], iterations, username, oneTimePad, nonce),
+                };
+            }
+            else
+            {
+                r = new LoginReq
+                {
+                    Hash = Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(String.Join('|', hash, oneTimePad)))),
+                    OneTimePad = oneTimePad,
+                };
+            }
             return await client.PostJsonRequest<LoginReq, AuthInfo>(urlbase + "Api/auth/Login", r).ConfigureAwait(false);
         }
 

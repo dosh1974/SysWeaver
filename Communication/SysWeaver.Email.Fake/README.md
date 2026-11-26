@@ -32,7 +32,7 @@ Stands in for the senders ([SysWeaver.Email.Smtp](../SysWeaver.Email.Smtp/README
 - `FakeIncoming` simulates an email from a user to the system (returned by `GetIncoming`), `SendEmail` sends one as the system (it keeps the `System` of the message, as the fake text service; the user manager sends its own system)
 - A web inbox at `fakeEmail/index.html` (embedded menu item *Debug / FakeEmail* "Fake email inbox", it also works stand alone): live updates, search, html rendered in a sandboxed iframe or as source, compose, reply and delete; built on the Sw core / ui library, no third-party libraries
 - `MessageTable` lists every email (table menu item "Emails", card template in [`srcWeb/fakeEmail/cards.html`](srcWeb/fakeEmail/cards.html))
-- Access: `Auth` (FakeEmailParams) protects the APIs and the menu items. The default `null` leaves them open, as the original: the services that send through it and the testers call it without signing in. Set it (ex: `"Ops,Dev,Debug"`, or `""` = any signed in user) when others can reach the service: the fake emails can hold sign in codes and password reset links
+- Access: `Auth` (FakeEmailParams) protects the APIs and the menu items. The default `null` leaves them open: the services that send through it and the testers call it without signing in. Set it (ex: `"Ops,Dev,Debug"`, or `""` = any signed in user) when others can reach the service: the fake emails can hold sign in codes and password reset links
 
 ## Key components
 

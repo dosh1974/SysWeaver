@@ -103,10 +103,10 @@ namespace SysWeaver.MicroService
         {
             bool haveLang = messages != null;
             var m = haveLang ? messages.GetMail(ops) : Messages[(int)ops];
-            //  Localized message folders made before the forced reset template existed: use the reset template
+            //  Localized message folders without the forced reset template use the reset template
             if (IsMissing(m) && haveLang && (ops == UserManagerComOps.ForcedResetPassword))
                 m = messages.GetMail(UserManagerComOps.ResetPassword);
-            //  Localized message folders made before the changed e-mail notice existed: use the built in template
+            //  Localized message folders without the changed e-mail notice use the built in template
             if (IsMissing(m) && haveLang && (ops == UserManagerComOps.ChangedEmail))
                 m = Messages[(int)ops];
             if (m == null)

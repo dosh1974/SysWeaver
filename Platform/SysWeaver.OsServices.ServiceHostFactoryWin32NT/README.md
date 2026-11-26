@@ -67,6 +67,7 @@ MyService status
 ## Limitations and considerations
 
 - The service always runs as LocalSystem; change the account in the Services console if needed.
+- `start` of an installed service that isn't running updates the registered command line, display name and description if they are outdated (ex: the folder was renamed); the account, startup type, failure actions and dependencies are kept. A changed service *name* is a new service, uninstall the old one.
 - `start` does not resume a paused service (use `continue`).
 - `uninstall` marks the service for deletion; Windows removes it once all handles are closed.
 - All changing verbs need elevation (re-run with the `runas` verb). A service that can't be opened (missing, or access denied) is reported as not installed.

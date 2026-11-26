@@ -163,6 +163,62 @@ namespace SysWeaver.MicroService
 
 
     /// <summary>
+    /// Limit the call rate to an API per client IP address (IPv6 addresses are grouped by their /64 prefix).
+    /// Slows down a single attacker (ex: password guessing), not a distributed one, combine with a permissive <see cref="WebApiServiceRateLimitAttribute"/>.
+    /// Keep it permissive enough for many users behind one address (offices, NAT).
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Method, AllowMultiple = false)]
+    public class WebApiIpRateLimitAttribute : Attribute
+    {
+        /// <summary>
+        /// Limit the call rate to an API per client IP address
+        /// </summary>
+        /// <param name="count">Number of request</param>
+        /// <param name="duration">Over this time frame in seconds</param>
+        /// <param name="maxQueue">The maximum number of request to keep queued</param>
+        /// <param name="maxDelay">The maximum time to delay a request</param>
+        public WebApiIpRateLimitAttribute(int count = 10, int duration = 1, int maxQueue = 10, int maxDelay = 5)
+        {
+            Count = count;
+            Duration = duration;
+            MaxQueue = maxQueue;
+            MaxDelay = maxDelay;
+        }
+        /// <summary>Number of requests allowed per duration</summary>
+        public readonly int Count;
+        /// <summary>The time frame in seconds</summary>
+        public readonly int Duration;
+        /// <summary>The maximum number of requests to keep queued</summary>
+        public readonly int MaxQueue;
+        /// <summary>The maximum time to delay a request</summary>
+        public readonly int MaxDelay;
+    }
+
+
+    /// <summary>
+    /// Track calls to this API in the intrusion detection of the http server (calls per client address, an intrusion is reported above a threshold).
+    /// Audited API's (<see cref="WebApiAuditAttribute"/>) are tracked by default, use this for other key API's (ex: data exports, look ups).
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Method, AllowMultiple = false)]
+    public sealed class WebApiIntrusionTrackAttribute : Attribute
+    {
+        /// <summary>
+        /// Track (or with false: don't track, ex: a frequently called audited API) calls to this API in the intrusion detection
+        /// </summary>
+        /// <param name="track">True to track calls, false to never track them (even if audited)</param>
+        public WebApiIntrusionTrackAttribute(bool track = true)
+        {
+            Track = track;
+        }
+
+        /// <summary>
+        /// True to track calls, false to never track them
+        /// </summary>
+        public readonly bool Track;
+    }
+
+
+    /// <summary>
     /// Put this attribute on web api's to report them to any audit loggers
     /// </summary>
     [AttributeUsage(AttributeTargets.Method, AllowMultiple = false)]

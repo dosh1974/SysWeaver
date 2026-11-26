@@ -28,8 +28,44 @@ namespace SysWeaver.MicroService
     /// </summary>
     [WebApiUrl("../FolderSync")]
     [IsMicroService]
-    public partial class FolderSyncService : IHttpServerModule, IHttpRequestHandler, IDisposable, IHaveStats, IPerfMonitored
+    public partial class FolderSyncService : IHttpServerModule, IHttpRequestHandler, IDisposable, IHaveStats, IPerfMonitored, IRunTimeWebApiAuth
     {
+
+        #region Auth
+
+        /// <summary>
+        /// The json API's used by sync clients, they get <see cref="FolderSyncParams.ApiAuth"/> (the folder auth is checked by each call)
+        /// </summary>
+        static readonly String[] SyncApiMethods =
+        [
+            nameof(CheckManagedFolder), nameof(Activate), nameof(Remove),
+            nameof(CheckSharedFolder), nameof(SharedFolderHasChanged), nameof(WaitUntilSharedFolderHasChanged), nameof(GetSharedFileChunks),
+        ];
+
+        /// <inheritdoc />
+        public IReadOnlyDictionary<String, String> MethodAuths { get; private set; }
+
+        /// <summary>
+        /// The parsed <see cref="FolderSyncParams.ApiAuth"/>, the auth of the binary upload and chunk end points
+        /// </summary>
+        IReadOnlyList<String> ApiAuthTokens;
+
+        /// <summary>
+        /// The auth of a folder, <see cref="Roles.ServiceSync"/> if none is given (null)
+        /// </summary>
+        static String FolderAuth(String auth) => auth ?? Roles.ServiceSync;
+
+        void InitAuth(FolderSyncParams p)
+        {
+            var a = p.ApiAuth ?? FolderSyncParams.DefaultApiAuth;
+            ApiAuthTokens = SysWeaver.Auth.Authorization.GetRequiredTokens(a);
+            var m = new Dictionary<String, String>(StringComparer.Ordinal);
+            foreach (var x in SyncApiMethods)
+                m[x] = a;
+            MethodAuths = m.Freeze();
+        }
+
+        #endregion//Auth
 
         #region IHttpRequestHandler
 
@@ -48,8 +84,10 @@ namespace SysWeaver.MicroService
         /// <inheritdoc />
         public ICompDecoder Decoder => null;
 
-        /// <inheritdoc />
-        public IReadOnlyList<string> Auth => null;
+        /// <summary>
+        /// The binary upload and chunk end points need <see cref="FolderSyncParams.ApiAuth"/> (uploads also check the folder auth of the sync job)
+        /// </summary>
+        public IReadOnlyList<string> Auth => ApiAuthTokens;
 
         /// <inheritdoc />
         public ValueTask<String> GetCacheKey(HttpServerRequest request) => TaskExt.NullStringValueTask;
@@ -188,6 +226,7 @@ namespace SysWeaver.MicroService
         public FolderSyncService(ServiceManager manager, FolderSyncParams p)
         {
             p = p ?? new();
+            InitAuth(p);
             Manager = manager;
             FileMod = manager.TryGet<FileHttpServerModule>();
             if (FileMod == null)
@@ -266,7 +305,7 @@ namespace SysWeaver.MicroService
             path = PathExt.CreateDataFolder(path);
             if (String.IsNullOrEmpty(name))
                 name = Path.GetFileName(path);
-            var auth = x.Auth ?? Roles.Debug;
+            var auth = FolderAuth(x.Auth);
             var pullF = x.AllowPull ? new FsSharedFolder
             {
                 Name = name,
@@ -326,7 +365,7 @@ namespace SysWeaver.MicroService
             path = PathExt.CreateDataFolder(path);
             if (String.IsNullOrEmpty(name))
                 name = Path.GetFileName(path);
-            var auth = x.Auth ?? Roles.Debug;
+            var auth = FolderAuth(x.Auth);
             var folder = new SharedFolder(
                 name,
                 path,

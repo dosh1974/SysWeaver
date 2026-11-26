@@ -2,7 +2,7 @@
 
 [⬆ srcWeb](README.md)
 
-> The rules for moving the web pages of an app (any project with a `srcWeb` / `srcData` folder) from the old UI (`common/common.js`, `app/application.js`, `common/theme.css` era) to the `Sw` core / ui / shell and to the Design v2 look. Each rule says what changed, shows a before / after, and whether [`SwWeb`](https://github.com/dosh1974/SysWeaver.Tools/blob/main/SwWeb/README.md) does it (`migrate`) or finds it (`check`).
+> The rules for moving the web pages of an app (any project with a `srcWeb` / `srcData` folder) from the old UI (`common/common.js`, `app/application.js`) to the `Sw` core / ui / shell and to the Design v2 look. Each rule says what to change, shows the old and the new code, and whether [`SwWeb`](https://github.com/dosh1974/SysWeaver.Tools/blob/main/SwWeb/README.md) does it (`migrate`) or finds it (`check`).
 
 Nothing breaks if you do nothing: old pages keep working on the generated legacy bundles, and the framework pages, the shell, the tables and the editors get Design v2 by themselves. Porting means adopting the new API and the shared page parts, so the next restyle of the framework reaches your pages too. **Never fork or copy framework files** (`sw/*`, `ui/*`, `common/theme.css`): brand and adapt through `app/app.css`, `app/app.js` and the `*.Services.json` (section [B16](#b16-themes-and-branding-without-forking)).
 
@@ -52,7 +52,7 @@ Legend used below: **migrate** = what `SwWeb migrate` does (`api` is the default
 - **migrate** (`api`, also `--level includes`): yes, keeping the path prefix, attributes, quotes, `?v=` and templated prefixes (`${@Base Url}`). A page whose scripts still use legacy names after the renames also gets `sw/compat.js` / `sw/compat.css` (the old globals on top of the new bundles) and one warning listing the names.
 - **check**: `legacy-include` (strict: a new page that also loads a legacy bundle), `design-legacy-page` (design: an old format page).
 - **manual**: rewrite the listed names (A2-A11), then remove `sw/compat.js` / `sw/compat.css`.
-- Old pages often lack `<meta name="viewport">` (phones then render them 980 px wide, zoomed out) and put the old theme colour classes on the body (`<body class="ThemeBaseBg ThemeMainFg">`). `migrate --level design` adds `<meta name="viewport" content="width=device-width, initial-scale=1">` after the charset tag (check: `design-viewport`); remove the `Theme*Bg` / `Theme*Fg` classes yourself (`ThemeBaseBg` no longer exists, `sw/ui.css` gives the body `--sw-canvas` / `--sw-text`; check: `design-legacy-class`). Add `<meta charset="utf-8">` and `<html lang="en">` while you are there.
+- Old pages often lack `<meta name="viewport">` (phones then render them 980 px wide, zoomed out) and put the old theme colour classes on the body (`<body class="ThemeBaseBg ThemeMainFg">`). `migrate --level design` adds `<meta name="viewport" content="width=device-width, initial-scale=1">` after the charset tag (check: `design-viewport`); remove the `Theme*Bg` / `Theme*Fg` classes yourself (`ThemeBaseBg` does not exist, `sw/ui.css` gives the body `--sw-canvas` / `--sw-text`; check: `design-legacy-class`). Add `<meta charset="utf-8">` and `<html lang="en">` while you are there.
 
 ### A2. Page entry and loader
 
@@ -201,10 +201,10 @@ The old names still resolve (each is defined as `var(--new)`), but new code and 
 - **migrate** (`api`): yes, every `var()` use in css, `<style>`, `style` attributes and JavaScript strings (comments skipped, fallbacks kept). `--sw-gap` is not an alias (Pro has its own): keep it or use `--sw-space-*`.
 - **check**: `design-token-alias`.
 
-### B2. Overrides of old names no longer restyle the components
+### B2. Overrides of old names do not restyle the components
 
 ```css
-.big-form { --sw-touch: 52px; }        /* before: made the controls taller; now nothing reads --sw-touch */
+.big-form { --sw-touch: 52px; }        /* before: nothing reads --sw-touch */
 .big-form { --sw-control-h: 52px; }    /* after */
 ```
 
@@ -315,8 +315,8 @@ Static markup works too: `<main class="sw-page-form"><header class="sw-ph"><div 
 - In the shell a level 1 page header shows the **menu item name** (`Sw.MenuTitle()`), so the h1, the breadcrumb and the menu agree; `MenuTitle: false` for a page about one record. Name your menu items as the pages should be titled.
 - One primary action per region; destructive actions `Kind: "danger"` (outline) with a confirmation; fill pages use `Compact: true` (hidden on phones, the top bar shows the title).
 - Table pages (`Sw.Table.Create({ Page: true })`, `explore/table.html`) make their own compact header from the menu name / table title.
-- Header actions never wrap or squeeze (F49-Left): `Sw.PageHeader` keeps them on one line and moves the last ones that do not fit into a "More actions" kebab menu (the primary action and non button controls stay). Pages need no change; drop own css that wrapped or shrank `.sw-ph-actions` children, and put the most important actions first (the last ones move first). `Overflow: false` keeps the old wrapping row.
-- A text file viewer on a menu page (`edit/text.html` opened by a menu item, ex: Log file) shows the menu name as its h1 and the file name as the description; links to `edit/text.html` from tables are unchanged (the file name stays the heading).
+- Header actions never wrap or squeeze: `Sw.PageHeader` keeps them on one line and moves the last ones that do not fit into a "More actions" kebab menu (the primary action and non button controls stay). Pages need no change; drop own css that wrapped or shrank `.sw-ph-actions` children, and put the most important actions first (the last ones move first). `Overflow: false` keeps the old wrapping row.
+- A text file viewer on a menu page (`edit/text.html` opened by a menu item, ex: Log file) shows the menu name as its h1 and the file name as the description; links to `edit/text.html` from tables show the file name as the heading.
 - Remove centred titles, hero logos and "Welcome x" pills from content pages (the brand lives in the sidebar).
 - A page of many alike things (displays, devices, cameras) that placed fixed size boxes with `position: absolute` / `style.top`: `Sw.PageLayout({ Type: "dash", ... })` + `Sw.Grid({ Content })` of `Sw.Card({ Title, Sub, Tools: [buttons], Body, Flush: true, Span: 6 })`, and `Sw.StateView({ Kind: "empty", ... })` when there are none. A fixed size preview (an iframe of a 1280x720 page) keeps its layout at any card width with `aspect-ratio: 16 / 9` on a wrapper and the iframe at `200%` size with `transform: scale(0.5)`.
 - **migrate**: no (structure). **check**: `design-page-header` (says whether the page makes its own `<h1>` and lacks a container), `design-page-container` (a header without a container). **manual**: as above, or `<!-- SwWeb:no-page-header -->` for a page without one on purpose.
@@ -325,7 +325,7 @@ Static markup works too: `<main class="sw-page-form"><header class="sw-ph"><div 
 
 | Old pattern | Design v2 part (ui/page.js, ui/page.css) |
 |---|---|
-| fieldset look, `Sw.Group` with the title in the border | `Sw.Card({ Title, Sub, Tools, Body })` / `section.sw-card` (a `Sw.Group` is a card now; `--sw-frame-bg` is obsolete) |
+| fieldset look, `Sw.Group` with the title in the border | `Sw.Card({ Title, Sub, Tools, Body })` / `section.sw-card` (a `Sw.Group` is a card; `--sw-frame-bg` is not read) |
 | a row of fact pills (host, OS, version ...) | `Sw.Facts({ Items: [{ Label, Value, Href }] })` (`dl.sw-facts`) |
 | a donut / gauge for one value of a total | `Sw.Kpi({ Label, Icon, Value, Unit, Meter: { Max, Warn, Danger } })` |
 | bar series over time, rotated time labels | a line chart in a card (`chart/chart.html?type=line&title=false`) |
@@ -353,14 +353,14 @@ Table pages and embedded tables get the fixed frame automatically (tool bar on t
 | Change | What to do | SwWeb |
 |---|---|---|
 | `Table.addTable(url, el, rowsPerPage, ...)` | `Sw.Table.Create({ Url, Element, Param, ... })`; the page size is automatic (or the user's choice) | migrate (`api`) |
-| The rows, skeleton and states moved into `div.sw-table-area`: `.sw-table > .sw-table-scroll`, `.sw-table-page > .sw-table-empty` no longer match | drop the `>` or write `.sw-table-area > ...` | check `design-legacy-class` |
-| Search and tools moved from the footer to the tool bar: `.sw-table-tools` is gone (`.sw-table-ttools > .sw-table-tbtn`), `.sw-table-foot > .sw-table-search` no longer matches | move the rules to `.sw-table-toolbar` / `.sw-table-ttools` | check `design-legacy-class` (map entry) |
+| The rows, skeleton and states are in `div.sw-table-area`: `.sw-table > .sw-table-scroll`, `.sw-table-page > .sw-table-empty` do not match | drop the `>` or write `.sw-table-area > ...` | check `design-legacy-class` |
+| Search and tools are in the tool bar (`.sw-table-ttools > .sw-table-tbtn`; there is no `.sw-table-tools`), `.sw-table-foot > .sw-table-search` does not match | move the rules to `.sw-table-toolbar` / `.sw-table-ttools` | check `design-legacy-class` (map entry) |
 | Footer slots (`.sw-table-fleft`, `.sw-table-pps`, `.sw-table-nav`, `.sw-table-pageno`) never wrap and only grow | don't set `flex-wrap`, widths or `min-width` on them | - |
 | A page table (`Page: true`) fills its host | give the host a definite height (a flex column child with `min-height: 0`, ex: `.sw-fill` in `.sw-page-fill`) | - |
 | Rows are `--sw-row-h` high (density), sentence case muted headers, tabular numbers, striped rows only with the Density menu's "Striped rows" (`.sw-table-zebra`, default on in compact) | restyle with the tokens (`--sw-row-h`, `--sw-cell-px`), not the selectors | - |
 | The page header h1 is the menu item name | name the menu item as the page should be titled | - |
 | `sw-table-loading` is only on until the first answer | use `.sw-table-busy` as a busy hook | - |
-| **Footer rule** (F49-Left): page tables and **fill tables** have the footer at the bottom of the frame; other embedded tables are as high as their rows (footer after the last row, sticky at the window bottom). An embedded table whose container has the class `sw-fill` (ex: a `Sw.PageLayout` fill page section) or `sw-table-fill` is a fill table automatically (option `Fill: true / false` overrides) | a fill page with a form and a table: give the table host `.sw-fill` and drop own css that tried to stretch the table (`.host > * { flex: 1 }`, heights on `.sw-table`) | - (no reliable pattern) |
+| **Footer rule**: page tables and **fill tables** have the footer at the bottom of the frame; other embedded tables are as high as their rows (footer after the last row, sticky at the window bottom). An embedded table whose container has the class `sw-fill` (ex: a `Sw.PageLayout` fill page section) or `sw-table-fill` is a fill table automatically (option `Fill: true / false` overrides) | a fill page with a form and a table: give the table host `.sw-fill` and drop own css that tried to stretch the table (`.host > * { flex: 1 }`, heights on `.sw-table`) | - (no reliable pattern) |
 | Per table empty texts: `EmptyTitle` / `EmptyText` options (`table.html`: `et` / `ed` url parameters); default "No rows to show" / "There is nothing in <name> right now." | set them where an empty table needs a sentence of its own (ex: "No messages yet" / "Simulated texts show up here.") | - |
 | `Header` option: page tables can hide their compact header (`Header: false`, `table.html?...&header=false`), embedded tables can show one (`Header: true`, an h2 with the table name and the note) | an iframe of `table.html` inside a page with its own `Sw.PageHeader`: add `&header=false` | - |
 
@@ -372,17 +372,17 @@ Forms built with `Sw.Edit` (the object editor) and `Sw.PropertyEditor` get the D
 - Don't style the editor's inner rows; the label width is `--sw-label-w`.
 - A null result is never an object editor: show an empty state (`Sw.StateView`) for "no value".
 - Read only stays read only: a whole-object paste or drop keeps the current values of read only members (one toast says what was kept), so don't re-implement paste for your types. Code that loads a new record into an existing editor uses `await editor.SetObject(value)` (not merged, not undoable); user edits go through `ReplaceObject` (merged, one undo step). Pasted / dropped collection items lose a `$type` equal to the element type.
-- Colour text boxes read `0x` hex in non-integer members as `0xRRGGBBAA` (before `0xAARRGGBB`; a note says so); integer layouts (UInt32Argb ...) are unchanged. `EditTypeUnit.js` is part of the editor files: a page that loads them itself (rare, `Sw.Edit.Init` does it) must not skip it.
+- Colour text boxes read `0x` hex in non-integer members as `0xRRGGBBAA` (a note says so); integer layouts (UInt32Argb ...) are read in their own layout. `EditTypeUnit.js` is part of the editor files: a page that loads them itself (rare, `Sw.Edit.Init` does it) must not skip it.
 - A page that lets users type json for a type validates it with `await Sw.Edit.CheckJson(type, value)` (null or `{ Path, Text }`; every depth, with the line of the error, `Sw.Edit.JsonLines`) instead of `JSON.parse` alone.
 - **Describe your C# members, the editor does the rest** (server side, one attribute each, backward compatible): `[EditUnit(EditUnits.Seconds)]` (durations, sizes, ratios: a number in its unit with a readable hint, typed units such as "1h 30m" / "32 MB", Min / Max notes, optional slider), `[EditColor(EditColorFormat.Hex)]` / `Css` / `Rgba8` ... (a colour editor in the stored format, alpha kept or reported), `[EditPassword]` (secrets), `[EditType(EditTypes.Url / Phone / Email)]` (input mode and validation; not on members that also take other forms such as `$(...)` templates). They change only the editor, never the stored value or the json; `EditUnit`, `EditColor` and `EditType` are editor types (one per member, not combined with `EditHideIf`). Without them the members stay plain numbers / texts. The shared `ApiKeyParams.ApiKey`, `CredentialParams.Password` and `AppColorParams` already have them.
-- `explore/api.html` is a Design v2 page (page header, a meta line of badges, the signature, Input / Result cards with a sticky footer): its old boxed sections (`.api-section`, `.api-head`, `.api-tags`, `.api-send`, `.api-desc`, `.api-lock`, `.api-message-*`) are gone; style `.api-meta`, `.api-tag`, `.api-signature`, `.api-card` or the tokens.
-- **migrate**: the `Edit*` legacy aliases (A7). **check**: `design-legacy-class` (the removed api.html sections), the generic rules (`design-*`, `element-css`) on your form css.
+- `explore/api.html` is a Design v2 page (page header, a meta line of badges, the signature, Input / Result cards with a sticky footer): it has no `.api-section`, `.api-head`, `.api-tags`, `.api-send`, `.api-desc`, `.api-lock`, `.api-message-*` classes; style `.api-meta`, `.api-tag`, `.api-signature`, `.api-card` or the tokens.
+- **migrate**: the `Edit*` legacy aliases (A7). **check**: `design-legacy-class` (the old api.html section classes), the generic rules (`design-*`, `element-css`) on your form css.
 
 ### B15. Shell
 
-The shell is a CSS grid: a full height sidebar (brand at its top, app identity, the menu tools Pin / Collapse all / Expand all above the search, section labels, monochrome icons, the current item in accent) and a top bar over the content with the breadcrumb (`app-ContentTitle` is the breadcrumb container now). No shadows or gradients; the Application theme marks the sidebar with a 3 px accent edge. The element names `app-header`, `app-menu`, `app-ContentTitle`, `app-content`, `app-PinButton` (now inside the menu tools) are kept, so `app/app.css` rules on them still match; rules that drew header gradients, shadows or a centred title are obsolete.
+The shell is a CSS grid: a full height sidebar (brand at its top, app identity, the menu tools Pin / Collapse all / Expand all above the search, section labels, monochrome icons, the current item in accent) and a top bar over the content with the breadcrumb (`app-ContentTitle` is the breadcrumb container). No shadows or gradients; the Application theme marks the sidebar with a 3 px accent edge. The element names `app-header`, `app-menu`, `app-ContentTitle`, `app-content`, `app-PinButton` (inside the menu tools) exist, so `app/app.css` rules on them match; rules that drew header gradients, shadows or a centred title are obsolete.
 
-- Icons (F49-Left, Design v2 3.12): the shell chrome uses the line set (`Sw.Icon`), menu icons are monochrome masks (`--sw-text-3`); full colour menu icon urls (`...svg*`) and `IconLogo` are shown as masks in the sidebar, the rail and the shell's popup menus. Want colour? Show it in content (Home tiles, your pages). App css on the old header icon classes (`app-SettingsButton .IconSettings`, `app-BackButton .IconNavBack`) must target `.sw-shell-hicon` (an svg now).
+- Icons: the shell chrome uses the line set (`Sw.Icon`), menu icons are monochrome masks (`--sw-text-3`); full colour menu icon urls (`...svg*`) and `IconLogo` are shown as masks in the sidebar, the rail and the shell's popup menus. Want colour? Show it in content (Home tiles, your pages). App css on the old header icon classes (`app-SettingsButton .IconSettings`, `app-BackButton .IconNavBack`) target `.sw-shell-hicon` (an svg).
 - **check**: the `design-*` rules on `app/app.css` like on any page css.
 
 ### B16. Themes and branding without forking
@@ -430,12 +430,12 @@ Things that open a page are `<a href>` links (middle click, copy link), actions 
 
 ### B20. Framework pages your app builds on
 
-If your app links to, embeds or restyles the framework's own pages, these changed with Design v2 (the pages themselves need nothing from you):
+If your app links to, embeds or restyles the framework's own pages, these are their Design v2 forms (the pages themselves need nothing from you):
 
 - **Home** (`app/`): a dashboard (KPI tiles, shortcuts, recent pages, problems); inside the shell the status badge only shows news (not connected, problems: the sidebar footer shows "Connected, server time"), the user picture only when it is an upload target. `app/app.css` rules on `.HomeStatus` / `img.UserImage` keep working.
-- **ServerManager**: the classes `.sm-stat*`, `.sm-charts`, `.sm-history`, `.sm-commands`, `.sm-danger*`, `.si-name`, `.si-state`, `.si-grid*`, `.vi-name`, `.vi-values`, `ss-add`, `kf-table` and the global `smStat` are gone (facts strip, KPI tiles, line cards, page header actions); `SmShared.KpiSub`, `LineCard`, `UploadButton`, `FillTable` (a fill page around `Sw.Table.Create({ Page: true })`) are the shared helpers. Use `Compact: false` on a fill page header that has actions (a compact header is hidden on phones, its actions with it). **check**: `design-legacy-class` reports css on the removed classes.
+- **ServerManager**: the classes `.sm-stat*`, `.sm-charts`, `.sm-history`, `.sm-commands`, `.sm-danger*`, `.si-name`, `.si-state`, `.si-grid*`, `.vi-name`, `.vi-values`, `ss-add`, `kf-table` and the global `smStat` do not exist (facts strip, KPI tiles, line cards, page header actions); `SmShared.KpiSub`, `LineCard`, `UploadButton`, `FillTable` (a fill page around `Sw.Table.Create({ Page: true })`) are the shared helpers. Use `Compact: false` on a fill page header that has actions (a compact header is hidden on phones, its actions with it). **check**: `design-legacy-class` reports css on these classes.
 - **Auth pages**: `Sw.AuthUi.Page(icon, build, { Account: true, Description })` gives signed-in account pages the form layout (page header + card), stand-alone pages keep the centred card; tool pages call `page.SetHeader({ Title, Description, Actions })`.
-- **Chart page**: inside the shell `chart.html` gets a compact page header and a card; embedded tiles (`m=false` / `transparent=true`) are unchanged; `title=false` hides the chart's own title when a card head names it.
+- **Chart page**: inside the shell `chart.html` gets a compact page header and a card; embedded tiles (`m=false` / `transparent=true`) have neither; `title=false` hides the chart's own title when a card head names it.
 - **Log file, translator, upload test, fake email, FakeText, chat**: fill pages with the buttons in the page header actions (no sticky bars with shadows); record pages use `Sw.Facts` + cards with `MenuTitle: false`; app Home overrides keep the app name (`MenuTitle: false`); chat lost its glow and inset shadows (hairlines).
 
 ---
@@ -464,10 +464,10 @@ If your app links to, embeds or restyles the framework's own pages, these change
 | B11 pills, fieldsets | - | `design-pill-facts`, `design-fieldset` |
 | B12 old element hooks | reported | `design-legacy-class` |
 | B13 table structure | `Table.addTable` | `design-legacy-class` (`.sw-table-tools`, child selectors) |
-| B14 editors (removed api.html sections, C# edit attributes) | `Edit*` aliases | `design-legacy-class` |
+| B14 editors (old api.html section classes, C# edit attributes) | `Edit*` aliases | `design-legacy-class` |
 | B18 custom controls | - | `a11y-custom-control`, `a11y-name` |
 | B19 inline styles | aliases in strings | `design-inline-style` |
-| B20 removed framework page classes | reported | `design-legacy-class` |
+| B20 old framework page classes | reported | `design-legacy-class` |
 
 Not detectable statically (review by hand): a donut for one value (chart urls are built at run time), a command row at the bottom of a page (its actions belong in the page header), an h1 that differs from the menu name (the UI runner checks it), px font sizes / paddings, child selectors into components other than the table frame.
 

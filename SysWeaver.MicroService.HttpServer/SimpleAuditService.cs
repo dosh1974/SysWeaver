@@ -33,10 +33,12 @@ namespace SysWeaver.MicroService
         /// </summary>
         /// <param name="msg">Optional message host</param>
         /// <param name="p">Parameters, null uses the defaults</param>
-        public SimpleAuditService(IMessageHost msg = null, SimpleAuditParams p = null)
+        /// <param name="manager">Optional service manager, used to find an ip location service (<see cref="IIpLocation"/>)</param>
+        public SimpleAuditService(IMessageHost msg = null, SimpleAuditParams p = null, ServiceManager manager = null)
         {
             p = p ?? new SimpleAuditParams();
             Msg = msg;
+            Manager = manager;
             var folders = p.Folders;
             if ((folders?.Length ?? 0) <= 0)
                 folders = Folders.Append(Folders.AllAppFolders, "Audit");
@@ -51,6 +53,7 @@ namespace SysWeaver.MicroService
         }
 
         readonly IMessageHost Msg;
+        readonly ServiceManager Manager;
         readonly SimpleAuditStorage Storage;
         readonly int RetentionDays;
         readonly int MaxDataLength;
@@ -111,7 +114,7 @@ namespace SysWeaver.MicroService
                 Value = value,
                 Auth = s.Auth,
                 Api = api,
-                Session = ApiAuditTools.RedactSession(s.Token),
+                Session = s.TokenHash,
                 Ip = r.GetIpAddress(),
                 DeviceId = s.DeviceId,
                 Language = s.ClientLanguage,
@@ -298,7 +301,14 @@ namespace SysWeaver.MicroService
                 Storage = "Files",
                 RetentionDays = RetentionDays,
                 MaxDataLength = MaxDataLength,
+                HaveIpLocation = Manager?.TryGet<IIpLocation>() != null,
             });
+
+        /// <inheritdoc />
+        [WebApi]
+        [WebApiAuth(ApiAuditTools.ReadAuth)]
+        public Task<Location> GetIpLocation(String ip)
+            => ApiAuditTools.GetIpLocation(Manager?.TryGet<IIpLocation>(), ip);
 
         /// <inheritdoc />
         [WebApi]

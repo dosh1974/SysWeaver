@@ -16,15 +16,18 @@ namespace SysWeaver.Auth
     /// </summary>
     /// <remarks>
     /// Users are defined as "user:password:tokens:domain" strings, see <see cref="SimpleAuthorizerParams.Users"/>.
-    /// The password can be clear text (validated against the password policy) or a hash computed using <see cref="AuthTools.ComputeSimplePasswordHash(string, string)"/>
-    /// (the "Generate password hash" debug page can compute it).
-    /// API keys are stored in <see cref="KeyValueStore.AllApp"/> as "name:key" strings and are accepted as bearer tokens (and basic auth).
+    /// The password is a SCRAM verifier ("$s1$...", see <see cref="ScramVerifier"/>, the "Generate password hash" debug page can compute it)
+    /// or clear text (validated against the password policy). Password hashes (44 char base64) are refused.
+    /// API keys are only accepted as header auth (bearer / basic), never as a one time token (<see cref="AuthorizerBase.TokenAuth(string)"/>).
+    /// API keys are stored encrypted in <see cref="KeyValueStore.AllApp"/> (see <see cref="DataProtection"/>), optionally restricted to some client addresses, and are accepted as bearer tokens (and basic auth).
+    /// Header auth (basic / bearer) is only allowed for API keys, unless <see cref="SimpleAuthorizerParams.AllowBasicAuth"/> is true.
     /// The user guids are "SI:" followed by a hash of the user name.
     /// Thread safe, user changes are applied atomically and users whose password or tokens changed are asked to log out.
     /// </remarks>
     [WebMenuEmbedded(null, "Admin/GenPwd", "Generate password hash", "auth/index.html", "Generate password hashes to be used for the simple authorizer", "IconLock", 3, Roles.Ops)]
     [WebMenuEmbedded(null, "Admin/KeyMan", "API-key management", "auth/KeyMan.html", "Manage API-keys", "IconKey", 2, "", false, nameof(CanManageKeys))]
-    public sealed class SimpleAuthorizer : AuthorizerBase, IDisposable, IRunTimeWebApiAuth
+    [WebMenuEmbedded(null, "Admin/UserMan", "Stored users", "auth/UserMan.html", "Add and remove users and change their tokens", "IconUsers", 2, "", false, nameof(CanManageUsers))]
+    public sealed partial class SimpleAuthorizer : AuthorizerBase, IDisposable, IRunTimeWebApiAuth
     {
         /// <inheritdoc/>
         public override string Name => "Simple";
@@ -36,8 +39,7 @@ namespace SysWeaver.Auth
         {
             if (auth == null)
                 return TaskExt.FalseTask;
-            var p = Params;
-            if (p.ApiKeyAuth == null)
+            if (ApiKeyDefaultTokens == null)
                 return TaskExt.FalseTask;
             if (auth.IsValid(ManagementTokens))
                 return TaskExt.TrueTask;
@@ -56,25 +58,18 @@ namespace SysWeaver.Auth
             Msg = msg;
             Params = p;
             InternalPasswordPolicy = p.PasswordPolicy ?? new PasswordPolicy();
+            AppHashString = String.IsNullOrEmpty(p.AppHashString) ? EnvInfo.AppAssemblyName : p.AppHashString;
+            InternalScramDefaults = new ScramInfo
+            {
+                Iterations = ScramTools.ClampIterations(p.ScramIterations),
+                Binding = AppHashString,
+            };
             MustExist = p.MustExist;
             //  null must never mean "no auth required" for the key management methods, use the default instead
             ManagementAuth = p.ApiKeyManagementAuth ?? Roles.AdminOps;
             ManagementTokens = Authorization.GetRequiredTokens(ManagementAuth);
-            if (p.ApiKeyAuth != null)
-            {
-                var aa = ManagementAuth;
-                MethodAuths = new Dictionary<String, String>(StringComparer.Ordinal)
-                {
-                    { nameof(AppInfo), aa },
-                    { nameof(ApiKeysSupported), aa },
-                    { nameof(GetApiKeys), aa },
-                    { nameof(AddApiKey), aa },
-                    { nameof(RemoveApiKey), aa },
-                }.Freeze();
-            }else
-            {
-                MethodAuths = ReadOnlyData.EmptyDictionary<String, String>();
-            }
+            ApiKeyDefaultTokens = GetApiKeyDefaultTokens(p.ApiKeyAuth);
+            MethodAuths = BuildMethodAuths();
             if (!String.IsNullOrEmpty(p.Location))
             {
                 UserFile = new ManagedFile(p, OnFileUpdate);
@@ -148,7 +143,6 @@ namespace SysWeaver.Auth
             return a.SetEquals(b) && b.SetEquals(a);
         }
 
-        const String ApiKeyKey = "BasicAuthApiKeys";
 
         static IEnumerable<String> Append(IEnumerable<String> x, String append)
         {
@@ -169,7 +163,7 @@ namespace SysWeaver.Auth
             {
                 msg?.AddMessage(MessageLevels.Debug, $"{LogPrefix}Updating users");
                 using var _ = msg?.Tab();
-                Dictionary<String, Tuple<Byte[], Authorization, String, Authorization>> changed = new (StringComparer.Ordinal);
+                Dictionary<String, UserEntry> changed = new (StringComparer.Ordinal);
                 //  Serialize updates, so that a concurrent update (file change vs api key change) can't publish a stale snapshot
                 lock (ApiKeyLock)
                 {
@@ -177,10 +171,9 @@ namespace SysWeaver.Auth
                     Interlocked.Increment(ref InternalChangeCounter);
                     var p = Params;
                     var tokenDelim = TokenDelim;
-                    var a = new Dictionary<String, Tuple<Byte[], Authorization, String, Authorization>>(StringComparer.Ordinal);
+                    var a = new Dictionary<String, UserEntry>(StringComparer.Ordinal);
                     var guidMap = new Dictionary<String, AuthorizationInfo>(StringComparer.Ordinal);
                     var aba = p.AllowBasicAuth;
-                    var apiKeyAuth = p.ApiKeyAuth;
                     Dictionary<String, Task<Authorization>> bearerAuths = new(StringComparer.Ordinal);
                     if ((p.Users?.Length ?? 0) > 0)
                     {
@@ -194,28 +187,58 @@ namespace SysWeaver.Auth
                         using (msg?.Tab())
                             AddUsers(a, guidMap, FileLines, aba);
                     }
-                    if (apiKeyAuth != null)
+                    if (p.AllowStoredUsers)
                     {
-                        var apiKeys = KeyValueStore.AllApp.TryGet<String[]>(ApiKeyKey);
-                        if ((apiKeys?.Length ?? 0) > 0)
+                        var stored = ReadStoredUserRecords();
+                        if (stored.Count > 0)
+                        {
+                            msg?.AddMessage(MessageLevels.Debug, $"{LogPrefix}Adding stored users");
+                            using var __ = msg?.Tab();
+                            //  Stored users may not replace configured users (same name => same user and guid)
+                            var configured = new HashSet<String>(a.Keys, StringComparer.Ordinal);
+                            foreach (var rec in stored)
+                            {
+                                if (configured.Contains(rec.Name.FastToLower()))
+                                {
+                                    msg?.AddMessage(MessageLevels.Warning, $"{LogPrefix}Ignoring the stored user {rec.Name.ToQuoted()}, a user with that name already exists");
+                                    continue;
+                                }
+                                AddUser(a, guidMap, String.Join(':', rec.Name, rec.Verifier, rec.Tokens ?? ""), aba, true);
+                            }
+                        }
+                    }
+                    if (ApiKeyDefaultTokens != null)
+                    {
+                        var apiKeys = ReadApiKeyRecords();
+                        if (apiKeys.Count > 0)
                         {
                             msg?.AddMessage(MessageLevels.Debug, $"{LogPrefix}Adding users from stored api keys");
                             using var __ = msg?.Tab();
-                            apiKeyAuth = ":" + apiKeyAuth;
-                            //  Api keys may not replace configured users (same name => same user and guid)
+                            //  Api keys may not replace other users (same name => same user and guid)
                             var configured = new HashSet<String>(a.Keys, StringComparer.Ordinal);
-                            foreach (var kv in apiKeys)
+                            foreach (var rec in apiKeys)
                             {
-                                var keyName = kv.Substring(0, Math.Max(0, kv.IndexOf(':'))).Trim();
+                                var keyName = rec.Name.Trim();
                                 if (configured.Contains(keyName.FastToLower()))
                                 {
                                     msg?.AddMessage(MessageLevels.Warning, $"{LogPrefix}Ignoring api key {keyName.ToQuoted()}, a user with that name already exists");
                                     continue;
                                 }
-                                var auth = AddUser(a, guidMap, kv + apiKeyAuth, true, true);
+                                IReadOnlyList<System.Net.IPNetwork> nets;
+                                try
+                                {
+                                    nets = Authorization.ParseNetworks(rec.Addresses);
+                                }
+                                catch (ArgumentException ex)
+                                {
+                                    //  Fail closed: an invalid list allows no address
+                                    msg?.AddMessage(MessageLevels.Warning, $"{LogPrefix}The allowed addresses of the api key {keyName.ToQuoted()} are invalid, the key can't be used: {ex.Message}");
+                                    nets = [];
+                                }
+                                var auth = AddUser(a, guidMap, String.Join(':', rec.Name, rec.Key, rec.Tokens), true, true, true, nets);
                                 if (auth == null)
                                     continue;
-                                bearerAuths[kv.Substring(kv.IndexOf(':') + 1)] = Task.FromResult(auth);
+                                bearerAuths[rec.Key] = Task.FromResult(auth);
                             }
                         }
                     }
@@ -225,9 +248,9 @@ namespace SysWeaver.Auth
                     {
                         if (!changed.TryGetValue(x.Key, out var y))
                             continue;
-                        if (x.Value.Item3 == y.Item3)
+                        if (x.Value.PwdKey == y.PwdKey)
                         {
-                            if (SetsAreEqual(x.Value.Item2.Tokens, y.Item2.Tokens))
+                            if (SetsAreEqual(x.Value.Auth.Tokens, y.Auth.Tokens))
                             {
                                 changed.Remove(x.Key);
                                 continue;
@@ -240,9 +263,9 @@ namespace SysWeaver.Auth
                 }
                 foreach (var x in changed)
                 {
-                    x.Value.Item2.RequestLogout("Password or tokens have changed!");
+                    x.Value.Auth.RequestLogout("Password or tokens have changed!");
                     //  The weak (basic auth / API key) authorization is used by token and bearer logins
-                    x.Value.Item4?.RequestLogout("Password or tokens have changed!");
+                    x.Value.BasicAuth?.RequestLogout("Password or tokens have changed!");
                 }
             }
             catch (Exception ex)
@@ -263,7 +286,18 @@ namespace SysWeaver.Auth
             msg?.AddMessage(MessageLevels.Debug, $"{LogPrefix}Users updated");
         }
 
-        void AddUsers(Dictionary<String, Tuple<Byte[], Authorization, String, Authorization>> a, Dictionary<String, AuthorizationInfo> guidMap, IEnumerable<String> users, bool allowBasicAuth, bool ignorePolicy = false)
+        /// <summary>
+        /// True if a password value is a password hash (44 chars of base64 for 32 bytes, ex: <see cref="AuthTools.ComputeSimplePasswordHash(string, string, string)"/>), not a password
+        /// </summary>
+        static bool IsPasswordHash(String pwd)
+        {
+            if (pwd.Length != 44)
+                return false;
+            Span<Byte> d = stackalloc byte[32];
+            return Convert.TryFromBase64String(pwd, d, out var w) && (w == 32);
+        }
+
+        void AddUsers(Dictionary<String, UserEntry> a, Dictionary<String, AuthorizationInfo> guidMap, IEnumerable<String> users, bool allowBasicAuth, bool ignorePolicy = false)
         {
             if (users == null)
                 return;
@@ -271,7 +305,7 @@ namespace SysWeaver.Auth
                 AddUser(a, guidMap, x, allowBasicAuth, ignorePolicy);
         }
 
-        Authorization AddUser(Dictionary<String, Tuple<Byte[], Authorization, String, Authorization>> a, Dictionary<String, AuthorizationInfo> guidMap, String u, bool allowBasicAuth, bool ignorePolicy = false)
+        Authorization AddUser(Dictionary<String, UserEntry> a, Dictionary<String, AuthorizationInfo> guidMap, String u, bool allowBasicAuth, bool ignorePolicy = false, bool isApiKey = false, IReadOnlyList<System.Net.IPNetwork> networks = null)
         {
             var ud = u?.Trim();
             if (String.IsNullOrEmpty(ud))
@@ -300,18 +334,22 @@ namespace SysWeaver.Auth
                 }
             }
             var ul = user.FastToLower();
+            //  The stored value: a SCRAM verifier ("$s1$...") or a clear text password
             String hash = null;
-            if (pwd.Length == 44)
+            var verifier = ScramVerifier.TryParse(pwd);
+            if ((verifier == null) && pwd.StartsWith(ScramVerifier.Prefix, StringComparison.Ordinal))
             {
-                Span<Byte> d = stackalloc byte[32];
-                if (Convert.TryFromBase64String(pwd, d, out var w))
-                {
-                    if (w == 32)
-                        hash = pwd;
-                }
+                Msg?.AddMessage(MessageLevels.Warning, $"{LogPrefix}Ignoring user {user.ToQuoted()}, the password verifier is invalid");
+                return null;
             }
-            if (hash == null)
+            if (verifier == null)
             {
+                //  A 44 char base64 value (32 bytes) is a password hash, not a password: refused, else a copied hash would be a working password
+                if (!isApiKey && IsPasswordHash(pwd))
+                {
+                    Msg?.AddMessage(MessageLevels.Warning, $"{LogPrefix}Ignoring user {user.ToQuoted()}, password hashes are not supported (use a \"{ScramVerifier.Prefix}...\" verifier)");
+                    return null;
+                }
                 if (!ignorePolicy)
                 {
                     var pol = PasswordPolicy;
@@ -322,7 +360,9 @@ namespace SysWeaver.Auth
                         return null;
                     }
                 }
-                hash = AuthTools.ComputeSimplePasswordHash(ul, pwd);
+                hash = AuthTools.ComputeSimplePasswordHash(ul, pwd, AppHashString);
+                //  API keys are long random strings, a low iteration count is enough (and keeps updates fast)
+                verifier = GetDerivedVerifier(hash, isApiKey ? ScramTools.MinIterations : Params.ScramIterations);
             }
             var guid = String.Concat(GuidPrefix, ':', HashTools.GetHashString(user));
             Authorization auth;
@@ -330,9 +370,10 @@ namespace SysWeaver.Auth
             AuthorizationInfo info;
             try
             {
-                auth = new Authorization(this, user, Authorization.GetRequiredTokenSet(tokens), false, guid, user, null, null, domain);
-                allowBasicAuth |= auth.Tokens.Contains("service");
-                basicAuth = allowBasicAuth ? new Authorization(this, user, Authorization.GetRequiredTokenSet(tokens), true, guid, user, null, null, domain) : null;
+                auth = new Authorization(this, user, Authorization.GetRequiredTokenSet(tokens), false, guid, user, null, null, domain) { AllowedNetworks = networks };
+                //  Header auth (basic / bearer) is only for API keys, unless SimpleAuthorizerParams.AllowBasicAuth is set.
+                //  Basic auth compares the password hash (no PBKDF2 per request), so it needs a clear text password (or an API key)
+                basicAuth = allowBasicAuth && (hash != null) ? new Authorization(this, user, Authorization.GetRequiredTokenSet(tokens), true, guid, user, null, null, domain) { AllowedNetworks = networks, IsApiKey = isApiKey } : null;
                 info = new AuthorizationInfo(auth);
             }
             catch (ArgumentException ex)
@@ -342,10 +383,78 @@ namespace SysWeaver.Auth
                 return null;
             }
             guidMap[guid] = info;
-            a[ul] = new Tuple<byte[], Authorization, String, Authorization>(Convert.FromBase64String(hash), auth, hash, basicAuth);
+            a[ul] = new UserEntry
+            {
+                Auth = auth,
+                BasicAuth = basicAuth,
+                Verifier = verifier,
+                PasswordHash = basicAuth == null ? null : Convert.FromBase64String(hash),
+                PwdKey = verifier.ToString(),
+                IsApiKey = isApiKey,
+            };
             Msg?.AddMessage(MessageLevels.Debug, $"{LogPrefix}Added user \"{user}\"");
             return basicAuth ?? auth;
         }
+
+        /// <summary>
+        /// A user (or API key)
+        /// </summary>
+        sealed class UserEntry
+        {
+            /// <summary>
+            /// The (strong) authorization of the user
+            /// </summary>
+            public Authorization Auth;
+            /// <summary>
+            /// The weak authorization (basic auth, API keys), null if basic auth isn't allowed for the user
+            /// </summary>
+            public Authorization BasicAuth;
+            /// <summary>
+            /// The SCRAM verifier (never null)
+            /// </summary>
+            public ScramVerifier Verifier;
+            /// <summary>
+            /// The password hash H (password equivalent, see <see cref="AuthTools.ComputeSimplePasswordHash(string, string, string)"/>) for basic auth, null if basic auth isn't allowed for the user
+            /// </summary>
+            public Byte[] PasswordHash;
+            /// <summary>
+            /// The stored password value (used to detect password changes)
+            /// </summary>
+            public String PwdKey;
+            /// <summary>
+            /// True for an API key user: every sign in method gives the weak authorization (<see cref="BasicAuth"/>), so a key never gets a strong session (ex: can't add passkeys)
+            /// </summary>
+            public bool IsApiKey;
+
+            /// <summary>
+            /// The authorization to give after a successful sign in (password / proof): the weak one for API keys
+            /// </summary>
+            public Authorization SignInAuth => IsApiKey ? BasicAuth : Auth;
+        }
+
+        /// <summary>
+        /// Verifiers of clear text passwords and API keys, PBKDF2 is only computed once per hash, binding and iteration count.
+        /// The salt is random (per process): it is public (sign in parameters), a salt derived from the hash would let anyone test password guesses without the PBKDF2 cost.
+        /// The one time pad of a sign in is per process too, so a new salt after a restart doesn't matter.
+        /// </summary>
+        readonly System.Collections.Concurrent.ConcurrentDictionary<String, ScramVerifier> DerivedVerifiers = new (StringComparer.Ordinal);
+
+        ScramVerifier GetDerivedVerifier(String passwordHash, int iterations)
+        {
+            iterations = ScramTools.ClampIterations(iterations);
+            var binding = AppHashString;
+            var key = String.Join('|', passwordHash, iterations, binding);
+            if (DerivedVerifiers.TryGetValue(key, out var v))
+                return v;
+            v = ScramTools.CreateVerifier(passwordHash, binding, iterations);
+            return DerivedVerifiers.GetOrAdd(key, v);
+        }
+
+        /// <summary>
+        /// The application binding string (<see cref="SimpleAuthorizerParams.AppHashString"/>, defaults to the entry assembly name)
+        /// </summary>
+        public readonly String AppHashString;
+
         const String LogPrefix = "[Auth] ";
 
         static readonly Char[] TokenDelim = "|:".ToCharArray();
@@ -353,7 +462,7 @@ namespace SysWeaver.Auth
         /// <inheritdoc/>
         public override string ToString() => String.Join(String.Join(", ", Auths.Keys.Select(x => x.ToQuoted())), "Users: [", ']');
 
-        IReadOnlyDictionary<String, Tuple<Byte[], Authorization, String, Authorization>> Auths = new Dictionary<String, Tuple<Byte[], Authorization, String, Authorization>>(StringComparer.Ordinal).Freeze();
+        IReadOnlyDictionary<String, UserEntry> Auths = new Dictionary<String, UserEntry>(StringComparer.Ordinal).Freeze();
         IReadOnlyDictionary<String, AuthorizationInfo> AuthGuids = new Dictionary<String, AuthorizationInfo>(StringComparer.Ordinal).Freeze();
 
         IReadOnlyDictionary<String, Task<Authorization>> BearerAuths = new Dictionary<String, Task<Authorization>>(StringComparer.Ordinal).Freeze();
@@ -406,7 +515,7 @@ namespace SysWeaver.Auth
         [WebApiRequestCache(3)]
         [WebApiCompression("br:Best, deflate:Best, gzip:Best")]
         [WebMenuTable(null, "Admin/{0}", "Built-in users", "The users of the service configuration, they can't be changed here", "IconUsers", 1)]
-        public TableData UsersTable(TableDataRequest r) => TableDataTools.Get(r, 5000, Auths.Values.Select(x => new Info(x.Item2)));
+        public TableData UsersTable(TableDataRequest r) => TableDataTools.Get(r, 5000, Auths.Values.Select(x => new Info(x.Auth)));
 
 
         /// <summary>
@@ -421,8 +530,28 @@ namespace SysWeaver.Auth
         [WebApiCompression("br:Best, deflate:Best, gzip:Best")]
         public Task<String> GetAuthSalt(String user)
         {
-            return Task.FromResult(AuthTools.ComputeSimpleSalt(user));
+            return Task.FromResult(AuthTools.ComputeSimpleSalt(user, AppHashString));
         }
+
+        /// <summary>
+        /// Get the parameters used to create a password verifier ("$s1$..." format) on the "Generate password hash" page.
+        /// The verifier is: "$s1$" + Iterations + "$" + ToBase64(salt) + "$" + ToBase64(SHA256(HMAC-SHA256(PBKDF2-SHA256(UTF8(hash + "|" + Binding), salt, Iterations), "Client Key")))
+        /// where hash is the simple hash (password + "|" + GetAuthSalt(user)) and salt is 16 random bytes.
+        /// </summary>
+        /// <returns>The parameters (the salt is null, use a random one)</returns>
+        [WebApi("debug/simpleAuth/{0}")]
+        [WebApiClientCacheStatic]
+        [WebApiRequestCacheStatic]
+        public ScramInfo GetVerifierParams() => new ScramInfo
+        {
+            Iterations = InternalScramDefaults.Iterations,
+            Binding = AppHashString,
+        };
+
+        /// <inheritdoc/>
+        public override ScramInfo ScramDefaults => InternalScramDefaults;
+
+        readonly ScramInfo InternalScramDefaults;
 
 
         /// <summary>
@@ -449,14 +578,15 @@ namespace SysWeaver.Auth
         {
             if (!Auths.TryGetValue(userName.FastToLower(), out var data))
                 return NullTaskAuthorizationInfo;
-            return Task.FromResult(new AuthorizationInfo(data.Item2));
+            return Task.FromResult(new AuthorizationInfo(data.Auth));
         }
 
         static readonly Task<AuthorizationInfo> NullTaskAuthorizationInfo = Task.FromResult<AuthorizationInfo>(null);
 
         /// <summary>
-        /// Authorize a user using basic auth, only allowed if <see cref="SimpleAuthorizerParams.AllowBasicAuth"/> is true or the user has the "service" token.
-        /// The hash is compared in constant time.
+        /// Authorize a user using basic auth, only allowed for API keys, or for all users if <see cref="SimpleAuthorizerParams.AllowBasicAuth"/> is true.
+        /// The hash is compared in constant time against the password hash (no PBKDF2, so failed attempts are as cheap as successful ones).
+        /// Users defined with a verifier have no password hash and can't use basic auth.
         /// </summary>
         /// <param name="userName">The user name (case insensitive)</param>
         /// <param name="hash">The password hash: SHA256(UTF8(password|salt))</param>
@@ -466,10 +596,13 @@ namespace SysWeaver.Auth
             if (!Auths.TryGetValue(userName.FastToLower(), out var data))
                 return NoAuth;
             //  Basic auth allowed
-            var ba = data.Item4;
+            var ba = data.BasicAuth;
             if (ba == null)
                 return NoAuth;
-            if (!System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(hash, data.Item1))
+            if (hash == null)
+                return NoAuth;
+            var lh = data.PasswordHash;
+            if ((lh == null) || !System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(hash, lh))
                 return NoAuth;
             return Task.FromResult(ba);
         }
@@ -483,29 +616,30 @@ namespace SysWeaver.Auth
             => (token != null) && BearerAuths.TryGetValue(token, out var data) ? data : NoAuth;
 
         /// <inheritdoc/>
-        public override Task<Authorization> SecureAuth(string userName, byte[] hash, String oneTimePad)
+        public override Task<ScramInfo> GetScramInfoAsync(string userName)
         {
-            if (!Auths.TryGetValue(userName.FastToLower(), out var data))
-                return NoAuth;
-            var dhash = AuthTools.ComputeHash(data.Item3, oneTimePad);
-            if (!System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(hash, dhash))
-                return NoAuth;
-            return Task.FromResult(data.Item2);
+            if (!Auths.TryGetValue((userName ?? "").FastToLower(), out var data))
+                return NoScram;
+            return Task.FromResult(data.Verifier.GetInfo(AppHashString));
         }
 
+        /// <inheritdoc/>
+        public override Task<Authorization> ScramAuth(ScramProof proof)
+        {
+            if (proof == null)
+                return NoAuth;
+            if (!Auths.TryGetValue((proof.UserName ?? "").FastToLower(), out var data))
+                return NoAuth;
+            if (!ScramTools.Verify(data.Verifier, proof))
+                return NoAuth;
+            return Task.FromResult(data.SignInAuth);
+        }
 
-        /// <summary>
-        /// Authorize using an API key as a token (same as <see cref="BearerAuth(string)"/>, the key is not consumed).
-        /// </summary>
-        /// <param name="oneTimeToken">The API key (null is not found)</param>
-        /// <returns>A weak authorization for the API key user, or null</returns>
-        public override Task<Authorization> TokenAuth(string oneTimeToken)
-            => (oneTimeToken != null) && BearerAuths.TryGetValue(oneTimeToken, out var data) ? data : NoAuth;
 
         static readonly Task<String> TaskTupleStringStringNull = Task.FromResult<String>(null);
 
         /// <summary>
-        /// Get the salt of a known user, see <see cref="AuthTools.ComputeSimpleSalt(string)"/>.
+        /// Get the salt of a known user, see <see cref="AuthTools.ComputeSimpleSalt(string, string)"/> (using <see cref="AppHashString"/>).
         /// </summary>
         /// <param name="userName">The user name (case insensitive), null is treated as empty</param>
         /// <returns>The salt, or null if the user is unknown</returns>
@@ -514,7 +648,7 @@ namespace SysWeaver.Auth
             userName = (userName ?? "").FastToLower();
             if (!Auths.ContainsKey(userName))
                 return TaskTupleStringStringNull;
-            return Task.FromResult(AuthTools.ComputeSimpleSalt(userName));
+            return Task.FromResult(AuthTools.ComputeSimpleSalt(userName, AppHashString));
         }
 
         /// <summary>
@@ -526,7 +660,7 @@ namespace SysWeaver.Auth
         {
             email = email.FastToLower();
             if (Auths.TryGetValue(email, out var a))
-                return Task.FromResult(a.Item2.Username);
+                return Task.FromResult(a.Auth.Username);
             return TaskExt.NullStringTask;
         }
 
@@ -544,209 +678,6 @@ namespace SysWeaver.Auth
 
 
 
-        #region Api Keys
-
-
-        readonly Object ApiKeyLock = new object();
-
-        static String GenKey()
-        {
-            var cg = AlphaNumericCodeGenerator.Get(10);
-            using var rng = SecureRng.Get();
-            var mask = cg.InputMask;
-            var a = cg.Encode((long)rng.GetUInt64() & mask, false, false);
-            var b = cg.Encode((long)rng.GetUInt64() & mask, false, false);
-            var c = cg.Encode((long)rng.GetUInt64() & mask, false, false);
-            var d = cg.Encode((long)rng.GetUInt64() & mask, false, false);
-            a = a.Interleave(b);
-            c = c.Interleave(d);
-            return a.Interleave(c);
-        }
-
-
-        const String ApiKeyPath = "simpleAuth/{0}";
-        const String ApiKeyAuditGroup = "api-key";
-        const String ApiKeyAuth = Roles.Disabled;
-
-
-        /// <summary>
-        /// Get app information (for the API key management page).
-        /// Requires <see cref="SimpleAuthorizerParams.ApiKeyManagementAuth"/> (disabled if API keys are disabled).
-        /// </summary>
-        /// <returns>[EnvInfo.AppName, EnvInfo.AppDisplayName]</returns>
-        [WebApi(ApiKeyPath)]
-        [WebApiAuth(ApiKeyAuth)]
-        [WebApiClientCacheStatic]
-        [WebApiRequestCacheStatic]
-        public String[] AppInfo()
-            => [EnvInfo.AppName, EnvInfo.AppDisplayName];
-
-        /// <summary>
-        /// Check if API key management is enabled.
-        /// Requires <see cref="SimpleAuthorizerParams.ApiKeyManagementAuth"/> (disabled if API keys are disabled).
-        /// </summary>
-        /// <returns>True if GetApiKeys, RemoveApiKey, AddApiKey is available</returns>
-        [WebApi(ApiKeyPath)]
-        [WebApiAuth(ApiKeyAuth)]
-        [WebApiClientCacheStatic]
-        [WebApiRequestCacheStatic]
-        public bool ApiKeysSupported()
-            => Params.ApiKeyAuth != null;
-
-
-        /// <summary>
-        /// Get a list of ALL api keys (in clear text).
-        /// Requires <see cref="SimpleAuthorizerParams.ApiKeyManagementAuth"/> (disabled if API keys are disabled).
-        /// </summary>
-        /// <returns>An array of strings with the user/password pairs encoded as "user:key", or null if there are no keys</returns>
-        [WebApi(ApiKeyPath)]
-        [WebApiAuth(ApiKeyAuth)]
-        public String[] GetApiKeys()
-            => KeyValueStore.AllApp.TryGet<String[]>(ApiKeyKey);
-
-        /// <summary>
-        /// Remove an api key.
-        /// Requires <see cref="SimpleAuthorizerParams.ApiKeyManagementAuth"/> (disabled if API keys are disabled).
-        /// </summary>
-        /// <param name="keyName">The name of the key (user name), or the full "name:key" string</param>
-        /// <returns>True when the key was removed (never false: a key that doesn't exist is a 409 with the reason)</returns>
-        /// <param name="context">The caller (handled internally by the web api), named in the log line, may be null</param>
-        /// <exception cref="ArgumentNullException"><paramref name="keyName"/> is null (DEBUG builds only).</exception>
-        /// <exception cref="SysWeaver.Net.HttpResponseException">409 with the reason: there is no API key with that name (it may already be removed)</exception>
-        [WebApi(ApiKeyPath)]
-        [WebApiAuth(ApiKeyAuth)]
-        [WebApiAudit(ApiKeyAuditGroup)]
-        public bool RemoveApiKey(String keyName, IAuthorizedRequest context = null)
-        {
-#if DEBUG
-            ArgumentNullException.ThrowIfNull(keyName);
-#endif//DEBUG
-            lock (ApiKeyLock)
-            {
-                var t = KeyValueStore.AllApp.TryGet<String[]>(ApiKeyKey);
-                if (t == null)
-                    throw SysWeaver.Net.HttpResponseException.Gone("Can't remove the API key " + (keyName.Split(':')[0]).ToQuoted() + ": there are no API keys (it may already be removed), refresh the list");
-                var tl = t.Length;
-                var isFull = keyName.Contains(':');
-                int del = -1;
-                if (isFull)
-                {
-                    for (int i = 0; i < tl; ++i)
-                    {
-                        if (t[i].FastEquals(keyName))
-                        {
-                            del = i;
-                            break;
-                        }
-                    }
-                }else
-                {
-                    var kl = keyName.Length;
-                    for (int i = 0; i < tl; ++i)
-                    {
-                        var tt = t[i];
-                        if ((tt.Length > kl) && (tt[kl] == ':') && tt.FastStartsWith(keyName))
-                        {
-                            del = i;
-                            break;
-                        }
-                    }
-
-                }
-                if (del < 0)
-                    throw SysWeaver.Net.HttpResponseException.Gone("Can't remove the API key " + (keyName.Split(':')[0]).ToQuoted() + ": it doesn't exist (it may already be removed), refresh the list");
-                var removedName = t[del].Split(':')[0];
-                t = t.RemoveAt(del);
-                KeyValueStore.AllApp.Set(ApiKeyKey, t);
-                //  Always logged (the WebApiAudit entry, with the user, is only stored when an audit service is running)
-                Msg?.AddMessage(MessageLevels.Info, $"{LogPrefix}API key {removedName.ToQuoted()} was removed by {CallerName(context)}");
-                UpdateUsers();
-                return true;
-            }
-        }
-
-
-        /// <summary>
-        /// The quoted user name of a web api caller for log lines, "an unknown caller" when unknown (ex: a call from code).
-        /// </summary>
-        static String CallerName(IAuthorizedRequest context)
-        {
-            var n = context?.CallerAuth?.Username;
-            return String.IsNullOrEmpty(n) ? "an unknown caller" : n.ToQuoted();
-        }
-
-        static Object AuditOutputFilter_AddApiKey(long id, Object obj)
-        {
-            var data = obj as String;
-            if (data == null)
-                return obj;
-            var x = data.Split(':');
-            x[1] = x[1].Substring(0, 6) + "*****";
-            return String.Join(':', x);
-        }
-
-        /// <summary>
-        /// Add/create a new API key with a random 40 char alpha numerical key (from a secure RNG).
-        /// Users authenticated with the key get the <see cref="SimpleAuthorizerParams.ApiKeyAuth"/> tokens.
-        /// Requires <see cref="SimpleAuthorizerParams.ApiKeyManagementAuth"/> (disabled if API keys are disabled).
-        /// </summary>
-        /// <param name="keyName">The name of the new key (used as user name), please use only alpha numericals</param>
-        /// <returns>Return a string with new user/password pair as "user:password", or null if a key or user with that name already exists (user names are case insensitive)</returns>
-        /// <exception cref="ArgumentNullException">The key name is null.</exception>
-        /// <param name="context">The caller (handled internally by the web api), named in the log line, may be null</param>
-        /// <exception cref="ArgumentException">The key name is empty (or only white spaces), contains a ':', starts with a '#' or "//" or is too long.</exception>
-        [WebApi(ApiKeyPath)]
-        [WebApiAuth(ApiKeyAuth)]
-        [WebApiAudit(ApiKeyAuditGroup)]
-        [WebApiAuditFilterReturn(nameof(AuditOutputFilter_AddApiKey))]
-        public String AddApiKey(String keyName, IAuthorizedRequest context = null)
-        {
-            if (keyName == null)
-                throw new ArgumentNullException(nameof(keyName), "Invalid key name (may not be null)");
-            keyName = keyName.Trim();
-            if (keyName.Length <= 0)
-                throw new ArgumentException("Invalid key name (may not be all white spaces or empty)", nameof(keyName));
-            if (keyName.Contains(':'))
-                throw new ArgumentException("Invalid key name (may not contain a ':')", nameof(keyName));
-            //  Would be parsed as a comment line (the key would never work)
-            if ((keyName[0] == '#') || keyName.StartsWith("//", StringComparison.Ordinal))
-                throw new ArgumentException("Invalid key name (may not start with a '#' or \"//\")", nameof(keyName));
-            var kl = keyName.Length;
-            if (kl > AuhorizationLimits.MaxUserNameLength)
-                throw new ArgumentException("Key name too long, use at most " + AuhorizationLimits.MaxUserNameLength + " chars!", nameof(keyName));
-            lock (ApiKeyLock)
-            {
-                var t = KeyValueStore.AllApp.TryGet<String[]>(ApiKeyKey);
-                if (t != null)
-                {
-                    var tl = t.Length;
-                    for (int i = 0; i < tl; ++i)
-                    {
-                        var tt = t[i];
-                        if ((tt.Length > kl) && (tt[kl] == ':') && tt.FastStartsWith(keyName))
-                            return null;
-                    }
-                }
-                //  May not collide with an existing user (would replace it, same name => same guid)
-                if (Auths.ContainsKey(keyName.FastToLower()))
-                    return null;
-                var kv = String.Join(':', keyName, GenKey());
-                t = t.Push(kv);
-                KeyValueStore.AllApp.Set(ApiKeyKey, t);
-                //  Always logged (the WebApiAudit entry, with the user, is only stored when an audit service is running), never the key itself
-                Msg?.AddMessage(MessageLevels.Info, $"{LogPrefix}API key {keyName.ToQuoted()} was created by {CallerName(context)}");
-                UpdateUsers();
-                return kv;
-            }
-        }
-
-
-        /// <summary>
-        /// Runtime auth overrides for the API key management methods (uses <see cref="SimpleAuthorizerParams.ApiKeyManagementAuth"/>), empty if API keys are disabled.
-        /// </summary>
-        public IReadOnlyDictionary<String, String> MethodAuths { get; init; }
-
-        #endregion//Api Keys
 
 
     }

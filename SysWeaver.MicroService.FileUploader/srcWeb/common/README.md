@@ -13,7 +13,7 @@
 
 Client of the upload protocol of [`FileUploaderService`](../../FileUploaderService.cs): for each file it computes an MD5 hash, asks `upload/CheckStatus` whether the file is accepted, already uploaded or refused, then posts only the files that need uploading to `upload/Upload?repo=...`, raw-deflate compressed when that helps. It also turns any element into an upload target (click / keyboard picker and drag and drop).
 
-New API: `Sw.Upload` (needs the Sw core; the visual helpers use the Sw ui library when present). The old global functions are kept as thin wrappers for existing callers.
+API: `Sw.Upload` (needs the Sw core; the visual helpers use the Sw ui library when present). The legacy global functions are thin wrappers for existing callers.
 
 ## Contents
 
@@ -31,7 +31,7 @@ New API: `Sw.Upload` (needs the Sw core; the visual helpers use the Sw ui librar
 ## Behavior
 
 ### Loading
-Classic script without side effects at load. Load it after the core (`sw/core.js`, or the legacy `common/common.js` which contains the core): statically (`<script defer src="../common/fileUploader.js">`) or with `Sw.Net.IncludeJs(null, "fileUploader.js")`. `md5.js` no longer has to be loaded by the page (`Sw.Upload.Ensure()` / the first upload load it); pages that still load `md5.js` / `UZIP.js` statically keep working.
+Classic script without side effects at load. Load it after the core (`sw/core.js`, or the legacy `common/common.js` which contains the core): statically (`<script defer src="../common/fileUploader.js">`) or with `Sw.Net.IncludeJs(null, "fileUploader.js")`. `md5.js` doesn't have to be loaded by the page (`Sw.Upload.Ensure()` / the first upload load it); pages that load `md5.js` / `UZIP.js` statically keep working.
 
 ### Upload (`Sw.Upload.Files(repo, files, {ApiBase, OnProgress})`)
 1. Every file is read fully and hashed with `YaMD5.hashByteArray` -> `FileUploadInfo {Name, Length, Hash, LastModified}`.
