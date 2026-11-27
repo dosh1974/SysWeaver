@@ -22,7 +22,7 @@ Translator services, translation caches, language identifiers and the code that 
 | [`ITranslationContext.cs`](ITranslationContext.cs) | A translator and target language, implemented by the http request (session language) |
 | [`TranslateRequest.cs`](TranslateRequest.cs) | Request to translate one text (source and target language, text, options) |
 | [`TranslateMultipleRequest.cs`](TranslateMultipleRequest.cs) | Request to translate several texts |
-| [`TranslationEffort.cs`](TranslationEffort.cs) | How much time / cost to spend (quick, balanced, high quality), and the text format enum |
+| [`TranslationEffort.cs`](TranslationEffort.cs) | How much time / cost to spend (`TranslationEffort`: low, medium, high), and the text format enum (`TranslationContentTypes`: text, markdown, html) |
 | [`TranslationCacheRetention.cs`](TranslationCacheRetention.cs) | How long a translation should be cached |
 | [`TranslatorTypes.cs`](TranslatorTypes.cs) | Type of an auto translated text (text, markdown, html) |
 | [`AutoTranslateAttribute.cs`](AutoTranslateAttribute.cs) | Marks members for automatic translation of API results |

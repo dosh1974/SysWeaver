@@ -37,7 +37,7 @@ namespace SysWeaver.AI
         internal const String ServiceName = "Google";
 
         GoogleAiService(ServiceManager sm, GoogleAiParams p, IMessageHost msg, int _)
-            : base(sm, p, msg, ServiceName, "gemini-2.5-flash", "gemini-2.5-flash-image")
+            : base(sm, p, msg, ServiceName, "gemini-3.8-flash", "gemini-3.1-flash-lite-image", "gemini-3.1-flash-lite-image")
         {
             DefaultTier = p.DefaultTier;
             var apiKey = p.GetApiKey(false);

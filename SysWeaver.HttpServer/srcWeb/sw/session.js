@@ -497,7 +497,7 @@ window.Sw.Sources["core/kernel.js"] = "sw/session.js";
  *  - `Sw.I18n`: the formatter (Format, FormatArgs), HTML arguments (ArgAsHtml) and the page language.
  *
  * Placeholder syntax: {n} is replaced by argument n; prefixes: {_n} lower-cases, {^n} upper-cases, {$n}
- * lower-cases unless the placeholder is at position 0 of the format. Undefined arguments leave the placeholder
+ * lower-cases unless the placeholder is at position 0 of the format, {#n} keeps only the digits. Undefined arguments leave the placeholder
  * as is; function arguments (see ArgAsHtml) are called with (n, caseFormatter, position).
  *
  * Load order: after core/kernel.js (core/base.js in sw/core.js). Dependencies: none at load time.
@@ -562,10 +562,11 @@ function _TFH(text, translationContext) {
         ['_', (val, index) => val.toLowerCase()],
         ['^', (val, index) => val.toUpperCase()],
         ['$', (val, index) => index <= 0 ? val : val.toLowerCase()],
+        ['#', (val, index) => val.replace(/\D/g, "")],
     ]);
 
-    /** Placeholder expression: {n}, {_n}, {^n}, {$n}. */
-    const placeholderRx = /{[_^$]?(\d+)}/g;
+    /** Placeholder expression: {n} with an optional prefix (see formatMaps). */
+    const placeholderRx = /{[_^$#]?(\d+)}/g;
 
     /**
      * Format a template with an argument array (see the file header for the placeholder syntax).

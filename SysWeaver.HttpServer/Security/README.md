@@ -19,7 +19,7 @@
 |---|---|
 | [`WindowsFirewallHandler.cs`](WindowsFirewallHandler.cs) | `WindowsFirewallHandler` (rules through `netsh advfirewall`, needs elevated rights), plus `NoFirewallHandler` and the platform-selecting `FirewallHandler` |
 | [`LinuxFirewallHandler.cs`](LinuxFirewallHandler.cs) | `LinuxFirewallHandler`, supporting ufw, firewalld and plain nftables; needs root, never uses `sudo`, does nothing when no firewall is active and never touches rules it didn't add |
-| [`LinuxFirewallDetection.cs`](LinuxFirewallDetection.cs) | Detection of the installed and active Linux firewall (`LinuxFirewallKinds`, `LinuxFirewallStates`, `LinuxFirewallInfo`, `LinuxFirewallDetection`) and the `ILinuxFirewallSystem` abstraction of command execution and file access (real implementation `LinuxFirewallSystem`), which allows the handler to be tested without a real system |
+| [`LinuxFirewallDetection.cs`](LinuxFirewallDetection.cs) | Detection of the installed and active Linux firewall (`LinuxFirewallKinds`, `LinuxFirewallStates`, `LinuxFirewallInfo`, `LinuxFirewallDetection`) and the `ILinuxFirewallSystem` abstraction of command execution and file access (real implementation `LinuxFirewallSystem`, command results as `LinuxCommandResult`), which allows the handler to be tested without a real system |
 
 ## Limitations and considerations
 

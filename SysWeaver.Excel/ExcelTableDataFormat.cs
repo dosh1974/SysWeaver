@@ -80,6 +80,7 @@ namespace SysWeaver.Excel
 
         /// <summary>
         /// Format a string using <see cref="String.Format(String, Object[])"/>, but first replace the escaped "{^" and "{_" with "{"
+        /// (the case of the web client isn't applied), and "{#n}" (digits only, as in the web client) with the digits of argument n
         /// </summary>
         /// <param name="fmt">The format string</param>
         /// <param name="ps">The format arguments</param>
@@ -88,8 +89,17 @@ namespace SysWeaver.Excel
         {
             fmt = fmt.Replace("{^", "{");
             fmt = fmt.Replace("{_", "{");
+            if (fmt.Contains("{#", StringComparison.Ordinal))
+                fmt = DigitsPlaceholders.Replace(fmt, m =>
+                {
+                    var i = Int32.Parse(m.Groups[1].ValueSpan, NumberStyles.None, CultureInfo.InvariantCulture);
+                    var v = (i < (ps?.Length ?? 0)) ? Convert.ToString(ps[i], CultureInfo.InvariantCulture) : null;
+                    return v == null ? m.Value : new String(v.Where(Char.IsAsciiDigit).ToArray());
+                });
             return String.Format(fmt, ps);
         }
+
+        static readonly System.Text.RegularExpressions.Regex DigitsPlaceholders = new(@"\{#(\d+)\}", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 
         /// <summary>
         /// Escape text so that it is shown literally in an Excel number format (a backslash is placed in front of every character)

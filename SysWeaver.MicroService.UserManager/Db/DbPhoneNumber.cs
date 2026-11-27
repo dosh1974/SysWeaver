@@ -44,6 +44,7 @@ namespace SysWeaver.MicroService.Db
         /// The phone number (normalized, prefix and number separated by a space; not stored, filled when the row is read by the user manager)
         /// </summary>
         [Ignore]
+        [SysWeaver.Data.TableDataPhone]
         public string Phone { get; set; }
 
         String IDbProtectedValue.Value { get => Phone; set => Phone = value; }

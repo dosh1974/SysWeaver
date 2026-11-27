@@ -21,8 +21,8 @@
 
   <!--
     The snippet library (the source, edited here or by the admins of the Effect Weaver editor, whose snippet folder is this srcData\ when the
-    repositories are next to each other): srcData\<folder>\<Id>.glsl + <Id>.md and srcData\README.md (the library docs and the summary table
-    with the number of places, written by Effect Weaver's snippet scanner). Every file is brotli compressed to data\...\<file>.br (like the
+    repositories are next to each other): srcData\<folder>\<Id>.glsl + <Id>.md and srcData\README.md (the library docs and the folder list,
+    written by Effect Weaver's snippet scanner). Every file is brotli compressed to data\...\<file>.br (like the
     web assets of the other projects) and embedded as "snippets/<path>.br" (SnippetLibrary.Builtin decodes them once, when first used).
     -OptimizeShaders False: the snippets are stored as they are (no stripping or minification; they are inserted into effects as source code).
   -->

@@ -204,7 +204,7 @@ Sw.DevOptions.NoOptions("Sw.Util.RemoveNulls", "o is the value to clean");      
 | Member | Description |
 |---|---|
 | marker globals | The four translation markers (formatting, HTML formatting, plain, HTML plain): runtime fallbacks identical to the legacy library. |
-| `Sw.I18n.FormatArgs(format, args)`, `Sw.I18n.Format(format, ...args)` | `{n}` placeholders, `{_n}` lower case, `{^n}` upper case, `{$n}` lower case unless at position 0; undefined arguments keep the placeholder; function arguments are called. |
+| `Sw.I18n.FormatArgs(format, args)`, `Sw.I18n.Format(format, ...args)` | `{n}` placeholders, `{_n}` lower case, `{^n}` upper case, `{$n}` lower case unless at position 0, `{#n}` only the digits (ex: a phone number in an url); undefined arguments keep the placeholder; function arguments are called. |
 | `Sw.I18n.ArgAsHtml(value, cls, tag)` | Argument rendered as an HTML element (default `b`). |
 | `Sw.I18n.FormatMaps`, `Sw.I18n.Language()` | Case formatters; page language (html lang). |
 

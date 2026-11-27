@@ -64,5 +64,5 @@ flowchart LR
 
 - **Project:** [`SysWeaver.MicroService.Edit.csproj`](SysWeaver.MicroService.Edit.csproj)
 - **Builds on:** [SysWeaver.Docs](../SysWeaver.Docs/README.md), [SysWeaver.HttpServer.IsoDataModule](../SysWeaver.HttpServer.IsoDataModule/README.md), [SysWeaver.HttpServer](../SysWeaver.HttpServer/README.md), [SysWeaver.MicroServices.ServiceManager](../SysWeaver.MicroServices.ServiceManager/README.md), [SysWeaver.MicroServices](../SysWeaver.MicroServices/README.md)
-- **Used by:** [SysWeaver.Services](https://github.com/dosh1974/SysWeaver.Services) applications: ComfyUiService, ExchangeRateService, FakeEmailService, FakeTextService, HttpBenchService, IpLocationService, ReverseProxyClient, ReverseProxyServer, SwLanCertManager, SwServerManager, TranslationService, WebServerService
+- **Used by:** [SysWeaver.Services](https://github.com/dosh1974/SysWeaver.Services) applications: ComfyUiService, ExchangeRateService, FakeEmailService, FakeTextService, HttpBenchService, IpLocationService, ReverseProxyClient, ReverseProxyServer, SwLanCertManager, SwServerManager, ThumbnailService, TranslationService, WebServerService
 - **Third-party:** Ace editor and Prettier (bundled browser scripts)

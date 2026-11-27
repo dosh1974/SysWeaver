@@ -38,6 +38,7 @@ flowchart LR
 - [`InspectorInfo<I>`](InspectorInfo.cs) / [`InspectorImplementationInfo<I>`](InspectorImplementationInfo.cs) — reflection info about the inspector methods, used when compiling the handlers
 - [`TypeHandlerCache<T>`](TypeHandlerCache.cs) — the handler cache
 - [`StaticTypeHandler`](StaticTypeHandler.cs) — helpers used by the generated code (type names, versions, unmanaged memory)
+- [`HelpersTypeHandler`](HelpersTypeHandler.cs) — internal reflection helpers used when compiling handlers (e.g. finding the most-derived `Describe`)
 - [`TypenameQualifications`](TypenameQualifications.cs) — how type names are written
 
 ## Limitations and considerations

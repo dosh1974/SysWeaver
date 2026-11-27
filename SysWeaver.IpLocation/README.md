@@ -40,7 +40,8 @@ The service requires at least one `IIpLocationSource` and optionally uses one `I
 - [`IpLocationParams`](IpLocationParams.cs) - service parameters: the memory cache time and the retry rounds and waits
 - [`IIpLocationSource`](Sources/IIpLocationSource.cs) - the source plug-in contract
 - [`IIpLocationCache`](Caches/IIpLocationCache.cs) - the cache plug-in contract, implemented by [`IpLocationMemoryCache`](Caches/IpLocationMemoryCache.cs)
-- [`IpLocation`](IpLocation.cs) - the result (country, region, city, coordinates, autonomous system, source)
+- [`Location`](../SysWeaver.Common/Net/Location.cs) - the result (`SysWeaver.Net.Location`, defined in [SysWeaver.Common](../SysWeaver.Common/README.md): country, region, city, coordinates, autonomous system, source)
+- [`IpLocationTools`](IpLocationTools.cs) - helpers for the sources (`ParseNumber`)
 
 ## Using it
 

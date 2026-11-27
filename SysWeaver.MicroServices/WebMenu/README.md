@@ -11,7 +11,7 @@
 
 ## Purpose
 
-A service declares its menu entries with `[WebMenu*]` attributes. Each attribute has a menu name, an id/path (e.g. `"Debug/Media/ImageEffects"`), a display name, a title, an icon, an order, the required auth and kind-specific data. An optional "dynamic" member name lets the service decide at run time whether the entry is shown, e.g. `PassKeyService.CanSignInWithPassKey`. The `WebMenuService` in [SysWeaver.MicroService.HttpServer](../../SysWeaver.MicroService.HttpServer/README.md) collects the attributes and returns the resulting `WebMenu` / `WebMenuItem` tree to the browser.
+A service declares its menu entries with `[WebMenu*]` attributes. Each attribute has a menu name, an id/path (e.g. `"Debug/Media/ImageEffects"`), a display name, a title, an icon, an order, the required auth and kind-specific data. An optional "dynamic" member name lets the service decide at run time whether the entry is shown, e.g. `PassKeyService.CanSignInWithPassKey`; the forms that take the item can also change it, e.g. set `Flags` to show it disabled or checked. The `WebMenuService` in [SysWeaver.MicroService.HttpServer](../../SysWeaver.MicroService.HttpServer/README.md) collects the attributes and returns the resulting `WebMenu` / `WebMenuItem` tree to the browser.
 
 The main menu folders (Monitoring, Operations, Administration, Data, Development), naming rules and the menu auth rule (a menu item must use the auth of the page / api it opens) are described in [`_docs/Web.md`](../../_docs/Web.md) "Main menu structure".
 
@@ -28,8 +28,9 @@ The main menu folders (Monitoring, Operations, Administration, Data, Development
 | [`WebMenuTableAttribute.cs`](WebMenuTableAttribute.cs) | A table view of a table data API (on methods or classes) |
 | [`WebMenuChartAttribute.cs`](WebMenuChartAttribute.cs) | A chart view of a chart API (on methods) |
 | [`WebMenu.cs`](WebMenu.cs) | A menu: root URI and items |
-| [`WebMenuItem.cs`](WebMenuItem.cs) | One menu item: id, name, type, title, icon class, data and children |
+| [`WebMenuItem.cs`](WebMenuItem.cs) | One menu item: id, name, type, title, icon class, data, children and flags |
 | [`WebMenuItemTypes.cs`](WebMenuItemTypes.cs) | Item kinds: `Path`, `Table`, `Embedded`, `Link`, `LinkExternal`, `Js`, `Chart` |
+| [`WebMenuItemFlags.cs`](WebMenuItemFlags.cs) | Item state bits read by the app shell: `Disabled` (1), `Checked` (2) |
 
 ## Relationships
 

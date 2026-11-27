@@ -16,6 +16,10 @@ namespace SysWeaver.MicroService
     /// Network monitoring: all connections of the server (like netstat), the established connections to external addresses (one row per address),
     /// and intruder alerts for long established connections to addresses that aren't allowed (see <see cref="SmNetworkParams"/>).
     /// </summary>
+    //  The allow lists: one page (allowed.html, k = ip, port or country) with an add box (Admin) above the live table
+    [WebMenuEmbedded(null, "Admin/AllowedIps", "Allowed addresses", "ServerManager/allowed.html?k=ip", "The addresses that are never flagged as intruders (see the problems)", "icons/table_services.svg", -1, Roles.AdminOps)]
+    [WebMenuEmbedded(null, "Admin/AllowedPorts", "Allowed ports", "ServerManager/allowed.html?k=port", "The ports whose connections are never flagged as intruders (see the problems)", "icons/table_services.svg", -1, Roles.AdminOps)]
+    [WebMenuEmbedded(null, "Admin/AllowedCountries", "Allowed countries", "ServerManager/allowed.html?k=country", "The countries whose addresses are never flagged as intruders (see the problems)", "icons/table_services.svg", -1, Roles.AdminOps)]
     public sealed partial class ServerManagerService : IHaveProblemActions
     {
         #region State
@@ -433,7 +437,13 @@ namespace SysWeaver.MicroService
         [WebApiClientCache(4)]
         [WebApiRequestCache(3)]
         public TableData RemoteHostsTable(TableDataRequest r)
-            => WithoutIpColumns(TableDataTools.Get(r, 5000, NetCurrent.Hosts));
+        {
+            var hosts = NetCurrent.Hosts;
+            //  Flagged is refreshed here, so an address allowed with the row action (or on the problems page) isn't flagged until the next snapshot
+            foreach (var h in hosts)
+                h.Flagged = Intruders.ContainsKey(h.Address);
+            return WithoutIpColumns(TableDataTools.Get(r, 5000, hosts));
+        }
 
         #endregion//Connections
 
@@ -905,7 +915,6 @@ namespace SysWeaver.MicroService
         /// <returns>Table data, one row per address or network</returns>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
-        [WebMenuTable(null, "Admin/AllowedIps", "Allowed addresses", "The addresses that are never flagged as intruders (see the problems)", "icons/table_services.svg", -1)]
         [WebApiClientCache(4)]
         [WebApiRequestCache(3)]
         public TableData AllowedIpsTable(TableDataRequest r)
@@ -921,7 +930,6 @@ namespace SysWeaver.MicroService
         /// <returns>Table data, one row per port</returns>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
-        [WebMenuTable(null, "Admin/AllowedPorts", "Allowed ports", "The ports whose connections are never flagged as intruders (see the problems)", "icons/table_services.svg", -1)]
         [WebApiClientCache(4)]
         [WebApiRequestCache(3)]
         public TableData AllowedPortsTable(TableDataRequest r)
@@ -941,7 +949,6 @@ namespace SysWeaver.MicroService
         /// <returns>Table data, one row per country</returns>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
-        [WebMenuTable(null, "Admin/AllowedCountries", "Allowed countries", "The countries whose addresses are never flagged as intruders (see the problems)", "icons/table_services.svg", -1)]
         [WebApiClientCache(4)]
         [WebApiRequestCache(3)]
         public TableData AllowedCountriesTable(TableDataRequest r)

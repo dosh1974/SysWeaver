@@ -79,10 +79,8 @@ namespace SysWeaver.AI
 
     /// <summary>
     /// Parameters for a Google (Gemini) session.
-    /// Model examples:
-    /// "gemini-2.5-flash" - Fast and cost efficient, supports thinking.
-    /// "gemini-2.5-pro" - Advanced reasoning model.
-    /// "gemini-3-pro-preview" - The most capable model.
+    /// The model defaults to <see cref="AiServiceParams.DefaultChatModel"/> of <see cref="GoogleAiParams"/> ("gemini-3.8-flash");
+    /// any Gemini model id the API accepts can be used (see https://ai.google.dev/gemini-api/docs/models).
     /// </summary>
     public class GoogleSessionParams : AiSessionParams
     {

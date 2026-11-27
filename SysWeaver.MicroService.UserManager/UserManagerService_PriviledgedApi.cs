@@ -325,7 +325,7 @@ namespace SysWeaver.MicroService
         /// <returns>The users</returns>
         /// <remarks>Shown on the Users page (auth/Users.html, user menu Management > Users). Not cached on the server: the
         /// re-read right after a row action, or after a delete, shows the new state at once (with a request cache it showed the old row and its
-        /// old actions until the next refresh). The search box searches the user name, domain, language and nick name (in memory: the names are encrypted in the database).</remarks>
+        /// old actions until the next refresh). The search box searches the user name, domain, language, nick name and phone number (in memory: the names and numbers are encrypted in the database).</remarks>
         [WebApi]
         [WebApiAuth(UserManagerRoles.ViewUser)]
         public async Task<TableData> UserAdminTable(TableDataRequest r, HttpServerRequest context)
@@ -333,6 +333,7 @@ namespace SysWeaver.MicroService
             //  The user names and nick names are encrypted in the database: sorted, filtered and searched in memory (decrypted, cached a few seconds;
             //  the row actions below are made for the shown rows on every call)
             var users = await GetAllUsers().ConfigureAwait(false);
+            var phones = await GetAllPhones().ConfigureAwait(false);
             var ret = TableDataTools.Get(r, TableRefresh, users.Select(x => new DbUserAdminRow
             {
                 Id = x.Id,
@@ -341,6 +342,7 @@ namespace SysWeaver.MicroService
                 Domain = x.Domain,
                 Language = x.Language,
                 NickName = x.NickName,
+                Phone = phones.GetValueOrDefault(x.Id),
             }));
             var cols = ret.Cols ?? [];
             var ai = Array.FindIndex(cols, x => x?.Name == nameof(DbUserAdminRow.Actions));

@@ -265,6 +265,8 @@ The result is serialized by the serializer the `Accept` header asks for (the def
 | [`CachedTransformer/`](CachedTransformer/README.md) | Base class and contracts of the disc-cached file transformers |
 | [`Security/`](Security/README.md) | Firewall handlers for Windows (netsh) and Linux (ufw, firewalld, nftables) |
 | [`Services/`](Services/README.md) | Service contracts for user images and user storage |
+| [`srcData/`](srcData/ProbeUrls.txt) | Embedded data files (compressed into `data/` by the build): `ProbeUrls.txt`, the built-in probe urls of the probe trap |
+| [`trapData/`](trapData) | The pre-compressed decompression bombs of the probe trap (`GetAJob.txt.br` / `.gz` / `.deflate` / `.zst`, written once, embedded as is) |
 | [`srcWeb/`](srcWeb/README.md) | Source of the embedded web client: the start page `index.html`, the client core, UI library and application shell (`core/`, `ui/`, `shell/`, bundled into `sw/`), file viewers (`view/`), start pages (`app/`), the audit browser (`audit/`), the theme and legacy bundle (`common/`), brand fonts (`brand/`) and template help (`help/`) |
 
 ## Relationships

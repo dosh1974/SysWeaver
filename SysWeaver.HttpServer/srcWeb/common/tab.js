@@ -1,6 +1,6 @@
 ﻿/**
- * @file LEGACY tab bar control (class `Tab`), kept for old code: `explore/api.js` (`new Tab("Api.Args")`,
- * `new Tab("Api.Results")`) and `edit/type.html`. New code uses `Sw.Tabs` (ui library).
+ * @file LEGACY tab bar control (class `Tab`), kept for old app code: no framework page uses it any more (`explore/api.js`
+ * uses `Sw.Tabs`, which keeps the same "SysWeaver.Tabs." local storage key). New code uses `Sw.Tabs` (ui library).
  * Loaded as a classic script with `<script defer src="../common/tab.js">` together with
  * `<link rel="stylesheet" href="../common/tab.css">`. No code runs at load time.
  *

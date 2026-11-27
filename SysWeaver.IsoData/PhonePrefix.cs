@@ -473,7 +473,8 @@ namespace SysWeaver
             new PhonePrefix("257", "Burundi", "BI", "00", null, null, 163, 8),
             new PhonePrefix("855", "Cambodia", "KH", "001,007", "0", null, 170, 8),
             new PhonePrefix("237", "Cameroon", "CM", "00", null, null, 190, 7, 8, 9),
-            new PhonePrefix("1", "Canada", "CA", "011", "1", null, 203, 10),
+            //  The Canadian area codes (geographic, incl. the overlays up to 2025, and the non-geographic 600 / 622): a +1 number with another area code is the United States
+            new PhonePrefix("1", "Canada", "CA", "011", "1", "204,226,236,249,250,257,263,289,306,343,354,365,367,368,382,403,416,418,428,431,437,438,450,468,474,506,514,519,548,579,581,584,587,600,604,613,622,639,647,672,683,705,709,742,753,778,780,782,807,819,825,867,873,879,902,905,942", 203, 7),
             new PhonePrefix("238", "Cape Verde", "CV", "00", null, null, 73, 7),
             new PhonePrefix("1", "Cayman Islands", "KY", "011", "1", "345", 44, 7),
             new PhonePrefix("236", "Central African Rep.", "CF", "00", null, null, 117, 8),

@@ -159,7 +159,7 @@
 
     /**
      * Register the option schema of a public api, next to the api (the one registry: Sw.DevOptions(where, o) then needs no schema
-     * argument, and the walker of the test page core/optionstest.html knows the api is checked). A later Register replaces it.
+     * argument, and the walker Sw.DevOptions.Walk, run by the test page core/contracttest.html, knows the api is checked). A later Register replaces it.
      * @param {string} where The api's path name ("Sw.Card", "Sw.Net.Send", "Sw.Form field").
      * @param {object} schema The schema (see Sw.DevOptions).
      * @returns {object} The schema.
@@ -262,7 +262,7 @@
      * Walk the public api (the Sw namespace, 3 levels; public names start with an upper-case letter) and report every function / class
      * that takes an options object (a parameter named o / opts / options / opt / props / cfg / config / settings / params, or a
      * destructured one) without a registered schema (Sw.DevOptions.Register) and not exempt (Sw.DevOptions.NoOptions). The test page
-     * core/optionstest.html fails on Missing (guard rail: every api checks its options, by mechanism, not by list).
+     * core/contracttest.html fails on Missing (guard rail: every api checks its options, by mechanism, not by list).
      * @param {object} [root=Sw] The namespace.
      * @param {string} [name="Sw"] Its name.
      * @returns {{Missing: Array<{Name: string, Params: Array<string>}>, Checked: Array<string>, Exempt: Array<{Name: string, Why: string}>}}

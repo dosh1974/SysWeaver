@@ -72,6 +72,29 @@ namespace SysWeaver.Data
     }
 
     /// <summary>
+    /// Format values (international phone numbers, ex: "+46 701234567") as the flag of the country of the number and the number, a link to a lookup of the number.
+    /// The flag comes from the IsoDataModule (iso_data/phone_prefix/, the longest matching country code and region prefix), without it only the number is shown.
+    /// Only the digits of the number are used in the icon and the link ({#0}), so spaces, dashes and brackets don't matter.
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
+    public sealed class TableDataPhoneAttribute : TableDataUrlAttribute
+    {
+        /// <summary>
+        /// Format values (international phone numbers, ex: "+46 701234567") as the flag of the country of the number and the number, a link to a lookup of the number.
+        /// </summary>
+        /// <param name="textFormat">The text to display, {0} = This value.</param>
+        public TableDataPhoneAttribute(String textFormat = "{0}")
+            : base(
+                  textFormat,
+                  TableDataConsts.PhoneLookupFormat,
+                  "Click to look up the phone number {0}",
+                  "../iso_data/phone_prefix/{#0}.svg"
+            )
+        {
+        }
+    }
+
+    /// <summary>
     /// Format values (user agent strings) as a link to information about the user agent.
         /// The server sends the full string, Sw.Cells shows it short ("Edge 140 on Windows") with the full string in the tool tip.
     /// </summary>

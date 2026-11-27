@@ -29,8 +29,8 @@ Processing (SVG optimisation, Brotli compression, embedding) is described in [`s
 | Item | Description |
 |---|---|
 | [`icons/`](icons/README.md) | SVG icons used by the auth services (`user_not_found.svg`) |
-| [`Login.html`](Login.html) | Sign in page (`auth/Login.html[?to=..][&parent=1&loc=.]`), calls `loginMain()` |
-| [`Logout.html`](Logout.html) | Sign out page (`auth/Logout.html`), calls `logoutMain()` |
+| [`Login.html`](Login.html) | Sign in page (`auth/Login.html[?to=..][&parent=1&loc=.]`), calls `Sw.AuthUi.LoginMain()` (global alias `loginMain`) |
+| [`Logout.html`](Logout.html) | Sign out page (`auth/Logout.html`), calls `Sw.AuthUi.LogoutMain()` (global alias `logoutMain`) |
 | [`Auth.js`](Auth.js) | `Sw.Auth`: login protocol (the SCRAM proof, or the one time hash for authorizers without SCRAM, ex: SolidAdmin), explicit Basic login, logout, password proof / hashes, policy text and checks, password generator, leak check, e-mail / phone validation, phone prefix lookup, short codes, token urls, post sign in navigation |
 | [`AuthUi.js`](AuthUi.js) | `Sw.AuthUi`: page frame (`Page`), `Field`, `PhoneField`, `Status`, `Text`, `Heading`, `Buttons`, `Button`, `InfoButton`, `Segments`, `ShortCode`, `UserHtml`, the login / logout pages |
 | [`Auth.css`](Auth.css) | Styles of the card, fields, status line, lists, segments (classes `auth-*`) |
@@ -54,11 +54,11 @@ Every page uses the new format includes:
 <script defer src="../sw/ui.js"></script>
 <script defer src="Auth.js"></script>
 <script defer src="AuthUi.js"></script>
-<!-- Passkey.js / Passkey.css are not tags: Sw.AuthUi.LoadPassKeys() loads them only when the passkey service runs -->
+<!-- Passkey.js / Passkey.css are tags only in Login.html; other pages: Sw.AuthUi.LoadPassKeys() loads them only when the passkey service runs -->
 <link rel="stylesheet" href="../common/theme.css">
 <link rel="stylesheet" href="../sw/ui.css">
 <link rel="stylesheet" href="Auth.css">
-<body onload="loginMain()">
+<body onload="Sw.AuthUi.LoginMain()">
 ```
 
 `Sw.AuthUi.Page(icon, build)` calls `Sw.Session.IgnoreUserChanges()` (the page's own sign in / out must not reload it; KeyMan opts out), shows the loader (`Sw.Page.Loading`), builds a centered card (a real `<form>`), awaits the builder and removes the loader exactly once (also on errors, shown as a fail toast). In the shell iframe the page is transparent (core class `Transparent`). Layouts (Design v2): sign in style pages (Login, Logout, SignUp, ForgotPassword, ResetPassword, ChoosePassword, UsePassKey, token links) keep the centered 28rem card with the page icon; outside the phone layout that card is the body of an `Sw.Dialog` (`AuthPage.AsDialog`, class `auth-dialog`: the title bar with the document title, moved and resized like every other dialog, its position remembered per page, "Discard changes?" for typed input; Close and Escape go back: the shell's previous page or its first page, stand alone the previous page of the site or the start page); Login and Logout (`Dialog: false`) and phones keep the plain card. Inside the shell (`html.Embedded`) the page body is the frame height minus the page margin, so a card that fits gets no scroll bar; account and tool pages (`Account: true` inside the shell, or `page.SetHeader({Title, Description, Actions})`: KeyMan, the password hash generator, the UserManager account pages, MyPassKeys, AddPassKey, AddPassKeyOnOtherDevice) become a form page (`main.auth-page.sw-page-form.auth-tool`): a left aligned `Sw.PageHeader` (title = the menu name or the document title) above a start aligned 36rem card (48rem with `auth-wide`), texts start aligned, the big page icon hidden (an image icon such as the QR code stays). A sign in style page that is not a dialog (phones, `Dialog: false` such as Logout; not the sign in page with its banner) shows its document title as a visible `h1` under the page icon (`.auth-page-title`), unless the page has a heading of its own (ex: "Welcome ...", a state view). The sign up method selector (`.auth-segments`) is a Design v2 segmented control (sunken track, the selected segment raised). The legacy entry `common/common.js` also works (the libraries only need `Sw`).

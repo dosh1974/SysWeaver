@@ -22,7 +22,7 @@ Registered before `IpLocationService` in the manifest, it replaces the service's
 - Two levels: in-memory (`MaxMemCachedMinutes`, default 60) in front of a MySQL table (`DbCachedDays`, default 90)
 - Table created automatically, in the `IpLocation` schema by default
 - Unknown addresses (no location) are cached too, avoiding repeated paid lookups
-- Rows older than `DbCachedDays` are looked up again; so are locations without a city stored before 2026-09-07 (when the city was added to `IpLocation`)
+- Rows older than `DbCachedDays` are looked up again; so are locations without a city stored before 2026-09-07 (when the city was added to `SysWeaver.Net.Location`)
 - A *Locations* table in the web UI (requires the `Debug` role, at most 2000 rows)
 
 ## Key components

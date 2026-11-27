@@ -123,7 +123,7 @@ Deploy `SysWeaver.Common.Windows` and/or `SysWeaver.Common.Linux` next to the ex
 | [`Inpsection/`](Inpsection/README.md) | Inspection contracts (`IInspector`, `IDescribable`, `DescVersionAttribute`); the folder name is misspelled, the namespace is `SysWeaver.Inspection` |
 | [`ManagedFile/`](ManagedFile/README.md) | Local or http(s) files kept current with change notification |
 | [`Markdown/`](Markdown/README.md) | Internal markdown parser and HTML / Slack renderers behind `WebTools` |
-| [`Net/`](Net/README.md) | `HttpResponseException` |
+| [`Net/`](Net/README.md) | `HttpResponseException`, network connections, `IIpLocation` / `Location`, `IMcpService` |
 | [`Search/`](Search/README.md) | Text search contracts and `SimpleTextSearch` |
 | [`Security/`](Security/README.md) | `CertificateTools`, `ICertificateProvider`, `IFirewallHandler` |
 | [`Translation/`](Translation/README.md) | Translator and language identifier contracts, translation requests and options |

@@ -5,7 +5,7 @@
       "Header": "Sw session: the small, self-contained SysWeaver messaging core for pages that render their own UI (the old \"SessionManager.Create(); SysWeaverInit();\" of common.js without theming): the session (GetMessages master / child, server time, default reactions to the server events, the fallback server block overlay), InterOp, the automatic html / body classes, the requested theme (applies nothing) and the legacy names SessionManager, InterOp, SysWeaverInit, GetServerTime, PostTop ... Opt-in theming: sw/theme.js after it. sw/core.js contains all of it (never needed together; harmless, each source runs once).",
       "LoadOnce": true,
       "MaxKB": 218,
-      "MaxGzipKB": 54,
+      "MaxGzipKB": 55,
       "Files": [
         "core/kernel.js",
         "core/i18n.js",

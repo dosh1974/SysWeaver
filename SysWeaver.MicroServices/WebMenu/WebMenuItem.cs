@@ -45,6 +45,10 @@ namespace SysWeaver.MicroService
         /// Optional child items
         /// </summary>
         public WebMenuItem[] Children;
+        /// <summary>
+        /// State flags (disabled, checked), typically set by the dynamic function of the menu attribute
+        /// </summary>
+        public WebMenuItemFlags Flags;
     }
 
 

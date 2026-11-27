@@ -58,7 +58,7 @@ flowchart TB
 ## Limitations and considerations
 
 - Disc usage grows with the number of kept versions; tune `RemoveBackupsDays` / `DeleteAfterHours` and consider `Compress`.
-- Folder-level auth must be configured carefully — managed folders can overwrite deployed content (a `null` auth means the `Debug` role).
+- Folder-level auth must be configured carefully — managed folders can overwrite deployed content (a `null` folder auth means `Roles.ServiceSync`: the `Service_Sync`, `Dev` or `Debug` roles, and callers also need `FolderSyncParams.ApiAuth`).
 - Serving remote folders on the web needs the `FileHttpServerModule` (and `StaticDataHttpServerModule` for versioned data).
 
 ## Folder layout

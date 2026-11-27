@@ -19,7 +19,7 @@ An `IInspector` visits the data of an object field by field; the same interface 
 
 | Item | Description |
 |---|---|
-| [`IInspector.cs`](IInspector.cs) | The inspector interface (typed `Field` overloads for primitives, strings, dates, `Guid`, ...) and the `SetProp<T>` delegate |
+| [`IInspector.cs`](IInspector.cs) | The inspector interface (typed `Field` (by reference) and `Prop` (value plus optional setter) overloads for primitives, strings, dates, `Guid`, ...) and the `SetProp<T>` delegate |
 | [`IReadInspector.cs`](IReadInspector.cs) | An inspector that reads (creates) objects from a source |
 | [`IWriteInspector.cs`](IWriteInspector.cs) | An inspector that writes objects to a destination |
 | [`IDescribable.cs`](IDescribable.cs) | Implemented by types that describe themselves, at the current or an older version |

@@ -654,7 +654,7 @@ window.Sw.Sources["core/base.js"] = "sw/core.js";
 
     /**
      * Register the option schema of a public api, next to the api (the one registry: Sw.DevOptions(where, o) then needs no schema
-     * argument, and the walker of the test page core/optionstest.html knows the api is checked). A later Register replaces it.
+     * argument, and the walker Sw.DevOptions.Walk, run by the test page core/contracttest.html, knows the api is checked). A later Register replaces it.
      * @param {string} where The api's path name ("Sw.Card", "Sw.Net.Send", "Sw.Form field").
      * @param {object} schema The schema (see Sw.DevOptions).
      * @returns {object} The schema.
@@ -757,7 +757,7 @@ window.Sw.Sources["core/base.js"] = "sw/core.js";
      * Walk the public api (the Sw namespace, 3 levels; public names start with an upper-case letter) and report every function / class
      * that takes an options object (a parameter named o / opts / options / opt / props / cfg / config / settings / params, or a
      * destructured one) without a registered schema (Sw.DevOptions.Register) and not exempt (Sw.DevOptions.NoOptions). The test page
-     * core/optionstest.html fails on Missing (guard rail: every api checks its options, by mechanism, not by list).
+     * core/contracttest.html fails on Missing (guard rail: every api checks its options, by mechanism, not by list).
      * @param {object} [root=Sw] The namespace.
      * @param {string} [name="Sw"] Its name.
      * @returns {{Missing: Array<{Name: string, Params: Array<string>}>, Checked: Array<string>, Exempt: Array<{Name: string, Why: string}>}}
@@ -1994,7 +1994,7 @@ window.Sw.Sources["core/base.js"] = "sw/core.js";
  *  - `Sw.I18n`: the formatter (Format, FormatArgs), HTML arguments (ArgAsHtml) and the page language.
  *
  * Placeholder syntax: {n} is replaced by argument n; prefixes: {_n} lower-cases, {^n} upper-cases, {$n}
- * lower-cases unless the placeholder is at position 0 of the format. Undefined arguments leave the placeholder
+ * lower-cases unless the placeholder is at position 0 of the format, {#n} keeps only the digits. Undefined arguments leave the placeholder
  * as is; function arguments (see ArgAsHtml) are called with (n, caseFormatter, position).
  *
  * Load order: after core/kernel.js (core/base.js in sw/core.js). Dependencies: none at load time.
@@ -2059,10 +2059,11 @@ function _TFH(text, translationContext) {
         ['_', (val, index) => val.toLowerCase()],
         ['^', (val, index) => val.toUpperCase()],
         ['$', (val, index) => index <= 0 ? val : val.toLowerCase()],
+        ['#', (val, index) => val.replace(/\D/g, "")],
     ]);
 
-    /** Placeholder expression: {n}, {_n}, {^n}, {$n}. */
-    const placeholderRx = /{[_^$]?(\d+)}/g;
+    /** Placeholder expression: {n} with an optional prefix (see formatMaps). */
+    const placeholderRx = /{[_^$#]?(\d+)}/g;
 
     /**
      * Format a template with an argument array (see the file header for the placeholder syntax).

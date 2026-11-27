@@ -55,6 +55,12 @@ namespace SysWeaver.Data
         /// </summary>
         public const String EncodingSearchFormat = "Information about the {0} text encoding format";
 
+        /// <summary>
+        /// Phone number lookup, {#0} = the digits of the international number (the web client keeps only the digits, %2B = the leading '+').
+        /// To be replaced by an <see cref="ExternalInfoRoot"/> redirect ("phone/..."), as for countries.
+        /// </summary>
+        public const String PhoneLookupFormat = "https://sync.me/search/?number=%2B{#0}";
+
 
         /// <summary>
         /// Default max image width

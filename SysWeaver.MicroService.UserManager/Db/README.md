@@ -18,7 +18,7 @@
 | Item | Description |
 |---|---|
 | [`DbUser.cs`](DbUser.cs) | Table `Users`: id, creation time, domain, language and the protected user name and nick name (`Rnd`, lookup hash `NameKey`, encrypted `NameEnc` / `NickEnc`; `UserName` / `NickName` are not stored, filled when read) |
-| [`DbUserAdminRow.cs`](DbUserAdminRow.cs) | A read-only view of table `Users` for the Users page (`UserAdminTable`): the `DbUser` columns plus the row actions (force password reset, undo forced reset, disable, enable) |
+| [`DbUserAdminRow.cs`](DbUserAdminRow.cs) | A read-only view of table `Users` for the Users page (`UserAdminTable`): the `DbUser` columns plus the phone number and the row actions (force password reset, undo forced reset, disable, enable) |
 | [`DbAuthMethod.cs`](DbAuthMethod.cs) | Abstract base of sign-in methods: owning user id, creation and last use time |
 | [`DbAuthPassword.cs`](DbAuthPassword.cs) | Table `AuthPasswords`: the client salt, the SCRAM verifier (`ScramSalt`, `ScramIterations`, `StoredKey`, null for no password) and the "must reset password" flag |
 | [`DbAuthPassKey.cs`](DbAuthPassKey.cs) | Table `AuthPasskeys`: passkey credential id, device, public key, user handle, relying party id, signature counter, transports, backup state and AAGUID |

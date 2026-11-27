@@ -23,6 +23,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// The phone number that the message was sent from
         /// </summary>
+        [TableDataPhone]
         public string PhoneNumber;
 
         /// <summary>

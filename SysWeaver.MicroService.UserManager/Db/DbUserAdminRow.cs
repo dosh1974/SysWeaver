@@ -7,7 +7,8 @@ namespace SysWeaver.MicroService.Db
 {
     /// <summary>
     /// A row of the users table of the Users page (<see cref="UserManagerService.UserAdminTable"/>): the user (the same table and columns as
-    /// <see cref="DbUser"/>, read only; built in memory from the decrypted <see cref="DbUser"/> rows, never read from the database) and its row actions.
+    /// <see cref="DbUser"/>, read only; built in memory from the decrypted <see cref="DbUser"/> rows, never read from the database), the user's phone number
+    /// (decrypted from <see cref="DbPhoneNumber"/>) and its row actions.
     /// The plain users table (<see cref="UserManagerService.UserDataTable"/>) stays <see cref="DbUser"/>, without the actions, as before.
     /// </summary>
     [Alias("Users")]
@@ -61,6 +62,13 @@ namespace SysWeaver.MicroService.Db
         /// </summary>
         [Ignore]
         public string NickName { get; set; }
+
+        /// <summary>
+        /// The phone number of the user (decrypted, normalized: "+46 701234567"), null if none
+        /// </summary>
+        [Ignore]
+        [TableDataPhone]
+        public string Phone { get; set; }
 
         /// <summary>
         /// See <see cref="DbUser.Rnd"/> (not shown)

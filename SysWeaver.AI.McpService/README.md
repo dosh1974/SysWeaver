@@ -49,6 +49,7 @@ The service is an HTTP server module, so the web server picks it up automaticall
 - [`McpToolContext`](McpToolContext.cs) — the tool context used for MCP calls (collects files and links added by tools)
 - [`McpService.CallLog.cs`](McpService.CallLog.cs) — the call log and its table
 - [`McpService.TempServers.cs`](McpService.TempServers.cs) — temporary servers, the MCP debug API's and the authorizer of their API keys
+- [`McpEventStream`](McpEventStream.cs) — the server sent event stream of streamed tool calls
 - [`McpParams`](McpParams.cs) — parameters
 - [`srcWeb/`](srcWeb/README.md) — the MCP debug page
 

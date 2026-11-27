@@ -27,7 +27,7 @@
   </ItemGroup>
 
 	<Target Name="EmbedLocal" BeforeTargets="BeforeBuild">
-		<Exec Command="rmdir /S /Q .\srcWeb\icons\.opt" />
+		<Exec Command="if exist .\srcWeb\iso_data\icons\.opt rmdir /S /Q .\srcWeb\iso_data\icons\.opt" />
 		<Exec Command="..\_tools\svg_opt\SvgOpt.exe -Compare .\WebCompare -RemoveSize -MaxDecimals 2 .\srcWeb\iso_data\icons\*.svg .\srcWeb\iso_data\icons\.opt\" />
 		<Exec Command="..\_tools\compress\Compress.exe -Methods br .\srcWeb\iso_data\icons\.opt\* .\web\iso_data\icons" />
 		<Exec Command="..\_tools\compress\Compress.exe -Methods br .\srcWeb\iso_data\cards\* .\web\iso_data\cards" />

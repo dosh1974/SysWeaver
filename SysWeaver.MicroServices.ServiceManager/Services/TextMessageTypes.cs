@@ -243,6 +243,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// The recipient phone number (if known)
         /// </summary>
+        [SysWeaver.Data.TableDataPhone]
         public String PhoneNumber;
 
         /// <summary>

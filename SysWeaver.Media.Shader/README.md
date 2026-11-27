@@ -57,7 +57,7 @@ flowchart LR
 
 | Member | |
 |---|---|
-| `Builtin` | All embedded snippets with their code, description (`Md`, `Summary`, `Signature`), dependencies and number of places; made when first used, then shared (`Snippet.IsBuiltin`) |
+| `Builtin` | All embedded snippets with their code, description (`Md`, `Summary`, `Signature`), dependencies; made when first used, then shared (`Snippet.IsBuiltin`) |
 | `BuiltinFiles` | The embedded files as library paths: `<folder>/<Id>.glsl`, `<folder>/<Id>.md`, `README.md` |
 | `ReadBuiltinFile(path)` | The text of an embedded file (decoded once, cached), null if there is none |
 | `WithFolder(folder, log)` | `Builtin` with the snippets of a folder on top: a folder snippet replaces the built in one with the same id (`Snippet.OverridesBuiltin`), new ones are added; no folder: `Builtin` |
@@ -81,9 +81,9 @@ var (fragment, vertex) = ShaderStages.SplitProgram(program);
 
 | Folder | Content |
 |---|---|
-| [`srcData/`](srcData/README.md) | **The source of the snippet library**: `<folder>/<Id>.glsl` + `<Id>.md` and `README.md` (the library docs, the summary table with the number of places) |
+| [`srcData/`](srcData/README.md) | **The source of the snippet library**: `<folder>/<Id>.glsl` + `<Id>.md` and `README.md` (the library docs, the folder list) |
 
-`srcData/` is Effect Weaver's snippet library: the Effect Weaver editor's snippet folder is this folder in development (an admin's save is the source, embedded by the next build), and its scanner (`_snippets/tools/SnippetScan` there) writes the summary table and the "Found in effects" sections here.
+`srcData/` is Effect Weaver's snippet library: the Effect Weaver editor's snippet folder is this folder in development (an admin's save is the source, embedded by the next build), and its scanner (`_snippets/tools/SnippetScan` there) writes the folder list there (the per effect files go to Effect Weaver's `_snippets/effects`).
 
 ## Relationships
 

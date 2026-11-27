@@ -35,6 +35,9 @@ The local provider for [SysWeaver.AI](../SysWeaver.AI/README.md), built on the [
 - [`LlamaSharpModel`](LlamaSharpModel.cs) — a loaded model: prompt formatting, inference, tool call parsing
 - [`LlamaSharpChatSession`](LlamaSharpChatSession.cs) / [`LlamaSharpQuerySession`](LlamaSharpQuerySession.cs) — chat and query sessions
 - [`LlamaSharpAiParams`](LlamaSharpAiParams.cs) — service, model (`LlamaSharpLlm`) and session parameters
+- [`LlamaSharpGemma4`](LlamaSharpGemma4.cs) — the built in `gemma4` chat template and its native tool format
+- [`LlamaSharpGguf`](LlamaSharpGguf.cs) — GGUF handling, including the stripped copy (`LlamaSharpStrippedGguf`) of models with multi token prediction layers
+- [`LlamaSharpMessage`](LlamaSharpMessage.cs) — a message of a conversation, formatted using the chat template of the model
 
 ## Using it
 

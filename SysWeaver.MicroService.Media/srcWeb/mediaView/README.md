@@ -11,7 +11,7 @@
 
 ## Purpose
 
-`MediaView.html` is the server's extension viewer for media files (`MediaView.html?link={0}`, MediaService). `MediaPreview.html` is a bare full window player; the thumbnail services (Thumbnail.Web, MediaThumbnail) load it headless and talk to it through the `ScreenShotHost` host object. `MapView.html` renders Google Maps / OpenStreetMap views (Thumbnail.Web `GetGoogleMap`). The `*EffectsLib.html`, `TextDemo.html` and `MapDemo.html` pages are developer galleries of the Debug/Media menu ("Media demos"), which also opens `MediaEdit.html?link=../logo.svg` ("Media editor"). The effect folders hold the `.glsl` effects that `mediaView/Api/Get*Effects` enumerates, each with a lean `index.html` that renders one effect full window.
+`MediaView.html` is the server's extension viewer for media files (`MediaView.html?link={0}`, MediaService). `MediaPreview.html` is a bare full window player; the thumbnail services (Thumbnail.Web, MediaThumbnail) load it headless and talk to it through the `ScreenShotHost` host object. `MapView.html` renders Google Maps / OpenStreetMap views (Thumbnail.Web `GetGoogleMap`). The `*EffectsLib.html`, `TextDemo.html` and `MapDemo.html` pages are developer galleries of the Debug/Media menu ("Media demos"), which also opens `MediaEdit.html?link=../logo.png&props=...` (the logo, transparent, with the Rain effect; "Media editor"). The effect folders hold the `.glsl` effects that `mediaView/Api/Get*Effects` enumerates, each with a lean `index.html` that renders one effect full window.
 
 All players come from [`../mediaPlayer`](../mediaPlayer/README.md).
 
@@ -42,7 +42,7 @@ All players come from [`../mediaPlayer`](../mediaPlayer/README.md).
 
 - **Part of:** [SysWeaver.MicroService.Media](../../README.md)
 - **Uses:** [`../mediaPlayer`](../mediaPlayer/README.md), the SysWeaver core / ui (`../sw/core.js`, `../sw/ui.js`, `../common/theme.css`, `../sw/ui.css`) on the new-format pages, `../common/anim.js` (effect smoothing).
-- **Server contract:** `MediaView.html?link=` (raw), `MediaPreview.html?type=&link=&pos=&props=&fill`, `MapView.html?key=&center=&zoom=&language=&maptype=&dpi=&pin=&pinX=&pinY=&pinHeight=`, `mediaView/Api/GetBackgroundEffects|GetImageEffects|GetCollageEffects|GetCounterEffects|GetGoogleMapsKey`, host objects `ScreenShotHost` (`isSupported`, `setSize`, `doIt`) and `ErrorText.SetText`.
+- **Server contract:** `MediaView.html?link=` (raw), `MediaPreview.html?type=&link=&pos=&props=&fill`, `MapView.html?key=&center=&zoom=&language=&maptype=&dpi=&pin=&pinX=&pinY=&pinHeight=`, `mediaView/Api/GetBackgroundEffects|GetImageEffects|GetFrameEffects|GetIconEffects|GetCollageEffects|GetCounterEffects|GetAudioEffects|GetGoogleMapsKey`, host objects `ScreenShotHost` (`isSupported`, `setSize`, `doIt`) and `ErrorText.SetText`.
 
 ## Behavior
 

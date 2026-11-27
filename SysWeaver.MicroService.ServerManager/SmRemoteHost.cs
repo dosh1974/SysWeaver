@@ -81,6 +81,22 @@ namespace SysWeaver.MicroService
         public bool Flagged;
 
         /// <summary>
+        /// Allow the address (only shown while it is flagged): connections with it are never flagged again (requires Admin)
+        /// </summary>
+        //  The value is "-,address,flagged" ({2} and {3}): Allow is only shown on flagged rows.
+        //  Not final: the row stays (the connections are still there), the table re-reads it and Flagged turns false.
+        [TableDataActionsFull(
+            "Allow",
+            "Allow the address: connections with it are never flagged as an intruder",
+            "../ServerManager/AllowIp?\"{2}\"",
+            "",
+            "Allow {2}?\nConnections with it will never be flagged as an intruder. Remove it again on the Allowed addresses page.",
+            "{3}",
+            "{2} is allowed")]
+        [TableDataOrder(11)]
+        public String Actions => String.Concat("-,", Address, Flagged ? ",1" : ",");
+
+        /// <summary>
         /// The location of the address (empty if unknown, or when no ip location service is available)
         /// </summary>
         [TableDataExpand("{0}", "")]

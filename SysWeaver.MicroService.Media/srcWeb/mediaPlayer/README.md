@@ -237,7 +237,6 @@ The scripts are served as `mediaPlayer/*.js`. The pages in `mediaView/` include 
   - `CreateTextGrid` and `CreateNumberImage` share measuring code.
   - The `*Blob`/`*Url` wrappers repeat each other.
   - `MediaPlayerTools.delay/waitEvent2` are the library's own helpers (no core needed).
-  - Commented-out legacy code (old `ApplyClip`, blob video cache, element replacement in `Stop`) is present.
 - Parameter mirroring with the C# types is by name only:
   - JS `MediaTypes` includes `Text=5`, which the C# enum lacks; C# has `MediaVimeo`, which JS has no player for.
   - `MediaEffect.DpiAdjust` defaults to true in C# and false in JS.
@@ -322,7 +321,7 @@ Shared helpers for every player, loaded by `MediaPlayer.Init()` (always). Define
 | `RemoveDarkModeChangeEvent` | static method | `RemoveDarkModeChangeEvent(fn)` → bool | Unregisters `fn` (false if unknown); when the map becomes empty calls `DarkModeClear`. |
 | `DarkModeEventsMap` | static field | `new Map()` | Registered dark-mode callbacks (`fn → true`). |
 | `ComputeClip` | static method | `ComputeClip(i, params)` → bool | Computes `i.ClipX/ClipY/ClipWidth/ClipHeight` (and `ClipR/ClipB` when clipped) from `(params ?? i.Params).Crop` against `i.Width/Height`. Crop uses `MarginTop/Right/Bottom/Left` pixels, or `Margin*P` percentages when `MarginAsPercentage`. Returns false (full-size clip) when there is no crop or all margins are ≤ 0. |
-| `ApplyClip` | static method | `ApplyClip(i, params)` | Runs `ComputeClip` and sets `i.Element.style.clipPath` to `inset(top right bottom left px)` (or clears it); calls `i.OnClipChanged()` when the value changed. A commented-out older implementation (with inner `NoClip` helpers and a `Stream === 2` exception) remains in the body and is inactive. |
+| `ApplyClip` | static method | `ApplyClip(i, params)` | Runs `ComputeClip` and sets `i.Element.style.clipPath` to `inset(top right bottom left px)` (or clears it); calls `i.OnClipChanged()` when the value changed. |
 | `CreateBlob` | static async method | `CreateBlob(url)` → Promise<string \| null> | Fetches `url` and returns an object URL for the blob, `null` on error. Not used inside this folder. |
 | `LoadFont` | static async method | `LoadFont(name, url)` → Promise<FontFace> | Loads a web font into `document.fonts`. The url is parsed relative to the document and must be http(s) (or a blob: url of this origin); only the normalized `href` is used, quoted with `JSON.stringify` (a quote in the raw value can't inject a second CSS `url()`). Throws an `Error` with `FontLoad = true` when refused or not loadable. Used by `TextEffect` and `LoadFontOrFallback`. |
 | `LoadFontOrFallback` | static async method | `LoadFontOrFallback(style)` → Promise<Error \| null> | Loads `style.FontUrl` / `FontUrlName` with `LoadFont`; on a failure logs it, appends "Verdana, sans-serif" to `style.Font` (default font), dispatches the window event `MediaFontFallback` (detail: the error, `FontLoad = true`) and returns the error instead of throwing. Used by the text players (`FontError`). |
@@ -408,12 +407,12 @@ HTML5 video player. Loaded by `MediaPlayer.Init` (`MediaLoadAll`) or lazily by `
 | `Cache` | async method | `Cache(keepHidden)` → Promise<bool> | `LoadVideo`; reads `videoWidth/Height` (or 0 for audio-only), `ApplyClip()`, `Duration`, seeks to `StartAt`, computes `endTime` and the loop-watch midpoint, installs `ontimeupdate`/`onended`, then `OnCacheComplete`. |
 | `e.ontimeupdate` | handler (set in `Cache`) | async `()` | Updates `Duration`. Before `endTime`: detects a native-loop wrap below the midpoint (when `LoopWatch` is set) and seeks back to `StartAt` + `OnLoop`; otherwise arms `LoopWatch` once past the midpoint (only when `StartAt > 0`, looping and playing). At/after `endTime`: seeks to `StartAt` if looping, else pauses at `endTime`, sets `AtEnd` and calls `OnEnded`. |
 | `e.onended` | handler (set in `Cache`) | async `(ev)` | Natural end while playing: pause, `AtEnd = true`, `OnEnded`. |
-| `LoadVideo` | static async method | `LoadVideo(e, c)` → Promise<bool> | Appends `<source src=c>` to `e`, waits for `loadeddata`/`error`, then polls every 100 ms until `readyState ≥ 3`. False on error. A commented-out blob-cache implementation (`VideoCache`) precedes it. |
+| `LoadVideo` | static method | `LoadVideo(e, c)` → Promise<bool> | Delegates to `MediaPlayerElement.Load(e, c)`: appends `<source src=c>` to `e`, waits for `loadeddata`/`error`, then polls every 100 ms until `readyState ≥ 3`. False on error. |
 | `Mute` | async method | `Mute()` | Sets `Muted` and `element.muted = true`. |
 | `UnMute` | async method | `UnMute()` | Clears `Muted`; if `HaveAudio`, sets `element.volume = Volume * Params.Volume * 0.01` and unmutes the element. |
 | `SetVolume` | async method | `SetVolume(vol)` | Clamps to 0..1, stores `Volume`; applies to the element when it has audio and is not muted. |
 | `Play` | async method | `Play()` | From `AtEnd` seeks to `StartAt` first; sets `loop`, awaits `element.play()`; on success `Paused=false`, `AtStart=false`, updates `Duration`. Rejections are swallowed (state stays paused). |
-| `Stop` | async method | `Stop()` → Promise<true \| undefined> | Unless paused at start: pauses, seeks to `StartAt`, `Paused=AtStart=true`. Contains a commented-out "replace the element" variant. |
+| `Stop` | async method | `Stop()` → Promise<true \| undefined> | Unless paused at start: pauses, seeks to `StartAt`, `Paused=AtStart=true`. |
 | `Pause` | async method | `Pause()` | Pauses the element. |
 | `Seek` | async method | `Seek(time)` | Clamps `time` to `[StartAt, endTime]`, updates `AtEnd`/`AtStart`, sets `currentTime`. |
 | `GetPos` | method | `GetPos()` → seconds | `element.currentTime`. |
@@ -444,7 +443,7 @@ HTML5 audio player; like `media_player_video.js` it extends `MediaPlayerElement`
 | `Cache` | async method | `Cache(keepHidden)` → Promise<bool> | `LoadAudio`; `Width=Height=0` and 0-size element; `Duration`; seek to `StartAt`; installs `ontimeupdate`/`onended` exactly like the video player (no `ApplyClip`). |
 | `e.ontimeupdate` | handler (set in `Cache`) | async `()` | Same window/loop logic as `MediaPlayerVideo` (also clears `LoopWatch` when ending). |
 | `e.onended` | handler (set in `Cache`) | async `(ev)` | Natural end while playing: pause, `AtEnd`, `OnEnded`. |
-| `LoadAudio` | static async method | `LoadAudio(e, c)` → Promise<bool> | Appends `<source src=c>`, waits `loadeddata`/`error`, polls until `readyState ≥ 3`. |
+| `LoadAudio` | static method | `LoadAudio(e, c)` → Promise<bool> | Delegates to `MediaPlayerElement.Load(e, c)`: appends `<source src=c>`, waits `loadeddata`/`error`, polls until `readyState ≥ 3`. |
 | `Mute` / `UnMute` | async method | `()` | As video (`UnMute` always applies volume, no `HaveAudio` check). |
 | `SetVolume` | async method | `SetVolume(vol)` | Clamp 0..1, store, apply `vol * Params.Volume * 0.01` when unmuted. |
 | `Play` / `Stop` / `Pause` / `Seek` / `GetPos` / `Loop` / `Once` | (async) methods | as video | Inherited from `MediaPlayerElement`, the same behavior as `MediaPlayerVideo`. |

@@ -40,6 +40,7 @@ flowchart TB
 - [`ServiceHostFactoryUnix`](ServiceHostFactoryUnix.cs) — the `IServiceHostFactory`, detects the init system
 - [`ServiceHostSystemD`](ServiceHostSystemd.cs) / [`ServiceHostSysVinit`](ServiceHostSysVinit.cs) — internal `IServiceHost` implementations
 - [`UnixHelpers`](UnixHelpers.cs) — `IsElevated` (euid 0), `RunElevated` (sudo), `SendSignal` (libc `kill`)
+- [`StatusFile`](StatusFile.cs) / [`FileHelper`](FileHelper.cs) — internal helpers: parsing and validating the daemon's status / pid file, and file operations that retry to tolerate concurrent access to it
 - [`SystemdSystemServices` / `SysVinitSystemServices`](UnixSystemServices.cs) — internal `ISystemServices` (systemctl, or the /etc/init.d scripts)
 - [`UfwFirewall` / `IptablesFirewall`](UnixFirewall.cs) — internal `IFirewall` (ufw if installed, else iptables / ip6tables; iptables changes are not persisted)
 - [`UnixStorage`](UnixStorage.cs) — internal `IStorage` (`lsblk -J -b` and the mounted file systems, LUKS / LVM detected from the device tree)

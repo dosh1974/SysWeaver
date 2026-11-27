@@ -74,4 +74,4 @@ flowchart TB
 - **Project:** [`SysWeaver.Chat.csproj`](SysWeaver.Chat.csproj)
 - **Builds on:** [SysWeaver.HttpServer](../SysWeaver.HttpServer/README.md), [SysWeaver.MicroServices.ServiceManager](../SysWeaver.MicroServices.ServiceManager/README.md)
 - **Used by:** [SysWeaver.AI](../SysWeaver.AI/README.md), [SysWeaver.AI.OpenAI](../SysWeaver.AI.OpenAI/README.md), [SysWeaver.Chat.MySql](../SysWeaver.Chat.MySql/README.md)
-- **Third-party:** HtmlAgilityPack, CommunityToolkit.HighPerformance
+- **Third-party:** HtmlAgilityPack, CommunityToolkit.HighPerformance, System.IO.Hashing

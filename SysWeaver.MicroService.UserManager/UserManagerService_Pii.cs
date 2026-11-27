@@ -191,7 +191,11 @@ namespace SysWeaver.MicroService
 
         Task<int> InsertEmail(OrmConnection c, DbEmailAddress row) => c.InsertAsync(Protect(row));
 
-        Task<int> InsertPhone(OrmConnection c, DbPhoneNumber row) => c.InsertAsync(Protect(row));
+        Task<int> InsertPhone(OrmConnection c, DbPhoneNumber row)
+        {
+            InvalidateUserList();
+            return c.InsertAsync(Protect(row));
+        }
 
         Task<long> InsertUser(OrmConnection c, DbUser user)
         {
@@ -221,7 +225,39 @@ namespace SysWeaver.MicroService
         Tuple<long, List<DbUser>> UserList;
         readonly AsyncLock UserListLock = new AsyncLock();
 
-        void InvalidateUserList() => Interlocked.Exchange(ref UserList, null);
+        void InvalidateUserList()
+        {
+            Interlocked.Exchange(ref UserList, null);
+            Interlocked.Exchange(ref PhoneList, null);
+        }
+
+        Tuple<long, Dictionary<long, String>> PhoneList;
+
+        /// <summary>
+        /// The phone number of every user that has one, decrypted (key = the user id; a user with several numbers: one of them).
+        /// For the admin tables, cached for <see cref="UserListCacheMs"/> ms like the users (a removed number may show for that long).
+        /// </summary>
+        async Task<Dictionary<long, String>> GetAllPhones()
+        {
+            var now = Environment.TickCount64;
+            var l = PhoneList;
+            if ((l != null) && (l.Item1 > now))
+                return l.Item2;
+            using var _ = await UserListLock.Lock().ConfigureAwait(false);
+            l = PhoneList;
+            if ((l != null) && (l.Item1 > now))
+                return l.Item2;
+            var phones = new Dictionary<long, String>();
+            using (var c = await DbGetAsync().ConfigureAwait(false))
+                foreach (var x in await c.SelectAsync<DbPhoneNumber>().ConfigureAwait(false))
+                {
+                    var p = Unprotect(x)?.Phone;
+                    if (!String.IsNullOrEmpty(p))
+                        phones.TryAdd(x.UserId, p);
+                }
+            Interlocked.Exchange(ref PhoneList, Tuple.Create(Environment.TickCount64 + UserListCacheMs, phones));
+            return phones;
+        }
 
         /// <summary>
         /// All users, decrypted (the admin tables sort, filter and search them in memory: the database can't, the values are encrypted).
@@ -315,6 +351,84 @@ namespace SysWeaver.MicroService
                 if ((any != null) && (dp.TryDecrypt(KindUserName, any.Rnd, any.NameEnc) == null))
                     throw new Exception($"The user names can't be decrypted with the data protection secret (fingerprint {fingerprint})");
             }
+            if (!p.ReadOnly)
+                await RenormalizePhones(c).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// The meta value (<see cref="DbUserManagerMeta"/>) that tells which phone number normalization the stored numbers (and their lookup keys) use
+        /// </summary>
+        const String PhoneFormatMeta = "Phones.Format";
+
+        /// <summary>
+        /// The current phone number normalization (<see cref="PhoneFormatMeta"/>), change it when <see cref="PhonePrefix"/> splits numbers differently.
+        /// 2: the Canadian area codes are region prefixes ("+1 416 5551234", was "+1 4165551234").
+        /// </summary>
+        const String PhoneFormat = "2";
+
+        /// <summary>
+        /// One time upgrade when the phone number normalization changed (<see cref="PhoneFormat"/>): every stored number is normalized again, and a number
+        /// whose normalized text changed is stored again with the new text and lookup key (the key is a hash of the normalized text, so the old row would
+        /// never be found by a sign in, a reset or the uniqueness check). The new row is inserted before the old one is deleted (an interrupted upgrade
+        /// loses nothing and runs again on the next start). A number that no longer validates, or whose new form is already stored, is left as it is.
+        /// </summary>
+        /// <summary>
+        /// The normalized form of a phone number with the current <see cref="PhonePrefix"/> data: "prefix local" (the same as AuthManagerService.ValidatePhoneNumber
+        /// stores), ex: "+1 4165551234" -> "+1 416 5551234"
+        /// </summary>
+        /// <param name="phone">A stored (or any) phone number</param>
+        /// <returns>The normalized number, null if it isn't valid</returns>
+        internal static String NormalizeStoredPhone(String phone)
+        {
+            try
+            {
+                PhonePrefix.GetValidatedPhoneNumber(out _, out _, out var prefix, out var local, phone);
+                return String.Concat(prefix, ' ', local);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        async Task RenormalizePhones(OrmConnection c)
+        {
+            var meta = await c.FirstOrDefaultAsync<DbUserManagerMeta>(x => x.Name == PhoneFormatMeta).ConfigureAwait(false);
+            if (String.Equals(meta?.Value, PhoneFormat, StringComparison.Ordinal))
+                return;
+            int changed = 0, kept = 0;
+            foreach (var row in await c.SelectAsync<DbPhoneNumber>().ConfigureAwait(false))
+            {
+                var oldKey = row.Key;
+                var old = Unprotect(row)?.Phone;
+                if (String.IsNullOrEmpty(old))
+                    continue;
+                var n = NormalizeStoredPhone(old);
+                if (n == null)
+                {
+                    ++kept;
+                    continue;
+                }
+                if (String.Equals(n, old, StringComparison.Ordinal))
+                    continue;
+                if (await FindDbPhone(c, n).ConfigureAwait(false) != null)
+                {
+                    ++kept;
+                    continue;
+                }
+                await InsertPhone(c, new DbPhoneNumber { Phone = n, UserId = row.UserId }).ConfigureAwait(false);
+                await c.DeleteAllAsync<DbPhoneNumber>(x => x.Key == oldKey).ConfigureAwait(false);
+                ++changed;
+            }
+            if (meta == null)
+                await c.InsertAsync(new DbUserManagerMeta { Name = PhoneFormatMeta, Value = PhoneFormat }).ConfigureAwait(false);
+            else
+            {
+                meta.Value = PhoneFormat;
+                await c.UpdateAsync(meta).ConfigureAwait(false);
+            }
+            if ((changed > 0) || (kept > 0))
+                Manager.AddMessage($"Phone numbers normalized again (format {PhoneFormat}): {changed} changed, {kept} left as they were (no longer valid, or already stored in the new form)", MessageLevels.Info);
         }
 
         /// <summary>

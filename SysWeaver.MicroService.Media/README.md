@@ -28,7 +28,7 @@ flowchart LR
 ## Key features
 
 - Embedded web application (`mediaView/`, `mediaPlayer/`): media view and preview pages, a media editor, a media picker, a map view and a text effect demo
-- Libraries of GLSL image, background, collage, counter and audio effects, listed by the API (`GetImageEffects`, `GetBackgroundEffects`, `GetCollageEffects`, `GetCounterEffects`, `GetAudioEffects`)
+- Libraries of GLSL image, background, collage, counter and audio effects, listed by the API (`GetImageEffects`, `GetFrameEffects`, `GetIconEffects`, `GetBackgroundEffects`, `GetCollageEffects`, `GetCounterEffects`, `GetAudioEffects`)
 - `BuildEffect`: builds an Effect Weaver effect (Ew snippets, vertex stage, iMouse controls) for the player with [SysWeaver.Media.Shader](../SysWeaver.Media.Shader/README.md), the same code Effect Weaver uses, so these effects play like in Effect Weaver
 - `ResolveEffectMedia`: resolves the media an effect names in its `//  media:` line (ex: Effect Weaver stock media) through the registered `IEffectMediaResolver` services
 - Registered as the extension viewer for image, video, audio and `.glsl` files (`mediaView/MediaView.html`)

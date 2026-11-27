@@ -1,0 +1,17 @@
+﻿/*
+ * allowed.css - styles of the ServerManager "Allowed addresses / ports / countries" page (allowed.html), loaded after ../common/theme.css,
+ * ../sw/ui.css, smShared.css and ../explore/table.css. Plain static css.
+ * The page is a Design v2 fill page built by allowed.js: main.al-page.sw-page-fill (ui/page.css) with the page header, the add box
+ * (.al-add, a .sw-row with the text box and the Allow button, Admin only) and the live table in .sm-fill (SmShared.FillTable, smShared.css).
+ */
+
+.al-add {
+    align-items: flex-start;
+    margin-bottom: var(--sw-space-3, 0.75rem);
+    max-width: 40rem;
+}
+
+.al-add .sw-text {
+    flex: 1 1 14rem;
+    min-width: 0;
+}

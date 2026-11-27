@@ -25,6 +25,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// The phone number of the user, null if none
         /// </summary>
+        [SysWeaver.Data.TableDataPhone]
         public String Phone;
 
 
