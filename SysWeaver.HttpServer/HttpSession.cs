@@ -367,6 +367,30 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
+        /// Set when the session probed for secrets (see <see cref="HttpProbeTrapParams"/>): until this time (UTC) every request of the session
+        /// gets the probe trap answer. Null if the session isn't banned.
+        /// </summary>
+        public DateTime? BannedUntil
+        {
+            get
+            {
+                var t = Interlocked.Read(ref BannedUntilTicks);
+                return t == 0 ? null : new DateTime(t, DateTimeKind.Utc);
+            }
+            set => Interlocked.Exchange(ref BannedUntilTicks, value?.ToUniversalTime().Ticks ?? 0);
+        }
+
+        /// <summary>
+        /// The ticks (UTC) of <see cref="BannedUntil"/>, 0 if not banned (a single read per request)
+        /// </summary>
+        internal long BannedUntilTicks;
+
+        /// <summary>
+        /// The (probe) url that banned the session (see <see cref="BannedUntil"/>), null if never banned
+        /// </summary>
+        internal String BannedUrl;
+
+        /// <summary>
         /// Increment the in progress request counter, dispose the session when the request is done to decrement it.
         /// </summary>
         /// <returns>This session</returns>

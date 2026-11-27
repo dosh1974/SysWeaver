@@ -169,11 +169,16 @@ namespace SysWeaver.MicroService
         public PasswordPolicy GetCommonPasswordPolicy() => Am.Auth.CommonPasswordPolicy;
 
         /// <summary>
-        /// Get the password policy for a user (return the policy for the authorizer of the user, or the common policy if the user is unknown).
+        /// Get the password policy for a user: the policy of the authorizer of the user.
+        /// An unknown user gets the policy of an authorizer chosen from a keyed hash of the name (the same every time), so the answer doesn't tell if the user exists.
+        /// An empty user name gets the common policy.
         /// </summary>
         /// <param name="username">The user name to get password policy for</param>
         /// <returns>The password policy</returns>
         [WebApi]
+        //  Like the sign in API's, a bit more permissive per address: the sign in pages ask whenever the user name changes
+        [WebApiServiceRateLimit(200, 1, 400, 5)]
+        [WebApiIpRateLimit(60, 60, 20, 10)]
         public Task<PasswordPolicy> GetPasswordPolicy(String username)
             => Am.Auth.GetPasswordPolicy(username);
 

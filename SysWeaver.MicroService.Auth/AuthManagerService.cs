@@ -618,6 +618,9 @@ This server supports the following sizes:
         [WebApi]
         [WebApiAudit(AuthTools.AuditGroup)]
         [WebApiAuditFilterParams(nameof(AuditInputFilter_TokenAuth))]
+        //  The same limits as the "auth/redirect" end point (the other one time token sign in): 300 per minute for the process, 20 per minute per address
+        [WebApiServiceRateLimit(300, 60, 20, 5)]
+        [WebApiIpRateLimit(20, 60, 10, 10)]
         public async Task<AuthInfo> TokenAuth(String oneTimeToken, HttpServerRequest context)
         {
             var s = context?.Session;

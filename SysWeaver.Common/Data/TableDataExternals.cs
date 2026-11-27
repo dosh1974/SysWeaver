@@ -6,40 +6,66 @@ namespace SysWeaver.Data
     #region Text 
 
     /// <summary>
-    /// Format values (ISO 3166 alpha-2 country codes) as a link to information about the country.
+    /// Format values (ISO 3166 alpha-2 country codes) as the flag of the country and the code, a link to information about the country.
+    /// The flag comes from the IsoDataModule (iso_data/country/), without it only the code is shown.
     /// </summary>
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
     public sealed class TableDataIsoCountryAttribute : TableDataUrlAttribute
     {
         /// <summary>
-        /// Format values (ISO 3166 alpha-2 country codes) as a link to information about the country.
+        /// Format values (ISO 3166 alpha-2 country codes) as the flag of the country and the code, a link to information about the country.
         /// </summary>
         /// <param name="textFormat">The text to display, {0} = This value.</param>
         public TableDataIsoCountryAttribute(String textFormat = "{0}")
             : base(
                   textFormat,
                   TableDataConsts.ExternalInfoRoot + "country/{0}",
-                  "Click show information about the country with the ISO 3166 Alpha 2 country code: {0}"
+                  "Click show information about the country with the ISO 3166 Alpha 2 country code: {0}",
+                  "../iso_data/country/{_0}.svg"
             )
         {
         }
     }
 
     /// <summary>
-    /// Format values (ISO 4217 currency codes) as a link to information about the currency.
+    /// Format values (ISO 4217 currency codes) as the flag of the (biggest) country using the currency and the code, a link to information about the currency.
+    /// The flag comes from the IsoDataModule (iso_data/currency/), without it only the code is shown.
     /// </summary>
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
     public sealed class TableDataIsoCurrencyAttribute : TableDataUrlAttribute
     {
         /// <summary>
-        /// Format values (ISO 4217 currency codes) as a link to information about the currency.
+        /// Format values (ISO 4217 currency codes) as the flag of the (biggest) country using the currency and the code, a link to information about the currency.
         /// </summary>
         /// <param name="textFormat">The text to display, {0} = This value.</param>
         public TableDataIsoCurrencyAttribute(String textFormat = "{0}")
             : base(
                   textFormat,
                   TableDataConsts.ExternalInfoRoot + "currency/{0}",
-                  "Click show information about the currency with the ISO 4217 currency code: {0}"
+                  "Click show information about the currency with the ISO 4217 currency code: {0}",
+                  "../iso_data/currency/{_0}.svg"
+            )
+        {
+        }
+    }
+
+    /// <summary>
+    /// Format values (language codes: ISO 639-1, optionally with a region, ex: "sv", "en-US") as a flag for the language and the code, a link to information about the language.
+    /// The flag comes from the IsoDataModule (iso_data/language/), without it only the code is shown.
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
+    public sealed class TableDataIsoLanguageAttribute : TableDataUrlAttribute
+    {
+        /// <summary>
+        /// Format values (language codes: ISO 639-1, optionally with a region, ex: "sv", "en-US") as a flag for the language and the code, a link to information about the language.
+        /// </summary>
+        /// <param name="textFormat">The text to display, {0} = This value.</param>
+        public TableDataIsoLanguageAttribute(String textFormat = "{0}")
+            : base(
+                  textFormat,
+                  TableDataConsts.ExternalInfoRoot + "language/{0}",
+                  "Click show information about the language with the code: {0}",
+                  "../iso_data/language/{0}.svg"
             )
         {
         }

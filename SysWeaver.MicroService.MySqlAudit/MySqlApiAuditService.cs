@@ -248,8 +248,9 @@ namespace SysWeaver.MicroService
         {
             if (IsDisposing)
                 return;
-            var s = r.Session;
-            Calls.Enqueue(new Temp(0, id, value, s.Auth, s.TokenHash, s.DeviceId, s.ClientTimeZone, s.UserAgent, s.ClientLanguage, r.GetIpAddress(), api));
+            //  r is null for a system event (no request: no user, session or client)
+            var s = r?.Session;
+            Calls.Enqueue(new Temp(0, id, value, s?.Auth, s?.TokenHash ?? "", s?.DeviceId ?? "", s?.ClientTimeZone ?? "", s?.UserAgent ?? "", s?.ClientLanguage ?? "", r?.GetIpAddress() ?? "", api));
         }
 
         /// <inheritdoc />
@@ -257,7 +258,7 @@ namespace SysWeaver.MicroService
         {
             if (IsDisposing)
                 return;
-            Calls.Enqueue(new Temp(1, id, value, r.Session.Auth));
+            Calls.Enqueue(new Temp(1, id, value, r?.Session.Auth));
         }
 
         /// <inheritdoc />
@@ -265,7 +266,7 @@ namespace SysWeaver.MicroService
         {
             if (IsDisposing)
                 return;
-            Calls.Enqueue(new Temp(2, id, ex, r.Session.Auth));
+            Calls.Enqueue(new Temp(2, id, ex, r?.Session.Auth));
         }
 
         readonly MySqlDbSimpleStack Db;

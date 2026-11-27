@@ -105,21 +105,22 @@ namespace SysWeaver.MicroService
         {
             if (IsDisposing)
                 return;
-            var s = r.Session;
+            //  r is null for a system event (no request: no user, session or client)
+            var s = r?.Session;
             Events.Enqueue(new Event
             {
                 State = ApiAuditStates.InProgress,
                 Id = id,
                 Time = DateTime.UtcNow,
                 Value = value,
-                Auth = s.Auth,
+                Auth = s?.Auth,
                 Api = api,
-                Session = s.TokenHash,
-                Ip = r.GetIpAddress(),
-                DeviceId = s.DeviceId,
-                Language = s.ClientLanguage,
-                TimeZone = s.ClientTimeZone,
-                UserAgent = s.UserAgent,
+                Session = s?.TokenHash ?? "",
+                Ip = r?.GetIpAddress() ?? "",
+                DeviceId = s?.DeviceId,
+                Language = s?.ClientLanguage,
+                TimeZone = s?.ClientTimeZone,
+                UserAgent = s?.UserAgent,
             });
         }
 
@@ -141,7 +142,7 @@ namespace SysWeaver.MicroService
                 Id = id,
                 Time = DateTime.UtcNow,
                 Value = value,
-                Auth = r.Session.Auth,
+                Auth = r?.Session.Auth,
             });
         }
 

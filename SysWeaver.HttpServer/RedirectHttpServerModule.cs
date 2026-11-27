@@ -288,8 +288,10 @@ namespace SysWeaver.Net
             { "country", v => "https://countrycode.org/" + Uri.EscapeDataString(v) },
             { "currency", v => CurrencyLinks.TryGetValue(v.FastToLower(), out var x) ? ("https://www.xe.com/currency/" + x) : null },
             { "useragent", v => "https://gs.statcounter.com/detect?useragent=" + Uri.EscapeDataString(v) },
-            { "ip", v => "https://ip.me/ip/" + Uri.EscapeDataString(v).Replace("%3A", ":") },
+            { "ip", v => "https://www.abuseipdb.com/check/" + Uri.EscapeDataString(v).Replace("%3A", ":") },
             { "mac", v => "https://maclookup.app/search/result?mac=" + Uri.EscapeDataString(v) },
+            //  The language part of a code with a region ("en-US", "sv_SE" = "en", "sv")
+            { "language", v => "https://en.wikipedia.org/wiki/ISO_639:" + Uri.EscapeDataString(v.Split('-', '_')[0].Trim().FastToLower()) },
         }.Freeze();
 
         /// <summary>

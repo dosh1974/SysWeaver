@@ -48,7 +48,7 @@ namespace SysWeaver.Net
             /// <summary>
             /// The flag of the language (auto translated to)
             /// </summary>
-            [TableDataIsoLanguageImage]
+            [TableDataIsoLanguage]
             public readonly String Flag;
 
             /// <summary>

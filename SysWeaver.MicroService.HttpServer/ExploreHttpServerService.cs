@@ -420,6 +420,10 @@ namespace SysWeaver.MicroService
         public async Task<TableData> UserStoreTable(TableDataRequest r, HttpServerRequest request)
         {
             var uri = r.Param;
+            //  The parsed tables are cached per url (shared by all callers), so the access of this caller is checked first
+            //  (throws if the caller may not read the file, null if it doesn't exist)
+            if ((await UserStore.GetScope(request, uri).ConfigureAwait(false)) == null)
+                throw HttpResponseException.Gone("The stored table was not found (it may have been deleted)");
             var filterFnCols = await UserStoreTables.GetOrUpdateAsync(uri, async _uri =>
             {
                 using var bs = await UserStore.ReadFile(request, uri).ConfigureAwait(false);

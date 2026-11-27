@@ -1,6 +1,6 @@
 ﻿/*
  * serviceInfo.css - styles of the ServerManager "service info" page (serviceInfo.html), loaded after ../common/theme.css,
- * ../sw/ui.css, smShared.css (chart tiles, line chart cards, upload buttons) and server.css (the chart heights of .sm-linecard).
+ * ../sw/ui.css, smShared.css (upload buttons).
  * Plain static css, Sw tokens only.
  *
  * The page anatomy (main.si-page.sw-page-dash, header .sw-ph with the status badge and the control verbs, facts strip .sw-facts, KPI

@@ -12,7 +12,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Two letter ISO-3166a2 country code of the sender phone number, null means that this is not a country.
         /// </summary>
-        [TableDataIsoCountryImage]
+        [TableDataIsoCountry]
         public String Country;
 
         /// <summary>

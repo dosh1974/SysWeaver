@@ -616,6 +616,51 @@ namespace SysWeaver.MicroService
             return ValueTuple.Create(fi, comp);
         }
 
+        /// <summary>
+        /// True if a url segment can be used as a single file or folder name: not empty, not "." or "..", no path separators ('/', '\'),
+        /// no ':' (drive letters, alternate data streams), no control chars and no trailing '.' or ' ' (Windows drops them).
+        /// </summary>
+        /// <param name="s">The segment</param>
+        /// <returns>True if the segment is a plain name</returns>
+        static bool IsPlainSegment(String s)
+        {
+            if (String.IsNullOrEmpty(s))
+                return false;
+            if ((s == ".") || (s == ".."))
+                return false;
+            foreach (var c in s)
+            {
+                if ((c < ' ') || (c == '/') || (c == '\\') || (c == ':') || (c == 0x7f))
+                    return false;
+            }
+            var l = s[s.Length - 1];
+            return (l != '.') && (l != ' ');
+        }
+
+        /// <summary>
+        /// Combine a storage root with url segments, refusing anything that could leave the root (path traversal): every segment must be a plain name
+        /// (<see cref="IsPlainSegment(string)"/>) and the full path must be inside the root.
+        /// </summary>
+        /// <param name="path">The combined path, null if refused</param>
+        /// <param name="root">The storage root (a shard folder)</param>
+        /// <param name="segments">The url segments (already decoded)</param>
+        /// <returns>True if the path is safe</returns>
+        static bool TryCombineSafe(out String path, String root, params String[] segments)
+        {
+            path = null;
+            foreach (var x in segments)
+                if (!IsPlainSegment(x))
+                    return false;
+            var r = Path.GetFullPath(root);
+            if (!Path.EndsInDirectorySeparator(r))
+                r += Path.DirectorySeparatorChar;
+            var p = Path.GetFullPath(Path.Combine(r, Path.Combine(segments)));
+            if (!p.StartsWith(r, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+                return false;
+            path = p;
+            return true;
+        }
+
         bool GetDiscFile(out String ext, out ICompType comp, out FileInfo fi, String filename)
         {
             fi = new FileInfo(filename);
@@ -680,12 +725,9 @@ namespace SysWeaver.MicroService
                 if (filename == null)
                     return false;
             }
-            var fname = Path.Combine(
-                paths[shardIndex],
-                userPath,
-                scopeS,
-                rngFlags,
-                filename);
+            //  The url segments must be plain names inside the shard (no path traversal, the file name was decoded)
+            if (!TryCombineSafe(out var fname, paths[shardIndex], userPath, scopeS, rngFlags, filename))
+                return false;
             if (isLink)
                 fname = String.Join(".", fname, Ser.Extension);
             if (!GetDiscFile(out var ext, out compType, out fi, fname))
@@ -965,12 +1007,9 @@ namespace SysWeaver.MicroService
             }
             var pathShard = paths[shardIndex];
             var scope = parts[1 + r];
-            var fname = Path.Combine(
-                pathShard,
-                userPath,
-                scope,
-                randomGuid,
-                parts[4 + r]);
+            //  The url segments must be plain names inside the shard (no path traversal)
+            if (!TryCombineSafe(out var fname, pathShard, userPath, scope, randomGuid, parts[4 + r]))
+                return false;
             if (!GetDiscFile(out var ext, out var compType, out var fi, fname))
                 return false;
             DeleteFileAndEmptyPath(fi.FullName, pathShard.Length, false);
@@ -1007,12 +1046,9 @@ namespace SysWeaver.MicroService
                 return false;
             var scope = parts[1 + r];
             var pathShard = paths[shardIndex];
-            var fname = Path.Combine(
-                pathShard,
-                userPath,
-                scope,
-                parts[2 + r],
-                parts[4 + r]);
+            //  The url segments must be plain names inside the shard (no path traversal)
+            if (!TryCombineSafe(out var fname, pathShard, userPath, scope, parts[2 + r], parts[4 + r]))
+                return false;
             if (!GetDiscFile(out var ext, out var compType, out var fi, fname))
                 return false;
             DeleteFileAndEmptyPath(fi.FullName, pathShard.Length, false);
@@ -1225,12 +1261,9 @@ namespace SysWeaver.MicroService
             var filename = TrimLinkFilename(parts[4 + r]);
             if (filename == null)
                 return false;
-            var fname = Path.Combine(
-                pathShard,
-                userPath,
-                scope,
-                randomGuid,
-                String.Concat(filename, '.', Ser.Extension));
+            //  The url segments must be plain names inside the shard (no path traversal)
+            if (!TryCombineSafe(out var fname, pathShard, userPath, scope, randomGuid, String.Concat(filename, '.', Ser.Extension)))
+                return false;
             var fi = new FileInfo(fname);
             if (!fi.Exists)
             {

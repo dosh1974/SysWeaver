@@ -49,7 +49,7 @@ namespace SysWeaver.Net
         /// <summary>
         /// If true the session and device id cookies always get the "Secure" attribute (the browser only sends them over https).
         /// If false (the default) "Secure" is added when the request is https: the connection is https, or a trusted proxy (<see cref="TrustedProxies"/>)
-        /// says that the client used https ("Forwarded: proto=https" or "X-Forwarded-Proto: https").
+        /// says that the client used https ("X-Forwarded-Proto: https").
         /// Set it to true when the server is only reached through a proxy that ends TLS and doesn't send these headers.
         /// </summary>
         public bool SecureCookies;
@@ -127,14 +127,15 @@ namespace SysWeaver.Net
         public String ExternalRootUri;
 
         /// <summary>
-        /// The proxies that may tell the address of the client (the "Forwarded" or "X-Forwarded-For" header): when the connection comes from
-        /// one of them, <see cref="HttpServerRequest.GetIpAddress"/> is the forwarded client address (and <see cref="HttpServerRequest.IsForwarded"/>
-        /// is true). Every entry is an address ("10.0.0.5", "fd00::1"), a network ("10.0.0.0/8", "fd00::/8"), "loopback" (127.0.0.0/8, ::1)
+        /// The proxies that may tell the address of the client (the "X-Forwarded-For" header) and that the client used https ("X-Forwarded-Proto"):
+        /// when the connection comes from one of them, <see cref="HttpServerRequest.GetIpAddress"/> is the forwarded client address (and
+        /// <see cref="HttpServerRequest.IsForwarded"/> is true). The standard "Forwarded" header is never read (proxies pass a client's one on unchanged).
+        /// Every entry is an address ("10.0.0.5", "fd00::1"), a network ("10.0.0.0/8", "fd00::/8"), "loopback" (127.0.0.0/8, ::1)
         /// or "private" (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16, fc00::/7, fe80::/10).
-        /// Null (the default) = "loopback" and "private" (a proxy on the same machine or network, ex: a SysWeaver reverse proxy).
+        /// Null (the default) = "loopback" only (a proxy on the same machine). A proxy on another machine must be listed, by its address
+        /// (preferred) or network: a client that connects directly from a trusted address can set the headers itself, so only trust addresses where
+        /// every machine is a proxy. A forwarding header from an address that isn't trusted is ignored (a warning is logged once).
         /// An empty array = never (the address of the connection is always used).
-        /// A client that connects directly from a trusted network can set the header itself: only trust networks where every machine is a proxy
-        /// or is trusted not to lie about its address.
         /// </summary>
         public String[] TrustedProxies;
 
@@ -165,6 +166,46 @@ namespace SysWeaver.Net
         /// Optional, request limiter for each individual session
         /// </summary>
         public HttpRateLimiterParams SessionLimits;
+
+        /// <summary>
+        /// Cross site request forgery protection: an api call (and "logout") of a signed in session (not an API key, no Authorization or API key header)
+        /// that the browser says comes from another site is refused (403), unless it has the <see cref="HttpServerBase.ApiRequestHeader"/> header
+        /// (added by Sw.Net to every same origin request; another site can't send it without a preflight the server never allows).
+        /// "From another site": "Sec-Fetch-Site" is "cross-site" or "same-site" (another sub domain), or, for a browser that doesn't send it,
+        /// the "Origin" (or else "Referer") host isn't this site. Requests without any of these headers (other clients) are allowed.
+        /// Default true.
+        /// </summary>
+        public bool CsrfProtection = true;
+
+        /// <summary>
+        /// The probe trap: a request that hits no end point for an url that only probes ask for (".env", ".git/config" etc) gets a slow, hostile answer
+        /// and the client address is banned for a while, see <see cref="HttpProbeTrapParams"/>. Enabled by default, null disables it.
+        /// </summary>
+        public HttpProbeTrapParams ProbeTrap = new HttpProbeTrapParams();
+
+        /// <summary>
+        /// Request limiter for the whole server of the "auth/redirect" end point (sign in with a one time token from an external authorizer), null for no limit.
+        /// Default: 300 requests per minute (at most 20 delayed, for at most 5 seconds).
+        /// </summary>
+        public HttpRateLimiterParams AuthRedirectLimits = new HttpRateLimiterParams
+        {
+            Count = 300,
+            Duration = 60,
+            MaxQueue = 20,
+            MaxDelay = 5,
+        };
+
+        /// <summary>
+        /// Request limiter per client address (IPv6 addresses grouped by their /64 prefix) of the "auth/redirect" end point, null for no limit.
+        /// Default: 20 requests per minute (at most 10 delayed, for at most 10 seconds), the same as the sign in API.
+        /// </summary>
+        public HttpRateLimiterParams AuthRedirectIpLimits = new HttpRateLimiterParams
+        {
+            Count = 20,
+            Duration = 60,
+            MaxQueue = 10,
+            MaxDelay = 10,
+        };
 
         /// <summary>
         /// The simple intrusion detection: error responses (scanning) and calls to key API's (sign in, audited API's) per client address,

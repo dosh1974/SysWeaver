@@ -36,6 +36,7 @@ namespace SysWeaver.MicroService.Db
         /// </summary>
         [TableDataIsoLanguageImage]
         [Ignore]
+        [TableDataHide]
         public string Country => Language;
 
 
@@ -45,6 +46,7 @@ namespace SysWeaver.MicroService.Db
         [Index]
         [Ascii]
         [StringLength(8)]
+        [TableDataIsoLanguage]
         public string Language { get; set; }
 
         /// <summary>

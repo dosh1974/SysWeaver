@@ -29,6 +29,7 @@ namespace SysWeaver.IsoData
         /// </summary>
         [TableDataIsoCountryImage]
         [TableDataOrder(-1)]
+        [TableDataHide]
         public String Flag => Iso3166a2;
 
         /// <summary>

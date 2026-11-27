@@ -43,6 +43,18 @@ namespace SysWeaver.MicroService
             /// </summary>
             [TableDataText(64)]
             public String LastException;
+
+            /// <summary>
+            /// Actions for the problem, from the service that reported it (see <see cref="IHaveProblemActions"/>), null if there are none
+            /// </summary>
+            //  The value is "-" followed by 6 parts per action (text, title, url, icon, confirm and visible = "1"), so action n (0 based) uses {2+6n} .. {7+6n}.
+            //  The unused actions have empty parts (hidden by the empty visible part).
+            [TableDataActionsFull(
+                "{2}", "{3}", "{4}", "{5}", "{6}", "{7}", "",
+                "{8}", "{9}", "{10}", "{11}", "{12}", "{13}", "",
+                "{14}", "{15}", "{16}", "{17}", "{18}", "{19}", "",
+                "{20}", "{21}", "{22}", "{23}", "{24}", "{25}", "")]
+            public String Actions;
         }
 
         /// <summary>
@@ -102,7 +114,7 @@ namespace SysWeaver.MicroService
         [WebApiClientCache(1)]
         [WebApiRequestCache(1, WebApiCaches.Globally)]
         [WebMenuTable(null, "Monitoring/{0}", "Problems", "How often each part of the system failed, when and why (not every failure is logged)", "IconTableStats", 3)]
-        public Task<TableData> ProblemsTable(TableDataRequest r, HttpServerRequest context) => TableDataTools.Get(context, r, 1000, GetProblems(), "Problems");
+        public Task<TableData> ProblemsTable(TableDataRequest r, HttpServerRequest context) => TableDataTools.Get(context, r, 1000, WithProblemActions(GetProblems()), "Problems");
 
 
         #region Problem log

@@ -969,19 +969,41 @@
     }
 
     /**
+     * A small icon shown before the text of a cell (ex: the flag of a country code, C# TableDataIsoCountry / Currency / Language).
+     * An icon that can't be loaded (ex: no IsoDataModule) is removed (Sw.FadeSrc collapses failed images), so the text keeps its place.
+     * @param {string} src The icon url.
+     * @returns {HTMLImageElement} The icon (class sw-cell-icon, decorative: the text names the value).
+     */
+    function CellIcon(src) {
+        const i = Sw.CreateImg({ ShowError: false });
+        i.className = "sw-cell-icon";
+        i.alt = "";
+        i.setAttribute("aria-hidden", "true");
+        i.src = src;
+        return i;
+    }
+
+    /**
      * Renderer "Url": text = formats[1] (default "{0}"), url = formats[2] (default "{2}" = the text; a target prefix + _blank, * _self, ^ _top, - _parent),
-     * title = formats[3] (default 'Click to open "{3}".'). Args: {0} value, {1} nextValue, {2} text, {3} absolute url. Plain text without an url.
+     * title = formats[3] (default 'Click to open "{3}".'), formats[4] = "UserAgent" (a user agent string, shown short), formats[5] = the url of an
+     * icon shown before the text (ex: a flag; {0} value, {1} nextValue, {_0} the value in lower case; none for an empty value).
+     * Args: {0} value, {1} nextValue, {2} text, {3} absolute url. Plain text without an url.
      * @param {HTMLElement} e The cell. @param {*} value The value. @param {string[]} formats The format arguments. @param {*} nextValue The next value.
      * @param {string|false} flash Flash class. @param {string} type The C# type. @param {function} onRefresh Refresh callback.
      */
     function Url(e, value, formats, nextValue, flash, type, onRefresh) {
         Reset(e, "Url");
-        if (value === undefined || value === null) {
+        if (value === undefined || value === null || (formats[5] && String(value).trim() === "")) {
             SetText(e, "", "", flash);
             return;
         }
         const ua = formats[4] === "UserAgent";
         const text = ua ? UserAgentText(value) : sf(formats[1] ?? "{0}", value, nextValue);
+        const iconSrc = formats[5] ? sf(formats[5], value, nextValue) : "";
+        if (iconSrc) {
+            UrlWithIcon(e, value, formats, nextValue, flash, text, iconSrc);
+            return;
+        }
         const ut = UrlTarget(sf(formats[2] ?? "{2}", value, nextValue, text));
         const url = absUrl(ut[0]);
         const target = ut[1];
@@ -1004,6 +1026,44 @@
         }
         e.classList.remove(Classes.Link);
         SetText(e, text, title, flash);
+    }
+
+    /**
+     * The "Url" renderer with an icon before the text (formats[5]): the icon and the text are one link (or plain text without an url, or
+     * offline for a link to another site). A failed icon is removed, the text stays.
+     * @param {HTMLElement} e The cell. @param {*} value The value. @param {string[]} formats The format arguments. @param {*} nextValue The next value.
+     * @param {string|false} flash Flash class. @param {string} text The text. @param {string} iconSrc The icon url.
+     */
+    function UrlWithIcon(e, value, formats, nextValue, flash, text, iconSrc) {
+        const ut = UrlTarget(sf(formats[2] ?? "{2}", value, nextValue, text));
+        const url = absUrl(ut[0]);
+        const target = ut[1];
+        let title = sf(formats[3] ?? (url ? _TF('Open "{3}".', "Tool tip that indicates that an url can be viewed by clicking on an element. {3} is the url, filled in later, ex: https://example.com/docs. {0}, {1} and {2} are other values of the cell, not used in this text") : ""), value, nextValue, text, url);
+        const ext = External(url);
+        const content = () => [CellIcon(iconSrc), el("span.sw-cell-icon-text", { text })];
+        if (!url || (ext && ext.Offline)) {
+            e.classList.remove(Classes.Link);
+            if (ext)
+                title = ext.Title;
+            SetNodes(e, "p" + iconSrc + "\n" + text + (ext ? "\no" + url : ""), () => [el("span.sw-cell-iconed", null, ...content())], title, flash);
+            return;
+        }
+        e.classList.add(Classes.Link);
+        if (ext)
+            title = ext.Search ? ext.Title : F().JoinNonEmpty("\n", title, ext.Title);
+        SetNodes(e, "u" + url + "\n" + target + "\n" + iconSrc + "\n" + text + (ext ? "\ne" : ""), () => {
+            let a;
+            if (ext) {
+                a = ExternalLink(url, text, ext);
+                a.prepend(CellIcon(iconSrc));
+            }
+            else {
+                a = CreateLink(url, null, target);
+                a.append(...content());
+            }
+            a.classList.add("sw-cell-iconed");
+            return [a];
+        }, title, flash);
     }
 
     // ------------------------------------------------------------------ external links

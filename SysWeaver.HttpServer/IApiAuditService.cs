@@ -13,6 +13,8 @@ namespace SysWeaver.Net
     /// <remarks>
     /// The callbacks are invoked synchronously on the request path; implementations should be fast, thread safe and should not throw
     /// (an exception from <see cref="OnApiBegin"/> or <see cref="OnApiEnd"/> fails the API call).
+    /// A service can also audit a system event that no request caused (ex: an alert from a background check), the request is then null
+    /// (no user, session or client): implementations must accept a null request.
     /// </remarks>
     public interface IApiAuditService
     {
@@ -20,7 +22,7 @@ namespace SysWeaver.Net
         /// Method invoked before an audited API is invoked
         /// </summary>
         /// <param name="id">A unique invoke id</param>
-        /// <param name="r">The server request (used to get session data, such as agent etc)</param>
+        /// <param name="r">The server request (used to get session data, such as agent etc), null for a system event</param>
         /// <param name="api">The api that is being invoked</param>
         /// <param name="value">The input value (after any audit params filter), can be null for API's without arguments. Must not be modified.</param>
         void OnApiBegin(long id, HttpServerRequest r, IHttpApiAudit api, Object value);
@@ -29,7 +31,7 @@ namespace SysWeaver.Net
         /// Method invoked after an audited API is invoked (if no exception in thrown)
         /// </summary>
         /// <param name="id">A unique invoke id (same as for the begin)</param>
-        /// <param name="r">The server request (used to get session data, such as agent etc)</param>
+        /// <param name="r">The server request (used to get session data, such as agent etc), null for a system event</param>
         /// <param name="api">The api that is being invoked</param>
         /// <param name="value">The output value (after any audit return filter), can be null for void API's. Must not be modified.</param>
         void OnApiEnd(long id, HttpServerRequest r, IHttpApiAudit api, Object value);
@@ -38,7 +40,7 @@ namespace SysWeaver.Net
         /// Method invoked if an audited API throws an exception
         /// </summary>
         /// <param name="id">A unique invoke id (same as for the begin)</param>
-        /// <param name="r">The server request (used to get session data, such as agent etc)</param>
+        /// <param name="r">The server request (used to get session data, such as agent etc), null for a system event</param>
         /// <param name="api">The api that is being invoked</param>
         /// <param name="ex">The exception object thrown</param>
         void OnApiException(long id, HttpServerRequest r, IHttpApiAudit api, Exception ex);

@@ -49,6 +49,7 @@ namespace SysWeaver
         /// </summary>
         [TableDataIsoCountryImage]
         [TableDataOrder(-1)]
+        [TableDataHide]
         public String Flag => IsoCountry;
 
         /// <summary>

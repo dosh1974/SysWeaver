@@ -249,6 +249,7 @@ namespace SysWeaver.MicroService
             }
             UpdateTask = new PeriodicTask(UpdateMetrics, 4000);
             UpdateStatsTask = new PeriodicTask(UpdateStats, 200);
+            InitNetwork(p.Network);
         }
 
 
@@ -324,6 +325,7 @@ namespace SysWeaver.MicroService
         /// <inheritdoc />
         public void Dispose()
         {
+            DisposeNetwork();
             Interlocked.Exchange(ref UpdateStatsTask, null)?.Dispose();
             Interlocked.Exchange(ref UpdateTask, null)?.Dispose();
             var fu = FileUploader;
@@ -1729,9 +1731,17 @@ namespace SysWeaver.MicroService
                 return null;
             var tot = mi.Total - mi.Free;
             var used = info.Process?.Metrics?.MemUsage ?? 0;
-            double usedP = (double)(used * 100M / Math.Max(1M, tot));
-            return GetMemChart(Math.Max(0, tot - used), tot, usedP, serviceName + " memory use", "Allocated");
+            return GetMemChart(Math.Max(0, tot - used), tot, GetMemUsagePercent(mi, used), serviceName + " memory use", "Allocated");
         }
+
+        /// <summary>
+        /// The memory use of a service in percent of the memory in use on the computer (total - free)
+        /// </summary>
+        /// <param name="mi">The memory of the computer, null if not known yet</param>
+        /// <param name="used">The memory use of the service</param>
+        /// <returns>The percentage, 0 if the memory of the computer isn't known</returns>
+        static double GetMemUsagePercent(SmMemoryInfo mi, long used)
+            => mi == null ? 0 : (double)(used * 100M / Math.Max(1M, mi.Total - mi.Free));
 
 
         /// <summary>
@@ -1866,7 +1876,9 @@ namespace SysWeaver.MicroService
             SmFileInfo[] masterConfigs = null;
             if (info.Service.MasterConfig)
                 masterConfigs = GetConfigs(masterFolder, "*").Select(x => GetFileInfo(Path.Combine(masterFolder, x))).OrderByDescending(x => x.LastModified).ToArray();
-            return new SmServiceDetail(info, data, exeName, logFile, configs, masterConfigs, GetExecutables(info, exe), info.Exe?.Manual ?? false);
+            var detail = new SmServiceDetail(info, data, exeName, logFile, configs, masterConfigs, GetExecutables(info, exe), info.Exe?.Manual ?? false);
+            detail.MemUsagePercent = GetMemUsagePercent(MemInfo, detail.MemUsage);
+            return detail;
         }
 
         /// <summary>
@@ -2681,6 +2693,8 @@ namespace SysWeaver.MicroService
             foreach (var x in DriveEx.GetStats(sys, "DriveExs."))
                 yield return x;
             foreach (var x in StatsExs.GetStats(sys, "StatsExs."))
+                yield return x;
+            foreach (var x in GetNetworkStats(sys))
                 yield return x;
         }
 

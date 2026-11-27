@@ -5,30 +5,20 @@
  * The page anatomy (page container .sw-page-dash, header .sw-ph, facts strip .sw-facts, grid .sw-grid, KPI tiles .sw-kpi with
  * .sw-meter, cards .sw-card) comes from the shared ui library (ui/page.css, built by ui/page.js: Sw.PageLayout, Sw.Facts,
  * Sw.Kpi, Sw.Card). Here only the chart sizes:
- *  - .sm-linecard: a chart card (the CPU / memory charts of serviceInfo.html, which loads this file); its body holds an .sm-chart
- *    (SmShared.ChartTile) of a fixed height, so new data never moves the page,
- *  - .sm-metric (server_metrics.html): the "Now" card (.sm-metric-now) and the two history cards (.sm-metric-hist).
+ *  - .sm-metric (server_metrics.html): the chart bodies (.sm-chart, SmShared.ChartTile) have a fixed height, so new data never
+ *    moves the page; the "Now" card (.sm-metric-now) and the two history cards (.sm-metric-hist).
  * Flat: no shadows, no gradients (Design v2, PORTING.md B5).
  */
 
-/* ===== Line chart cards ===== */
+/* ===== Chart cards ===== */
 
-.sm-linecard .sm-chart,
 .sm-metric .sm-chart {
     height: 15rem;
     margin: var(--sw-space-2) var(--sw-space-3) var(--sw-space-3);
 }
 
-/* Large screens: taller charts (the dashboard is centered at 100rem) */
-@media (min-height: 1000px) {
-    .sm-linecard .sm-chart {
-        height: 18rem;
-    }
-}
-
 /* Phones: lower charts */
 @media (max-width: 599px), (max-height: 500px) {
-    .sm-linecard .sm-chart,
     .sm-metric .sm-chart {
         height: 12rem;
         margin: var(--sw-space-1) var(--sw-space-2) var(--sw-space-2);

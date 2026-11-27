@@ -58,8 +58,8 @@ namespace SysWeaver.IpLocation.Caches
         /// <summary>
         /// The ISO country code (shown as a flag)
         /// </summary>
-        [TableDataIsoCountryImage]
         [Ignore]
+        [TableDataIsoCountry]
         public String Flag => Loc?.IsoCountry;
 
         /// <summary>

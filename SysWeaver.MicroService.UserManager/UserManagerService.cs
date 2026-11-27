@@ -542,7 +542,7 @@ namespace SysWeaver.MicroService
                 var ip = context.GetIpAddress();
                 var userAgent = context.Session.UserAgent;
                 var s = String.Concat(
-                    "<a href=\"https://ip.me/ip/", HttpUtility.HtmlAttributeEncode(ip), "\" style=\"color: ", cols.Acc1, "; text-decoration: none;\">", HttpUtility.HtmlEncode(ip), "</a>",
+                    "<a href=\"https://www.abuseipdb.com/check/", HttpUtility.HtmlAttributeEncode(ip), "\" style=\"color: ", cols.Acc1, "; text-decoration: none;\">", HttpUtility.HtmlEncode(ip), "</a>",
                     " <a href=\"https://gs.statcounter.com/detect?useragent=", HttpUtility.HtmlAttributeEncode(userAgent), "\" style=\"color: ", cols.Acc1, "; text-decoration: none;\">", HttpUtility.HtmlEncode("🕵️"), "</a>"
                     );
                 d["[Origin]"] = s;

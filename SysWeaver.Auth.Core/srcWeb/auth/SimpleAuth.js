@@ -16,7 +16,7 @@
  *    The list refreshes every 30 s (unchanged items are kept). This page reloads on user changes (it doesn't call IgnoreUserChanges).
  *  - userManMain (auth/UserMan.html, menu Admin/UserMan): the stored users (GetStoredUsers: name and tokens), add (dialog: the user
  *    line "username : $s1$..." of the Generate password hash page and the tokens), edit the tokens (SetStoredUserTokens) and remove
- *    (confirmed). A row the caller may not change (CanChange false: the user has the "debug" token) has its buttons disabled with the
+ *    (confirmed). A row the caller may not change (CanChange false: the user has tokens the caller doesn't have) has its buttons disabled with the
  *    reason. The list refreshes every 30 s (unchanged items are kept).
  *
  * Loading: classic `defer` scripts ../sw/core.js, ../sw/ui.js, Auth.js, AuthUi.js (MicroService.Auth, same auth/
@@ -1005,7 +1005,7 @@
                 el("p.sw-dialog-text", null, _TF("Paste the line made on the page", "Start of the text of the add user dialog, followed by a link to the Generate password hash page") + " ", genLink,
                     ". " + _TF("The password itself is never sent here.", "End of the text of the add user dialog (after the link)")),
                 line.E,
-                el("p.sw-dialog-text", { text: _TF("The tokens decide what the user may do. Only a user with the \"debug\" token may give it.", "Text of the add user dialog, above the tokens field (debug is a literal token name, not translated)") }),
+                el("p.sw-dialog-text", { text: _TF("The tokens decide what the user may do. You can only give tokens that you have yourself.", "Text of the add user dialog, above the tokens field") }),
                 tokens.E),
             Buttons: buttons,
             Focus: line.Input,
@@ -1023,7 +1023,7 @@
      */
     const editStoredUserTokens = (name, current) => editTokens({
         Title: _T("Tokens of \"{0}\"", name, "Title of the dialog where the tokens of a stored user are edited, {0} is the user name"),
-        Text: _TF("The tokens decide what the user may do, the user is signed out when they change. Only a user with the \"debug\" token may give it.", "Text of the tokens dialog of a stored user (debug is a literal token name, not translated)"),
+        Text: _TF("The tokens decide what the user may do, the user is signed out when they change. You can only give tokens that you have yourself.", "Text of the tokens dialog of a stored user"),
         Hint: _TF("Comma separated, ex: admin, ops. Empty: pages for any signed in user only.", "The tool tip description of the tokens field of a stored user (the example tokens are literal, not translated)"),
         Value: current,
         Check: userTokensError,
@@ -1066,7 +1066,7 @@
             /** @type {Map<string, HTMLElement>} "name\ntokens\ncanChange" -> list item. */
             const items = new Map();
             let timer = 0;
-            const debugOnly = () => _TF("Only a user with the \"debug\" token may change this user", "Reason of the disabled edit and remove buttons of a stored user that has the debug token (debug is a literal token name, not translated)");
+            const debugOnly = () => _TF("This user has tokens that you don't have, so you can't change or remove it", "Reason of the disabled edit and remove buttons of a stored user that has tokens the signed in user doesn't have");
 
             /**
              * A list item of a user.

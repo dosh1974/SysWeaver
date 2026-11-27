@@ -492,7 +492,7 @@ namespace SysWeaver.Net
         /// <summary>
         /// Get the client IP address as text, "?" if unknown.
         /// When the connection comes from a trusted proxy (<see cref="HttpServerBaseParams.TrustedProxies"/>) the client address is taken from its
-        /// "Forwarded" (RFC 7239) or "X-Forwarded-For" header: then <see cref="IsForwarded"/> is true and <see cref="ProxyIpAddress"/> is the
+        /// "X-Forwarded-For" header (the "Forwarded" header is never read): then <see cref="IsForwarded"/> is true and <see cref="ProxyIpAddress"/> is the
         /// address of the proxy. Else this is the address of the connection (see <see cref="GetIP"/>).
         /// </summary>
         /// <returns>The address as text</returns>
@@ -504,7 +504,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// True if the client address (<see cref="GetIpAddress"/>) was told by a trusted proxy (a "Forwarded" or "X-Forwarded-For" header), false if it
+        /// True if the client address (<see cref="GetIpAddress"/>) was told by a trusted proxy (an "X-Forwarded-For" header), false if it
         /// is the address of the connection.
         /// </summary>
         public bool IsForwarded
@@ -533,7 +533,7 @@ namespace SysWeaver.Net
 
         /// <summary>
         /// True if the client used https: the connection is https, or the connection comes from a trusted proxy (<see cref="HttpServerBaseParams.TrustedProxies"/>)
-        /// that ended the TLS and says so ("proto=https" in the first element of the "Forwarded" header, else "https" as the first "X-Forwarded-Proto" value).
+        /// that ended the TLS and says so ("https" as the first "X-Forwarded-Proto" value; the "Forwarded" header is never read).
         /// </summary>
         public bool IsHttps
         {
@@ -545,18 +545,6 @@ namespace SysWeaver.Net
                 var server = Server;
                 if ((peer == null) || (server == null) || !server.IsTrustedProxy(peer))
                     return false;
-                var fw = GetReqHeader("Forwarded");
-                if (!String.IsNullOrWhiteSpace(fw))
-                {
-                    //  The first element is the client side of the first proxy
-                    var first = fw.Split(',')[0];
-                    foreach (var pair in first.Split(';'))
-                    {
-                        var kv = pair.Trim();
-                        if (kv.StartsWith("proto=", StringComparison.OrdinalIgnoreCase))
-                            return kv.AsSpan(6).Trim().Trim('"').Equals("https", StringComparison.OrdinalIgnoreCase);
-                    }
-                }
                 var xfp = GetReqHeader("X-Forwarded-Proto");
                 if (String.IsNullOrWhiteSpace(xfp))
                     return false;
@@ -584,6 +572,9 @@ namespace SysWeaver.Net
             var server = Server;
             if ((server == null) || !server.IsTrustedProxy(peer))
             {
+                //  A forwarding header from a connection that isn't a trusted proxy is ignored (a missing proxy is reported once)
+                if ((server != null) && (GetReqHeader("X-Forwarded-For") != null))
+                    server.OnUntrustedForwardingHeader(peer);
                 LazyClientIp = IpText(peer);
                 return;
             }
@@ -613,26 +604,13 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// The client addresses of the "Forwarded" header ("for=" values), else of the "X-Forwarded-For" header, from the client to the last proxy.
-        /// An entry that isn't an address (ex: "unknown", "_hidden") is null. Null if there is no such header.
+        /// The client addresses of the "X-Forwarded-For" header, from the client to the last proxy.
+        /// An entry that isn't an address (ex: "unknown") is null. Null if there is no such header.
+        /// The standard "Forwarded" header (RFC 7239) is never read: the proxies in use write "X-Forwarded-For" and pass a "Forwarded" header of the
+        /// client on unchanged, so reading it let a client choose its own address.
         /// </summary>
         List<IPAddress> ForwardedChain()
         {
-            var fw = GetReqHeader("Forwarded");
-            if (!String.IsNullOrWhiteSpace(fw))
-            {
-                var res = new List<IPAddress>();
-                foreach (var element in fw.Split(','))
-                    foreach (var pair in element.Split(';'))
-                    {
-                        var kv = pair.Trim();
-                        if (!kv.StartsWith("for=", StringComparison.OrdinalIgnoreCase))
-                            continue;
-                        res.Add(ParseForwardedAddress(kv.Substring(4)));
-                    }
-                if (res.Count > 0)
-                    return res;
-            }
             var xff = GetReqHeader("X-Forwarded-For");
             if (String.IsNullOrWhiteSpace(xff))
                 return null;

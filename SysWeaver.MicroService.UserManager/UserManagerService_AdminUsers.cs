@@ -215,6 +215,28 @@ namespace SysWeaver.MicroService
             return n;
         }
 
+        /// <summary>
+        /// Refuse (403) to act on an account that has roles (tokens) the caller doesn't have: a user manager can't disable, delete, unlock or reset
+        /// an account that is more powerful than its own (ex: a "UserManagement" user and an "Admin" account), see
+        /// <see cref="AuthTools.TokensNotHeld(Authorization, IEnumerable{string})"/> ("debug" has every token).
+        /// </summary>
+        /// <param name="c">The connection (in the caller's transaction)</param>
+        /// <param name="context">The request (the caller)</param>
+        /// <param name="userId">The account</param>
+        /// <param name="userName">The name of the account (for the reason)</param>
+        /// <param name="what">What would be done, ex: "disable"</param>
+        static async Task RefuseMorePowerfulAccount(OrmConnection c, HttpServerRequest context, long userId, String userName, String what)
+        {
+            var tokens = (await c.SelectAsync<DbToken>(x => x.UserId == userId).ConfigureAwait(false))
+                .Select(x => x.Token)
+                .Where(x => (x != null) && !x.StartsWith(DisabledTokenPrefix, StringComparison.OrdinalIgnoreCase));
+            var missing = AuthTools.TokensNotHeld(context?.Session?.Auth, tokens);
+            if (missing.Length <= 0)
+                return;
+            throw HttpResponseException.Refused(String.Concat(userName, " has the ", missing.Length == 1 ? "role " : "roles ", String.Join(", ", missing.Select(x => x.ToQuoted())),
+                " that your account doesn't have: you can't ", what, " this account"), 403);
+        }
+
         static void RefuseOwnAccount(HttpServerRequest context, DbUser user, String what)
         {
             var own = (context?.Session?.Auth?.AuthContext as DbUser)?.Id ?? 0;
@@ -242,6 +264,7 @@ namespace SysWeaver.MicroService
                 using var tr = await c.BeginTransactionAsync().ConfigureAwait(false);
                 var a = await AdminFind(c, r?.User).ConfigureAwait(false);
                 name = a.User.UserName;
+                await RefuseMorePowerfulAccount(c, context, a.User.Id, name, "unlock").ConfigureAwait(false);
                 if (!a.HasPassword)
                     throw HttpResponseException.Refused(String.Concat(name, " has no password, there is no password reset to undo"));
                 if (!a.MustResetPassword)
@@ -282,6 +305,7 @@ namespace SysWeaver.MicroService
                 var a = await AdminFind(c, r?.User).ConfigureAwait(false);
                 user = a.User;
                 RefuseOwnAccount(context, user, "disable");
+                await RefuseMorePowerfulAccount(c, context, user.Id, user.UserName, "disable").ConfigureAwait(false);
                 if (a.Disabled)
                     throw HttpResponseException.AlreadyDone(String.Concat(user.UserName, " is already disabled"));
                 await c.InsertAsync<DbToken>(new DbToken { UserId = user.Id, Token = DisabledToken(user.Id) }).ConfigureAwait(false);
@@ -316,6 +340,7 @@ namespace SysWeaver.MicroService
                 using var tr = await c.BeginTransactionAsync().ConfigureAwait(false);
                 var a = await AdminFind(c, r?.User).ConfigureAwait(false);
                 user = a.User;
+                await RefuseMorePowerfulAccount(c, context, user.Id, user.UserName, "enable").ConfigureAwait(false);
                 if (!a.Disabled)
                     throw HttpResponseException.AlreadyDone(String.Concat(user.UserName, " is not disabled"));
                 var dt = DisabledToken(user.Id);
@@ -352,6 +377,7 @@ namespace SysWeaver.MicroService
                 var a = await AdminFind(c, r?.User).ConfigureAwait(false);
                 user = a.User;
                 RefuseOwnAccount(context, user, "delete");
+                await RefuseMorePowerfulAccount(c, context, user.Id, user.UserName, "delete").ConfigureAwait(false);
                 if (!String.Equals(r?.Confirm?.Trim(), user.UserName, StringComparison.OrdinalIgnoreCase))
                     throw HttpResponseException.Refused(String.Concat("Type the user name ", user.UserName.ToQuoted(), " to confirm the delete"), 400);
                 await DeleteUserRows(c, user.Id).ConfigureAwait(false);

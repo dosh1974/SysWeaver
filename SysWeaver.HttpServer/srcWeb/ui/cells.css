@@ -164,6 +164,32 @@ a.sw-link.sw-link-ext.sw-link-image .sw-link-ext-icon {
     vertical-align: middle;
 }
 
+/* The value shown instead of a picture that can't be loaded (cells.js Img): normal text, also inside an image link (line-height 0) */
+.sw-cell-img-text {
+    line-height: normal;
+    vertical-align: middle;
+}
+
+/* An icon before the text of a cell (cells.js CellIcon, ex: the flag of a country / currency / language code). Fixed size: the iso flags
+   are svg files without intrinsic pixel sizes. A failed icon is removed (display none, Sw.FadeSrc), so its margin leaves no gap. */
+.sw-cell-icon {
+    display: inline-block;
+    width: 1.33em;
+    height: 1em;
+    margin-right: 0.35em;
+    object-fit: contain;
+    vertical-align: -0.15em;
+    flex: none;
+}
+
+.sw-cell-iconed {
+    white-space: nowrap;
+}
+
+    .sw-cell-iconed .sw-cell-icon-text {
+        white-space: normal;
+    }
+
 /* Tags (auth tokens, compression formats ...): as the original (owner report 4 #9), a filled pill in the first accent with bold text
    in the page colour (the original: every span in a table cell, --ThemeAcc1 / --ThemeBackground, bold, the input radius); the text is
    kept a little smaller so a row of several tags stays one line in the row height. Hacker: square, like every control there. */

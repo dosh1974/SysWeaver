@@ -20,6 +20,12 @@ namespace SysWeaver.MicroService
         public TimeSpan TotalProcessorTime;
 
         /// <summary>
+        /// The memory use of the service in percent of the memory in use on the computer (total - free), as in the memory chart (GetServiceMemChart).
+        /// 0 if the memory of the computer isn't known yet
+        /// </summary>
+        public double MemUsagePercent;
+
+        /// <summary>
         /// Name of the executable
         /// </summary>
         public String ExeName;

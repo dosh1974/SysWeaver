@@ -686,7 +686,7 @@ html.SwMobile[data-theme="pro"] {
     .sw-card-rich :is(h3, dd, .sw-card-sub, .sw-card-text, .sw-card-more > :not(summary), .sw-card-lead-figure),
     .sw-ph-desc, .sw-ph-status, .sw-empty-text, .sw-empty.sw-error .sw-empty-title, .sw-state-text, .sw-state.sw-error .sw-state-title,
     .sw-field-hint, .sw-text-error, .sw-ctl-status, .sw-form-status, .sw-prop-help, .sw-prop-error, .sw-prop-hintpart,
-    .sw-cell-confirm, .sw-cell-img-text, .sw-denied-text, .sw-denied-reason, .sw-working-text, .sw-dialog-progress-time,
+    .sw-cell-confirm, .sw-cell-img-text, .sw-cell-icon-text, .sw-denied-text, .sw-denied-reason, .sw-working-text, .sw-dialog-progress-time,
     .sw-serverblock-text, .sw-serverblock-time, .sw-serverblock-note) {
     user-select: text;
     -webkit-user-select: text;

@@ -634,8 +634,11 @@ namespace SysWeaver.Chat
 
             var l = Uri.UnescapeDataString(request.Url);
             l = context.MakeRequestAbsolute(l);
+            //  InternalRead doesn't run a handler that the session may not use (null is returned)
             var data = await context.Server.InternalRead(l, context.Session).ConfigureAwait(false);
-            if (!context.Session.IsValid(data.Item3.Auth))
+            if (data == null)
+                throw HttpResponseException.Refused("The url can't be read: it doesn't exist or you are not allowed to read it");
+            if ((data.Item3 != null) && !context.Session.IsValid(data.Item3.Auth))
                 throw new UserNotAllowedException();
             if (!AllowPublicStore)
                 if (request.Scope == UserStorageScopes.Public)
@@ -730,8 +733,11 @@ namespace SysWeaver.Chat
                     return localPrefix + r;
             }
             l = context.Prefix + l;
+            //  InternalRead doesn't run a handler that the session may not use (null is returned)
             var data = await context.Server.InternalRead(l, context.Session).ConfigureAwait(false);
-            if (!context.Session.IsValid(data.Item3.Auth))
+            if (data == null)
+                throw HttpResponseException.Refused("The url can't be read: it doesn't exist or you are not allowed to read it");
+            if ((data.Item3 != null) && !context.Session.IsValid(data.Item3.Auth))
                 throw new UserNotAllowedException();
             if (!AllowPublicStore)
                 if (request.Scope == UserStorageScopes.Public)

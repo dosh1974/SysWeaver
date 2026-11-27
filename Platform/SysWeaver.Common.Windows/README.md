@@ -34,11 +34,12 @@ No project calls this assembly directly; it only needs to be deployed with the a
 - Flushing file buffers to disk (`FlushFileBuffers`)
 - Executable discovery (`FindExecutables`: `*.exe` files that are PE images with a console or GUI subsystem); `MakeExecutable` has nothing to do on Windows
 - Granting the Everyone group full control on a directory, inherited by contained files and folders (used for data folders shared by all users)
+- Network connections (`INetConnections`, see `NetConnections` in SysWeaver.Common): TCP from `GetExtendedTcpTable` (`TCP_TABLE_OWNER_MODULE_ALL`: process id and creation time; falls back to `TCP_TABLE_OWNER_PID_ALL` without the creation time), UDP from `GetExtendedUdpTable`, IPv4 and IPv6
 - Failures counted as statistics (`IHaveStats`, system `Windows.Platform`)
 
 ## Key components
 
-- [`WindowsPlatformTools`](WindowsPlatformTools.cs) — the `IPlatformTools` implementation
+- [`WindowsPlatformTools`](WindowsPlatformTools.cs) — the `IPlatformTools` implementation, the network connections in [`WindowsPlatformTools.NetConnections.cs`](WindowsPlatformTools.NetConnections.cs)
 
 ## Using it
 

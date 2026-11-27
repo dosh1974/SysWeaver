@@ -814,7 +814,10 @@ namespace SysWeaver.Docs
                 return GenericParameter + t.GenericParameterPosition;
             if (t.IsGenericType)
             {
-                var r = String.Join('.', t.Namespace, t.Name).Split('`')[0];
+                var dt = t.DeclaringType;
+                var r = ((dt != null) && !dt.IsGenericType)
+                    ? String.Concat(dt.FullName, ".", t.Name.Split('`')[0])
+                    : String.Join('.', t.Namespace, t.Name).Split('`')[0];
                 r += '{';
                 r += String.Join(',', t.GenericTypeArguments.Select(x => GetParamaterTypeSig(x)));
                 r += '}';
@@ -834,22 +837,36 @@ namespace SysWeaver.Docs
 
 
 
-        static bool TryFindType(out Type t, out String typeName, String[] names, Assembly asm)
+        /// <summary>
+        /// Resolve a type from the dot separated parts of a documentation id (ex: "Ns.Outer.Inner.Leaf"), where any number of the trailing parts can be nested types.
+        /// </summary>
+        /// <param name="t">The type found, or null.</param>
+        /// <param name="typeName">The reflection name of the type found ("Ns.Outer+Inner+Leaf"), or the last name tried.</param>
+        /// <param name="names">The dot separated parts.</param>
+        /// <param name="count">The number of parts (from the start) that names the type.</param>
+        /// <param name="asm">The assembly that defines the type.</param>
+        /// <returns>True if the type was found.</returns>
+        static bool TryResolveType(out Type t, out String typeName, String[] names, int count, Assembly asm)
         {
-            var nl = names.Length;
-            typeName = String.Concat(String.Join('.', names, 0, nl - 1), ", ", asm.FullName);
-            t = Type.GetType(typeName, false);
-            if (t == null)
+            t = null;
+            typeName = null;
+            if (count <= 0)
+                return false;
+            //  Fewest nesting levels first: "Ns.Outer.Inner", then "Ns.Outer+Inner", then "Ns+Outer+Inner" ...
+            for (int split = count; split > 0; --split)
             {
-                if (nl <= 2)
-                    return false;
-                typeName = String.Concat(String.Join('.', names, 0, nl - 2), '+', names[nl - 2], ", ", asm.FullName);
-                t = Type.GetType(typeName, false);
-                if (t == null)
-                    return false;
+                typeName = split == count
+                    ? String.Join('.', names, 0, count)
+                    : String.Concat(String.Join('.', names, 0, split), "+", String.Join('+', names, split, count - split));
+                t = asm.GetType(typeName, false);
+                if (t != null)
+                    return true;
             }
-            return true;
+            return false;
         }
+
+        static bool TryFindType(out Type t, out String typeName, String[] names, Assembly asm)
+            => TryResolveType(out t, out typeName, names, names.Length - 1, asm);
 
         /// <summary>
         /// Loads (once) and parses the documentation file of an assembly. Parse errors are swallowed, keeping what was parsed so far.
@@ -891,20 +908,9 @@ namespace SysWeaver.Docs
                                         {
                                             case 'T':
                                                 {
-                                                    var typeName = String.Join(", ", tn[1], asm.FullName);
-                                                    var t = Type.GetType(typeName, false);
-                                                    if (t == null)
-                                                    {
-                                                        typeName = tn[1];
-                                                        var i = typeName.LastIndexOf('.');
-                                                        if (i < 0)
-                                                            continue;
-                                                        typeName =  String.Join("+", typeName.Substring(0, i), typeName.Substring(i + 1));
-                                                        typeName = String.Join(", ", typeName, asm.FullName);
-                                                        t = Type.GetType(typeName, false);
-                                                        if (t == null)
-                                                            continue;
-                                                    }
+                                                    var names = tn[1].Split('.');
+                                                    if (!TryResolveType(out var t, out var typeName, names, names.Length, asm))
+                                                        continue;
                                                     types.TryAdd(t, new DocInfo(Read(m, ElementSummary), Read(m, ElementRemarks)));
                                                 }
                                                 break;

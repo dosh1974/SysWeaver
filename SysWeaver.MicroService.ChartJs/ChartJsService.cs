@@ -76,7 +76,10 @@ namespace SysWeaver.MicroService
                 return null;
             if (q.FastIndexOf("://") < 0)
                 q = HttpServerTools.CleanupPaths(context.Prefix + "chart/" + q);
+            //  InternalRead doesn't run a handler that the session may not use (null is returned)
             var data = await context.Server.InternalRead(q, context.Session).ConfigureAwait(false);
+            if (data == null)
+                throw HttpResponseException.Refused("The chart data can't be read: it doesn't exist or you are not allowed to read it");
             var ds = JsonSer.Create<ChartJsConfig>(data.Item1);
             var mem = await s.Export(ds, context).ConfigureAwait(false);
             return mem.Name;

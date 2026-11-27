@@ -4787,6 +4787,12 @@ window.Sw.Sources["core/net.js"] = "sw/core.js";
     const MaxReason = 300;
 
     /**
+     * The header that marks an api call of this site's own pages (HttpServerBase.ApiRequestHeader): the server refuses a signed in api call
+     * that the browser says comes from another site, unless it has this header (cross site request forgery protection).
+     */
+    const ApiHeader = "X-Sw-Api";
+
+    /**
      * The server's reason in an error body, when it is text for people: plain text (or a JSON { Reason | Message | message | error }),
      * at most MaxReason characters, not HTML, not a stack trace, not just the status phrase. "" otherwise.
      * @param {string} text The body.
@@ -5464,6 +5470,15 @@ window.Sw.Sources["core/net.js"] = "sw/core.js";
                 r.SwWrite = !!write;
                 if (detached)
                     r.SwDetached = true;
+            }
+            catch {
+            }
+            //  The cross site request protection of the server: an api call of this page says so with a header that another site can't
+            //  send (a cross origin request with it needs a preflight that the server never allows). Same origin only, so a request to
+            //  another host doesn't get a preflight.
+            try {
+                if (r.headers && new URL(r.url, location.href).origin === location.origin)
+                    r.headers.set(ApiHeader, "1");
             }
             catch {
             }

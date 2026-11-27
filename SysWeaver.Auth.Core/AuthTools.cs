@@ -263,6 +263,43 @@ namespace SysWeaver.Auth
         public static readonly IReadOnlySet<String> EmptyTokens = new HashSet<String>(StringComparer.Ordinal).Freeze();
 
         /// <summary>
+        /// The token that may give and manage every token (see <see cref="TokensNotHeld(Authorization, IEnumerable{string})"/>)
+        /// </summary>
+        public const String AllTokensToken = "debug";
+
+        /// <summary>
+        /// The tokens that a caller doesn't have itself, and so may not give to an account, nor manage an account that has them
+        /// (the rule against role escalation: an administrator can't make an account more powerful than itself, ex: an "admin" without the
+        /// "usermanagement" token can't give it, and a "usermanagement" user can't disable or reset an "admin" account).
+        /// A caller with the "debug" token has every token. Tokens are compared lower cased, empty ones are ignored.
+        /// </summary>
+        /// <param name="caller">The caller, null has no tokens (internal calls without a caller can't give tokens)</param>
+        /// <param name="tokens">The tokens to give, or the tokens of the account to manage</param>
+        /// <returns>The tokens the caller doesn't have (lower cased, no duplicates), empty if it has them all</returns>
+        public static String[] TokensNotHeld(Authorization caller, IEnumerable<String> tokens)
+        {
+            if (tokens == null)
+                return [];
+            var have = caller?.Tokens;
+            if ((have != null) && have.Contains(AllTokensToken))
+                return [];
+            List<String> res = null;
+            foreach (var x in tokens)
+            {
+                var t = x?.Trim();
+                if (String.IsNullOrEmpty(t))
+                    continue;
+                t = t.FastToLower();
+                if ((have != null) && have.Contains(t))
+                    continue;
+                res ??= new List<String>();
+                if (!res.Contains(t))
+                    res.Add(t);
+            }
+            return res?.ToArray() ?? [];
+        }
+
+        /// <summary>
         /// A token list that no one can fulfill (the result of the "-" requirement), compared by reference in <see cref="AuthExt.IsValid(Authorization, IReadOnlyList{string})"/>.
         /// </summary>
         public static readonly IReadOnlyList<String> NoAuth = [NoAuthToken];

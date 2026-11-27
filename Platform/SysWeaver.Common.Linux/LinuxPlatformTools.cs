@@ -20,7 +20,7 @@ namespace SysWeaver
     /// <see cref="FlushToDisc(SafeHandle)"/> is a no-op. <see cref="MakeDirectoryAccessableToEveryOne(string)"/> uses mode bits and POSIX default ACL's (setfacl).</para>
     /// <para>Failures are counted in an <see cref="ExceptionTracker"/> exposed through <see cref="GetStats"/>.</para>
     /// </remarks>
-    public sealed class LinuxPlatformTools : IPlatformTools
+    public sealed partial class LinuxPlatformTools : IPlatformTools
     {
         /// <summary>
         /// Returns "Linux".

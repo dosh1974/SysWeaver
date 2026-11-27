@@ -703,7 +703,7 @@ html.SwMobile[data-theme="pro"] {
     .sw-card-rich :is(h3, dd, .sw-card-sub, .sw-card-text, .sw-card-more > :not(summary), .sw-card-lead-figure),
     .sw-ph-desc, .sw-ph-status, .sw-empty-text, .sw-empty.sw-error .sw-empty-title, .sw-state-text, .sw-state.sw-error .sw-state-title,
     .sw-field-hint, .sw-text-error, .sw-ctl-status, .sw-form-status, .sw-prop-help, .sw-prop-error, .sw-prop-hintpart,
-    .sw-cell-confirm, .sw-cell-img-text, .sw-denied-text, .sw-denied-reason, .sw-working-text, .sw-dialog-progress-time,
+    .sw-cell-confirm, .sw-cell-img-text, .sw-cell-icon-text, .sw-denied-text, .sw-denied-reason, .sw-working-text, .sw-dialog-progress-time,
     .sw-serverblock-text, .sw-serverblock-time, .sw-serverblock-note) {
     user-select: text;
     -webkit-user-select: text;
@@ -5694,6 +5694,32 @@ a.sw-link.sw-link-ext.sw-link-image .sw-link-ext-icon {
     max-width: 100%;
     vertical-align: middle;
 }
+
+/* The value shown instead of a picture that can't be loaded (cells.js Img): normal text, also inside an image link (line-height 0) */
+.sw-cell-img-text {
+    line-height: normal;
+    vertical-align: middle;
+}
+
+/* An icon before the text of a cell (cells.js CellIcon, ex: the flag of a country / currency / language code). Fixed size: the iso flags
+   are svg files without intrinsic pixel sizes. A failed icon is removed (display none, Sw.FadeSrc), so its margin leaves no gap. */
+.sw-cell-icon {
+    display: inline-block;
+    width: 1.33em;
+    height: 1em;
+    margin-right: 0.35em;
+    object-fit: contain;
+    vertical-align: -0.15em;
+    flex: none;
+}
+
+.sw-cell-iconed {
+    white-space: nowrap;
+}
+
+    .sw-cell-iconed .sw-cell-icon-text {
+        white-space: normal;
+    }
 
 /* Tags (auth tokens, compression formats ...): as the original (owner report 4 #9), a filled pill in the first accent with bold text
    in the page colour (the original: every span in a table cell, --ThemeAcc1 / --ThemeBackground, bold, the input radius); the text is

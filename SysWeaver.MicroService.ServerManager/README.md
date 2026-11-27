@@ -39,6 +39,25 @@ flowchart TB
 - **Self update**: activating a version of the server manager itself is done by a detached script that restores the previous version on any failure (see below)
 - Service verbs have time outs (`VerbTimeoutSeconds`); when activating a version, a service that doesn't uninstall (stop) within `SwapStopTimeoutSeconds` is killed and the activation continues
 - Linux: the execute permission is added to uploaded executables (ELF executables and `#!` scripts, detected by content), the upload format has no file mode
+- **Network monitoring** and **intruder alerts** (see below)
+
+## Network monitoring
+
+The connections are read every `Network.UpdateSeconds` (default 5) with `NetConnections.Get` (SysWeaver.Common: the platform tools give the owning process and, on Windows, the creation time).
+
+- *Network connections* (`NetworkConnectionsTable`, `AdminOps`): every TCP connection and listener and the UDP end points (`Network.IncludeUdp`), like `netstat`: protocol, state, direction (incoming when the local port is listening, else outgoing), the local and remote end point, local / LAN / Internet, the process, the age. Addresses link to information about the address (`TableDataIp`). Internet addresses get location columns when an ip location service (`IIpLocation`) is available (without one the location columns are left out of both tables).
+- *External hosts* (`RemoteHostsTable`, `AdminOps`): the established connections to Internet addresses (local and LAN addresses left out), one row per address: the number of connections, the local and remote ports, the processes, the total and the oldest age, the location and whether it is flagged.
+- Locations are looked up at most `Network.MaxLocationLookups` (4) at a time and cached for `Network.LocationCacheMinutes` (60).
+
+### Intruder alerts
+
+Only when an `IIpLocation` service is available (and `Network.IntruderAlerts`, default true). Every `Network.IntruderCheckSeconds` (10) an Internet address is flagged when it has an established connection older than `Network.IntruderMinSeconds` (30) on a port that isn't allowed, and neither the address nor its country is allowed (an unknown country is never allowed).
+
+- The port of a connection is the local port of an incoming connection and the remote port of an outgoing one, so allowing 443 covers both the web server and browsing.
+- A flagged address is a problem (the *Problems* table of the service manager, source "Intruder alert &lt;ip&gt;"), a warning in the log and an audit entry (group "ServerManager", `ServerManager/IntruderAlert`, a system event without a user). It's reported again after `Network.IntruderRepeatMinutes` (60) while it stays connected.
+- The problem has the buttons *Allow IP*, *Allow port N* (up to two ports) and *Allow country XX*. Allowing the address, its country or all its flagged ports removes the problem.
+- Allow lists: `AllowIp` / `DenyIp` (an address or a network, ex: `1.2.3.0/24`), `AllowPort` / `DenyPort`, `AllowCountry` / `DenyCountry` (ISO 3166 two letter code). They require `Admin` and are audited. The values are stored in the app key value store (`ServerManager.Network.AllowedIps`, `…AllowedPorts`, `…AllowedCountries`).
+- The tables *Allowed addresses*, *Allowed ports* and *Allowed countries* (menu *Administration*; `AllowedIpsTable`, `AllowedPortsTable`, `AllowedCountriesTable`, `AdminOps`): the value, when and by whom it was allowed, and a *Remove* button. Values from the parameters (`Network.AllowedIps`, `Network.AllowedPorts` (default 80 and 443), `Network.AllowedCountries`) are shown as "Service parameters" and can only be removed there (`Deny*` answers 409).
 
 ## Service executable
 
@@ -74,6 +93,7 @@ The script deletes itself, it's log (`SysWeaver_SelfSwap_<ticks>.log`) is kept a
 - [`SelfFolderSwap`](SelfFolderSwap.cs) — the self update script (cmd / bash) generation and launch
 - [`ServerManagerParams`](ServerManagerParams.cs) — service folder, managed services and folders, text files, hosts access
 - [`ManagedService`](ManagedService.cs) — configuration of one managed service
+- [`ServerManagerService.Network`](ServerManagerService.Network.cs) — the network monitoring, the intruder alerts, the allow lists and their APIs and tables; [`SmNetworkParams`](SmNetworkParams.cs) — its parameters (`ServerManagerParams.Network`)
 
 ## Using it
 
@@ -97,6 +117,8 @@ The script deletes itself, it's log (`SysWeaver_SelfSwap_<ticks>.log`) is kept a
 - Killing the processes of a service that doesn't stop (activation and self update) matches the executable path of the processes and the command line arguments (`dotnet /opt/svc/Svc.dll`, `dotnet C:\Svc\Svc.dll`); only fully qualified paths are matched, a relative argument (`dotnet Svc.dll` started in the folder) isn't.
 - Windows: a killed SysWeaver service is restarted by the service control manager after `RestartDelaySeconds` (default 2 minutes, the swap is done long before that; the new version is then already running so the restart does nothing).
 - Linux: before killing, the systemd units of the matched processes are stopped with `systemctl stop --no-block` so that `Restart=` doesn't restart them while the folders are swapped (the unit of the server manager / the script is never stopped, user managers and login sessions are skipped). The new version's `start` (or the rollback) starts the unit again.
+- Linux doesn't tell when a connection was created: the age of a connection is counted from when it was first seen (right after a start every connection is young, so it takes `Network.IntruderMinSeconds` before anything is flagged).
+- The intruder alerts are a heuristic for a server that only should have connections on known ports: they don't block anything (see the probe trap and the intrusion detection of [SysWeaver.HttpServer](../SysWeaver.HttpServer/README.md) for that).
 - The self update script is tested with a fake service on Windows and with the bash logic in Git Bash, `systemd-run` itself needs a test on a real Linux host.
 
 ## Folder layout

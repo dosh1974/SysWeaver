@@ -23,7 +23,7 @@ namespace SysWeaver
     /// <para>The type initializer creates the performance counter and the constructor queries WMI; if the counter can't be created <see cref="GetCpuUsage(out double)"/> returns false,
     /// and if WMI fails <see cref="OsFriendlyName"/> falls back to <see cref="RuntimeInformation.OSDescription"/>.</para>
     /// </remarks>
-    public sealed class WindowsPlatformTools : IPlatformTools
+    public sealed partial class WindowsPlatformTools : IPlatformTools
     {
         /// <summary>
         /// Returns "Windows".

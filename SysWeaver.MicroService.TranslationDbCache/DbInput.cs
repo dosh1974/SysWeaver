@@ -51,7 +51,7 @@ namespace SysWeaver.MicroService
         [StringLength(8)]
         [Ascii]
         [Required]
-        [TableDataIsoLanguageImage]
+        [TableDataIsoLanguage]
         public String From { get; set; }
 
         /// <summary>
@@ -71,7 +71,7 @@ namespace SysWeaver.MicroService
         [StringLength(8)]
         [Ascii]
         [Required]
-        [TableDataIsoLanguageImage]
+        [TableDataIsoLanguage]
         public String To { get; set; }
 
         /// <summary>

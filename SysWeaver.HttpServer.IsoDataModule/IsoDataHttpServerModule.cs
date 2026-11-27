@@ -14,8 +14,8 @@ namespace SysWeaver.Net.IsoDataModule
 {
     /// <summary>
     /// Publishes the ISO reference data of SysWeaver.IsoData to the web: the generated scripts iso_data/languages.js, countries.js,
-    /// currencies.js and phone_prefixes.js, the flag urls iso_data/country/..., iso_data/language/... and iso_data/phone_prefix/...
-    /// (the flags of the icon module, else iso_data/icons/unknown.svg), and the debug tables of the data.
+    /// currencies.js and phone_prefixes.js, the flag urls iso_data/country/..., iso_data/language/..., iso_data/phone_prefix/...
+    /// and iso_data/currency/... (the flag of the country using the currency) (the flags of the icon module, else iso_data/icons/unknown.svg), and the debug tables of the data.
     /// </summary>
     public sealed class IsoDataHttpServerModule : IHttpServerModule
     {
@@ -654,6 +654,49 @@ namespace SysWeaver.Net.IsoDataModule
             return new String(b);
         }
 
+        /// <summary>
+        /// The flag of a currency: the flag of the (biggest) country using it (<see cref="IsoCurrency.Country"/>, "EU" for the Euro), else the unknown icon
+        /// </summary>
+        /// <param name="name">The ISO 4217 code followed by an extension, ex: "sek.svg"</param>
+        IHttpRequestHandler HandleCurrency(ReadOnlySpan<Char> name)
+        {
+            if (name.SequenceEqual("explore"))
+                return null;
+            name = RemoveExtension(name);
+            var cur = IsoCurrency.TryGet(name.ToString());
+            var cc = cur?.Country;
+            if (String.IsNullOrEmpty(cc))
+                return Unknown;
+            return GetFlag(cc) ?? Unknown;
+        }
+
+        IEnumerable<IHttpServerEndPoint> EnumCurrencies()
+        {
+            foreach (var x in IsoCurrency.Currencies)
+            {
+                var cc = x.Country;
+                if (String.IsNullOrEmpty(cc))
+                    continue;
+                IHttpServerEndPoint t = GetFlag(cc);
+                if (t != null)
+                    yield return new HttpServerEndPoint(
+                        String.Concat("iso_data/currency/", x.Iso4217.FastToLower(), ".svg"),
+                        t.Method,
+                        t.ClientCacheDuration,
+                        t.RequestCacheDuration,
+                        t.CompPreference,
+                        t.PreCompressed,
+                        t.Auth,
+                        t.Type,
+                        String.Concat("[Internal redirect] => ", t.Uri, " @ ", t.Location), t.Size,
+                        t.LastModified,
+                        t.ETag,
+                        t.Mime,
+                        null
+                        );
+            }
+        }
+
         IHttpRequestHandler HandlePhonePrefix(ReadOnlySpan<Char> name)
         {
             if (name.SequenceEqual("explore"))
@@ -786,6 +829,8 @@ namespace SysWeaver.Net.IsoDataModule
                 return HandleLanguage(url.Slice(9));
             if (url.StartsWith("phone_prefix/"))
                 return HandlePhonePrefix(url.Slice(13));
+            if (url.StartsWith("currency/"))
+                return HandleCurrency(url.Slice(9));
             return null;
         }
 
@@ -798,6 +843,7 @@ namespace SysWeaver.Net.IsoDataModule
         static readonly IHttpServerEndPoint CountryFolder = new HttpServerEndPoint("iso_data/country", ImpLocation, AsmTime, AsmETag);
         static readonly IHttpServerEndPoint LanguageFolder = new HttpServerEndPoint("iso_data/language", ImpLocation, AsmTime, AsmETag);
         static readonly IHttpServerEndPoint PhonePrefixFolder = new HttpServerEndPoint("iso_data/phone_prefix", ImpLocation, AsmTime, AsmETag);
+        static readonly IHttpServerEndPoint CurrencyFolder = new HttpServerEndPoint("iso_data/currency", ImpLocation, AsmTime, AsmETag);
 
 
 
@@ -810,11 +856,14 @@ namespace SysWeaver.Net.IsoDataModule
                 yield return CountryFolder;
                 yield return LanguageFolder;
                 yield return PhonePrefixFolder;
+                yield return CurrencyFolder;
                 foreach (var x in EnumCountries())
                     yield return x;
                 foreach (var x in EnumLanguages())
                     yield return x;
                 foreach (var x in EnumPhonePrefixes())
+                    yield return x;
+                foreach (var x in EnumCurrencies())
                     yield return x;
             }
             else
@@ -826,6 +875,7 @@ namespace SysWeaver.Net.IsoDataModule
                         yield return CountryFolder;
                         yield return LanguageFolder;
                         yield return PhonePrefixFolder;
+                        yield return CurrencyFolder;
                     }
                     else
                     {
@@ -846,6 +896,11 @@ namespace SysWeaver.Net.IsoDataModule
                                 if (root.FastEquals("phone_prefix/"))
                                 {
                                     foreach (var x in EnumPhonePrefixes())
+                                        yield return x;
+                                }
+                                else if (root.FastEquals("currency/"))
+                                {
+                                    foreach (var x in EnumCurrencies())
                                         yield return x;
                                 }
                             }

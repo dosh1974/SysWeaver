@@ -3959,6 +3959,8 @@
      * data-sw-useevent (iframes: wait for the framed page's PageLoaded message instead of the load event).
      * Note: the inline opacity / visibility of the animated element are overridden, style a parent instead.
      * @param {HTMLImageElement|HTMLIFrameElement} e The element.
+     * An image that fails to load without ShowError is collapsed (display none and class sw-img-failed, so it takes no space and its
+     * margin / padding don't leave a gap) until its src changes.
      * @param {object} [o] Options: { ShowError (images: show the broken image on errors), FadeIn, FadeDelay, Channel, Parent, UseEvent }.
      * @returns {HTMLElement} The element.
      */
@@ -3982,6 +3984,7 @@
             ShowError: !!o.ShowError,
             Style: target.style,
             Count: 0,
+            Collapsed: false,
             Channel: null,
             Index: 0,
             Anim: 0,
@@ -4006,13 +4009,26 @@
         e.SwFade = f;
         /** Load event: reveal the element. */
         const onLoad = () => fadeReveal(e);
-        /** Error event: stop listening; show the broken image when ShowError. */
+        /** Error event: stop listening; show the broken image when ShowError, else collapse the image (no empty gap, padding or margin where it was). */
         const onError = () => {
             f.Stop();
             leaveChannel(e);
             if (f.ShowError) {
                 f.Style.opacity = "";
                 f.Style.visibility = "";
+            }
+            else if (isImg && !f.Collapsed) {
+                f.Collapsed = true;
+                e.classList.add("sw-img-failed");
+                e.style.display = "none";
+            }
+        };
+        /** A new source: the image is shown again (it may load). */
+        const uncollapse = () => {
+            if (f.Collapsed) {
+                f.Collapsed = false;
+                e.classList.remove("sw-img-failed");
+                e.style.display = "";
             }
         };
         /** Message from the framed page: PageLoaded (from this iframe only) reveals it. */
@@ -4045,6 +4061,7 @@
         try {
             f.Obs = new MutationObserver(() => {
                 f.Stop();
+                uncollapse();
                 hide();
                 listen();
             });

@@ -68,40 +68,23 @@ namespace SysWeaver.MicroService
         [WebApiAudit(AuditGroup)]
         public async Task<bool> InviteUser(InviteUserRequest r, HttpServerRequest context)
         {
-            //  Get validated tokens
+            //  The roles of the new account: only the ones the inviter has itself (no role escalation, "debug" has every role)
             String[] authTokens = null;
             if (r.Tokens != null)
             {
-                var a = context?.Session?.Auth?.Tokens;
-                if (a != null)
+                var missing = AuthTools.TokensNotHeld(context?.Session?.Auth, r.Tokens);
+                if (missing.Length > 0)
+                    throw HttpResponseException.Refused(String.Concat("You can't give the ", missing.Length == 1 ? "role " : "roles ", String.Join(", ", missing.Select(x => x.ToQuoted())),
+                        ": your account doesn't have ", missing.Length == 1 ? "it" : "them"), 403);
+                var temp = new HashSet<String>(StringComparer.Ordinal);
+                foreach (var t in r.Tokens)
                 {
-                    var isDebug = a.Contains("debug");
-                    var isAdmin = a.Contains("admin");
-                    var temp = new HashSet<String>(StringComparer.Ordinal);
-                    foreach (var t in r.Tokens)
-                    {
-                        var tt = t?.FastTrimToLower();
-                        if (tt == null)
-                            continue;
-                        if (a.Contains(tt))
-                        {
-                            temp.Add(tt);
-                            continue;
-                        }
-                        if (isDebug)
-                        {
-                            temp.Add(tt);
-                            continue;
-                        }
-                        if (isAdmin)
-                        {
-                            if (!tt.FastEquals("debug"))
-                                temp.Add(tt);
-                        }
-                    }
-                    if (temp.Count > 0)
-                        authTokens = temp.ToArray();
+                    var tt = t?.FastTrimToLower();
+                    if (!String.IsNullOrEmpty(tt))
+                        temp.Add(tt);
                 }
+                if (temp.Count > 0)
+                    authTokens = temp.ToArray();
             }
             //  Validate target
             var target = r.Email?.Trim();
@@ -234,6 +217,8 @@ namespace SysWeaver.MicroService
                     return res;
                 res.Found = true;
                 res.UserName = user.UserName;
+                //  No reset of an account with roles the caller doesn't have (ex: a "UserManagement" user and an "Admin" account)
+                await RefuseMorePowerfulAccount(c, context, userId, user.UserName, "force a password reset on").ConfigureAwait(false);
                 var pwd = await c.FirstOrDefaultAsync<DbAuthPassword>(x => x.UserId == userId).ConfigureAwait(false);
                 //  The placeholder of GetSaltAsync (empty hash) is no password
                 if (!IsUsablePassword(pwd))
@@ -436,8 +421,14 @@ namespace SysWeaver.MicroService
                 var b = System.Text.Encoding.ASCII.GetBytes(x.Item2.CancelToken);
                 if (!System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(a, b))
                     continue;
+                //  x.Item1 is the stored key of the action (already an ActionKey), so it's deleted as is (DeleteAction takes the token and hashes it)
+                var key = x.Item1;
+                int n;
                 using (var c = await DbGetAsync().ConfigureAwait(false))
-                    await DeleteAction(c, x.Item1, DbAction.CreateUser, null, false).ConfigureAwait(false);
+                    n = await c.DeleteAllAsync<DbAction>(y => y.Token == key && y.Type == DbAction.CreateUser).ConfigureAwait(false);
+                if (n <= 0)
+                    break;
+                MarkDeadKey(key, CauseUsed);
                 var by = LogActor(context);
                 Manager.AddMessage(MessageLevels.Info, $"An invitation was cancelled by \"{by}\"");
                 return true;

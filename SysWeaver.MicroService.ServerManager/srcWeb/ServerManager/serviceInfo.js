@@ -10,8 +10,8 @@
  *    that don't apply to the current state disabled with the reason, as on the original page; Kill as a danger outline with a confirmation),
  *  - Sw.Facts: the facts strip (Process ID, Executable, Total CPU time) instead of the old state pills; the executable opens a menu
  *    to select it (ExeMenu: "Automatic" or one of the executables found in the active folder),
- *  - Sw.Kpi: CPU and memory tiles with meters (a click opens the metric page),
- *  - Sw.Card: the CPU / memory charts (SmShared.ChartTile of GetServiceCpuChart / GetServiceMemChart, as the original page),
+ *  - Sw.Kpi: CPU and memory tiles with meters (a click opens the metric page; the memory meter is the percentage of the memory in
+ *    use on the computer, SmServiceDetail.MemUsagePercent, the value of the memory chart GetServiceMemChart),
  *  - Sw.Card: "Files" (folders, log; Explore / View log / Deleted files), "Active configuration" and "Master configuration" (row lists
  *    with an upload button in the card head, a row menu) and "Versions" (row list; a row opens versionInfo.html).
  *
@@ -22,7 +22,7 @@
  * 4 s on the server), the verbs Restart, Pause, Continue, Stop, Start, Uninstall, Kill (name -> SmServiceDetail),
  * SelectExe ({ServiceName, ExeName}, an empty name = automatic -> SmServiceDetail),
  * ActivateConfig, UseMasterConfig, DeleteConfig ({ServiceName, Config, IsMaster} -> bool); upload repos
- * `Current_<svc>` and `Master_<svc>`; the chart tiles GetServiceCpuChart / GetServiceMemChart (?"<svc>"). The same requests as the original page.
+ * `Current_<svc>` and `Master_<svc>`.
  *
  * Globals defined: `serviceInfoMain`, `SmServiceInfo` (the page class), `smIsConfigBackup`.
  */
@@ -106,14 +106,6 @@ class SmServiceInfo {
     }
 
     /**
-     * Open the metric detail page of the cpu ("Cpu") or memory ("Mem") use.
-     * @param {string} kind - "Cpu" or "Mem".
-     */
-    OpenMetrics(kind) {
-        Sw.Page.Navigate(this.MetricsUrl(kind), "_self");
-    }
-
-    /**
      * @returns {string} The page title ("Service - <name>").
      */
     Title() {
@@ -147,24 +139,13 @@ class SmServiceInfo {
         });
         el.Tot = el.Facts.Add({ Label: _TF("Total CPU time", "Label of the service total cpu time in the facts strip"), Value: "", Title: _TF("The processor time the service process has used since it started (all cores added)", "Tool tip of the service total cpu time in the facts strip of the service info page") });
 
-        //  The memory tile has no meter: the original page shows the memory use alone (no request for the server memory size)
+        //  Both meters are percentages: the cpu of all processors, the memory of the memory in use on the computer (as the memory chart)
         const kpi = (kind, label, icon, title) => Sw.Kpi({
-            Label: label, Icon: icon, Unit: kind === "Cpu" ? "%" : "", Meter: kind === "Cpu" ? { Max: 100, Warn: 0.8, Danger: 0.92 } : undefined, Span: 6,
+            Label: label, Icon: icon, Unit: kind === "Cpu" ? "%" : "", Meter: { Max: 100, Warn: 0.8, Danger: 0.92 }, Span: 6,
             Href: t.ViewOnly ? null : t.MetricsUrl(kind), Title: t.ViewOnly ? title : SmShared.Lines(title, "", showDetails),
         });
         el.Cpu = kpi("Cpu", _TF("CPU", "Label of the cpu use tile of the service page"), "cpu", _TF("Current cpu usage.", "Tool tip of the service cpu usage"));
         el.Mem = kpi("Mem", _TF("Memory", "Label of the memory use tile of the service page"), "memory", _TF("Current memory usage.", "Tool tip of the service memory usage"));
-
-        //  The cpu and memory charts of the original page (GetServiceCpuChart / GetServiceMemChart in chart tiles, the same requests); a click opens
-        //  the metric page (not in view only mode)
-        const chart = (kind, title) => Sw.Card({
-            Title: title, Span: 6, Flush: true, Class: "sm-linecard si-chartcard",
-            Body: SmShared.ChartTile({
-                Api: "GetService" + kind + "Chart" + t.Arg, Extra: "&aspect=false",
-                Title: kind === "Cpu" ? _TF("Show cpu usage details", "Tool tip of the cpu chart of the service page") : _TF("Show memory usage details", "Tool tip of the memory chart of the service page"),
-                OnClick: t.ViewOnly ? null : () => t.OpenMetrics(kind),
-            }),
-        });
 
         //  Files: folders and the log (Explore / View log / Deleted files)
         el.FileFacts = Sw.Facts({ Card: false, Label: _TF("Files", "Accessible name of the file facts of the service page") });
@@ -191,9 +172,6 @@ class SmServiceInfo {
 
         t.Page.Add(el.Facts,
             Sw.Grid({ Label: _TF("Resource use", "Accessible name of the KPI tiles of the service page"), Content: [el.Cpu, el.Mem] }),
-            Sw.Grid({ Label: _TF("Charts", "Accessible name of the service chart area"), Content: [
-                chart("Cpu", _TF("CPU use", "Title of the cpu chart of the service page")),
-                chart("Mem", _TF("Memory use", "Title of the memory chart of the service page"))] }),
             Sw.Grid({ Content: [el.Files, el.Configs, el.Master, el.Versions] }));
         t.Located = located;
     }
@@ -578,10 +556,16 @@ class SmServiceInfo {
         el.Exe.SetTitle(SmShared.Lines(...exeLines));
         el.Tot.Set(noProc ? "-" : Sw.Format.TimeSpan(d.TotalProcessorTime));
         const cpu = +d.CpuUsage || 0;
-        el.Cpu.Set({ Value: noProc ? "-" : cpu.toFixed(1), MeterValue: noProc ? 0 : cpu });
+        el.Cpu.Set({ Value: noProc ? "-" : cpu.toFixed(2), MeterValue: noProc ? 0 : cpu });
         SmShared.KpiSub(el.Cpu, noProc ? _TF("Not running", "Context line of the cpu / memory tile of a service without a process") : _TF("Of all processors", "Context line of the cpu tile of the service page"));
         const mem = +d.MemUsage || 0;
-        el.Mem.Set({ Value: noProc ? "-" : Sw.Format.Bytes(mem, 1), Sub: noProc ? _TF("Not running", "Context line of the cpu / memory tile of a service without a process") : _TF("Working set", "Context line of the memory tile of the service page") });
+        const memP = +d.MemUsagePercent || 0;
+        el.Mem.Set({
+            Value: noProc ? "-" : Sw.Format.Bytes(mem, 1), MeterValue: noProc ? 0 : memP,
+            Sub: noProc
+                ? _TF("Not running", "Context line of the cpu / memory tile of a service without a process")
+                : _T("Working set, {0} % of the memory in use", memP.toFixed(2), "Context line of the memory tile of the service page.{0} is replaced with the percentage of the memory in use on the computer that the service uses"),
+        });
 
         const located = t.Located;
         el.CurFolder.Set(d.CurrentFolder || "-");

@@ -95,6 +95,7 @@ namespace SysWeaver.ExchangeRate
             /// </summary>
             [TableDataIsoCountryImage]
             [TableDataOrder(1)]
+            [TableDataHide]
             public String Flag => Country;
 
             /// <summary>

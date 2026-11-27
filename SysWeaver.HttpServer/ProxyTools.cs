@@ -185,51 +185,48 @@ namespace SysWeaver.Net
             Byte[] data = null;
             if (m == HttpServerMethods.POST)
                 data = await r.InputStream.ReadAllBytesAsync().ConfigureAwait(false);
-            var headers = ProxyTools.EncodeHeaders(r.AllReqHeaders);
-            var hl = headers.Length;
+            var inHeaders = ProxyTools.EncodeHeaders(r.AllReqHeaders);
+            var hl = inHeaders.Length;
             var pl = prefixLength ?? r.Host.Len;
             //  The address of the connection is added to X-Forwarded-For, so the server behind the proxy knows the client (see
-            //  HttpServerRequest.GetIpAddress / HttpServerBaseParams.TrustedProxies)
+            //  HttpServerRequest.GetIpAddress / HttpServerBaseParams.TrustedProxies).
+            //  The forwarding headers of the request are only kept when the connection is a trusted proxy itself (it says what the client used),
+            //  else they come from the client and are replaced (a server behind this proxy that reads them from the left can't be fooled).
             var peer = r.GetIP();
             var peerText = peer == null ? null : (peer.IsIPv4MappedToIPv6 ? peer.MapToIPv4().ToString() : peer.ToString());
-            bool haveXff = false;
-            bool haveProto = false;
+            var fromProxy = (peer != null) && (r.Server?.IsTrustedProxy(peer) ?? false);
+            var headers = new List<String>(hl + 2);
+            String xff = null;
             for (int i = 0; i < hl; ++i)
             {
-                var h = headers[i];
-                if (h.StartsWith("X-Forwarded-Proto:", StringComparison.OrdinalIgnoreCase))
-                {
-                    //  Set by a proxy in front of this one: kept (the first proxy knows what the client used)
-                    haveProto = true;
+                var h = inHeaders[i];
+                //  The standard "Forwarded" header is never passed on (it isn't written by this proxy, so a client could choose what it says),
+                //  and "X-Forwarded-Proto" is written below
+                if (h.StartsWith("Forwarded:", StringComparison.OrdinalIgnoreCase) || h.StartsWith("X-Forwarded-Proto:", StringComparison.OrdinalIgnoreCase))
                     continue;
-                }
                 if (h.StartsWith("Referer:", StringComparison.OrdinalIgnoreCase))
                 {
                     //  One allocation (an invalid prefix length throws the same exception as before)
                     var t = h.AsSpan(8).Trim();
-                    headers[i] = ((uint)pl <= (uint)t.Length) ? String.Concat("Referer:", t.Slice(pl)) : ("Referer:" + h.Substring(8).Trim().Substring(pl));
+                    headers.Add(((uint)pl <= (uint)t.Length) ? String.Concat("Referer:", t.Slice(pl)) : ("Referer:" + h.Substring(8).Trim().Substring(pl)));
                     continue;
                 }
-                if ((peerText != null) && h.StartsWith("X-Forwarded-For:", StringComparison.OrdinalIgnoreCase))
+                if (h.StartsWith("X-Forwarded-For:", StringComparison.OrdinalIgnoreCase))
                 {
-                    var prev = h.Substring(16).Trim();
-                    headers[i] = String.IsNullOrEmpty(prev) ? ("X-Forwarded-For:" + peerText) : String.Concat("X-Forwarded-For:", prev, ", ", peerText);
-                    haveXff = true;
+                    if (fromProxy)
+                        xff = h.Substring(16).Trim();
+                    continue;
                 }
+                headers.Add(h);
             }
-            if ((peerText != null) && !haveXff)
-            {
-                Array.Resize(ref headers, hl + 1);
-                headers[hl] = "X-Forwarded-For:" + peerText;
-                ++hl;
-            }
-            //  Tells the server behind the proxy if the client used https (secure cookies when the proxy ends the TLS, see HttpServerRequest.IsHttps)
-            if (!haveProto)
-            {
-                Array.Resize(ref headers, hl + 1);
-                headers[hl] = r.IsHttps ? "X-Forwarded-Proto:https" : "X-Forwarded-Proto:http";
-            }
-            return new ProxyData(m, headers, data);
+            if (peerText != null)
+                headers.Add(String.IsNullOrEmpty(xff) ? ("X-Forwarded-For:" + peerText) : String.Concat("X-Forwarded-For:", xff, ", ", peerText));
+            else if (!String.IsNullOrEmpty(xff))
+                headers.Add("X-Forwarded-For:" + xff);
+            //  Tells the server behind the proxy if the client used https (secure cookies when the proxy ends the TLS, see HttpServerRequest.IsHttps:
+            //  a proxy in front of this one is believed when it's trusted)
+            headers.Add(r.IsHttps ? "X-Forwarded-Proto:https" : "X-Forwarded-Proto:http");
+            return new ProxyData(m, headers.ToArray(), data);
         }
 
         /// <summary>

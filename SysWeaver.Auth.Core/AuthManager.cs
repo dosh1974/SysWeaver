@@ -274,48 +274,71 @@ namespace SysWeaver.Auth
 
 
         /// <summary>
-        /// Get a deterministic fake salt for an unknown user.
-        /// If all authorizers are <see cref="SimpleAuthorizer"/>'s the salt is computed the same way as for a known user (same format), 
+        /// The user name as used by the fake answers: trimmed and lower cased, as the authorizers look users up
+        /// (else "Bob" and "bob", or "bob" and " bob", got different fake answers while a real user gets the same answer, telling them apart).
+        /// </summary>
+        /// <param name="username">The user name</param>
+        /// <returns>The normalized name</returns>
+        static String FakeName(String username) => (username ?? "").Trim().FastToLower();
+
+        /// <summary>
+        /// Get the authorizer that an unknown user is made to look like (its salt format, SCRAM parameters and password policy are used in the fake answers).
+        /// The choice is deterministic per user name and application: an HMAC of the normalized user name (<see cref="FakeName(string)"/>) keyed with <see cref="FakeSaltKey"/>, the last 3 bytes
+        /// as an integer, modulo the number of authorizers. Repeated questions get the same answer, and nobody can compute which authorizer an unknown
+        /// user maps to (answers from one fixed authorizer would reveal the users of the other authorizers).
+        /// </summary>
+        /// <param name="username">The user name</param>
+        /// <returns>The authorizer, null if there are no authorizers</returns>
+        AuthorizerBase GetFakeAuthorizer(String username)
+        {
+            var a = OrderdAuths;
+            if ((a == null) || (a.Length <= 0))
+                return null;
+            if (a.Length == 1)
+                return a[0];
+            var h = HMACSHA256.HashData(FakeSaltKey, Encoding.UTF8.GetBytes("auth|" + FakeName(username)));
+            var l = h.Length;
+            var v = (h[l - 3] << 16) | (h[l - 2] << 8) | h[l - 1];
+            return a[v % a.Length];
+        }
+
+        /// <summary>
+        /// Get a deterministic fake salt for an unknown user, in the format of the authorizer the user maps to (see <see cref="GetFakeAuthorizer(string)"/>).
+        /// For a <see cref="SimpleAuthorizer"/> the salt is computed the same way as for a known user,
         /// else a 24 char salt is returned (the format used by random salts, <see cref="AuthTools.GetRandomSalt"/>), keyed with
         /// <see cref="FakeSaltKey"/> so that nobody can compute it (an unkeyed hash of the user name told who has an account: a salt that
         /// differs from the computed one is a real one). The key is persisted (see <see cref="FakeSaltKey"/>), so the fake salt is stable across restarts.
         /// </summary>
         /// <param name="username">The user name</param>
+        /// <param name="fake">The authorizer the user maps to</param>
         /// <returns>A fake salt</returns>
-        String GetFakeSalt(String username)
+        static String GetFakeSalt(String username, AuthorizerBase fake)
         {
             //  A different salt format would reveal what users exist
-            var a = OrderdAuths;
-            if ((a != null) && (a.Length > 0) && a.All(x => x is SimpleAuthorizer))
-                return AuthTools.ComputeSimpleSalt(username ?? "", ((SimpleAuthorizer)a[0]).AppHashString);
-            return Convert.ToBase64String(HMACSHA256.HashData(FakeSaltKey, MemoryMarshal.Cast<Char, Byte>((username ?? "").AsSpan())), 0, 18);
+            if (fake is SimpleAuthorizer sa)
+                return AuthTools.ComputeSimpleSalt(username ?? "", sa.AppHashString);
+            return Convert.ToBase64String(HMACSHA256.HashData(FakeSaltKey, MemoryMarshal.Cast<Char, Byte>(FakeName(username).AsSpan())), 0, 18);
         }
 
         /// <summary>
-        /// Get fake SCRAM parameters for an unknown user (same shape as a real answer), null if no authorizer supports SCRAM.
-        /// The salt is keyed with <see cref="FakeSaltKey"/> (stable, nobody can compute it), the iteration count and binding are the defaults of the first SCRAM authorizer.
+        /// Get fake SCRAM parameters for an unknown user (same shape as a real answer), null if the authorizer the user maps to doesn't support SCRAM.
+        /// The salt is keyed with <see cref="FakeSaltKey"/> (stable, nobody can compute it), the iteration count and binding are the defaults of that authorizer.
         /// </summary>
         /// <param name="username">The user name</param>
+        /// <param name="fake">The authorizer the user maps to (see <see cref="GetFakeAuthorizer(string)"/>)</param>
         /// <returns>Fake SCRAM parameters or null</returns>
-        ScramInfo GetFakeScram(String username)
+        static ScramInfo GetFakeScram(String username, AuthorizerBase fake)
         {
-            var a = OrderdAuths;
-            if (a == null)
+            var d = fake?.ScramDefaults;
+            if (d == null)
                 return null;
-            foreach (var x in a)
+            var h = HMACSHA256.HashData(FakeSaltKey, Encoding.UTF8.GetBytes("scram|" + FakeName(username)));
+            return new ScramInfo
             {
-                var d = x.ScramDefaults;
-                if (d == null)
-                    continue;
-                var h = HMACSHA256.HashData(FakeSaltKey, Encoding.UTF8.GetBytes("scram|" + (username ?? "").FastToLower()));
-                return new ScramInfo
-                {
-                    Salt = Convert.ToBase64String(h, 0, ScramTools.SaltSize),
-                    Iterations = d.Iterations,
-                    Binding = d.Binding,
-                };
-            }
-            return null;
+                Salt = Convert.ToBase64String(h, 0, ScramTools.SaltSize),
+                Iterations = d.Iterations,
+                Binding = d.Binding,
+            };
         }
 
         /// <summary>
@@ -353,8 +376,9 @@ namespace SysWeaver.Auth
         /// For unknown users a deterministic fake salt (and fake SCRAM parameters if any authorizer supports SCRAM) is returned, and a random delay is always added, to make user enumeration harder.
         /// </summary>
         /// <param name="username">The user name to auth</param>
-        /// <param name="only">If non-null, only this authorizer is asked (and no fake answer is made if the user is unknown)</param>
-        /// <returns>The salt (null only if <paramref name="only"/> doesn't know the user) and the SCRAM parameters (null if the user must use the legacy login)</returns>
+        /// <param name="only">If non-null, only this authorizer is asked, and an unknown user gets fake parameters shaped like a user of this authorizer
+        /// (a signed in caller can't use it to tell what users of its own authorizer exist)</param>
+        /// <returns>The salt and the SCRAM parameters (null if the user must use the legacy login)</returns>
         public async Task<Tuple<String, ScramInfo>> GetLoginParams(String username, AuthorizerBase only = null)
         {
             String salt = null;
@@ -368,10 +392,11 @@ namespace SysWeaver.Auth
                     break;
                 }
             }
-            if ((salt == null) && (only == null))
+            if (salt == null)
             {
-                salt = GetFakeSalt(username);
-                scram = GetFakeScram(username);
+                var fake = only ?? GetFakeAuthorizer(username);
+                salt = GetFakeSalt(username, fake);
+                scram = GetFakeScram(username, fake);
             }
             await TaskExt.RandomDelay().ConfigureAwait(false);
             return Tuple.Create(salt, scram);
@@ -422,7 +447,7 @@ namespace SysWeaver.Auth
                     break;
             }
             if (salt == null)
-                salt = GetFakeSalt(username);
+                salt = GetFakeSalt(username, GetFakeAuthorizer(username));
             await TaskExt.RandomDelay().ConfigureAwait(false);
             return salt;
         }
@@ -448,7 +473,7 @@ namespace SysWeaver.Auth
                 }
             }
             if (salt == null)
-                salt = GetFakeSalt(username);
+                salt = GetFakeSalt(username, GetFakeAuthorizer(username));
             await TaskExt.RandomDelay().ConfigureAwait(false);
             return Tuple.Create(a, salt);
         }
@@ -673,18 +698,23 @@ namespace SysWeaver.Auth
 
 
         /// <summary>
-        /// Get the password policy for a user (return the policy for the authorizer of the user, or the common policy if the user is unknown).
+        /// Get the password policy for a user: the policy of the authorizer of the user.
+        /// An unknown user gets the policy of the authorizer it maps to (deterministic per user name, see <see cref="GetFakeAuthorizer(string)"/>),
+        /// so the answer doesn't tell a known user from an unknown one (answering unknown users with one fixed policy did, when authorizers have different policies).
+        /// An empty user name gets the common policy (<see cref="CommonPasswordPolicy"/>).
         /// </summary>
         /// <param name="username">The user name to get password policy for</param>
         /// <returns>The password policy</returns>
         public async Task<PasswordPolicy> GetPasswordPolicy(String username)
         {
+            if (String.IsNullOrEmpty(username))
+                return CommonPasswordPolicy;
             foreach (var author in OrderdAuths)
             {
                 if (await author.GetSaltAsync(username).ConfigureAwait(false) != null)
                     return author.PasswordPolicy;
             }
-            return CommonPasswordPolicy;
+            return GetFakeAuthorizer(username)?.PasswordPolicy ?? CommonPasswordPolicy;
         }
 
 

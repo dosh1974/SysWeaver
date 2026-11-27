@@ -8,8 +8,9 @@ namespace SysWeaver.Net
         /// <summary>
         /// A row in the active sessions debug table (<see cref="ActiveSessions"/>), also returned by <see cref="SessionDetails"/>.
         /// </summary>
-        /// <remarks>By default the table shows who (User, Address, UserAgent, Auth), when (Started, LastActivity), the state (Expired) and the
-        /// actions; the other columns are [TableDataHide] (still sent, the user can show them with the column picker).</remarks>
+        /// <remarks>By default the table shows who (User, Address, UserAgent, Auth), when (Started, LastActivity), the state (Expired, Banned) and the
+        /// actions; the other columns are [TableDataHide] (still sent, the user can show them with the column picker).
+        /// The ban columns (probe trap) and intrusion columns are set by <see cref="SetSecurityInfo"/>.</remarks>
         [SysWeaver.Data.TableDataCard("+session@monitoring/cards")]
         [TableDataPrimaryKey(nameof(TokenHash))]
         [TableDataDefaultOrder("-" + nameof(LastActivity))]
@@ -165,20 +166,22 @@ namespace SysWeaver.Net
             /// <summary>
             /// The flag of the language
             /// </summary>
-            [TableDataIsoLanguageImage]
             [TableDataHide]
+            [TableDataIsoLanguage]
             public readonly String Flag;
 
             /// <summary>
             /// The language to use
             /// </summary>
             [TableDataHide]
+            [TableDataIsoLanguage]
             public readonly String Language;
 
             /// <summary>
             /// The client language
             /// </summary>
             [TableDataHide]
+            [TableDataIsoLanguage]
             public readonly String ClientLanguage;
 
             /// <summary>
@@ -193,6 +196,78 @@ namespace SysWeaver.Net
             /// </summary>
             [TableDataUserAgent]
             public readonly String UserAgent;
+
+            /// <summary>
+            /// True if the session or its client address is banned by the probe trap (it asked for a url that only probes ask for, ex: ".env"):
+            /// every request gets a trap answer (a decoy secret file or a decompression bomb)
+            /// </summary>
+            public bool Banned;
+
+            /// <summary>
+            /// When the ban ends (the later of the session and address bans), null if not banned
+            /// </summary>
+            [TableDataHide]
+            public DateTime? BannedUntil;
+
+            /// <summary>
+            /// When the ban of the session ends, null if the session isn't banned
+            /// </summary>
+            [TableDataHide]
+            public DateTime? SessionBannedUntil;
+
+            /// <summary>
+            /// When the ban of the client address ends (see the ip bans table), null if the address isn't banned
+            /// </summary>
+            [TableDataHide]
+            public DateTime? AddressBannedUntil;
+
+            /// <summary>
+            /// True if the client address is never banned (HttpProbeTrapParams.NeverBan, ex: a local reverse proxy), only the session is banned
+            /// </summary>
+            [TableDataHide]
+            public bool NeverBanned;
+
+            /// <summary>
+            /// The probe url that banned the session or the address, null if not banned
+            /// </summary>
+            [TableDataHide]
+            public String BanUrl;
+
+            /// <summary>
+            /// The number of trap answers to the client address while banned, null if the address isn't banned
+            /// </summary>
+            [TableDataHide]
+            public long? TrapAnswers;
+
+            /// <summary>
+            /// The latest trap answer to the client address, ex: "Bomb (br)", "Decoy (EnvFile)", null if none
+            /// </summary>
+            [TableDataHide]
+            public String TrapLastAnswer;
+
+            /// <summary>
+            /// Intrusion detection: the number of different urls with an error response (400, 404 etc) from the client address within the window, null if the address isn't tracked
+            /// </summary>
+            [TableDataHide]
+            public int? IntrusionErrorUrls;
+
+            /// <summary>
+            /// Intrusion detection: the number of calls to tracked API's (sign in etc) from the client address within the window, null if the address isn't tracked
+            /// </summary>
+            [TableDataHide]
+            public long? IntrusionApiCalls;
+
+            /// <summary>
+            /// Intrusion detection: when an intrusion was last reported for the client address (its error responses and tracked API calls are then delayed), null if never (within the window)
+            /// </summary>
+            [TableDataHide]
+            public DateTime? IntrusionReported;
+
+            /// <summary>
+            /// The token needed to lift the ban of the session and its address (see <see cref="SessionLiftBanToken"/>), null if not banned
+            /// </summary>
+            [TableDataIgnore]
+            public String LiftToken;
 
             /// <summary>
             /// The token needed to end the session (see <see cref="SessionEndToken"/>), null for expired sessions, the caller's own session and sessions without a signed in user
@@ -211,20 +286,29 @@ namespace SysWeaver.Net
             /// <summary>
             /// Actions on the session
             /// </summary>
-            //  The value is "endToken,who" ({0} and {2} in the action formats), empty when the session can't be ended here (expired, not signed in, or your own session):
-            //  the action is then hidden, and the request must include the token (so a plain link or GET request can't end a session).
+            //  The value is "endToken,who,liftToken" ({0}, {2} and {3} in the action formats), empty when there is nothing to do.
+            //  The end token is empty when the session can't be ended here (expired, not signed in, or your own session), the lift token when nothing is banned:
+            //  the action is then hidden, and the request must include the token (so a plain link or GET request can't end a session or lift a ban).
             //  End session is final (G47, declared, never guessed from the words): the web table keeps the row muted without actions until the user refreshes.
-            [TableDataActionsFull(new[] { TableDataActionFlags.Final },
+            //  Lift ban is not final (the session stays, the row is re-read).
+            [TableDataActionsFull(new[] { TableDataActionFlags.Final, TableDataActionFlags.None },
     "End session",
     "End this session: the user is signed out on that device and must sign in again",
     "../Api/debug/EndSession?\"{0}\"",
     "../icons/user_logout.svg",
     "End the session of {2}?",
     "{0}",
-    ""
+    "",
+    "Lift ban",
+    "Lift the probe trap ban of this session and its address: they can use the site again (the intrusion detection state of the address is cleared too)",
+    "../Api/debug/LiftSessionBan?\"{3}\"",
+    "../icons/unlock.svg",
+    "Lift the ban of {2}?",
+    "{3}",
+    "The ban of {2} was lifted"
     )]
             [TableDataOrder(100)]
-            public String Actions => EndToken == null ? "" : String.Concat(EndToken, ",", User == null ? "a visitor who is not signed in" : User.Replace(',', ' '));
+            public String Actions => (EndToken == null) && (LiftToken == null) ? "" : String.Concat(EndToken ?? "", ",", User == null ? "a visitor who is not signed in" : User.Replace(',', ' '), ",", LiftToken ?? "");
 
         }
 

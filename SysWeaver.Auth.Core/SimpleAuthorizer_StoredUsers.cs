@@ -9,8 +9,8 @@ namespace SysWeaver.Auth
     /// <summary>
     /// Stored users: users added at run time (web API / the "Users" page), stored encrypted in <see cref="KeyValueStore.AllApp"/> like the API keys.
     /// A stored user has a SCRAM verifier ("$s1$...", made by the "Generate password hash" page or the "hash" verb of the service host) and tokens.
-    /// Managed by users with the <see cref="Roles.Admin"/> tokens ("admin" or "debug"); an "admin" without "debug" can't give the "debug" token,
-    /// and can't change or remove a user that has it.
+    /// Managed by users with the <see cref="Roles.Admin"/> tokens ("admin" or "debug"). A caller may only give the tokens it has itself, and may only change
+    /// or remove a user whose tokens it all has (no role escalation, see <see cref="AuthTools.TokensNotHeld(Authorization, IEnumerable{string})"/>; "debug" has every token).
     /// The users of the configuration and the user file can't be changed here, and a stored user can't replace them.
     /// </summary>
     public sealed partial class SimpleAuthorizer
@@ -31,11 +31,6 @@ namespace SysWeaver.Auth
         /// The auth required to manage the stored users: "admin" or "debug"
         /// </summary>
         const String UserManagementAuth = Roles.Admin;
-
-        /// <summary>
-        /// The token that only a "debug" user may give, change or remove
-        /// </summary>
-        const String DebugToken = "debug";
 
         /// <summary>
         /// A stored user
@@ -67,9 +62,6 @@ namespace SysWeaver.Auth
             }
             return String.Join(',', t);
         }
-
-        static bool HasToken(String normalizedTokens, String token)
-            => (normalizedTokens ?? "").Split(',').Contains(token, StringComparer.Ordinal);
 
         /// <summary>
         /// Read the stored users (decrypted), records that can't be read are skipped (with an error message).
@@ -130,13 +122,22 @@ namespace SysWeaver.Auth
         }
 
         /// <summary>
-        /// True if the caller has the "debug" token (may give, change and remove it)
+        /// The tokens (of a normalized list) that the caller doesn't have: it may not give them, nor change or remove a user that has them
+        /// (see <see cref="AuthTools.TokensNotHeld(Authorization, IEnumerable{string})"/>, a "debug" caller has them all)
         /// </summary>
-        static bool CallerIsDebug(IAuthorizedRequest context)
-            => context?.CallerAuth?.IsValid(DebugToken) ?? false;
+        static String[] NotHeld(IAuthorizedRequest context, String normalizedTokens)
+            => AuthTools.TokensNotHeld(context?.CallerAuth, (normalizedTokens ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries));
 
-        static SysWeaver.Net.HttpResponseException DebugOnly(String what)
-            => SysWeaver.Net.HttpResponseException.Refused(what + ": only a user with the \"" + DebugToken + "\" token may do that", 403);
+        /// <summary>
+        /// Refuse (403) when the caller doesn't have some of the tokens
+        /// </summary>
+        static void RefuseNotHeld(String[] notHeld, String what)
+        {
+            if (notHeld.Length <= 0)
+                return;
+            throw SysWeaver.Net.HttpResponseException.Refused(String.Concat(what, ": you don't have the ", notHeld.Length == 1 ? "token " : "tokens ",
+                String.Join(", ", notHeld.Select(x => x.ToQuoted())), " yourself (only a user that has a token may give it, or change a user that has it)"), 403);
+        }
 
         static Object AuditInputFilter_AddStoredUser(long id, Object obj)
         {
@@ -171,25 +172,24 @@ namespace SysWeaver.Auth
         [WebApiAuth(ManagementAuthDisabled)]
         public StoredUserInfo[] GetStoredUsers(IAuthorizedRequest context = null)
         {
-            var isDebug = CallerIsDebug(context);
             lock (ApiKeyLock)
                 return ReadStoredUserRecords().Select(x => new StoredUserInfo
                 {
                     Name = x.Name,
                     Tokens = x.Tokens,
-                    CanChange = isDebug || !HasToken(x.Tokens, DebugToken),
+                    CanChange = NotHeld(context, x.Tokens).Length == 0,
                 }).ToArray();
         }
 
         /// <summary>
         /// Add a stored user.
-        /// Requires the "admin" or "debug" token, only a "debug" user may give the "debug" token.
+        /// Requires the "admin" or "debug" token, only the tokens the caller has itself may be given.
         /// </summary>
         /// <param name="request">The user line ("username : $s1$...", as made by the "Generate password hash" page or the "hash" verb of the service host) and the tokens (comma separated)</param>
         /// <param name="context">The caller (handled internally by the web api), named in the log line, may be null</param>
         /// <returns>True when added</returns>
         /// <exception cref="ArgumentException">The line, the name, the verifier or the tokens are invalid</exception>
-        /// <exception cref="SysWeaver.Net.HttpResponseException">409 with the reason: a user or API key with that name exists; 403: the "debug" token given by a user without it</exception>
+        /// <exception cref="SysWeaver.Net.HttpResponseException">409 with the reason: a user or API key with that name exists; 403: a token the caller doesn't have itself</exception>
         [WebApi(ApiKeyPath)]
         [WebApiAuth(ManagementAuthDisabled)]
         [WebApiAudit(StoredUserAuditGroup)]
@@ -207,8 +207,7 @@ namespace SysWeaver.Auth
             if (v == null)
                 throw new ArgumentException("Invalid password verifier, expected \"" + ScramVerifier.Prefix + "...\" (from the Generate password hash page)", nameof(request.Auth));
             var tokens = NormalizeUserTokens(request.Tokens);
-            if (HasToken(tokens, DebugToken) && !CallerIsDebug(context))
-                throw DebugOnly("Can't give the \"" + DebugToken + "\" token to " + name.ToQuoted());
+            RefuseNotHeld(NotHeld(context, tokens), "Can't add the user " + name.ToQuoted());
             lock (ApiKeyLock)
             {
                 var r = ReadStoredUserRecords();
@@ -229,12 +228,12 @@ namespace SysWeaver.Auth
 
         /// <summary>
         /// Remove a stored user (the sessions of the user are asked to sign out).
-        /// Requires the "admin" or "debug" token, only a "debug" user may remove a user with the "debug" token.
+        /// Requires the "admin" or "debug" token, only a user whose tokens the caller all has may be removed.
         /// </summary>
         /// <param name="userName">The name of the user</param>
         /// <param name="context">The caller (handled internally by the web api), named in the log line, may be null</param>
         /// <returns>True when removed</returns>
-        /// <exception cref="SysWeaver.Net.HttpResponseException">409 with the reason: there is no stored user with that name; 403: the user has the "debug" token and the caller doesn't</exception>
+        /// <exception cref="SysWeaver.Net.HttpResponseException">409 with the reason: there is no stored user with that name; 403: the user has a token the caller doesn't have</exception>
         [WebApi(ApiKeyPath)]
         [WebApiAuth(ManagementAuthDisabled)]
         [WebApiAudit(StoredUserAuditGroup)]
@@ -247,8 +246,7 @@ namespace SysWeaver.Auth
                 var i = r.FindIndex(x => x.Name.FastEquals(name));
                 if (i < 0)
                     throw SysWeaver.Net.HttpResponseException.Gone("Can't remove the user " + name.ToQuoted() + ": it isn't a stored user (it may already be removed), refresh the list");
-                if (HasToken(r[i].Tokens, DebugToken) && !CallerIsDebug(context))
-                    throw DebugOnly("Can't remove the user " + name.ToQuoted());
+                RefuseNotHeld(NotHeld(context, r[i].Tokens), "Can't remove the user " + name.ToQuoted());
                 r.RemoveAt(i);
                 WriteStoredUserRecords(r);
                 Msg?.AddMessage(MessageLevels.Info, $"{LogPrefix}The user {name.ToQuoted()} was removed by {CallerName(context)}");
@@ -259,13 +257,13 @@ namespace SysWeaver.Auth
 
         /// <summary>
         /// Change the tokens of a stored user (the sessions of the user are asked to sign out).
-        /// Requires the "admin" or "debug" token, only a "debug" user may change a user with the "debug" token or give it.
+        /// Requires the "admin" or "debug" token, only a user whose tokens the caller all has may be changed, and only to tokens the caller has.
         /// </summary>
         /// <param name="request">The user name and the tokens (comma separated)</param>
         /// <param name="context">The caller (handled internally by the web api), named in the log line, may be null</param>
         /// <returns>True when changed</returns>
         /// <exception cref="ArgumentException">The tokens are invalid</exception>
-        /// <exception cref="SysWeaver.Net.HttpResponseException">409 with the reason: there is no stored user with that name; 403: the "debug" token is involved and the caller doesn't have it</exception>
+        /// <exception cref="SysWeaver.Net.HttpResponseException">409 with the reason: there is no stored user with that name; 403: a token (old or new) the caller doesn't have</exception>
         [WebApi(ApiKeyPath)]
         [WebApiAuth(ManagementAuthDisabled)]
         [WebApiAudit(StoredUserAuditGroup)]
@@ -274,17 +272,14 @@ namespace SysWeaver.Auth
             ArgumentNullException.ThrowIfNull(request);
             var name = request.Name?.Trim() ?? "";
             var tokens = NormalizeUserTokens(request.Tokens);
-            var isDebug = CallerIsDebug(context);
-            if (HasToken(tokens, DebugToken) && !isDebug)
-                throw DebugOnly("Can't give the \"" + DebugToken + "\" token to " + name.ToQuoted());
+            RefuseNotHeld(NotHeld(context, tokens), "Can't give the tokens to " + name.ToQuoted());
             lock (ApiKeyLock)
             {
                 var r = ReadStoredUserRecords();
                 var u = r.FirstOrDefault(x => x.Name.FastEquals(name));
                 if (u == null)
                     throw SysWeaver.Net.HttpResponseException.Gone("Can't change the user " + name.ToQuoted() + ": it isn't a stored user (it may be removed), refresh the list");
-                if (HasToken(u.Tokens, DebugToken) && !isDebug)
-                    throw DebugOnly("Can't change the tokens of " + name.ToQuoted());
+                RefuseNotHeld(NotHeld(context, u.Tokens), "Can't change the tokens of " + name.ToQuoted());
                 u.Tokens = tokens;
                 WriteStoredUserRecords(r);
                 Msg?.AddMessage(MessageLevels.Info, $"{LogPrefix}The tokens of the user {name.ToQuoted()} were set to {tokens.ToQuoted()} by {CallerName(context)}");
@@ -312,7 +307,7 @@ namespace SysWeaver.Auth
         public String Tokens { get; set; }
 
         /// <summary>
-        /// True if the caller may change or remove the user (false: the user has the "debug" token and the caller doesn't)
+        /// True if the caller may change or remove the user (false: the user has a token the caller doesn't have)
         /// </summary>
         public bool CanChange { get; set; }
     }

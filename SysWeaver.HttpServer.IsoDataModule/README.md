@@ -26,7 +26,7 @@ flowchart LR
 ## Key features
 
 - Generated client-side scripts `iso_data/languages.js`, `countries.js`, `currencies.js` and `phone_prefixes.js` with the reference data as JavaScript classes.
-- Flag URLs by country (`iso_data/country/<name or code>.svg`), language (`iso_data/language/...`) and phone prefix (`iso_data/phone_prefix/...`), falling back to an "unknown" icon.
+- Flag URLs by country (`iso_data/country/<name or code>.svg`), language (`iso_data/language/...`), phone prefix (`iso_data/phone_prefix/...`) and currency (`iso_data/currency/<ISO 4217 code>.svg`: the flag of the biggest country using it, "EU" for the Euro), falling back to an "unknown" icon.
 - Debug tables (Debug role) of currencies, countries, languages and phone number prefixes under `debug/data`, with menu entries. The country and currency tables have card templates (`iso_data/cards/iso.html`) for the card layout of `Sw.Table`.
 
 ## Key components

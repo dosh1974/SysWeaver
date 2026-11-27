@@ -31,6 +31,7 @@ namespace SysWeaver.MicroService
         /// The flag of the country (if present in the locale)
         /// </summary>
         [TableDataIsoCountryImage]
+        [TableDataHide]
         public readonly String CountryFlag;
 
         public static TranslatorDebugServiceData FromString(String s)

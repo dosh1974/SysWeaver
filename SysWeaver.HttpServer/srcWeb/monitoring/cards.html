@@ -20,6 +20,9 @@
                     <span class="sw-badge sw-info sw-when-on" data-translation_context="Status on the card of a user session: the session has ended">Ended</span>
                     <span class="sw-badge sw-ok sw-when-off" data-translation_context="Status on the card of a user session: the session is active">Active</span>
                 </span>
+                <span data-on="${Banned}">
+                    <span class="sw-badge sw-error sw-when-on" data-translation_context="Status on the card of a user session: the session or its address is banned by the probe trap (it asked for a url that only attackers ask for)">Banned</span>
+                </span>
             </header>
             <dl class="sw-facts">
                 <div><dt data-translation_context="Label on the card of a user session: the time of the last request">Last seen</dt><dd>${+LastActivity}</dd></div>

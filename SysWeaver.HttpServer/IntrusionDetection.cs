@@ -114,6 +114,53 @@ namespace SysWeaver.Net
     }
 
     /// <summary>
+    /// The tracked state of a client address in the intrusion detection (see <see cref="IntrusionDetection.TryGetAddressInfo(string, out IntrusionAddressInfo)"/>).
+    /// The counts start over after each report.
+    /// </summary>
+    public sealed class IntrusionAddressInfo
+    {
+        /// <summary>
+        /// The number of error responses since the last report
+        /// </summary>
+        public long ErrorRequests;
+
+        /// <summary>
+        /// The number of different urls with an error response since the last report (an intrusion is reported at <see cref="ErrorThreshold"/>)
+        /// </summary>
+        public int ErrorUrls;
+
+        /// <summary>
+        /// The number of calls to tracked API's since the last report (an intrusion is reported at <see cref="ApiThreshold"/>)
+        /// </summary>
+        public long ApiRequests;
+
+        /// <summary>
+        /// When an intrusion (errors) was last reported for the address, null if never
+        /// </summary>
+        public DateTime? LastErrorReport;
+
+        /// <summary>
+        /// When an intrusion (api) was last reported for the address, null if never
+        /// </summary>
+        public DateTime? LastApiReport;
+
+        /// <summary>
+        /// See <see cref="IntrusionDetectionParams.ErrorThreshold"/>
+        /// </summary>
+        public int ErrorThreshold;
+
+        /// <summary>
+        /// See <see cref="IntrusionDetectionParams.ApiThreshold"/>
+        /// </summary>
+        public int ApiThreshold;
+
+        /// <summary>
+        /// The latest report, null if never reported
+        /// </summary>
+        public DateTime? LastReport => LastErrorReport > LastApiReport ? LastErrorReport : (LastApiReport ?? LastErrorReport);
+    }
+
+    /// <summary>
     /// The output of the audit entry of an intrusion attempt, see <see cref="IntrusionInfo.GetAuditJson"/>
     /// </summary>
     public sealed class IntrusionAuditOutput
@@ -264,6 +311,41 @@ namespace SysWeaver.Net
             var flagged = (now - Interlocked.Read(ref e.LastReport) < WindowTicks) || (now - Interlocked.Read(ref a.LastReport) < WindowTicks);
             return flagged ? Delay() : Task.CompletedTask;
         }
+
+        /// <summary>
+        /// Get the tracked state of a client address (within the window)
+        /// </summary>
+        /// <param name="addressKey">The address key (<see cref="HttpIpRateLimiters.GetKey(string)"/>)</param>
+        /// <param name="info">The state, null if the address isn't tracked</param>
+        /// <returns>True if the address is tracked</returns>
+        public bool TryGetAddressInfo(String addressKey, out IntrusionAddressInfo info)
+        {
+            info = null;
+            if (String.IsNullOrEmpty(addressKey) || !States.TryGet(addressKey, out var s) || (s == null))
+                return false;
+            var e = s.Errors;
+            var a = s.Api;
+            var er = Interlocked.Read(ref e.LastReport);
+            var ar = Interlocked.Read(ref a.LastReport);
+            info = new IntrusionAddressInfo
+            {
+                ErrorRequests = Interlocked.Read(ref e.Count),
+                ErrorUrls = e.Urls.Count,
+                ApiRequests = Interlocked.Read(ref a.Count),
+                LastErrorReport = er == 0 ? null : new DateTime(er, DateTimeKind.Utc),
+                LastApiReport = ar == 0 ? null : new DateTime(ar, DateTimeKind.Utc),
+                ErrorThreshold = Math.Max(1, P.ErrorThreshold),
+                ApiThreshold = Math.Max(1, P.ApiThreshold),
+            };
+            return true;
+        }
+
+        /// <summary>
+        /// Forget the tracked state of a client address (its error responses and API calls are counted from zero, the delays of a reported address stop)
+        /// </summary>
+        /// <param name="addressKey">The address key (<see cref="HttpIpRateLimiters.GetKey(string)"/>)</param>
+        /// <returns>True if the address was tracked</returns>
+        public bool Forget(String addressKey) => !String.IsNullOrEmpty(addressKey) && States.Remove(addressKey);
 
         Task Delay()
         {

@@ -70,6 +70,11 @@ namespace SysWeaver.MicroService
         public bool CompressServices = true;
 
         /// <summary>
+        /// The network monitoring: the connection tables and the intruder alerts
+        /// </summary>
+        public SmNetworkParams Network = new SmNetworkParams();
+
+        /// <summary>
         /// Where managed services are located, multiple folders can be separated by ";" (path templates are resolved).
         /// If null or empty, "$(CommonApplicationData)/SysWeaver/ManagedServices" is used.
         /// </summary>

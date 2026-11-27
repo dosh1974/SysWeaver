@@ -95,6 +95,7 @@ namespace SysWeaver.Net
         /// Language code of the client
         /// </summary>
         [TableDataHide]
+        [TableDataIsoLanguage]
         public String Language;
 
         /// <summary>

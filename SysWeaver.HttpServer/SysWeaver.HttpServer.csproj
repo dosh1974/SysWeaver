@@ -26,15 +26,23 @@
 	<Target Name="EmbedLocal" BeforeTargets="BeforeBuild">
     <Exec Command="..\_tools\compress\Compress.exe -Methods br .\srcWeb\*+ .\web" />
     <Exec Command="copy /Y .\web\index.html.br .\web\debug.html.br" />
+    <!-- Data files (ex: the probe urls of the probe trap) -->
+    <Exec Command="..\_tools\compress\Compress.exe -OptimizeWebFiles false -Methods br .\srcData\*+ .\data" />
     <ItemGroup>
 			<EmbeddedResource Include="web\**\*.br" Visible="false" />
 			<EmbeddedResource Include="web\**\*.png" Visible="false" />
+			<EmbeddedResource Include="data\**\*.br" Visible="false" />
 		</ItemGroup>
 	</Target>
+  <!-- The pre-compressed responses of the probe trap (written once, not built: see HttpProbeTrap) -->
+  <ItemGroup>
+    <EmbeddedResource Include="trapData\*" Visible="false" />
+  </ItemGroup>
   <!-- The embedded web files are built from srcWeb by the EmbedLocal target: without these inputs the Visual Studio fast up to date
        check skips the build when only web files changed (no C# change), and the old pages stay embedded -->
   <ItemGroup>
     <UpToDateCheckInput Include="srcWeb\**\*" />
+    <UpToDateCheckInput Include="srcData\**\*" />
   </ItemGroup>
 
 </Project>

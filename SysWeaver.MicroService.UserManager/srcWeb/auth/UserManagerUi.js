@@ -1370,7 +1370,7 @@
                     : null);
             };
             //  security tokens as a picker (pressable chips), from the tokens the server lets this user give (InviteUser):
-            //  the user's own tokens; Debug may give every standard role, Admin every standard role but Debug
+            //  the user's own tokens (no role escalation); Debug may give every standard role
             let tokens = null;
             const own = (me.Tokens || []).map(x => String(x).trim()).filter(x => x);
             const lower = own.map(x => x.toLowerCase());
@@ -1383,10 +1383,8 @@
                     names.set(k, known.find(x => x.toLowerCase() === k) || t);
             };
             own.forEach(add);
-            if (lower.includes("debug") || lower.includes("admin"))
-                ["Admin", "Ops", "Dev", "UserManagement"].forEach(add);
             if (lower.includes("debug"))
-                add("Debug");
+                ["Admin", "Ops", "Dev", "UserManagement", "Debug"].forEach(add);
             if (names.size > 0) {
                 const hint = _TF("The new user gets the security tokens (roles) you select. You can only give tokens that you may give.", "Tool tip of the security token picker on the invite user page");
                 const label = Sw.el("span.sw-text-label", { id: "invite-tokens-label", text: _TF("Security tokens", "Label text for an input field where the user can enter auth tokens to give to a new user") });

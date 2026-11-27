@@ -21,7 +21,7 @@ namespace SysWeaver.MicroService
         public String Email { get; set; }
 
         /// <summary>
-        /// Optional security tokens to give the user: tokens the inviter has; an Admin may also give any token except Debug, a Debug user any token; other tokens are left out
+        /// Optional security tokens to give the user: only tokens the inviter has itself (a Debug user may give any token); another token refuses the invitation (403)
         /// </summary>
         public String[] Tokens { get; set; }
 

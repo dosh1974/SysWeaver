@@ -53,6 +53,7 @@ namespace SysWeaver.MicroService.Db
         [Index]
         [Ascii]
         [StringLength(8)]
+        [TableDataIsoLanguage]
         public string Language { get; set; }
 
         /// <summary>

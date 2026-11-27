@@ -128,6 +128,9 @@ namespace SysWeaver.Net
             FirewallHandler = firewallHandler;
             ExternalRootUri = p.ExternalRootUri;
             TrustedProxyNets = ParseTrustedProxies(p.TrustedProxies);
+            var probeTrap = p.ProbeTrap;
+            if (probeTrap != null)
+                ProbeTrap = new ProbeTrapState(this, probeTrap);
             var envVars =new Dictionary<String, String>(StringComparer.OrdinalIgnoreCase);
             foreach (var k in EnvInfo.TextVarsCaseInsensitive)
                 envVars[String.Join(k.Key, '[', ']')] = k.Value;
@@ -148,6 +151,7 @@ namespace SysWeaver.Net
 
             AuthRedirect = p.AuthRedirect;
             AllowAuthorizationAuth = p.AllowAuthorizationAuth;
+            CsrfProtection = p.CsrfProtection;
             LogoutRedirect = p.LogoutRedirect;
             ListenerExceptionType = listenerExceptionType;
             FirstCertRetryMinutes = Math.Max(1, p.FirstCertRetryMinutes);
@@ -196,38 +200,39 @@ namespace SysWeaver.Net
             foreach (var x in StaticVars.Inst.TemplateVariableGroups)
                 varGroups[x.Key] = x.Value;
             //  Forced end-points
-            var feps = new Dictionary<string, Func<HttpServerRequest, HttpSession, ValueTask>>(StringComparer.Ordinal);
-            feps["logout"] = HandleLogout;
-            feps["auth/redirect"] = HandleAuthRedirect;
-            feps["auth/logout_user"] = HandleLogoutUser;
-            feps["serverTime"] = HandleServerTime;
+            //  (an end point may declare rate limits, applied before its handler is called: per client address first, then shared)
+            var feps = new Dictionary<string, HttpInternalEndPoint<Func<HttpServerRequest, HttpSession, ValueTask>>>(StringComparer.Ordinal);
+            feps["logout"] = new(HandleLogout);
+            feps["auth/redirect"] = new(HandleAuthRedirect, HttpEndPointRateLimits.Create(p.AuthRedirectLimits, p.AuthRedirectIpLimits));
+            feps["auth/logout_user"] = new(HandleLogoutUser);
+            feps["serverTime"] = new(HandleServerTime);
 
 
 
-            var oeps = new Dictionary<string, Func<HttpServerRequest, HttpSession, ValueTask<IHttpRequestHandler>>>(StringComparer.Ordinal);
+            var oeps = new Dictionary<string, HttpInternalEndPoint<Func<HttpServerRequest, HttpSession, ValueTask<IHttpRequestHandler>>>>(StringComparer.Ordinal);
 
-            oeps["basic_auth"] = HandleBasicAuth;
-            oeps["login"] = HandleLogin;
-            oeps["icon.svg"] = HandleFaviconSvg;
+            oeps["basic_auth"] = new(HandleBasicAuth);
+            oeps["login"] = new(HandleLogin);
+            oeps["icon.svg"] = new(HandleFaviconSvg);
 
-            oeps["icon_debug.svg"] = HandleFaviconDebugSvg;
-            oeps["favicon.ico"] = HandleFaviconIco;
-            oeps["apple-touch-icon.png"] = HandleFaviconPng180;
-            oeps["icon-180.png"] = HandleFaviconPng180;
-            oeps["icon-192.png"] = HandleFaviconPng192;
-            oeps["icon-512.png"] = HandleFaviconPng512;
+            oeps["icon_debug.svg"] = new(HandleFaviconDebugSvg);
+            oeps["favicon.ico"] = new(HandleFaviconIco);
+            oeps["apple-touch-icon.png"] = new(HandleFaviconPng180);
+            oeps["icon-180.png"] = new(HandleFaviconPng180);
+            oeps["icon-192.png"] = new(HandleFaviconPng192);
+            oeps["icon-512.png"] = new(HandleFaviconPng512);
 
-            oeps["logo.svg"] = HandleLogoSvg;
-            oeps["logo_debug.svg"] = HandleLogoDebugSvg;
-            oeps["logo.png"] = HandleLogoPng1024;
+            oeps["logo.svg"] = new(HandleLogoSvg);
+            oeps["logo_debug.svg"] = new(HandleLogoDebugSvg);
+            oeps["logo.png"] = new(HandleLogoPng1024);
 
-            oeps["banner.svg"] = HandleBannerSvg;
-            oeps["banner_debug.svg"] = HandleBannerDebugSvg;
-            oeps["banner.png"] = HandleBannerPng1260;
+            oeps["banner.svg"] = new(HandleBannerSvg);
+            oeps["banner_debug.svg"] = new(HandleBannerDebugSvg);
+            oeps["banner.png"] = new(HandleBannerPng1260);
 
 
-            oeps["app/app.css"] = HandleEmpty;
-            oeps["app/app.js"] = HandleEmpty;
+            oeps["app/app.css"] = new(HandleEmpty);
+            oeps["app/app.js"] = new(HandleEmpty);
 
 
             ForcedEndPoints = feps.Freeze();
@@ -892,7 +897,8 @@ namespace SysWeaver.Net
         async Task<Tuple<ReadOnlyMemory<Byte>, String, IHttpRequestHandler, HttpServerRequest>> InternalRead(IHttpRequestHandler h, HttpServerRequest data, String ifNoneMatch = null)
         {
             var etag = h.GetEtag(out var useAsync, data);
-            if (etag.FastEquals(ifNoneMatch))
+            //  Only a given etag can match (a handler without an etag, ex: an API, must not be "not modified" when no etag is given)
+            if ((ifNoneMatch != null) && etag.FastEquals(ifNoneMatch))
                 return null;
             var comp = h.Decoder;
             if (useAsync)
@@ -920,12 +926,25 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Read the (decompressed) response data for a url by running it through the module handlers (no auth, caching, templates or transformers are applied).
+        /// True if a session may run a handler (from <see cref="InternalRead(string, HttpSession, string)"/>): the handler is public, or the session has the
+        /// required tokens (the client address restriction of the user was checked for the request that runs the internal read).
+        /// </summary>
+        static bool IsInternalReadAllowed(IHttpRequestHandler h, HttpSession session)
+        {
+            var auth = h.Auth;
+            if (auth == null)
+                return true;
+            return (session != null) && session.IsValid(auth);
+        }
+
+        /// <summary>
+        /// Read the (decompressed) response data for a url by running it through the module handlers (no caching, templates or transformers are applied).
+        /// A protected handler is only run if the session has the required tokens (else null is returned, the handler doesn't run).
         /// </summary>
         /// <param name="newUrl">The absolute url to read</param>
-        /// <param name="session">Optional session, required for the optional end points (generated icons etc)</param>
+        /// <param name="session">Optional session, required for the optional end points (generated icons etc) and for protected handlers</param>
         /// <param name="ifNotModifiedSince">Optional etag, if the handler's etag equals it null is returned</param>
-        /// <returns>The data, the etag, the handler and the request, or null if no handler was found, the etag matched or an exception occurred.
+        /// <returns>The data, the etag, the handler and the request, or null if no handler was found, the session may not run it, the etag matched or an exception occurred.
         /// For handlers that write the response directly only the data is set.</returns>
         public async Task<Tuple<ReadOnlyMemory<Byte>, String, IHttpRequestHandler, HttpServerRequest>> InternalRead(String newUrl, HttpSession session = null, String ifNotModifiedSince = null)
         {
@@ -941,10 +960,14 @@ namespace SysWeaver.Net
                     if (session == null)
                         return null;
                     if (OptionalEndPoints.TryGetValue(n.LocalUrl, out var oep))
-                        res = await oep(n, session).ConfigureAwait(false);
+                        res = await oep.Handler(n, session).ConfigureAwait(false);
                     if (res == null)
                         return null;
                 }
+                //  The handler's auth is checked before it runs (fail closed): a url given by a user (ex: "store this link") must not
+                //  run a protected end point (an API with side effects, protected files) for a session without the required tokens
+                if ((res != HttpServerTools.AlreadyHandled) && !IsInternalReadAllowed(res, session))
+                    return null;
                 if (res == HttpServerTools.AlreadyHandled)
                 {
                     var s = n.OutputStream;
@@ -1436,10 +1459,19 @@ namespace SysWeaver.Net
                     data.SetResText("false", HttpServerTools.JsonMime);
                 return;
             }
-            await HandleLogout(data, session).ConfigureAwait(false);
+            //  The front channel logout of an external authorizer (it comes from that site, so it's not checked as a cross site request)
+            await HandleLogoutCore(data, session).ConfigureAwait(false);
         }
 
         ValueTask HandleLogout(HttpServerRequest data, HttpSession session)
+        {
+            //  Another site can't sign the user out (see HttpServerBaseParams.CsrfProtection)
+            if (IsCrossSiteRequest(data, session))
+                return new ValueTask(RefuseCrossSite(data));
+            return HandleLogoutCore(data, session);
+        }
+
+        ValueTask HandleLogoutCore(HttpServerRequest data, HttpSession session)
         {
             bool didClose = ForceLogout(data, session);
             if (didClose)
@@ -1517,8 +1549,29 @@ namespace SysWeaver.Net
 
 
 
-        readonly IReadOnlyDictionary<String, Func<HttpServerRequest, HttpSession, ValueTask>> ForcedEndPoints;
-        readonly IReadOnlyDictionary<String, Func<HttpServerRequest, HttpSession, ValueTask<IHttpRequestHandler>>> OptionalEndPoints;
+        /// <summary>
+        /// Internal end points that can't be overridden (handled before any module), with their optional rate limits
+        /// </summary>
+        readonly IReadOnlyDictionary<String, HttpInternalEndPoint<Func<HttpServerRequest, HttpSession, ValueTask>>> ForcedEndPoints;
+        /// <summary>
+        /// Internal end points that modules can override (used when no module handles the url), with their optional rate limits
+        /// </summary>
+        readonly IReadOnlyDictionary<String, HttpInternalEndPoint<Func<HttpServerRequest, HttpSession, ValueTask<IHttpRequestHandler>>>> OptionalEndPoints;
+
+        /// <summary>
+        /// Apply the rate limits of an internal end point (per client address first, then the shared limit)
+        /// </summary>
+        /// <param name="data">The request</param>
+        /// <param name="limits">The limits (not null)</param>
+        /// <returns>True if the request was rejected (a 429 response is set)</returns>
+        async ValueTask<bool> HandleEndPointLimits(HttpServerRequest data, HttpEndPointRateLimits limits)
+        {
+            var l = limits.IpRateLimiter(data);
+            if ((l != null) && await HandleLimit(data, l).ConfigureAwait(false))
+                return true;
+            l = limits.ServiceRateLimiter;
+            return (l != null) && await HandleLimit(data, l).ConfigureAwait(false);
+        }
 
 
         /// <summary>
@@ -1534,6 +1587,9 @@ namespace SysWeaver.Net
 
         async Task Set404(HttpServerRequest data)
         {
+            //  A probe url gets the probe trap answer (and the address is banned), else the request is counted as a 404
+            if (await HandleProbe(data).ConfigureAwait(false))
+                return;
             data.SetResStatusCode(404);
             await IntrusionError(data, 404).ConfigureAwait(false);
             if (!data.IsHead)
@@ -1640,6 +1696,84 @@ namespace SysWeaver.Net
             SetOutcome(data, status, null, denied);
             if (!data.IsHead)
                 data.SetResText(await Translator.TranslateSafe(reason, data.Session?.Language ?? data.Language, "en", "The reason why a web server refused a request, shown to the user", TranslationEffort.Medium, TranslationCacheRetention.Long).ConfigureAwait(false));
+        }
+
+        /// <summary>
+        /// The request header that marks an api call of this site's own pages ("X-Sw-Api: 1", added by Sw.Net to every same origin request),
+        /// see <see cref="HttpServerBaseParams.CsrfProtection"/>. Another site can't send it: a cross origin request with a custom header needs a
+        /// CORS preflight, which the server never allows.
+        /// </summary>
+        public const String ApiRequestHeader = "X-Sw-Api";
+
+        /// <summary>
+        /// The reason of a 403 for a cross site request (see <see cref="HttpServerBaseParams.CsrfProtection"/>).
+        /// </summary>
+        public const String CrossSiteReason = "Refused: the request came from another web site";
+
+        readonly bool CsrfProtection;
+
+        /// <summary>
+        /// Cross site requests of signed in sessions that were refused (see <see cref="HttpServerBaseParams.CsrfProtection"/>)
+        /// </summary>
+        readonly HttpRequestTracker CrossSiteRequests = new HttpRequestTracker();
+
+        /// <summary>
+        /// True if a request of a signed in session must be refused as a cross site request (see <see cref="HttpServerBaseParams.CsrfProtection"/>):
+        /// it isn't marked with <see cref="ApiRequestHeader"/>, isn't authorized by a header, and the browser says it comes from another site.
+        /// </summary>
+        /// <param name="data">The request</param>
+        /// <param name="session">The session</param>
+        /// <returns>True to refuse the request</returns>
+        bool IsCrossSiteRequest(HttpServerRequest data, HttpSession session)
+        {
+            if (!CsrfProtection)
+                return false;
+            //  Only a signed in browser session can be abused (an API key or a header sign in isn't sent by a browser on its own)
+            var user = session?.Auth;
+            if ((user == null) || user.IsApiKey)
+                return false;
+            if (data.GetReqHeader(ApiRequestHeader) != null)
+                return false;
+            if ((data.GetReqHeader("Authorization") != null) || (data.GetReqHeader("x-api-key") != null) || (data.GetReqHeader("x-goog-api-key") != null))
+                return false;
+            //  Modern browsers: the fetch metadata ("none" is the user: typed url, bookmark)
+            var sfs = data.GetReqHeader("Sec-Fetch-Site");
+            if (sfs != null)
+                return !(String.Equals(sfs, "same-origin", StringComparison.OrdinalIgnoreCase) || String.Equals(sfs, "none", StringComparison.OrdinalIgnoreCase));
+            //  Older browsers: the origin, else the referer (no header at all: not a browser, or nothing to tell)
+            var o = data.GetReqHeader("Origin");
+            if (!String.IsNullOrEmpty(o))
+                return !IsOwnHost(o, data);
+            var r = data.GetReqHeader("Referer");
+            if (!String.IsNullOrEmpty(r))
+                return !IsOwnHost(r, data);
+            return false;
+        }
+
+        /// <summary>
+        /// True if the host of an url (an "Origin" or "Referer" header) is the host of this site: the host of the request prefix, the external root
+        /// (ex: behind a reverse proxy) or the "Host" header. An opaque origin ("null", ex: a sandboxed frame) isn't.
+        /// </summary>
+        bool IsOwnHost(String url, HttpServerRequest data)
+        {
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var u))
+                return false;
+            var h = u.IdnHost;
+            static bool Same(String h, String root)
+                => !String.IsNullOrEmpty(root) && Uri.TryCreate(root, UriKind.Absolute, out var r) && String.Equals(h, r.IdnHost, StringComparison.OrdinalIgnoreCase);
+            if (Same(h, data.Prefix) || Same(h, ExternalRootUri))
+                return true;
+            var host = data.GetReqHeader("Host");
+            return !String.IsNullOrEmpty(host) && Same(h, "http://" + host + "/");
+        }
+
+        /// <summary>
+        /// Refuse a cross site request (403 with <see cref="CrossSiteReason"/>), counted in the "CrossSite" statistics
+        /// </summary>
+        async Task RefuseCrossSite(HttpServerRequest data)
+        {
+            CrossSiteRequests.OnRequest(data.LocalUrl, data.GetIpAddress());
+            await SetReason(data, 403, CrossSiteReason).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -2065,8 +2199,25 @@ namespace SysWeaver.Net
                 return;
             var sessionTask = GetSession(data);
             using var session = sessionTask.IsCompleted ? sessionTask.GetAwaiter().GetResult() : (await sessionTask.ConfigureAwait(false));
+            if (session == null)
+            {
+                //  A banned address without a session (no session is created for it), see the probe trap
+                await HandleBanned(data).ConfigureAwait(false);
+                return;
+            }
             session.IncRequestCounter();
             data.Init(session);
+            //  A session that probed is banned (one read per request)
+            var bannedUntil = session.BannedUntilTicks;
+            if (bannedUntil != 0)
+            {
+                if (bannedUntil > DateTime.UtcNow.Ticks)
+                {
+                    await HandleBanned(data).ConfigureAwait(false);
+                    return;
+                }
+                session.BannedUntil = null;
+            }
             rateLimiter = session.RateLimiter;
             if ((rateLimiter != null) && (await HandleLimit(data, rateLimiter).ConfigureAwait(false)))
                 return;
@@ -2089,7 +2240,10 @@ namespace SysWeaver.Net
             var localUrl = data.LocalUrl;
             if (ForcedEndPoints.TryGetValue(localUrl, out var fep))
             {
-                var epTask = fep(data, session);
+                var fepLimits = fep.Limits;
+                if ((fepLimits != null) && await HandleEndPointLimits(data, fepLimits).ConfigureAwait(false))
+                    return;
+                var epTask = fep.Handler(data, session);
                 if (!epTask.IsCompleted)
                     await epTask.ConfigureAwait(false);
                 return;
@@ -2126,7 +2280,10 @@ namespace SysWeaver.Net
                 //  Optional end points (internal end points that can be overridden)
                 if (OptionalEndPoints.TryGetValue(localUrl, out var oep))
                 {
-                    var epTask = oep(data, session);
+                    var oepLimits = oep.Limits;
+                    if ((oepLimits != null) && await HandleEndPointLimits(data, oepLimits).ConfigureAwait(false))
+                        return;
+                    var epTask = oep.Handler(data, session);
                     t = epTask.IsCompleted ? epTask.GetAwaiter().GetResult() : await epTask.ConfigureAwait(false);
                 }
                 if (t == null)
@@ -2178,6 +2335,12 @@ namespace SysWeaver.Net
                 if (auth != null)
                     if (await HandleAuth(auth, data, session, localUrl, url, isHead, t is ApiHttpEntry).ConfigureAwait(false))
                         return;
+                //  Cross site request forgery: an api call of a signed in session from another site (see HttpServerBaseParams.CsrfProtection)
+                if ((t is ApiHttpEntry) && IsCrossSiteRequest(data, session))
+                {
+                    await RefuseCrossSite(data).ConfigureAwait(false);
+                    return;
+                }
                 using var __ = TrackHandle(t.Name);
                 var etag = t.GetEtag(out bool useAsync, data);
                 var ee = data.Etag;
@@ -3057,7 +3220,22 @@ namespace SysWeaver.Net
         /// </summary>
         readonly System.Net.IPNetwork[] TrustedProxyNets;
 
-        static readonly String[] DefaultTrustedProxies = ["loopback", "private"];
+        static readonly String[] DefaultTrustedProxies = ["loopback"];
+
+        int UntrustedForwardWarned;
+
+        /// <summary>
+        /// Called when a connection that isn't a trusted proxy sends a forwarding header (it's ignored): a warning is logged once per process,
+        /// so an operator notices a proxy that is missing from <see cref="HttpServerBaseParams.TrustedProxies"/>
+        /// (a client can send the header too, so it isn't a problem by itself).
+        /// </summary>
+        /// <param name="peer">The address of the connection</param>
+        internal void OnUntrustedForwardingHeader(System.Net.IPAddress peer)
+        {
+            if (Interlocked.Exchange(ref UntrustedForwardWarned, 1) != 0)
+                return;
+            Msg?.AddMessage(String.Concat(Prefix, "An X-Forwarded-For header from ", peer?.ToString(), " was ignored: it isn't a trusted proxy. If it's a proxy of this server, add its address to TrustedProxies (logged once)"), MessageLevels.Warning);
+        }
 
         static readonly System.Net.IPNetwork[] LoopbackNets = [System.Net.IPNetwork.Parse("127.0.0.0/8"), System.Net.IPNetwork.Parse("::1/128")];
 
@@ -3628,9 +3806,14 @@ namespace SysWeaver.Net
         /// <param name="req">The request</param>
         /// <param name="cookieString">The Cookie header of the request</param>
         /// <param name="setSessionCookie">True to set the session cookie on the response</param>
+        /// <returns>The new session, or null if the client address is banned by the probe trap (no session is created for it)</returns>
         [SkipLocalsInit]
         async ValueTask<HttpSession> CreateSession(HttpServerRequest req, String cookieString, bool setSessionCookie = true)
         {
+            //  A banned address gets no session (checked before any work, nothing is looked up when no address is banned)
+            var probeTrap = ProbeTrap;
+            if ((probeTrap != null) && probeTrap.IsBanned(req))
+                return null;
             var langTask = GetAcceptLanguage(req.GetReqHeader("Accept-Language"));
             var lang = langTask.IsCompletedSuccessfully ? langTask.Result : await langTask.ConfigureAwait(false);
             var ip = req.GetIpAddress();
@@ -3911,6 +4094,8 @@ namespace SysWeaver.Net
             foreach (var e in LogoutErrors.GetStats(sys, "OnLogout."))
                 yield return e;
             foreach (var e in IntrusionReports.GetStats(sys, "Intrusion."))
+                yield return e;
+            foreach (var e in GetProbeTrapStats(sys))
                 yield return e;
             foreach (var e in TransformExceptions.GetStats(sys, "Transform."))
                 yield return e;
@@ -4572,20 +4757,26 @@ namespace SysWeaver.Net
             //  Default order: the latest activity first (SessionDebugData has a TableDataDefaultOrder).
             //  Sessions are identified by the hash of the token (TokenHash), the token itself is never part of the table (so filtering and sorting can't reveal it)
             return TableDataTools.Get(r, 5000, Sessions.Values.Where(seen.Add).Select(x => GetSessionDebugData(x, n, own, flags))
-                .Concat(ExpiredSessions.Where(seen.Add).Select(x => new SessionDebugData(x, n, true, ClosedSessionUsers.TryGetValue(x, out var u) ? u : null, flags))));
+                .Concat(ExpiredSessions.Where(seen.Add).Select(x => GetEndedSessionDebugData(x, n, flags))));
         }
 
         /// <summary>
-        /// The debug data of an active session (with the end token when it can be ended by the caller)
+        /// The debug data of an active session (with the end token when it can be ended by the caller, and the ban info)
         /// </summary>
-        SessionDebugData GetSessionDebugData(HttpSession x, DateTime n, HttpSession own, bool flags) => new SessionDebugData(x, n, false, null, flags)
+        SessionDebugData GetSessionDebugData(HttpSession x, DateTime n, HttpSession own, bool flags) => SetSecurityInfo(new SessionDebugData(x, n, false, null, flags)
         {
             //  End session: only active sessions with a signed in user, never the caller's own (sign out instead).
             //  Ending an anonymous session is pointless: the browser just starts a new one with its next request (ex: the
             //  signed out page of a user whose session was ended polls the user state, so it shows up as a new anonymous session)
             EndToken = (x == own) || (x.Auth == null) ? null : SessionEndToken(x),
             IsCurrent = x == own,
-        };
+        }, x, n.Ticks);
+
+        /// <summary>
+        /// The debug data of an ended (or expired) session, with the ban info (a ban of its address can still be lifted)
+        /// </summary>
+        SessionDebugData GetEndedSessionDebugData(HttpSession x, DateTime n, bool flags)
+            => SetSecurityInfo(new SessionDebugData(x, n, true, ClosedSessionUsers.TryGetValue(x, out var u) ? u : null, flags), x, n.Ticks);
 
         /// <summary>
         /// Get the details of a session from its id (the hash of the session token, as shown in logs, audits and the active sessions table).
@@ -4612,7 +4803,7 @@ namespace SysWeaver.Net
             foreach (var x in ExpiredSessions)
             {
                 if (String.Equals(x.TokenHash, tokenHash, StringComparison.Ordinal))
-                    return new SessionDebugData(x, n, true, ClosedSessionUsers.TryGetValue(x, out var u) ? u : null, flags);
+                    return GetEndedSessionDebugData(x, n, flags);
             }
             throw new HttpResponseException(404, "No active or recently ended session has that id (it may have expired, or a sign in gave it a new id)");
         }

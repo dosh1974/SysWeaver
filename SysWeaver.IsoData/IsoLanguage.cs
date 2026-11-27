@@ -28,11 +28,13 @@ namespace SysWeaver.IsoData
         /// </summary>
         [TableDataIsoLanguageImage]
         [TableDataOrder(-1)]
+        [TableDataHide]
         public String Flag => Iso639_1;
 
         /// <summary>
         /// The two letter ISO 639-1 language code of this language
         /// </summary>
+        [TableDataIsoLanguage]
         public readonly String Iso639_1;
 
         /// <summary>
